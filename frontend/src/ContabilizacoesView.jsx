@@ -1,215 +1,278 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  TrendingUp, Zap, AlertTriangle, Building2, ChevronDown, ChevronUp,
-  Filter, RefreshCw, Download
+  TrendingUp, Zap, AlertTriangle, Building2,
+  ChevronDown, ChevronUp, RefreshCw
 } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
-const fmt  = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
+const fmt = (v) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-// Gera array de competências "YYYY-MM" dentro de [de, ate]
+// ── helpers de período ───────────────────────────────────────────────────────
 function gerarCompetencias(de, ate) {
-  const result = [];
+  const res = [];
   let [y, m] = de.split('-').map(Number);
   const [ey, em] = ate.split('-').map(Number);
   while (y < ey || (y === ey && m <= em)) {
-    result.push(`${y}-${String(m).padStart(2, '0')}`);
-    m++;
-    if (m > 12) { m = 1; y++; }
+    res.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++; if (m > 12) { m = 1; y++; }
   }
-  return result;
+  return res;
 }
-
-// Converte "YYYY-MM" → label amigável
-function labelMes(comp) {
+const labelMes = (comp) => {
   const [y, m] = comp.split('-').map(Number);
-  return `${MESES_ABREV[m - 1]}/${String(y).substring(2)}`;
-}
+  return `${MESES_ABREV[m - 1]}/${String(y).slice(2)}`;
+};
 
-// ── Cor por grupo contábil ───────────────────────────────────────────────────
-const GRUPOS = [
-  { key: 'receita',   label: 'Receita Societária',        cor: '#34c759',  test: (c,n) => /^3/i.test(String(c)) || /receita|venda/i.test(n) },
-  { key: 'custo',     label: 'Custos / POC',               cor: '#ff4d00',  test: (c,n) => /^4/i.test(String(c)) || /custo|obra|poc/i.test(n) },
-  { key: 'clientes',  label: 'Clientes e Adiantamentos',   cor: '#a259ff',  test: (c,n) => /^1\.(02|03)/i.test(String(c)) || /cliente|adiant/i.test(n) },
-  { key: 'tributos',  label: 'Tributos Societários',       cor: '#ffcc00',  test: (c,n) => /irpj|csll|diferido|tributo soc/i.test(n) },
-  { key: 'fiscal',    label: 'DARF / PIS / COFINS / RET',  cor: '#ff9f0a',  test: (c,n) => /pis|cofins|darf|ret|iss/i.test(n) },
-  { key: 'caixa',     label: 'Caixa e Bancos',             cor: '#30d158',  test: (c,n) => /^1\.01/i.test(String(c)) || /caixa|banco/i.test(n) },
-  { key: 'outros',    label: 'Outras Contas',               cor: '#636366',  test: () => true },
+// ── classificação de conta virtual por tipo ──────────────────────────────────
+// Os históricos injetados pelo backend seguem padrões reconhecíveis
+const GRUPOS_VIRTUAL = [
+  {
+    key: 'receita',
+    label: 'Receita Societária (POC)',
+    cor: '#34c759',
+    descricao: 'Receita auferida calculada com base no percentual de conclusão (POC)',
+    test: (nome) => /receita|auferida/i.test(nome)
+  },
+  {
+    key: 'custo',
+    label: 'Custo Econômico (POC)',
+    cor: '#ff4d00',
+    descricao: 'CMV e custo de obra proporcional à fração POC e VGV vendido',
+    test: (nome) => /custo poc|contrapartida reccusto/i.test(nome)
+  },
+  {
+    key: 'clientes',
+    label: 'Clientes / Adiantamento',
+    cor: '#a259ff',
+    descricao: 'Variação de clientes e adiantamentos de clientes sobre contratos',
+    test: (nome) => /cliente|adiantamento|faturamento direito/i.test(nome)
+  },
+  {
+    key: 'caixa',
+    label: 'Caixa / Bancos',
+    cor: '#30d158',
+    descricao: 'Entradas de caixa por recebimentos de parcelas vendidas',
+    test: (nome) => /caixa|recebimento caixa/i.test(nome)
+  },
+  {
+    key: 'trib_dif',
+    label: 'Tributos Diferidos / Antecipados',
+    cor: '#ffcc00',
+    descricao: 'Diferenças entre base caixa e base DRE (POC) — antecipados e diferidos',
+    test: (nome) => /diferido|antecipado|passivo tributo|constituição adiant/i.test(nome)
+  },
+  {
+    key: 'trib_dre',
+    label: 'Despesa Tributária DRE',
+    cor: '#ff9f0a',
+    descricao: 'IRPJ, CSLL, PIS, COFINS, RET — pelo critério econômico (base POC)',
+    test: (nome) => /despesa tribut|passivo.darf|darf exig/i.test(nome)
+  },
+  {
+    key: 'outros',
+    label: 'Outras Contas Societárias',
+    cor: '#636366',
+    descricao: 'Demais lançamentos gerados pelo motor societário',
+    test: () => true
+  },
 ];
 
-function grupoDeContabOu(conta, nome) {
-  for (const g of GRUPOS) if (g.test(conta, nome || '')) return g;
-  return GRUPOS[GRUPOS.length - 1];
+function grupoVirtual(histNome) {
+  for (const g of GRUPOS_VIRTUAL) if (g.test(histNome || '')) return g;
+  return GRUPOS_VIRTUAL[GRUPOS_VIRTUAL.length - 1];
 }
 
-// ── Linha de conta (horizontal por mês) ─────────────────────────────────────
-function ContaRow({ conta, nome, grupo, meses, dadosPorMes, saldoAnt, isExpanded, onToggle }) {
-  const acum = { saldoAnt };
-  const movPorMes = {};
-  let saldoFinalTotal = saldoAnt;
+// ── Linha de conta na tabela ─────────────────────────────────────────────────
+function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
+  const [open, setOpen] = useState(false);
 
-  meses.forEach(m => {
-    const d = dadosPorMes[m];
-    if (!d) { movPorMes[m] = null; return; }
-    const c = d.find(x => String(x.conta) === String(conta));
-    movPorMes[m] = c ? c.movimento_liquido : 0;
-    saldoFinalTotal += movPorMes[m] || 0;
+  // Para cada mês, somamos os movimentos desta conta (pode ter múltiplas unidades)
+  const movPorMes = {};
+  let saldoAnt = 0;
+  let saldoFinal = 0;
+  let primeiroMes = true;
+
+  competencias.forEach(comp => {
+    const registros = (dadosPorMes[comp] || []);
+    const match = registros.find(r => String(r.conta) === String(contaId));
+    if (match) {
+      if (primeiroMes) {
+        saldoAnt = match.saldo_anterior || 0;
+        primeiroMes = false;
+      }
+      movPorMes[comp] = match.movimento_liquido || 0;
+    } else {
+      movPorMes[comp] = null; // sem dado para esse mês
+    }
   });
 
-  const multiMes = meses.length > 1;
+  saldoFinal = saldoAnt + Object.values(movPorMes).reduce((s, v) => s + (v || 0), 0);
+
+  // Detalhes do último mês com dado
+  const ultimoMesComDado = [...competencias].reverse().find(c => dadosPorMes[c]?.find(r => String(r.conta) === String(contaId)));
+  const detalhes = ultimoMesComDado
+    ? (dadosPorMes[ultimoMesComDado].find(r => String(r.conta) === String(contaId))?.detalhes || [])
+    : [];
 
   return (
     <>
-      <tr className="border-b border-[#1a1a1a] hover:bg-[#141414] cursor-pointer" onClick={onToggle}>
-        {/* Conta + descrição */}
-        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px]">
+      <tr
+        className="border-b border-[#1a1a1a] hover:bg-[#141414] cursor-pointer transition-colors"
+        onClick={() => setOpen(o => !o)}
+      >
+        {/* Conta */}
+        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[230px]">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-bold" style={{ color: grupo.cor }}>{conta}</span>
-            <span className="text-[10px] text-[#666] truncate max-w-[130px]" title={nome}>{nome}</span>
-            {isExpanded ? <ChevronUp size={10} className="text-[#555] shrink-0"/> : <ChevronDown size={10} className="text-[#555] shrink-0"/>}
+            <span className="font-mono text-[11px] font-black shrink-0" style={{ color: grupo.cor }}>{contaId}</span>
+            <span className="text-[10px] text-[#666] truncate" title={contaNome}>{contaNome}</span>
+            {detalhes.length > 0 && (open ? <ChevronUp size={9} className="text-[#444] shrink-0"/> : <ChevronDown size={9} className="text-[#444] shrink-0"/>)}
           </div>
         </td>
 
-        {/* Saldo anterior (sempre primeiro) */}
-        <td className="px-3 py-2.5 text-right font-mono text-xs text-[#666] whitespace-nowrap">{fmt(saldoAnt)}</td>
+        {/* Saldo anterior */}
+        <td className="px-3 py-2.5 text-right font-mono text-[11px] text-[#555] whitespace-nowrap">{fmt(saldoAnt)}</td>
 
-        {/* Colunas por mês  */}
-        {meses.map(m => {
-          const val = movPorMes[m];
+        {/* Movimento por mês */}
+        {competencias.map(comp => {
+          const v = movPorMes[comp];
           return (
-            <td key={m} className="px-3 py-2.5 text-right font-mono text-xs whitespace-nowrap">
-              {val === null ? (
-                <span className="text-[#2a2a2a]">—</span>
-              ) : val === 0 ? (
-                <span className="text-[#333]">-</span>
-              ) : (
-                <span className={val > 0 ? 'text-[#34c759]' : 'text-[#ff4d00]'}>
-                  {val > 0 ? '+' : ''}{fmt(val)}
-                </span>
-              )}
+            <td key={comp} className="px-3 py-2.5 text-right font-mono text-[11px] whitespace-nowrap">
+              {v === null ? <span className="text-[#252525]">—</span>
+               : v === 0  ? <span className="text-[#333]">-</span>
+               : <span style={{ color: v > 0 ? '#34c759' : '#ff4d00' }}>
+                   {v > 0 ? '+' : ''}{fmt(v)}
+                 </span>}
             </td>
           );
         })}
 
         {/* Saldo final */}
-        <td className="px-3 py-2.5 text-right font-mono text-sm font-bold text-white whitespace-nowrap">{fmt(saldoFinalTotal)}</td>
+        <td className="px-3 py-2.5 text-right font-mono text-sm font-black text-white whitespace-nowrap">{fmt(saldoFinal)}</td>
       </tr>
 
-      {/* Detalhes expandidos (lançamentos do último mês com dados) */}
-      {isExpanded && (() => {
-        const ultimoMesComDados = [...meses].reverse().find(m => dadosPorMes[m]?.find(x => String(x.conta) === String(conta)));
-        if (!ultimoMesComDados) return null;
-        const contaData = dadosPorMes[ultimoMesComDados]?.find(x => String(x.conta) === String(conta));
-        if (!contaData?.detalhes?.length) return null;
-        return (
-          <tr key={`det-${conta}`}>
-            <td colSpan={meses.length + 3} className="p-0 bg-[#070707]">
-              <table className="w-full text-[10px] border-collapse">
-                <thead>
-                  <tr className="bg-[#0c0c0c]">
-                    <th className="px-5 py-1.5 text-left text-[8px] uppercase tracking-widest font-black text-[#333] border-b border-[#111]">Data</th>
-                    <th className="px-5 py-1.5 text-left text-[8px] uppercase tracking-widest font-black text-[#333] border-b border-[#111]">Histórico</th>
-                    <th className="px-5 py-1.5 text-center text-[8px] uppercase tracking-widest font-black text-[#333] border-b border-[#111] w-8">N</th>
-                    <th className="px-5 py-1.5 text-right text-[8px] uppercase tracking-widest font-black text-[#333] border-b border-[#111] w-28">Valor</th>
+      {/* Detalhes */}
+      {open && detalhes.length > 0 && (
+        <tr>
+          <td colSpan={competencias.length + 3} className="p-0 bg-[#070707]">
+            <div className="px-4 py-1 text-[9px] font-black uppercase tracking-widest text-[#444] border-b border-[#111]">
+              Lançamentos analíticos — {labelMes(ultimoMesComDado)}
+            </div>
+            <table className="w-full text-[10px] border-collapse">
+              <tbody>
+                {detalhes.map((d, i) => (
+                  <tr key={i} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+                    <td className="px-5 py-1.5 font-mono text-[#444] whitespace-nowrap w-24">{d.data}</td>
+                    <td className="px-3 py-1.5 text-[#555] truncate max-w-[460px]" title={d.historico}>{d.historico}</td>
+                    <td className="px-3 py-1.5 text-center font-bold w-8" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff9f0a' }}>{d.natureza}</td>
+                    <td className="px-5 py-1.5 text-right font-mono text-[#888] whitespace-nowrap w-32">{fmt(d.valor)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {contaData.detalhes.map((d, i) => (
-                    <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#0a0a0a]">
-                      <td className="px-5 py-1.5 font-mono text-[#444]">{d.data}</td>
-                      <td className="px-5 py-1.5 text-[#555] truncate max-w-[400px]" title={d.historico}>{d.historico}</td>
-                      <td className="px-5 py-1.5 text-center font-bold text-[10px]" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
-                      <td className="px-5 py-1.5 text-right font-mono text-[#777]">{fmt(d.valor)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </td>
-          </tr>
-        );
-      })()}
+                ))}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      )}
     </>
   );
 }
 
-// ── MAIN ────────────────────────────────────────────────────────────────────
+// ── MAIN VIEW ────────────────────────────────────────────────────────────────
 export const ContabilizacoesView = ({ selectedEmpresa }) => {
-  // State: filtros
   const now = new Date();
   const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
   const [periodoInicio, setPeriodoInicio] = useState(mesAtual);
   const [periodoFim,    setPeriodoFim]    = useState(mesAtual);
-  const [filtroEmpId,   setFiltroEmpId]   = useState('');   // '' = todos
-  const [tipoVisao, setTipoVisao] = useState('fisico');     // 'fisico' | 'virtual'
-
-  // State: dados carregados por competência
-  //  estrutura: { 'YYYY-MM': [ { conta, nome, saldo_anterior, movimento_liquido, detalhes, ... } ] }
-  const [dadosPorMes, setDadosPorMes] = useState({});
-  // lista de empreendimentos disponíveis (names e IDs) para o select
+  const [filtroEmpId,   setFiltroEmpId]   = useState('');
+  // empreendimentos para o select (carregados na montagem)
   const [empreendimentos, setEmpreendimentos] = useState([]);
+  const [empsLoading,     setEmpsLoading]     = useState(false);
+
+  // dados por competência: { 'YYYY-MM': [ conta_virtual ] }
+  const [dadosPorMes, setDadosPorMes] = useState({});
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
-  const [expandedContas, setExpandedContas] = useState({});
 
-  // Competências selecionadas
+  // ── Carrega lista de empreendimentos disponíveis na montagem ──────────────
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    setEmpsLoading(true);
+    fetch(`${API_BASE}/api/empreendimentos/basico?empresa_id=${selectedEmpresa}`)
+      .then(r => r.json())
+      .then(j => { setEmpreendimentos(j.empreendimentos || []); setEmpsLoading(false); })
+      .catch(() => setEmpsLoading(false));
+  }, [selectedEmpresa]);
+
+  // competências do intervalo selecionado
   const competencias = useMemo(() => {
     try { return gerarCompetencias(periodoInicio, periodoFim); }
     catch { return [periodoInicio]; }
   }, [periodoInicio, periodoFim]);
 
-  // Busca dados para todas as competências do intervalo
+  const periodoValido = competencias.length <= 18;
+
+  // ── Busca dados em paralelo para cada mês ────────────────────────────────
   const fetchTudo = useCallback(async () => {
-    if (!selectedEmpresa) return;
+    if (!selectedEmpresa || !periodoValido) return;
     setLoading(true);
     setError('');
-    const novoDadosPorMes = {};
-    const empSet = {};
+    const novos = {};
     try {
       await Promise.all(competencias.map(async (comp) => {
-        const [ano, mes] = comp.split('-');
-        let url = `${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${+mes}&ano=${+ano}`;
+        const [ano, mes] = comp.split('-').map(Number);
+        let url = `${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}`;
         if (filtroEmpId) url += `&empreendimento_id=${filtroEmpId}`;
         const resp = await fetch(url);
         const json = await resp.json();
-        const registros = [];
+        // Consolida contas_virtuais de todos os empreendimentos da resposta
+        const contasMerged = {};
         (json.data || []).forEach(emp => {
-          // Coleta lista de empreendimentos para o select
-          empSet[emp.empreendimento_id] = emp.empreendimento_nome;
-          const source = tipoVisao === 'fisico' ? (emp.contas_fisicas || []) : (emp.contas_virtuais || []);
-          source.forEach(c => registros.push({ ...c }));
+          (emp.contas_virtuais || []).forEach(c => {
+            const key = String(c.conta);
+            if (!contasMerged[key]) {
+              contasMerged[key] = { ...c, detalhes: [...(c.detalhes || [])] };
+            } else {
+              contasMerged[key].saldo_anterior  = (contasMerged[key].saldo_anterior  || 0) + (c.saldo_anterior  || 0);
+              contasMerged[key].movimento_debito = (contasMerged[key].movimento_debito || 0) + (c.movimento_debito || 0);
+              contasMerged[key].movimento_credito = (contasMerged[key].movimento_credito || 0) + (c.movimento_credito || 0);
+              contasMerged[key].movimento_liquido = (contasMerged[key].movimento_liquido || 0) + (c.movimento_liquido || 0);
+              contasMerged[key].saldo_final = (contasMerged[key].saldo_final || 0) + (c.saldo_final || 0);
+              contasMerged[key].detalhes.push(...(c.detalhes || []));
+            }
+          });
         });
-        novoDadosPorMes[comp] = registros;
+        novos[comp] = Object.values(contasMerged);
       }));
-      // Extrai lista única de empreendimentos
-      setEmpreendimentos(Object.entries(empSet).map(([id, nome]) => ({ id: String(id), nome })));
-      setDadosPorMes(novoDadosPorMes);
+      setDadosPorMes(novos);
     } catch (e) {
       setError(String(e));
     }
     setLoading(false);
-  }, [selectedEmpresa, competencias, filtroEmpId, tipoVisao]);
+  }, [selectedEmpresa, competencias, filtroEmpId]);
 
-  // Mapeia conta → { nome, grupo, saldoAnt }  usando o primeiro mês
+  // ── index de contas (conta → { nome, grupoVirtual }) ─────────────────────
   const contasIndex = useMemo(() => {
     const map = {};
-    competencias.forEach(comp => {
-      (dadosPorMes[comp] || []).forEach(c => {
+    Object.values(dadosPorMes).forEach(lista => {
+      lista.forEach(c => {
         if (!map[c.conta]) {
+          // O nome da conta vem do plano, mas os detalhes têm histórico descritivo
+          const primeiroHist = (c.detalhes || [])[0]?.historico || c.nome || '';
           map[c.conta] = {
-            conta: c.conta,
-            nome:  c.nome || '',
-            grupo: grupoDeContabOu(c.conta, c.nome),
-            // Saldo anterior vem do primeiro mês com dado
+            conta:  c.conta,
+            nome:   c.nome || `Conta ${c.conta}`,
+            grupo:  grupoVirtual(primeiroHist),
             saldoAnt: c.saldo_anterior || 0
           };
         }
       });
     });
     return map;
-  }, [dadosPorMes, competencias]);
+  }, [dadosPorMes]);
 
-  // Agrupa contas por grupo contábil
+  // ── Agrupa contas por grupo ───────────────────────────────────────────────
   const grupos = useMemo(() => {
     const gMap = {};
     Object.values(contasIndex).forEach(c => {
@@ -220,11 +283,16 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
     return Object.values(gMap);
   }, [contasIndex]);
 
-  const toggleConta = (conta) =>
-    setExpandedContas(prev => ({ ...prev, [conta]: !prev[conta] }));
+  // totais globais por mês
+  const totaisPorMes = useMemo(() => {
+    const t = {};
+    competencias.forEach(comp => {
+      t[comp] = (dadosPorMes[comp] || []).reduce((s, c) => s + (c.movimento_liquido || 0), 0);
+    });
+    return t;
+  }, [dadosPorMes, competencias]);
 
-  // Período longo demais? Limitamos a 12 meses
-  const periodoValido = competencias.length <= 18;
+  const temDados = Object.keys(dadosPorMes).length > 0;
 
   return (
     <div className="flex flex-col gap-5 pb-10 text-[#e5e2e1] animate-in fade-in">
@@ -234,75 +302,63 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
           <TrendingUp className="text-[#ff4d00]" size={36}/> Contabilizações
         </h2>
         <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">
-          Evolução Mensal de Contas por Período — Físico × Societário
+          Visão Societária (IFRS 15) — Receita POC · Tributos · Clientes
         </p>
       </div>
 
-      {/* ── Filtros ── */}
+      {/* ── Painel de filtros ── */}
       <div className="flex flex-wrap gap-3 items-end bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
-        {/* Período de */}
+
+        {/* Período De */}
         <div className="flex flex-col gap-1">
           <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Período De</span>
           <input type="month" value={periodoInicio}
-            onChange={e => { setPeriodoInicio(e.target.value); if (e.target.value > periodoFim) setPeriodoFim(e.target.value); }}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors"/>
+            onChange={e => { const v = e.target.value; setPeriodoInicio(v); if (v > periodoFim) setPeriodoFim(v); }}
+            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
 
-        {/* Período até */}
+        {/* Período Até */}
         <div className="flex flex-col gap-1">
           <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Até</span>
           <input type="month" value={periodoFim}
-            onChange={e => { setPeriodoFim(e.target.value); if (e.target.value < periodoInicio) setPeriodoInicio(e.target.value); }}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors"/>
+            onChange={e => { const v = e.target.value; setPeriodoFim(v); if (v < periodoInicio) setPeriodoInicio(v); }}
+            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
 
         {/* Empreendimento */}
-        <div className="flex flex-col gap-1 min-w-[200px]">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Empreendimento</span>
+        <div className="flex flex-col gap-1 min-w-[220px]">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">
+            Empreendimento {empsLoading ? '(carregando...)' : `(${empreendimentos.length})`}
+          </span>
           <select value={filtroEmpId} onChange={e => setFiltroEmpId(e.target.value)}
             className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-bold outline-none focus:border-[#ff4d00] transition-colors">
             <option value="">Todos os empreendimentos</option>
             {empreendimentos.map(e => (
-              <option key={e.id} value={e.id}>{e.nome}</option>
+              <option key={e.id} value={String(e.id)}>{e.nome}</option>
             ))}
           </select>
         </div>
 
-        {/* Tipo */}
-        <div className="flex flex-col gap-1">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Visão</span>
-          <div className="flex gap-1">
-            {[['fisico','Físico'],['virtual','Societário']].map(([v,l]) => (
-              <button key={v} onClick={() => setTipoVisao(v)}
-                className={`px-3 py-2 text-[9px] font-black uppercase tracking-widest border rounded transition-all ${
-                  tipoVisao === v ? 'bg-[#ff4d00] text-black border-[#ff4d00]' : 'text-[#888] border-[#333] hover:border-[#555]'
-                }`}>{l}</button>
-            ))}
-          </div>
+        {/* Indicador de competências */}
+        <div className="flex flex-col justify-end pb-0.5">
+          <span className="text-[9px] font-bold text-[#444] uppercase tracking-wider">
+            {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
+            {!periodoValido && <span className="text-[#ff4d00] ml-2">⚠ máx. 18</span>}
+          </span>
         </div>
 
-        {/* Botão buscar */}
-        <button onClick={fetchTudo} disabled={loading || !periodoValido}
-          className="px-5 py-2.5 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ml-auto">
+        {/* Botão */}
+        <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
+          className="ml-auto px-6 py-2.5 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
-          {loading ? 'Buscando...' : 'Carregar'}
+          {loading ? `Consultando ${competencias.length} meses...` : 'Carregar'}
         </button>
       </div>
-
-      {/* Aviso período longo */}
-      {!periodoValido && (
-        <div className="bg-[#ffcc00]/10 border border-[#ffcc00]/30 rounded p-3 flex items-center gap-3">
-          <AlertTriangle size={16} className="text-[#ffcc00] shrink-0"/>
-          <p className="text-[10px] font-bold text-[#ffcc00] uppercase tracking-wider">
-            Período máximo de 18 meses. Ajuste o intervalo para continuar.
-          </p>
-        </div>
-      )}
 
       {/* Erro */}
       {error && (
         <div className="bg-[#ff4d00]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
-          <AlertTriangle size={16} className="text-[#ff4d00] shrink-0"/>
+          <AlertTriangle size={14} className="text-[#ff4d00] shrink-0"/>
           <p className="text-sm font-mono text-[#ff4d00]">{error}</p>
         </div>
       )}
@@ -312,29 +368,53 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         <div className="flex items-center justify-center gap-3 py-12">
           <Zap className="animate-spin text-[#ff4d00]" size={28}/>
           <span className="text-xs font-black uppercase tracking-widest text-[#555]">
-            Consultando {competencias.length} competência{competencias.length > 1 ? 's' : ''}...
+            Rodando motor POC para {competencias.length} competência{competencias.length > 1 ? 's' : ''}...
           </span>
         </div>
       )}
 
-      {/* ── Tabela principal ── */}
-      {!loading && grupos.length > 0 && grupos.map(({ grupo, contas }) => (
+      {/* ── Totalizador rápido de meses ── */}
+      {!loading && temDados && competencias.length > 1 && (
+        <div className="overflow-x-auto">
+          <div className="flex gap-2" style={{ minWidth: `${competencias.length * 130}px` }}>
+            {competencias.map(comp => {
+              const v = totaisPorMes[comp] || 0;
+              return (
+                <div key={comp} className="flex-1 bg-[#0d0d0d] border border-[#1e1e1e] rounded p-3 text-center min-w-[110px]">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-1">{labelMes(comp)}</p>
+                  <p className="font-mono text-xs font-bold" style={{ color: v > 0 ? '#34c759' : v < 0 ? '#ff4d00' : '#444' }}>
+                    {v > 0 ? '+' : ''}{fmt(v)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tabelas por grupo ── */}
+      {!loading && grupos.map(({ grupo, contas }) => (
         <div key={grupo.key} className="bg-[#0d0d0d] border border-[#1e1e1e] rounded-sm overflow-hidden">
           {/* Cabeçalho do grupo */}
-          <div className="px-4 py-3 flex items-center gap-3 border-b border-[#1a1a1a]"
-            style={{ borderLeft: `3px solid ${grupo.cor}` }}>
-            <Building2 size={13} style={{ color: grupo.cor }}/>
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-white">{grupo.label}</h3>
-            <span className="text-[9px] text-[#444] font-bold ml-1">({contas.length} conta{contas.length !== 1 ? 's' : ''})</span>
+          <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-start gap-3" style={{ borderLeft: `3px solid ${grupo.cor}` }}>
+            <Building2 size={13} style={{ color: grupo.cor }} className="mt-0.5 shrink-0"/>
+            <div>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-white">{grupo.label}</h3>
+              <p className="text-[9px] text-[#444] mt-0.5">{grupo.descricao}</p>
+            </div>
+            <span className="ml-auto text-[9px] text-[#444] font-bold shrink-0">{contas.length} conta{contas.length !== 1 ? 's' : ''}</span>
           </div>
 
-          {/* Tabela */}
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-xs border-collapse" style={{ minWidth: `${220 + 120 + competencias.length * 120 + 140}px` }}>
+          {/* Tabela horizontal */}
+          <div className="overflow-x-auto">
+            <table
+              className="w-full text-xs border-collapse"
+              style={{ minWidth: `${240 + 120 + competencias.length * 120 + 140}px` }}
+            >
               <thead>
                 <tr className="bg-[#111]">
-                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 z-10 bg-[#111] min-w-[220px]">
-                    Conta / Descrição
+                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 z-20 bg-[#111] min-w-[230px]">
+                    Conta
                   </th>
                   <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] min-w-[110px]">
                     Saldo Ant.
@@ -352,45 +432,45 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
               <tbody>
                 {contas.map(c => (
                   <ContaRow key={c.conta}
-                    conta={c.conta}
-                    nome={c.nome}
+                    contaId={c.conta}
+                    contaNome={c.nome}
                     grupo={grupo}
-                    meses={competencias}
+                    competencias={competencias}
                     dadosPorMes={dadosPorMes}
-                    saldoAnt={c.saldoAnt}
-                    isExpanded={!!expandedContas[c.conta]}
-                    onToggle={() => toggleConta(c.conta)}
                   />
                 ))}
-                {/* Linha totalizadora do grupo */}
-                <tr className="bg-[#111] font-bold">
+
+                {/* Linha totalizadora */}
+                <tr className="bg-[#111]" style={{ borderTop: `1px solid #222` }}>
                   <td className="px-3 py-2 sticky left-0 z-10 bg-[#111] text-[9px] font-black uppercase tracking-widest" style={{ color: grupo.cor }}>
-                    Total {grupo.label}
+                    ∑ Total {grupo.label}
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-xs text-[#888]">
-                    {fmt(contas.reduce((s, c) => s + (c.saldoAnt || 0), 0))}
+                  <td className="px-3 py-2 text-right font-mono text-xs text-[#777]">
+                    {fmt(contas.reduce((s, c) => {
+                      const primeiroDado = Object.values(dadosPorMes)[0]?.find(r => String(r.conta) === String(c.conta));
+                      return s + (primeiroDado?.saldo_anterior || 0);
+                    }, 0))}
                   </td>
                   {competencias.map(comp => {
-                    const total = contas.reduce((s, c) => {
-                      const d = dadosPorMes[comp];
-                      const match = d?.find(x => String(x.conta) === String(c.conta));
-                      return s + (match?.movimento_liquido || 0);
+                    const total = contas.reduce((s, ct) => {
+                      const m = (dadosPorMes[comp] || []).find(r => String(r.conta) === String(ct.conta));
+                      return s + (m?.movimento_liquido || 0);
                     }, 0);
                     return (
                       <td key={comp} className="px-3 py-2 text-right font-mono text-xs font-bold">
-                        <span className={total > 0 ? 'text-[#34c759]' : total < 0 ? 'text-[#ff4d00]' : 'text-[#333]'}>
-                          {total !== 0 ? (total > 0 ? '+' : '') + fmt(total) : '—'}
+                        <span style={{ color: total > 0 ? '#34c759' : total < 0 ? '#ff4d00' : '#333' }}>
+                          {total !== 0 ? `${total > 0 ? '+' : ''}${fmt(total)}` : '—'}
                         </span>
                       </td>
                     );
                   })}
                   <td className="px-3 py-2 text-right font-mono text-sm font-black" style={{ color: grupo.cor }}>
                     {fmt(contas.reduce((s, c) => {
-                      let sf = c.saldoAnt || 0;
+                      let sf = 0;
+                      Object.values(dadosPorMes)[0] && (sf = Object.values(dadosPorMes)[0]?.find(r => String(r.conta) === String(c.conta))?.saldo_anterior || 0);
                       competencias.forEach(comp => {
-                        const d = dadosPorMes[comp];
-                        const match = d?.find(x => String(x.conta) === String(c.conta));
-                        sf += match?.movimento_liquido || 0;
+                        const m = (dadosPorMes[comp] || []).find(r => String(r.conta) === String(c.conta));
+                        sf += m?.movimento_liquido || 0;
                       });
                       return s + sf;
                     }, 0))}
@@ -402,26 +482,33 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         </div>
       ))}
 
-      {/* Empty state */}
-      {!loading && grupos.length === 0 && Object.keys(dadosPorMes).length > 0 && (
-        <div className="text-center py-16 text-[#555]">
-          <TrendingUp size={40} className="mx-auto mb-4 opacity-20"/>
-          <p className="font-black uppercase tracking-widest text-[#444] text-sm">Nenhum lançamento no período selecionado</p>
+      {/* Empty state após load */}
+      {!loading && temDados && grupos.length === 0 && (
+        <div className="text-center py-12 text-[#555]">
+          <AlertTriangle size={36} className="mx-auto mb-3 opacity-20"/>
+          <p className="font-black uppercase tracking-widest text-sm text-[#444]">
+            Nenhum lançamento societário gerado para o período
+          </p>
+          <p className="text-[10px] text-[#333] mt-1 uppercase tracking-widest">
+            Verifique se há POC, VGV e Receitas configurados para este empreendimento
+          </p>
         </div>
       )}
 
       {/* Call-to-action inicial */}
-      {!loading && Object.keys(dadosPorMes).length === 0 && !error && (
+      {!loading && !temDados && !error && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
           <div className="w-16 h-16 bg-[#ff4d00]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
             <TrendingUp className="text-[#ff4d00]" size={28}/>
           </div>
-          <p className="font-black uppercase tracking-widest text-white text-sm">Selecione o período e clique em Carregar</p>
-          <p className="text-[10px] text-[#444] uppercase tracking-widest">
-            Use um intervalo de meses para visualizar a evolução horizontal das contas
+          <p className="font-black uppercase tracking-widest text-white text-sm">
+            Selecione o período e clique em Carregar
           </p>
-          <button onClick={fetchTudo}
-            className="mt-2 px-6 py-3 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2">
+          <p className="text-[10px] text-[#444] uppercase tracking-widest max-w-xs">
+            O motor societário calcula receita POC, tributos diferidos/antecipados e variações de clientes
+          </p>
+          <button onClick={fetchTudo} disabled={!selectedEmpresa}
+            className="mt-2 px-6 py-3 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
             <Zap size={13}/> Carregar Dados
           </button>
         </div>
