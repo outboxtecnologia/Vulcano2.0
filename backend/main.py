@@ -9,8 +9,14 @@ import functools
 platform.machine = lambda: 'AMD64'
 platform.win32_ver = lambda *args, **kwargs: ('10', '', '', '')
 class FakeUname:
+    system = 'Windows'
+    node = 'NODE'
+    release = '10'
+    version = '10.0.19041'
     machine = 'AMD64'
+    processor = 'AMD64 Family'
 platform.uname = lambda: FakeUname()
+
 
 try:
     import warnings
