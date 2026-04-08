@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShieldCheck, Zap, AlertTriangle, CheckCircle2, XCircle,
-  RefreshCw, Building2, ChevronDown, ChevronUp, ArrowRight
+  RefreshCw, ChevronDown
 } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:6000";
-const fmt = (v) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
-const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+const fmt = (v) =>
+  new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
+
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const DIVERGENCIA_CORTE = 0.50;
+const abs = (v) => Math.abs(v || 0);
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function gerarCompetencias(de, ate) {
   const res = [];
   let [y, m] = de.split('-').map(Number);
@@ -25,173 +29,198 @@ const labelMes = (comp) => {
   return `${MESES_ABREV[m - 1]}/${String(y).slice(2)}`;
 };
 
-const abs = (v) => Math.abs(v || 0);
-const DIVERGENCIA_CORTE = 0.5; // abaixo disso, considera ok
-
-// Semáforo de status
-function Status({ diff }) {
-  if (abs(diff) < DIVERGENCIA_CORTE) return <CheckCircle2 size={14} className="text-[#34c759] shrink-0"/>;
-  if (abs(diff) < 5000)             return <AlertTriangle size={14} className="text-[#ffcc00] shrink-0"/>;
-  return <XCircle size={14} className="text-[#ff4d00] shrink-0"/>;
-}
-
-// Cor da divergência
-function corDiff(diff) {
-  if (abs(diff) < DIVERGENCIA_CORTE) return '#34c759';
-  if (abs(diff) < 5000)             return '#ffcc00';
+function corDiff(v) {
+  if (abs(v) < DIVERGENCIA_CORTE) return '#34c759';
+  if (abs(v) < 5000)              return '#ffcc00';
   return '#ff4d00';
 }
 
-// ── Linha de conta na tabela de confronto ────────────────────────────────────
-function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
+// ── Célula de valor ───────────────────────────────────────────────────────────
+function Valor({ v, cor }) {
+  if (abs(v) < 0.01) return <span className="text-[#2a2a2a]">—</span>;
+  return <span style={{ color: cor }} className="font-mono text-[10px]">{fmt(v)}</span>;
+}
+
+// ── Linha Δ (delta) ───────────────────────────────────────────────────────────
+function DeltaCell({ v }) {
+  if (abs(v) < DIVERGENCIA_CORTE) return <span className="text-[#333] text-[10px]">✓</span>;
+  return (
+    <span className="font-mono text-[10px] font-bold" style={{ color: corDiff(v) }}>
+      {v > 0 ? '+' : ''}{fmt(v)}
+    </span>
+  );
+}
+
+// ── Bloco de 4 valores por fonte (SA | Déb | Créd | SF) ───────────────────────
+function CelulaMes({ sa, deb, cred, sf, cor }) {
+  return (
+    <>
+      <td className="px-1.5 py-1.5 text-right border-r border-[#151515] w-24">
+        <Valor v={sa}  cor={cor + 'aa'} />
+      </td>
+      <td className="px-1.5 py-1.5 text-right border-r border-[#151515] w-24">
+        <Valor v={deb} cor="#34c759aa" />
+      </td>
+      <td className="px-1.5 py-1.5 text-right border-r border-[#151515] w-24">
+        <Valor v={cred} cor="#ff4d00aa" />
+      </td>
+      <td className="px-1.5 py-1.5 text-right border-r border-[#1e1e1e] w-24">
+        <Valor v={sf}  cor={cor} />
+      </td>
+    </>
+  );
+}
+
+// ── Linha de conta ────────────────────────────────────────────────────────────
+function ContaRow({ contaId, contaNome, competencias, dadosPorMes }) {
   const [open, setOpen] = useState(false);
 
-  // Para cada competência: soma fisico e virtual desta conta
   const porComp = competencias.map(comp => {
-    const lista = dadosPorMes[comp] || {};
-    const fisico   = lista.fisico?.find(r => String(r.conta) === String(contaId));
-    const virtual  = lista.virtual?.find(r => String(r.conta) === String(contaId));
+    const bloco = dadosPorMes[comp] || {};
+    const f = (bloco.fisico  || []).find(r => String(r.conta) === String(contaId)) || {};
+    const v = (bloco.virtual || []).find(r => String(r.conta) === String(contaId)) || {};
     return {
       comp,
-      movFisico:    fisico?.movimento_liquido   || 0,
-      saldoFisico:  fisico?.saldo_final         || 0,
-      movVirtual:   virtual?.movimento_liquido  || 0,
-      saldoVirtual: virtual?.saldo_final        || 0,
-      diffMov:      (virtual?.movimento_liquido || 0) - (fisico?.movimento_liquido || 0),
-      diffSaldo:    (virtual?.saldo_final       || 0) - (fisico?.saldo_final       || 0),
-      detalhesFisico:   fisico?.detalhes  || [],
-      detalhesVirtual:  virtual?.detalhes || [],
+      f_sa:  f.saldo_anterior   || 0,
+      f_deb: f.movimento_debito || 0,
+      f_cred:f.movimento_credito|| 0,
+      f_sf:  f.saldo_final      || 0,
+      v_sa:  v.saldo_anterior   || 0,
+      v_deb: v.movimento_debito || 0,
+      v_cred:v.movimento_credito|| 0,
+      v_sf:  v.saldo_final      || 0,
+      det_f: f.detalhes || [],
+      det_v: v.detalhes || [],
     };
   });
 
-  // Totais do período
-  const totalMovFisico   = porComp.reduce((s, c) => s + c.movFisico, 0);
-  const totalMovVirtual  = porComp.reduce((s, c) => s + c.movVirtual, 0);
-  const totalDiffMov     = totalMovVirtual - totalMovFisico;
-  // Saldo final = último mês
-  const ultimo           = porComp[porComp.length - 1] || {};
-  const totalDiffSaldo   = ultimo.diffSaldo || 0;
+  const temDado = porComp.some(c =>
+    abs(c.f_deb) > 0 || abs(c.f_cred) > 0 ||
+    abs(c.v_deb) > 0 || abs(c.v_cred) > 0
+  );
+  if (!temDado) return null;
 
-  const temDivergencia   = abs(totalDiffMov) >= DIVERGENCIA_CORTE || abs(totalDiffSaldo) >= DIVERGENCIA_CORTE;
+  const ultimo = porComp[porComp.length - 1] || {};
+  const diffSF  = ultimo.v_sf - ultimo.f_sf;
+  const temDiv  = abs(diffSF) >= DIVERGENCIA_CORTE;
 
-  // Só mostra contas que têm qualquer movimento em algum lado
-  const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0);
-  if (!temQualquerDado) return null;
+  const trBase  = temDiv
+    ? 'border-b border-[#ff4d00]/10 bg-[#0f0600]'
+    : 'border-b border-[#111] bg-[#0a0a0a]';
 
   return (
     <>
-      <tr
-        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/10 hover:bg-[#1a0800]' : 'border-[#1a1a1a] hover:bg-[#141414]'}`}
-        onClick={() => setOpen(o => !o)}
-      >
-        {/* Conta + nome */}
-        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px]">
+      {/* ── Linha QUESTOR ──────────────────────────────────────── */}
+      <tr className={`${trBase} hover:brightness-125 cursor-pointer`} onClick={() => setOpen(o => !o)}>
+        {/* Conta — rowspan visual via primeira linha */}
+        <td className="px-3 py-1.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[200px] border-r border-[#1e1e1e]" rowSpan={2}>
           <div className="flex items-center gap-2">
-            <Status diff={totalDiffSaldo}/>
-            <span className="font-mono text-[11px] font-bold text-[#ff4d00] shrink-0">{contaId}</span>
-            <span className="text-[10px] text-[#666] truncate" title={contaNome}>{contaNome}</span>
-            <ChevronDown size={9} className={`text-[#444] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
+            {temDiv
+              ? <XCircle size={12} className="text-[#ff4d00] shrink-0"/>
+              : <CheckCircle2 size={12} className="text-[#34c759] shrink-0"/>
+            }
+            <span className="font-mono text-[11px] font-bold text-[#ff4d00]">{contaId}</span>
+            <span className="text-[10px] text-[#555] truncate max-w-[110px]" title={contaNome}>{contaNome}</span>
+            <ChevronDown size={9} className={`text-[#444] shrink-0 ml-auto transition-transform ${open ? 'rotate-180':''}`}/>
           </div>
         </td>
-
-        {/* Por competência: mov fisico / mov virtual / diff */}
-        {porComp.map(({ comp, movFisico, movVirtual, diffMov }) => (
-          <td key={comp} className="px-1 py-0" style={{ minWidth: '270px' }}>
-            <div className="flex gap-0 h-full">
-              {/* Questor */}
-              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[10px] text-[#888] border-r border-[#1a1a1a]">
-                {abs(movFisico) > 0.01 ? (
-                  <span className={movFisico >= 0 ? 'text-[#34c759]/70' : 'text-[#ff4d00]/70'}>
-                    {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
-                  </span>
-                ) : <span className="text-[#252525]">—</span>}
-              </div>
-              {/* Vulcano */}
-              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[10px] text-[#888] border-r border-[#1a1a1a]">
-                {abs(movVirtual) > 0.01 ? (
-                  <span className={movVirtual >= 0 ? 'text-[#a259ff]/80' : 'text-[#ff9f0a]/80'}>
-                    {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
-                  </span>
-                ) : <span className="text-[#252525]">—</span>}
-              </div>
-              {/* Delta */}
-              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[11px] font-bold">
-                {abs(diffMov) < DIVERGENCIA_CORTE ? (
-                  <span className="text-[#333]">✓</span>
-                ) : (
-                  <span style={{ color: corDiff(diffMov) }}>
-                    {diffMov > 0 ? '+' : ''}{fmt(diffMov)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </td>
+        {/* Label fonte */}
+        <td className="px-2 py-1.5 border-r border-[#1e1e1e] w-20">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[#ff4d00]">Questor</span>
+        </td>
+        {/* Valores por mês */}
+        {porComp.map(c => (
+          <CelulaMes key={c.comp}
+            sa={c.f_sa} deb={c.f_deb} cred={c.f_cred} sf={c.f_sf}
+            cor="#ff8c00"
+          />
         ))}
-
-        {/* Saldo final total diff */}
-        <td className="px-3 py-2.5 text-right min-w-[130px]">
-          {abs(totalDiffSaldo) < DIVERGENCIA_CORTE ? (
-            <span className="text-[10px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
-          ) : (
+        {/* Status */}
+        <td className="px-3 py-1.5 text-right w-28 border-l border-[#1e1e1e]" rowSpan={2}>
+          {temDiv ? (
             <div>
-              <span className="font-mono text-sm font-black" style={{ color: corDiff(totalDiffSaldo) }}>
-                {totalDiffSaldo > 0 ? '+' : ''}{fmt(totalDiffSaldo)}
+              <span className="font-mono text-xs font-black" style={{ color: corDiff(diffSF) }}>
+                {diffSF > 0 ? '+' : ''}{fmt(diffSF)}
               </span>
-              <p className="text-[8px] font-bold uppercase tracking-widest text-[#555] mt-0.5">divergência saldo</p>
+              <p className="text-[8px] font-bold uppercase text-[#555] mt-0.5">Δ saldo</p>
             </div>
+          ) : (
+            <span className="text-[9px] font-black text-[#34c759] uppercase tracking-wider">OK</span>
           )}
         </td>
       </tr>
 
-      {/* Detalhe expandido: lançamentos lado a lado */}
+      {/* ── Linha VULCANO ──────────────────────────────────────── */}
+      <tr className={`${trBase} hover:brightness-125`}>
+        <td className="px-2 py-1.5 border-r border-[#1e1e1e] w-20">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano</span>
+        </td>
+        {porComp.map(c => (
+          <CelulaMes key={c.comp}
+            sa={c.v_sa} deb={c.v_deb} cred={c.v_cred} sf={c.v_sf}
+            cor="#a259ff"
+          />
+        ))}
+      </tr>
+
+      {/* ── Linha Δ (só se houver divergência) ────────────────── */}
+      {temDiv && (
+        <tr className="border-b border-[#ff4d00]/20 bg-[#0d0400]">
+          <td className="sticky left-0 z-10 bg-[#0d0400]"/>
+          <td className="px-2 py-1 border-r border-[#1e1e1e]">
+            <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Δ</span>
+          </td>
+          {porComp.map(c => (
+            <React.Fragment key={c.comp}>
+              <td className="px-1.5 py-1 text-right border-r border-[#151515] w-24">
+                <DeltaCell v={c.v_sa - c.f_sa} />
+              </td>
+              <td className="px-1.5 py-1 text-right border-r border-[#151515] w-24">
+                <DeltaCell v={c.v_deb - c.f_deb} />
+              </td>
+              <td className="px-1.5 py-1 text-right border-r border-[#151515] w-24">
+                <DeltaCell v={c.v_cred - c.f_cred} />
+              </td>
+              <td className="px-1.5 py-1 text-right border-r border-[#1e1e1e] w-24">
+                <DeltaCell v={c.v_sf - c.f_sf} />
+              </td>
+            </React.Fragment>
+          ))}
+          <td className="border-l border-[#1e1e1e]"/>
+        </tr>
+      )}
+
+      {/* ── Detalhe expandido ─────────────────────────────────── */}
       {open && (
         <tr>
-          <td colSpan={porComp.length + 2} className="p-0 bg-[#070707]">
+          <td colSpan={3 + competencias.length * 4 + 1} className="p-0 bg-[#060606]">
             <div className="grid grid-cols-2 divide-x divide-[#111]">
-              {/* Questor */}
-              <div>
-                <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-[#ff4d00]">Questor — Físico</span>
+              {[
+                { label: 'Questor — Físico', cor: '#ff4d00', rows: porComp.flatMap(c => c.det_f) },
+                { label: 'Vulcano — Societário', cor: '#a259ff', rows: porComp.flatMap(c => c.det_v) },
+              ].map(({ label, cor, rows }) => (
+                <div key={label}>
+                  <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
+                    <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: cor }}>{label}</span>
+                  </div>
+                  {rows.length === 0 ? (
+                    <p className="px-5 py-3 text-[9px] text-[#333] italic uppercase font-bold">Sem lançamentos</p>
+                  ) : (
+                    <table className="w-full text-[10px]">
+                      <tbody>
+                        {rows.map((d, i) => (
+                          <tr key={i} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+                            <td className="px-4 py-1 font-mono text-[#444] w-24 shrink-0">{d.data}</td>
+                            <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico || d.logica}>{d.historico || d.logica}</td>
+                            <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
+                            <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-                {porComp.flatMap(c => c.detalhesFisico).length === 0 ? (
-                  <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos físicos</p>
-                ) : (
-                  <table className="w-full text-[10px]">
-                    <tbody>
-                      {porComp.flatMap((c, ci) => c.detalhesFisico.map((d, i) => (
-                        <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                          <td className="px-4 py-1 font-mono text-[#444] w-24">{d.data}</td>
-                          <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico}>{d.historico}</td>
-                          <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
-                          <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
-                        </tr>
-                      )))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-              {/* Vulcano */}
-              <div>
-                <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano — Societário</span>
-                </div>
-                {porComp.flatMap(c => c.detalhesVirtual).length === 0 ? (
-                  <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos societários</p>
-                ) : (
-                  <table className="w-full text-[10px]">
-                    <tbody>
-                      {porComp.flatMap((c, ci) => c.detalhesVirtual.map((d, i) => (
-                        <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                          <td className="px-4 py-1 font-mono text-[#444] w-24">{d.data}</td>
-                          <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico || d.logica}>{d.historico}</td>
-                          <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
-                          <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
-                        </tr>
-                      )))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              ))}
             </div>
           </td>
         </tr>
@@ -210,12 +239,10 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const [filtroEmpId,   setFiltroEmpId]   = useState('');
   const [empreendimentos, setEmpreendimentos] = useState([]);
   const [empsLoading,     setEmpsLoading]     = useState(false);
-  // dados: { 'YYYY-MM': { fisico: [...contas], virtual: [...contas] } }
   const [dadosPorMes, setDadosPorMes] = useState({});
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // ── Carrega empreendimentos na montagem ──────────────────────────────────
   useEffect(() => {
     if (!selectedEmpresa) return;
     setEmpsLoading(true);
@@ -230,58 +257,47 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     catch { return [periodoInicio]; }
   }, [periodoInicio, periodoFim]);
 
-  const periodoValido = competencias.length <= 18;
+  const periodoValido = competencias.length <= 12;
 
-  // ── Fetch em paralelo, separando fisico e virtual ────────────────────────
   const fetchTudo = useCallback(async () => {
     if (!selectedEmpresa || !periodoValido) return;
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     const novos = {};
     try {
       await Promise.all(competencias.map(async (comp) => {
         const [ano, mes] = comp.split('-').map(Number);
         let url = `${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}`;
         if (filtroEmpId) url += `&empreendimento_id=${filtroEmpId}`;
-        const resp = await fetch(url);
-        const json = await resp.json();
+        const json = await (await fetch(url)).json();
 
-        // Consolida por conta, separando os dois lados
-        const mergeConta = (source, acc) => {
+        const merge = (source, acc) => {
           (source || []).forEach(c => {
             const k = String(c.conta);
             if (!acc[k]) {
               acc[k] = { ...c, detalhes: [...(c.detalhes || [])] };
             } else {
-              acc[k].saldo_anterior   = (acc[k].saldo_anterior   || 0) + (c.saldo_anterior   || 0);
-              acc[k].movimento_debito = (acc[k].movimento_debito || 0) + (c.movimento_debito || 0);
-              acc[k].movimento_credito= (acc[k].movimento_credito|| 0) + (c.movimento_credito|| 0);
-              acc[k].movimento_liquido= (acc[k].movimento_liquido|| 0) + (c.movimento_liquido|| 0);
-              acc[k].saldo_final      = (acc[k].saldo_final      || 0) + (c.saldo_final      || 0);
+              acc[k].saldo_anterior    = (acc[k].saldo_anterior    || 0) + (c.saldo_anterior    || 0);
+              acc[k].movimento_debito  = (acc[k].movimento_debito  || 0) + (c.movimento_debito  || 0);
+              acc[k].movimento_credito = (acc[k].movimento_credito || 0) + (c.movimento_credito || 0);
+              acc[k].movimento_liquido = (acc[k].movimento_liquido || 0) + (c.movimento_liquido || 0);
+              acc[k].saldo_final       = (acc[k].saldo_final       || 0) + (c.saldo_final       || 0);
               acc[k].detalhes.push(...(c.detalhes || []));
             }
           });
         };
 
-        const accFisico  = {};
-        const accVirtual = {};
+        const accF = {}, accV = {};
         (json.data || []).forEach(emp => {
-          mergeConta(emp.contas_fisicas,  accFisico);
-          mergeConta(emp.contas_virtuais, accVirtual);
+          merge(emp.contas_fisicas,  accF);
+          merge(emp.contas_virtuais, accV);
         });
-        novos[comp] = {
-          fisico:  Object.values(accFisico),
-          virtual: Object.values(accVirtual),
-        };
+        novos[comp] = { fisico: Object.values(accF), virtual: Object.values(accV) };
       }));
       setDadosPorMes(novos);
-    } catch (e) {
-      setError(String(e));
-    }
+    } catch (e) { setError(String(e)); }
     setLoading(false);
-  }, [selectedEmpresa, competencias, filtroEmpId]);
+  }, [selectedEmpresa, competencias, filtroEmpId, periodoValido]);
 
-  // ── União de todas as contas (fisico ∪ virtual) por código ───────────────
   const contasMap = useMemo(() => {
     const m = {};
     Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
@@ -289,49 +305,38 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         if (!m[c.conta]) m[c.conta] = c.nome || `Conta ${c.conta}`;
       });
     });
-    return m; // { contaId → nome }
+    return m;
   }, [dadosPorMes]);
 
-  // ── Métricas globais ──────────────────────────────────────────────────────
   const metrics = useMemo(() => {
-    let totMovFisico = 0, totMovVirtual = 0;
-    let contasConciliadas = 0, contasDivergentes = 0;
-
-    Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
-      (fisico  || []).forEach(c => { totMovFisico  += c.movimento_liquido || 0; });
-      (virtual || []).forEach(c => { totMovVirtual += c.movimento_liquido || 0; });
+    let ok = 0, div = 0;
+    Object.keys(contasMap).forEach(id => {
+      const diffTotal = competencias.reduce((s, comp) => {
+        const f = dadosPorMes[comp]?.fisico?.find( r => String(r.conta) === id);
+        const v = dadosPorMes[comp]?.virtual?.find(r => String(r.conta) === id);
+        return s + ((v?.saldo_final || 0) - (f?.saldo_final || 0));
+      }, 0);
+      abs(diffTotal) < DIVERGENCIA_CORTE ? ok++ : div++;
     });
-
-    Object.keys(contasMap).forEach(contaId => {
-      let diffTotal = 0;
-      competencias.forEach(comp => {
-        const f = dadosPorMes[comp]?.fisico?.find( r => String(r.conta) === contaId);
-        const v = dadosPorMes[comp]?.virtual?.find(r => String(r.conta) === contaId);
-        diffTotal += ((v?.movimento_liquido || 0) - (f?.movimento_liquido || 0));
-      });
-      if (abs(diffTotal) < DIVERGENCIA_CORTE) contasConciliadas++;
-      else contasDivergentes++;
-    });
-
-    const diffMov   = totMovVirtual - totMovFisico;
-    const pctAdh    = (contasConciliadas + contasDivergentes) > 0
-      ? (contasConciliadas / (contasConciliadas + contasDivergentes)) * 100
-      : 0;
-
-    return { totMovFisico, totMovVirtual, diffMov, pctAdh, contasConciliadas, contasDivergentes };
+    const pct = (ok + div) > 0 ? (ok / (ok + div)) * 100 : 0;
+    return { ok, div, pct };
   }, [dadosPorMes, contasMap, competencias]);
 
   const temDados = Object.keys(dadosPorMes).length > 0;
+  // Largura fixa por mês: 4 colunas × 96px = 384px
+  const COL_W = 96;
+  const COLS_PER_MES = 4;
 
   return (
     <div className="flex flex-col gap-5 pb-10 text-[#e5e2e1] animate-in fade-in">
+
       {/* Header */}
       <div className="border-b border-[#222] pb-4">
         <h2 className="text-4xl font-black tracking-tighter text-white flex items-center gap-3 mb-1">
           <ShieldCheck className="text-[#ff4d00]" size={36}/> Auditoria ERP
         </h2>
         <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">
-          Confronto Físico (Questor) × Societário (Vulcano POC) — Saldo e Movimento por Conta
+          Confronto <span className="text-[#ff4d00]">Questor (Físico)</span> × <span className="text-[#a259ff]">Vulcano (Societário)</span> — Saldo Ant · Déb · Créd · Saldo Final por Conta/Mês
         </p>
       </div>
 
@@ -359,10 +364,10 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
             {empreendimentos.map(e => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
           </select>
         </div>
-        <div className="flex flex-col justify-end pb-0.5">
+        <div className="flex flex-col justify-end">
           <span className="text-[9px] font-bold text-[#444] uppercase tracking-wider">
             {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
-            {!periodoValido && <span className="text-[#ff4d00] ml-2">⚠ máx. 18</span>}
+            {!periodoValido && <span className="text-[#ff4d00] ml-2">⚠ máx. 12</span>}
           </span>
         </div>
         <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
@@ -388,97 +393,110 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         </div>
       )}
 
-      {/* ── Cards de resumo ── */}
+      {/* Resumo */}
       {!loading && temDados && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Gauge conciliação */}
-          <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4 col-span-1">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
             <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-2">Conciliação Global</p>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-black font-mono" style={{ color: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00' }}>
-                {metrics.pctAdh.toFixed(0)}%
+            <div className="flex items-end gap-2 mb-2">
+              <span className="text-3xl font-black font-mono" style={{ color: metrics.pct >= 95 ? '#34c759' : metrics.pct >= 80 ? '#ffcc00' : '#ff4d00' }}>
+                {metrics.pct.toFixed(0)}%
               </span>
-              <span className="text-[10px] text-[#555] mb-0.5 font-bold">aderência</span>
             </div>
-            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5 mt-2">
-              <div className="h-1.5 rounded-full transition-all" style={{
-                width: `${metrics.pctAdh}%`,
-                background: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00'
-              }}/>
+            <div className="w-full bg-[#1a1a1a] rounded-full h-1 mb-2">
+              <div className="h-1 rounded-full" style={{ width: `${metrics.pct}%`, background: metrics.pct >= 95 ? '#34c759' : metrics.pct >= 80 ? '#ffcc00' : '#ff4d00' }}/>
             </div>
-            <p className="text-[9px] text-[#444] mt-2 font-bold">
-              <span className="text-[#34c759]">{metrics.contasConciliadas}</span> OK · <span className="text-[#ff4d00]">{metrics.contasDivergentes}</span> div.
+            <p className="text-[9px] text-[#444] font-bold">
+              <span className="text-[#34c759]">{metrics.ok}</span> conciliadas · <span className="text-[#ff4d00]">{metrics.div}</span> divergentes
             </p>
           </div>
-
-          {[
-            { label: 'Movimento Total Questor', val: metrics.totMovFisico,  cor: '#ff4d00' },
-            { label: 'Movimento Total Vulcano', val: metrics.totMovVirtual, cor: '#a259ff' },
-            { label: 'Diferença de Movimento',  val: metrics.diffMov, cor: corDiff(metrics.diffMov) },
-          ].map(m => (
-            <div key={m.label} className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
-              <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-2">{m.label}</p>
-              <p className="text-xl font-black font-mono" style={{ color: m.cor }}>{fmt(m.val)}</p>
+          <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4 col-span-2 flex items-center gap-6">
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-1">Legenda das colunas</p>
+              <div className="flex gap-4 text-[9px] font-bold uppercase tracking-widest flex-wrap">
+                <span className="text-[#666]">SA = Saldo Anterior</span>
+                <span className="text-[#34c759]/70]">Déb = Movimento Débito</span>
+                <span className="text-[#ff4d00]/70]">Créd = Movimento Crédito</span>
+                <span className="text-[#888]">SF = Saldo Final</span>
+              </div>
+              <div className="flex gap-4 mt-1 text-[9px] font-bold uppercase tracking-widest">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#ff4d00] inline-block"/>
+                  <span className="text-[#ff4d00]">Questor (Físico)</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#a259ff] inline-block"/>
+                  <span className="text-[#a259ff]">Vulcano (Societário)</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-[#ffcc00] inline-block"/>
+                  <span className="text-[#ffcc00]">Δ Divergência</span>
+                </span>
+              </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
-      {/* ── Tabela de confronto ── */}
+      {/* Tabela */}
       {!loading && Object.keys(contasMap).length > 0 && (
         <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded-sm overflow-hidden">
-          {/* Cabeçalho da legenda de colunas */}
-          <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-center gap-4 flex-wrap">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Confronto por Conta</h3>
-            <div className="flex gap-4 ml-auto text-[9px] font-bold uppercase tracking-widest">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#ff4d00] inline-block"/>
-                <span className="text-[#ff4d00]">Questor (Físico)</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#a259ff] inline-block"/>
-                <span className="text-[#a259ff]">Vulcano (Societário)</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#ffcc00] inline-block"/>
-                <span className="text-[#ffcc00]">Δ Divergência</span>
-              </span>
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
             <table
-              className="w-full border-collapse"
-              style={{ minWidth: `${220 + competencias.length * 270 + 140}px` }}
+              className="border-collapse"
+              style={{
+                tableLayout: 'fixed',
+                width: `${200 + 20 + competencias.length * COLS_PER_MES * COL_W + 110}px`
+              }}
             >
+              <colgroup>
+                {/* Conta */}
+                <col style={{ width: '200px' }}/>
+                {/* Fonte */}
+                <col style={{ width: '80px' }}/>
+                {/* Colunas por mês */}
+                {competencias.flatMap(c => Array(COLS_PER_MES).fill(c)).map((c, i) => (
+                  <col key={`${c}-${i}`} style={{ width: `${COL_W}px` }}/>
+                ))}
+                {/* Status */}
+                <col style={{ width: '110px' }}/>
+              </colgroup>
+
               <thead>
+                {/* Linha 1: meses */}
                 <tr className="bg-[#111]">
-                  {/* Conta */}
-                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 z-20 bg-[#111] min-w-[220px]">
+                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#222] sticky left-0 z-20 bg-[#111]" rowSpan={2}>
                     Conta
                   </th>
-                  {/* Grupos de colunas por mês */}
+                  <th className="px-2 py-2 border-b border-[#222] border-r border-[#222]" rowSpan={2}>
+                    <span className="text-[7px] font-black uppercase tracking-widest text-[#333]">Fonte</span>
+                  </th>
                   {competencias.map(comp => (
-                    <th key={comp} colSpan={1} className="p-0 border-b border-[#1a1a1a] border-l border-[#111]"
-                        style={{ minWidth: '270px' }}>
-                      <div className="px-2 py-1.5 text-center text-[9px] font-black uppercase tracking-widest text-[#666] border-b border-[#222]">
-                        {labelMes(comp)}
-                      </div>
-                      <div className="flex text-[7px] font-black uppercase tracking-widest text-[#333]">
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[#111]">Questor</div>
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[#111]">Vulcano</div>
-                        <div className="flex-1 px-2 py-1 text-right">Δ</div>
-                      </div>
+                    <th key={comp} colSpan={COLS_PER_MES}
+                        className="px-2 py-2 text-center text-[9px] font-black uppercase tracking-widest text-[#888] border-b border-[#222] border-l border-[#222]">
+                      {labelMes(comp)}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-white border-b border-[#1a1a1a] min-w-[130px]">
-                    Status Final
+                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#222] border-l border-[#222]" rowSpan={2}>
+                    Δ SF
                   </th>
                 </tr>
+                {/* Linha 2: SA | Déb | Créd | SF por mês */}
+                <tr className="bg-[#0f0f0f]">
+                  {competencias.flatMap(comp => (
+                    ['SA', 'Déb', 'Créd', 'SF'].map((col, i) => (
+                      <th key={`${comp}-${col}`}
+                          className={`py-1.5 text-right text-[7px] font-black uppercase tracking-widest border-b border-[#222] ${i === 0 ? 'border-l border-[#222]' : ''} ${i === 3 ? 'border-r border-[#222] text-white' : 'text-[#333]'}`}>
+                        {col}
+                      </th>
+                    ))
+                  ))}
+                </tr>
               </thead>
+
               <tbody>
                 {Object.entries(contasMap).map(([contaId, contaNome]) => (
-                  <ContaConfronto
+                  <ContaRow
                     key={contaId}
                     contaId={contaId}
                     contaNome={contaNome}
@@ -498,11 +516,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           <div className="w-16 h-16 bg-[#ff4d00]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
             <ShieldCheck className="text-[#ff4d00]" size={28}/>
           </div>
-          <p className="font-black uppercase tracking-widest text-white text-sm">
-            Selecione o período e clique em Auditar
-          </p>
+          <p className="font-black uppercase tracking-widest text-white text-sm">Selecione o período e clique em Auditar</p>
           <p className="text-[10px] text-[#444] uppercase tracking-widest max-w-sm">
-            Confronta movimento e saldo do Questor (físico) com o motor societário Vulcano (POC + tributos) conta a conta
+            Confronta Questor (físico) com Vulcano (societário) — Saldo Anterior, Débito, Crédito e Saldo Final por conta
           </p>
           <button onClick={fetchTudo} disabled={!selectedEmpresa}
             className="mt-2 px-6 py-3 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
