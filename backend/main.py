@@ -3,6 +3,15 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
 import pdfplumber
+import platform
+import functools
+# BUGFIX: Bypass WMI queries on Windows to avoid freeze during pandas import!
+platform.machine = lambda: 'AMD64'
+platform.win32_ver = lambda *args, **kwargs: ('10', '', '', '')
+class FakeUname:
+    machine = 'AMD64'
+platform.uname = lambda: FakeUname()
+
 try:
     import warnings
     with warnings.catch_warnings():
@@ -10,6 +19,26 @@ try:
         import google.generativeai as genai
 except BaseException:
     genai = None
+
+def _get_np():
+    import numpy as _np
+    return _np
+def _get_pd():
+    import pandas as _pd
+    return _pd
+
+class _LazyLoader:
+    def __init__(self, loader):
+        self._loader = loader
+        self._mod = None
+    def __getattr__(self, item):
+        if self._mod is None:
+            self._mod = self._loader()
+        return getattr(self._mod, item)
+
+np = _LazyLoader(_get_np)
+pd = _LazyLoader(_get_pd)
+
 import os
 import re
 import io
@@ -18,8 +47,6 @@ import asyncio
 import math
 import sys
 from datetime import date, datetime, time as time_type
-import numpy as np
-import pandas as pd
 
 
 
@@ -49,11 +76,25 @@ if genai:
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
 # Setup Cloud/Vertex para performance corporativa (JSON)
+_VERTEX_INIT_DONE = False
 try:
     import vertexai
-    from vertexai.generative_models import GenerativeModel as VertexModel, Part
-    # O GOOGLE_APPLICATION_CREDENTIALS carrega a service account automaticamente
-    vertexai.init(project="questor-explorer-prod", location="us-central1")
+    from vertexai.generative_models import GenerativeModel as OriginalVertexModel, Part
+    
+    class VertexModel:
+        def __init__(self, *args, **kwargs):
+            global _VERTEX_INIT_DONE
+            if not _VERTEX_INIT_DONE:
+                vertexai.init(project="questor-explorer-prod", location="us-central1")
+                _VERTEX_INIT_DONE = True
+            self.model = OriginalVertexModel(*args, **kwargs)
+            
+        def generate_content(self, *args, **kwargs):
+            return self.model.generate_content(*args, **kwargs)
+            
+        async def generate_content_async(self, *args, **kwargs):
+            return await self.model.generate_content_async(*args, **kwargs)
+            
     HAS_VERTEXAI = True
 except ImportError:
     HAS_VERTEXAI = False
