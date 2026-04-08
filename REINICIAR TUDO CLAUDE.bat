@@ -12,10 +12,10 @@ set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
 set VENV=%BACKEND%\.venv
 
-echo [1/4] Encerrando processos nas portas 6000 e 6001...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":6000 " 2^>nul') do taskkill /F /PID %%a >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":6001 " 2^>nul') do taskkill /F /PID %%a >nul 2>&1
-timeout /t 3 /nobreak >nul
+echo [1/4] Encerrando processos anteriores...
+taskkill /F /FI "WINDOWTITLE eq Vulcano2 - Backend" >nul 2>&1
+taskkill /F /FI "WINDOWTITLE eq Vulcano2 - Frontend" >nul 2>&1
+timeout /t 2 /nobreak >nul
 
 echo [2/4] Aguardando Windows...
 timeout /t 2 /nobreak >nul
@@ -28,9 +28,9 @@ start "Vulcano2 - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http
 
 echo.
 echo ==============================================================
-echo  Tudo iniciado! Abrindo navegador em 6 segundos...
+echo  Tudo iniciado! Aguarde 30s e abra: http://localhost:6001
 echo ==============================================================
-timeout /t 6 /nobreak >nul
+timeout /t 30 /nobreak >nul
 start http://localhost:6001/
 
 endlocal
