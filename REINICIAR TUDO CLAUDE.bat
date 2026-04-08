@@ -3,10 +3,9 @@ setlocal
 title Vulcano2.0
 color 0A
 
-set ROOT=C:\projetos\Vulcano2.0
-set BACKEND=%ROOT%\backend
-set FRONTEND=%ROOT%\frontend
-set VENV=%BACKEND%\.venv
+set BACKEND=C:\projetos\Vulcano2.0\backend
+set FRONTEND=C:\projetos\Vulcano2.0\frontend
+set VENV=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv
 
 echo Iniciando Backend porta 6000...
 start "Vulcano2 - Backend" cmd /k "cd /d "%BACKEND%" && "%VENV%\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 6000 --log-level info"
