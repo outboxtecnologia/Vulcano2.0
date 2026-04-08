@@ -25,7 +25,8 @@ echo.
 echo ==============================================================
 echo CONCLUIDO! Abrindo http://localhost:6001
 echo ==============================================================
-timeout /t 6 >nul
+echo Aguardando backend inicializar (30 segundos)...
+timeout /t 30 >nul
 start http://localhost:6001/
 
 endlocal
