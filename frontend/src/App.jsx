@@ -46,6 +46,8 @@ export default function App() {
   const [globalEmpresas, setGlobalEmpresas] = useState([]);
   const [empresasLoading, setEmpresasLoading] = useState(true);
   const [empresasError, setEmpresasError] = useState(null);
+  const [loadingSlow, setLoadingSlow] = useState(false); // true se passar de 4s
+  const [manualId, setManualId] = useState('959');
   const [currentView, setCurrentView] = useState('receitas');
   const [search, setSearch] = useState('');
 
@@ -60,11 +62,25 @@ export default function App() {
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/vulcano/empresas`)
+    // Avisa o usuario se estiver lento após 4s
+    const slowTimer = setTimeout(() => setLoadingSlow(true), 4000);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000); // 15s timeout
+    fetch(`${API_BASE}/api/vulcano/empresas`, { signal: ctrl.signal })
       .then(r => r.json())
-      .then(d => { setGlobalEmpresas(Array.isArray(d) ? d : (d.data || [])); setEmpresasLoading(false); })
-      .catch(e => { console.error('Error fetching empresas:', e); setEmpresasError('Network Error contacting ERP node'); setEmpresasLoading(false); });
+      .then(d => { setGlobalEmpresas(Array.isArray(d) ? d : (d.data || [])); setEmpresasLoading(false); setLoadingSlow(false); })
+      .catch(e => {
+        if (e.name === 'AbortError') {
+          setEmpresasError('Timeout: o banco de dados Vulcano não respondeu. Use entrada manual abaixo.');
+        } else {
+          setEmpresasError('Erro de conexão (porta 8000). Verifique o backend ou use entrada manual.');
+        }
+        setEmpresasLoading(false); setLoadingSlow(false);
+      })
+      .finally(() => { clearTimeout(timer); clearTimeout(slowTimer); });
+    return () => { ctrl.abort(); clearTimeout(timer); clearTimeout(slowTimer); };
   }, []);
+
 
   const handleRunSQL = () => alert('SQL Execution triggered for environment: ' + selectedEmpresa);
 
@@ -109,14 +125,43 @@ export default function App() {
                </div>
                
                {empresasLoading ? (
-                  <div className="text-white flex flex-col gap-4 items-center py-20">
-                    <RefreshCw className="animate-spin text-[#ff4d00]" size={40} />
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Sincronizando Nodes...</span>
+                  <div className="text-white flex flex-col gap-5 items-center py-16">
+                    <RefreshCw className="animate-spin text-[#ff4d00]" size={36} />
+                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Conectando ao banco Vulcano...</span>
+                    {loadingSlow && (
+                      <div className="mt-4 flex flex-col items-center gap-3 bg-black/40 border border-white/10 rounded p-5">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#ffcc00]">Demora detectada — banco pode estar bloqueado</p>
+                        <p className="text-[9px] text-[#555] uppercase tracking-widest">Digite o ID da empresa para entrar direto:</p>
+                        <div className="flex gap-2">
+                          <input value={manualId} onChange={e => setManualId(e.target.value)}
+                            className="bg-[#111] border border-[#333] rounded px-3 py-2 text-white text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
+                            placeholder="959"/>
+                          <button onClick={() => { setSelectedEmpresa(manualId); setEmpresaConfirmed(true); }}
+                            className="px-4 py-2 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all">
+                            Entrar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                ) : empresasError ? (
-                  <div className="text-[#ff4d00] bg-[#ff4d00]/10 p-8 max-w-lg text-center rounded-sm font-bold border border-[#ff4d00]/30 tracking-widest uppercase text-xs shadow-2xl">
-                    <AlertCircle size={32} className="mx-auto mb-4" />
-                    {empresasError}
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="text-[#ff4d00] bg-[#ff4d00]/10 p-6 max-w-lg text-center rounded-sm font-bold border border-[#ff4d00]/30 tracking-widest uppercase text-xs shadow-2xl">
+                      <AlertCircle size={28} className="mx-auto mb-3" />
+                      <p className="text-[10px] leading-relaxed">{empresasError}</p>
+                    </div>
+                    <div className="flex flex-col items-center gap-2 bg-black/40 border border-white/10 rounded p-5">
+                      <p className="text-[9px] text-[#555] uppercase tracking-widest font-bold">Entrar com ID de empresa:</p>
+                      <div className="flex gap-2">
+                        <input value={manualId} onChange={e => setManualId(e.target.value)}
+                          className="bg-[#111] border border-[#333] rounded px-3 py-2 text-white text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
+                          placeholder="959"/>
+                        <button onClick={() => { setSelectedEmpresa(manualId); setEmpresaConfirmed(true); }}
+                          className="px-4 py-2 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all">
+                          Entrar
+                        </button>
+                      </div>
+                    </div>
                   </div>
                ) : filteredEmpresas.length === 0 ? (
                   <div className="text-[#888] uppercase tracking-widest text-xs border border-white/5 p-12 rounded-sm bg-black/20 backdrop-blur-sm">Nenhuma empresa localizada</div>
