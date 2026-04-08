@@ -1,295 +1,513 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShieldCheck, Zap, AlertTriangle, CheckCircle2, XCircle,
-  ArrowUpRight, ArrowDownRight, TrendingUp, Building2, ChevronDown, ChevronUp
+  RefreshCw, Building2, ChevronDown, ChevronUp, ArrowRight
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend
-} from 'recharts';
 
 const API_BASE = "http://127.0.0.1:8000";
-const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-const fmtPct = (v) => `${(+v || 0).toFixed(1)}%`;
+const fmt = (v) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+// ── helpers ──────────────────────────────────────────────────────────────────
+function gerarCompetencias(de, ate) {
+  const res = [];
+  let [y, m] = de.split('-').map(Number);
+  const [ey, em] = ate.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    res.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return res;
+}
+const labelMes = (comp) => {
+  const [y, m] = comp.split('-').map(Number);
+  return `${MESES_ABREV[m - 1]}/${String(y).slice(2)}`;
+};
 
-// ── Gauge de % auditoria ─────────────────────────────────────────────────────
-function AuditGauge({ pct, label }) {
-  const clamped = Math.min(100, Math.max(0, pct));
-  const color = clamped >= 95 ? '#34c759' : clamped >= 80 ? '#ffcc00' : '#ff4d00';
-  const r = 40, cx = 50, cy = 50;
-  const circ = 2 * Math.PI * r;
-  const dash = (clamped / 100) * circ;
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <svg width="110" height="110" viewBox="0 0 100 100">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#1e1e1e" strokeWidth="10"/>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color}
-          strokeWidth="10" strokeDasharray={`${dash} ${circ}`}
-          strokeLinecap="round" transform="rotate(-90 50 50)"/>
-        <text x="50" y="46" textAnchor="middle" fill="white" fontSize="16" fontWeight="bold" fontFamily="monospace">{clamped.toFixed(0)}%</text>
-        <text x="50" y="62" textAnchor="middle" fill="#555" fontSize="8" fontFamily="sans-serif" textTransform="uppercase">AUDITADO</text>
-      </svg>
-      <p className="text-[9px] font-black uppercase tracking-widest text-[#666]">{label}</p>
-    </div>
-  );
+const abs = (v) => Math.abs(v || 0);
+const DIVERGENCIA_CORTE = 0.5; // abaixo disso, considera ok
+
+// Semáforo de status
+function Status({ diff }) {
+  if (abs(diff) < DIVERGENCIA_CORTE) return <CheckCircle2 size={14} className="text-[#34c759] shrink-0"/>;
+  if (abs(diff) < 5000)             return <AlertTriangle size={14} className="text-[#ffcc00] shrink-0"/>;
+  return <XCircle size={14} className="text-[#ff4d00] shrink-0"/>;
 }
 
-// ── Card de divergência por empreendimento ───────────────────────────────────
-function EmpCard({ emp }) {
+// Cor da divergência
+function corDiff(diff) {
+  if (abs(diff) < DIVERGENCIA_CORTE) return '#34c759';
+  if (abs(diff) < 5000)             return '#ffcc00';
+  return '#ff4d00';
+}
+
+// ── Linha de conta na tabela de confronto ────────────────────────────────────
+function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const [open, setOpen] = useState(false);
-  const fisicTotal  = (emp.contas_fisicas  || []).reduce((s, c) => s + (c.saldo_final || 0), 0);
-  const virtualTotal = (emp.contas_virtuais || []).reduce((s, c) => s + (c.saldo_final || 0), 0);
-  const diff  = virtualTotal - fisicTotal;
-  const adh   = fisicTotal !== 0 ? Math.min(100, (1 - Math.abs(diff) / Math.abs(fisicTotal)) * 100) : 0;
-  const ok    = Math.abs(diff) < 1000;
 
-  return (
-    <div className={`bg-[#111] border rounded-sm ${ok ? 'border-[#1e1e1e]' : 'border-[#ff4d00]/30'} shadow-lg`}>
-      <div className="px-5 py-4 flex items-center gap-4 cursor-pointer" onClick={() => setOpen(o => !o)}>
-        {/* Status dot */}
-        {ok ? <CheckCircle2 size={16} className="text-[#34c759] shrink-0"/> : <XCircle size={16} className="text-[#ff4d00] shrink-0"/>}
-        
-        <div className="flex-1 min-w-0">
-          <p className="text-white font-black text-sm truncate">{emp.empreendimento_nome}</p>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#555]">ID {emp.empreendimento_id}</p>
-        </div>
-
-        <div className="text-right">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#555] mb-0.5">Físico (Questor)</p>
-          <p className="font-mono text-sm text-[#aaa]">{fmt(fisicTotal)}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#555] mb-0.5">Societário (Vulcano)</p>
-          <p className="font-mono text-sm text-[#aaa]">{fmt(virtualTotal)}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#555] mb-0.5">Divergência</p>
-          <p className={`font-mono font-bold text-sm ${ok ? 'text-[#34c759]' : 'text-[#ff4d00]'}`}>
-            {diff >= 0 ? '+' : ''}{fmt(diff)}
-          </p>
-        </div>
-        <div className="w-16 text-center">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#555] mb-1">Aderência</p>
-          <div className="w-full bg-[#1a1a1a] rounded-full h-1.5">
-            <div className="h-1.5 rounded-full" style={{ width: `${adh}%`, background: ok ? '#34c759' : '#ff4d00' }}/>
-          </div>
-          <p className="text-[10px] font-mono font-bold mt-0.5" style={{ color: ok ? '#34c759' : '#ff4d00' }}>{adh.toFixed(0)}%</p>
-        </div>
-        {open ? <ChevronUp size={14} className="text-[#555]"/> : <ChevronDown size={14} className="text-[#555]"/>}
-      </div>
-
-      {open && (
-        <div className="border-t border-[#1a1a1a] px-5 py-4 grid grid-cols-2 gap-6">
-          {/* Contas físicas */}
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#ff4d00] mb-3">Contas Físicas (Questor)</p>
-            <div className="flex flex-col gap-1">
-              {(emp.contas_fisicas || []).slice(0, 15).map(c => (
-                <div key={c.conta} className="flex justify-between items-center py-1 border-b border-[#171717]">
-                  <span className="font-mono text-[10px] text-[#ff4d00] mr-2">{c.conta}</span>
-                  <span className="text-[10px] text-[#666] flex-1 truncate">{c.nome}</span>
-                  <span className="font-mono text-[10px] text-[#aaa] ml-2">{fmt(c.saldo_final)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Contas virtuais societárias */}
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-3">Lançamentos Societários (Vulcano)</p>
-            <div className="flex flex-col gap-1">
-              {(emp.contas_virtuais || []).slice(0, 15).map(c => (
-                <div key={c.conta} className="flex justify-between items-center py-1 border-b border-[#171717]">
-                  <span className="font-mono text-[10px] text-[#a259ff] mr-2">{c.conta}</span>
-                  <span className="text-[10px] text-[#666] flex-1 truncate">{c.nome}</span>
-                  <span className="font-mono text-[10px] text-[#aaa] ml-2">{fmt(c.saldo_final)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── MAIN ────────────────────────────────────────────────────────────────────
-export const AuditoriaERPView = ({ selectedEmpresa }) => {
-  const now = new Date();
-  const [mes, setMes] = useState(now.getMonth() + 1);
-  const [ano, setAno] = useState(now.getFullYear());
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const fetchData = () => {
-    if (!selectedEmpresa) return;
-    setLoading(true);
-    setError('');
-    fetch(`${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}`)
-      .then(r => r.json())
-      .then(j => { setData(j.data || []); setLoading(false); })
-      .catch(e => { setError(String(e)); setLoading(false); });
-  };
-
-  useEffect(() => { fetchData(); }, [selectedEmpresa, mes, ano]);
-
-  // Métricas globais
-  const metrics = useMemo(() => {
-    let totalFisico = 0, totalVirtual = 0, empOk = 0;
-    data.forEach(emp => {
-      const f = (emp.contas_fisicas  || []).reduce((s, c) => s + (c.saldo_final || 0), 0);
-      const v = (emp.contas_virtuais || []).reduce((s, c) => s + (c.saldo_final || 0), 0);
-      totalFisico  += f;
-      totalVirtual += v;
-      if (Math.abs(v - f) < 1000) empOk++;
-    });
-    const diff = totalVirtual - totalFisico;
-    const adh  = totalFisico !== 0 ? Math.min(100, (1 - Math.abs(diff) / Math.abs(totalFisico)) * 100) : 0;
-    return { totalFisico, totalVirtual, diff, adh, empOk, total: data.length };
-  }, [data]);
-
-  // Dados para gráfico de barras comparativo
-  const chartData = useMemo(() => {
-    return data.map(emp => ({
-      name: (emp.empreendimento_nome || '').substring(0, 18),
-      Físico: +(((emp.contas_fisicas  || []).reduce((s, c) => s + (c.saldo_final || 0), 0)) / 1000).toFixed(0),
-      Societário: +(((emp.contas_virtuais || []).reduce((s, c) => s + (c.saldo_final || 0), 0)) / 1000).toFixed(0),
-    }));
-  }, [data]);
-
-  const empsNok = data.filter(emp => {
-    const f = (emp.contas_fisicas  || []).reduce((s, c) => s + (c.saldo_final || 0), 0);
-    const v = (emp.contas_virtuais || []).reduce((s, c) => s + (c.saldo_final || 0), 0);
-    return Math.abs(v - f) >= 1000;
+  // Para cada competência: soma fisico e virtual desta conta
+  const porComp = competencias.map(comp => {
+    const lista = dadosPorMes[comp] || {};
+    const fisico   = lista.fisico?.find(r => String(r.conta) === String(contaId));
+    const virtual  = lista.virtual?.find(r => String(r.conta) === String(contaId));
+    return {
+      comp,
+      movFisico:    fisico?.movimento_liquido   || 0,
+      saldoFisico:  fisico?.saldo_final         || 0,
+      movVirtual:   virtual?.movimento_liquido  || 0,
+      saldoVirtual: virtual?.saldo_final        || 0,
+      diffMov:      (virtual?.movimento_liquido || 0) - (fisico?.movimento_liquido || 0),
+      diffSaldo:    (virtual?.saldo_final       || 0) - (fisico?.saldo_final       || 0),
+      detalhesFisico:   fisico?.detalhes  || [],
+      detalhesVirtual:  virtual?.detalhes || [],
+    };
   });
 
+  // Totais do período
+  const totalMovFisico   = porComp.reduce((s, c) => s + c.movFisico, 0);
+  const totalMovVirtual  = porComp.reduce((s, c) => s + c.movVirtual, 0);
+  const totalDiffMov     = totalMovVirtual - totalMovFisico;
+  // Saldo final = último mês
+  const ultimo           = porComp[porComp.length - 1] || {};
+  const totalDiffSaldo   = ultimo.diffSaldo || 0;
+
+  const temDivergencia   = abs(totalDiffMov) >= DIVERGENCIA_CORTE || abs(totalDiffSaldo) >= DIVERGENCIA_CORTE;
+
+  // Só mostra contas que têm qualquer movimento em algum lado
+  const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0);
+  if (!temQualquerDado) return null;
+
   return (
-    <div className="flex flex-col gap-6 pb-10 text-[#e5e2e1] animate-in fade-in">
+    <>
+      <tr
+        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/10 hover:bg-[#1a0800]' : 'border-[#1a1a1a] hover:bg-[#141414]'}`}
+        onClick={() => setOpen(o => !o)}
+      >
+        {/* Conta + nome */}
+        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px]">
+          <div className="flex items-center gap-2">
+            <Status diff={totalDiffSaldo}/>
+            <span className="font-mono text-[11px] font-bold text-[#ff4d00] shrink-0">{contaId}</span>
+            <span className="text-[10px] text-[#666] truncate" title={contaNome}>{contaNome}</span>
+            <ChevronDown size={9} className={`text-[#444] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
+          </div>
+        </td>
+
+        {/* Por competência: mov fisico / mov virtual / diff */}
+        {porComp.map(({ comp, movFisico, movVirtual, diffMov }) => (
+          <td key={comp} className="px-1 py-0" style={{ minWidth: '270px' }}>
+            <div className="flex gap-0 h-full">
+              {/* Questor */}
+              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[10px] text-[#888] border-r border-[#1a1a1a]">
+                {abs(movFisico) > 0.01 ? (
+                  <span className={movFisico >= 0 ? 'text-[#34c759]/70' : 'text-[#ff4d00]/70'}>
+                    {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
+                  </span>
+                ) : <span className="text-[#252525]">—</span>}
+              </div>
+              {/* Vulcano */}
+              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[10px] text-[#888] border-r border-[#1a1a1a]">
+                {abs(movVirtual) > 0.01 ? (
+                  <span className={movVirtual >= 0 ? 'text-[#a259ff]/80' : 'text-[#ff9f0a]/80'}>
+                    {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
+                  </span>
+                ) : <span className="text-[#252525]">—</span>}
+              </div>
+              {/* Delta */}
+              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[11px] font-bold">
+                {abs(diffMov) < DIVERGENCIA_CORTE ? (
+                  <span className="text-[#333]">✓</span>
+                ) : (
+                  <span style={{ color: corDiff(diffMov) }}>
+                    {diffMov > 0 ? '+' : ''}{fmt(diffMov)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </td>
+        ))}
+
+        {/* Saldo final total diff */}
+        <td className="px-3 py-2.5 text-right min-w-[130px]">
+          {abs(totalDiffSaldo) < DIVERGENCIA_CORTE ? (
+            <span className="text-[10px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
+          ) : (
+            <div>
+              <span className="font-mono text-sm font-black" style={{ color: corDiff(totalDiffSaldo) }}>
+                {totalDiffSaldo > 0 ? '+' : ''}{fmt(totalDiffSaldo)}
+              </span>
+              <p className="text-[8px] font-bold uppercase tracking-widest text-[#555] mt-0.5">divergência saldo</p>
+            </div>
+          )}
+        </td>
+      </tr>
+
+      {/* Detalhe expandido: lançamentos lado a lado */}
+      {open && (
+        <tr>
+          <td colSpan={porComp.length + 2} className="p-0 bg-[#070707]">
+            <div className="grid grid-cols-2 divide-x divide-[#111]">
+              {/* Questor */}
+              <div>
+                <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-[#ff4d00]">Questor — Físico</span>
+                </div>
+                {porComp.flatMap(c => c.detalhesFisico).length === 0 ? (
+                  <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos físicos</p>
+                ) : (
+                  <table className="w-full text-[10px]">
+                    <tbody>
+                      {porComp.flatMap((c, ci) => c.detalhesFisico.map((d, i) => (
+                        <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+                          <td className="px-4 py-1 font-mono text-[#444] w-24">{d.data}</td>
+                          <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico}>{d.historico}</td>
+                          <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
+                          <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
+                        </tr>
+                      )))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {/* Vulcano */}
+              <div>
+                <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano — Societário</span>
+                </div>
+                {porComp.flatMap(c => c.detalhesVirtual).length === 0 ? (
+                  <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos societários</p>
+                ) : (
+                  <table className="w-full text-[10px]">
+                    <tbody>
+                      {porComp.flatMap((c, ci) => c.detalhesVirtual.map((d, i) => (
+                        <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+                          <td className="px-4 py-1 font-mono text-[#444] w-24">{d.data}</td>
+                          <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico || d.logica}>{d.historico}</td>
+                          <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
+                          <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
+                        </tr>
+                      )))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// ── MAIN VIEW ────────────────────────────────────────────────────────────────
+export const AuditoriaERPView = ({ selectedEmpresa }) => {
+  const now = new Date();
+  const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const [periodoInicio, setPeriodoInicio] = useState(mesAtual);
+  const [periodoFim,    setPeriodoFim]    = useState(mesAtual);
+  const [filtroEmpId,   setFiltroEmpId]   = useState('');
+  const [empreendimentos, setEmpreendimentos] = useState([]);
+  const [empsLoading,     setEmpsLoading]     = useState(false);
+  // dados: { 'YYYY-MM': { fisico: [...contas], virtual: [...contas] } }
+  const [dadosPorMes, setDadosPorMes] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  // ── Carrega empreendimentos na montagem ──────────────────────────────────
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    setEmpsLoading(true);
+    fetch(`${API_BASE}/api/empreendimentos/basico?empresa_id=${selectedEmpresa}`)
+      .then(r => r.json())
+      .then(j => { setEmpreendimentos(j.empreendimentos || []); setEmpsLoading(false); })
+      .catch(() => setEmpsLoading(false));
+  }, [selectedEmpresa]);
+
+  const competencias = useMemo(() => {
+    try { return gerarCompetencias(periodoInicio, periodoFim); }
+    catch { return [periodoInicio]; }
+  }, [periodoInicio, periodoFim]);
+
+  const periodoValido = competencias.length <= 18;
+
+  // ── Fetch em paralelo, separando fisico e virtual ────────────────────────
+  const fetchTudo = useCallback(async () => {
+    if (!selectedEmpresa || !periodoValido) return;
+    setLoading(true);
+    setError('');
+    const novos = {};
+    try {
+      await Promise.all(competencias.map(async (comp) => {
+        const [ano, mes] = comp.split('-').map(Number);
+        let url = `${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}`;
+        if (filtroEmpId) url += `&empreendimento_id=${filtroEmpId}`;
+        const resp = await fetch(url);
+        const json = await resp.json();
+
+        // Consolida por conta, separando os dois lados
+        const mergeConta = (source, acc) => {
+          (source || []).forEach(c => {
+            const k = String(c.conta);
+            if (!acc[k]) {
+              acc[k] = { ...c, detalhes: [...(c.detalhes || [])] };
+            } else {
+              acc[k].saldo_anterior   = (acc[k].saldo_anterior   || 0) + (c.saldo_anterior   || 0);
+              acc[k].movimento_debito = (acc[k].movimento_debito || 0) + (c.movimento_debito || 0);
+              acc[k].movimento_credito= (acc[k].movimento_credito|| 0) + (c.movimento_credito|| 0);
+              acc[k].movimento_liquido= (acc[k].movimento_liquido|| 0) + (c.movimento_liquido|| 0);
+              acc[k].saldo_final      = (acc[k].saldo_final      || 0) + (c.saldo_final      || 0);
+              acc[k].detalhes.push(...(c.detalhes || []));
+            }
+          });
+        };
+
+        const accFisico  = {};
+        const accVirtual = {};
+        (json.data || []).forEach(emp => {
+          mergeConta(emp.contas_fisicas,  accFisico);
+          mergeConta(emp.contas_virtuais, accVirtual);
+        });
+        novos[comp] = {
+          fisico:  Object.values(accFisico),
+          virtual: Object.values(accVirtual),
+        };
+      }));
+      setDadosPorMes(novos);
+    } catch (e) {
+      setError(String(e));
+    }
+    setLoading(false);
+  }, [selectedEmpresa, competencias, filtroEmpId]);
+
+  // ── União de todas as contas (fisico ∪ virtual) por código ───────────────
+  const contasMap = useMemo(() => {
+    const m = {};
+    Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
+      [...(fisico || []), ...(virtual || [])].forEach(c => {
+        if (!m[c.conta]) m[c.conta] = c.nome || `Conta ${c.conta}`;
+      });
+    });
+    return m; // { contaId → nome }
+  }, [dadosPorMes]);
+
+  // ── Métricas globais ──────────────────────────────────────────────────────
+  const metrics = useMemo(() => {
+    let totMovFisico = 0, totMovVirtual = 0;
+    let contasConciliadas = 0, contasDivergentes = 0;
+
+    Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
+      (fisico  || []).forEach(c => { totMovFisico  += c.movimento_liquido || 0; });
+      (virtual || []).forEach(c => { totMovVirtual += c.movimento_liquido || 0; });
+    });
+
+    Object.keys(contasMap).forEach(contaId => {
+      let diffTotal = 0;
+      competencias.forEach(comp => {
+        const f = dadosPorMes[comp]?.fisico?.find( r => String(r.conta) === contaId);
+        const v = dadosPorMes[comp]?.virtual?.find(r => String(r.conta) === contaId);
+        diffTotal += ((v?.movimento_liquido || 0) - (f?.movimento_liquido || 0));
+      });
+      if (abs(diffTotal) < DIVERGENCIA_CORTE) contasConciliadas++;
+      else contasDivergentes++;
+    });
+
+    const diffMov   = totMovVirtual - totMovFisico;
+    const pctAdh    = (contasConciliadas + contasDivergentes) > 0
+      ? (contasConciliadas / (contasConciliadas + contasDivergentes)) * 100
+      : 0;
+
+    return { totMovFisico, totMovVirtual, diffMov, pctAdh, contasConciliadas, contasDivergentes };
+  }, [dadosPorMes, contasMap, competencias]);
+
+  const temDados = Object.keys(dadosPorMes).length > 0;
+
+  return (
+    <div className="flex flex-col gap-5 pb-10 text-[#e5e2e1] animate-in fade-in">
       {/* Header */}
-      <div className="border-b border-[#222] pb-5">
+      <div className="border-b border-[#222] pb-4">
         <h2 className="text-4xl font-black tracking-tighter text-white flex items-center gap-3 mb-1">
-          <ShieldCheck className="text-[#ff4d00]" size={38}/> Auditoria ERP
+          <ShieldCheck className="text-[#ff4d00]" size={36}/> Auditoria ERP
         </h2>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">Confronto Físico (Questor) × Societário (Vulcano IFRS15)</p>
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">
+          Confronto Físico (Questor) × Societário (Vulcano POC) — Saldo e Movimento por Conta
+        </p>
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="bg-[#111] border border-[#222] rounded p-3 flex flex-col gap-1 focus-within:border-[#ff4d00]">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Mês</span>
-          <select value={mes} onChange={e => setMes(+e.target.value)}
-            className="bg-transparent outline-none text-[#ccc] text-xs font-bold">
-            {MESES.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
+      <div className="flex flex-wrap gap-3 items-end bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Período De</span>
+          <input type="month" value={periodoInicio}
+            onChange={e => { const v = e.target.value; setPeriodoInicio(v); if (v > periodoFim) setPeriodoFim(v); }}
+            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
+        </div>
+        <div className="flex flex-col gap-1">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Até</span>
+          <input type="month" value={periodoFim}
+            onChange={e => { const v = e.target.value; setPeriodoFim(v); if (v < periodoInicio) setPeriodoInicio(v); }}
+            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
+        </div>
+        <div className="flex flex-col gap-1 min-w-[220px]">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">
+            Empreendimento {empsLoading ? '(carregando...)' : `(${empreendimentos.length})`}
+          </span>
+          <select value={filtroEmpId} onChange={e => setFiltroEmpId(e.target.value)}
+            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-bold outline-none focus:border-[#ff4d00] transition-colors">
+            <option value="">Todos os empreendimentos</option>
+            {empreendimentos.map(e => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
           </select>
         </div>
-        <div className="bg-[#111] border border-[#222] rounded p-3 flex flex-col gap-1 focus-within:border-[#ff4d00]">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Ano</span>
-          <select value={ano} onChange={e => setAno(+e.target.value)}
-            className="bg-transparent outline-none text-[#ccc] text-xs font-bold">
-            {[2022,2023,2024,2025,2026].map(y => <option key={y}>{y}</option>)}
-          </select>
+        <div className="flex flex-col justify-end pb-0.5">
+          <span className="text-[9px] font-bold text-[#444] uppercase tracking-wider">
+            {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
+            {!periodoValido && <span className="text-[#ff4d00] ml-2">⚠ máx. 18</span>}
+          </span>
         </div>
-        <button onClick={fetchData}
-          className="px-5 py-2.5 text-[9px] font-black uppercase tracking-widest border border-[#333] hover:border-[#ff4d00] hover:text-[#ff4d00] text-[#888] rounded flex items-center gap-2 ml-auto">
-          <Zap size={12}/> Auditar
+        <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
+          className="ml-auto px-6 py-2.5 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
+          {loading ? `Auditando ${competencias.length} meses...` : 'Auditar'}
         </button>
       </div>
 
-      {/* Loading / Error */}
-      {loading && (
-        <div className="flex items-center justify-center gap-3 py-16">
-          <Zap className="animate-spin text-[#ff4d00]" size={28}/>
-          <span className="text-xs font-black uppercase tracking-[0.2em] text-[#555]">Confrontando Registros...</span>
-        </div>
-      )}
       {error && (
-        <div className="bg-[#ff4d00]/10 border border-[#ff4d00]/30 rounded p-4 flex items-center gap-3">
-          <AlertTriangle size={18} className="text-[#ff4d00] shrink-0"/>
-          <p className="text-sm text-[#ff4d00] font-mono">{error}</p>
+        <div className="bg-[#ff4d00]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
+          <AlertTriangle size={14} className="text-[#ff4d00] shrink-0"/>
+          <p className="text-sm font-mono text-[#ff4d00]">{error}</p>
         </div>
       )}
 
-      {!loading && data.length > 0 && (
-        <>
-          {/* Painel de métricas executivas */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Gauge */}
-            <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-5 flex flex-col items-center justify-center gap-2">
-              <AuditGauge pct={metrics.adh} label="Status de Conciliação"/>
-              <p className="text-[9px] font-black uppercase tracking-widest text-[#555]">
-                {metrics.empOk}/{metrics.total} obras OK
-              </p>
-            </div>
-            {/* Métricas */}
-            {[
-              { label: 'Total Físico (Questor)', val: metrics.totalFisico, cor: '#ff4d00' },
-              { label: 'Total Societário (Vulcano)', val: metrics.totalVirtual, cor: '#a259ff' },
-              { label: 'Divergência Global', val: metrics.diff, cor: Math.abs(metrics.diff) < 1000 ? '#34c759' : '#ff4d00' },
-            ].map(m => (
-              <div key={m.label} className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-5 flex flex-col justify-between">
-                <p className="text-[9px] font-black uppercase tracking-widest text-[#555] mb-2">{m.label}</p>
-                <p className="text-2xl font-black font-mono" style={{ color: m.cor }}>{fmt(m.val)}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Gráfico comparativo */}
-          {chartData.length > 0 && (
-            <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#555] mb-4">Confronto por Empreendimento (R$ Mil)</p>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} barCategoryGap="25%">
-                  <CartesianGrid strokeDasharray="2 4" stroke="#1e1e1e"/>
-                  <XAxis dataKey="name" tick={{ fill: '#555', fontSize: 9 }} angle={-25} textAnchor="end" height={50}/>
-                  <YAxis tick={{ fill: '#555', fontSize: 9 }}/>
-                  <Tooltip contentStyle={{ background: '#111', border: '1px solid #222', color: '#fff', fontSize: 11 }}
-                    formatter={(v) => [`R$ ${v}k`, '']}/>
-                  <Legend wrapperStyle={{ fontSize: 10, color: '#888', paddingTop: 8 }}/>
-                  <Bar dataKey="Físico" fill="#ff4d00" radius={[2,2,0,0]}/>
-                  <Bar dataKey="Societário" fill="#a259ff" radius={[2,2,0,0]}/>
-                  <ReferenceLine y={0} stroke="#333"/>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Alertas críticos */}
-          {empsNok.length > 0 && (
-            <div className="bg-[#ff4d00]/5 border border-[#ff4d00]/20 rounded p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <AlertTriangle size={16} className="text-[#ff4d00]"/>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#ff4d00]">
-                  {empsNok.length} empreendimento{empsNok.length > 1 ? 's' : ''} com divergência acima de R$ 1.000
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {empsNok.map(e => (
-                  <span key={e.empreendimento_id} className="bg-[#ff4d00]/10 text-[#ff4d00] text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded">
-                    {e.empreendimento_nome}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Listagem por empreendimento */}
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#555] mb-3">
-              Detalhamento por Empreendimento ({data.length} obra{data.length !== 1 ? 's' : ''})
-            </p>
-            <div className="flex flex-col gap-3">
-              {data.map(emp => <EmpCard key={emp.empreendimento_id} emp={emp}/>)}
-            </div>
-          </div>
-        </>
+      {loading && (
+        <div className="flex items-center justify-center gap-3 py-12">
+          <Zap className="animate-spin text-[#ff4d00]" size={28}/>
+          <span className="text-xs font-black uppercase tracking-widest text-[#555]">
+            Confrontando {competencias.length} competência{competencias.length > 1 ? 's' : ''}...
+          </span>
+        </div>
       )}
 
-      {!loading && !error && data.length === 0 && (
-        <div className="text-center py-16 text-[#555]">
-          <ShieldCheck size={40} className="mx-auto mb-4 opacity-30"/>
-          <p className="font-black uppercase tracking-widest text-[#444] text-sm">Nenhum dado para {MESES[mes-1]}/{ano}</p>
-          <p className="text-[10px] text-[#333] uppercase tracking-widest mt-1">Selecione uma empresa e clique em Auditar</p>
+      {/* ── Cards de resumo ── */}
+      {!loading && temDados && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Gauge conciliação */}
+          <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4 col-span-1">
+            <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-2">Conciliação Global</p>
+            <div className="flex items-end gap-2">
+              <span className="text-3xl font-black font-mono" style={{ color: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00' }}>
+                {metrics.pctAdh.toFixed(0)}%
+              </span>
+              <span className="text-[10px] text-[#555] mb-0.5 font-bold">aderência</span>
+            </div>
+            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5 mt-2">
+              <div className="h-1.5 rounded-full transition-all" style={{
+                width: `${metrics.pctAdh}%`,
+                background: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00'
+              }}/>
+            </div>
+            <p className="text-[9px] text-[#444] mt-2 font-bold">
+              <span className="text-[#34c759]">{metrics.contasConciliadas}</span> OK · <span className="text-[#ff4d00]">{metrics.contasDivergentes}</span> div.
+            </p>
+          </div>
+
+          {[
+            { label: 'Movimento Total Questor', val: metrics.totMovFisico,  cor: '#ff4d00' },
+            { label: 'Movimento Total Vulcano', val: metrics.totMovVirtual, cor: '#a259ff' },
+            { label: 'Diferença de Movimento',  val: metrics.diffMov, cor: corDiff(metrics.diffMov) },
+          ].map(m => (
+            <div key={m.label} className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
+              <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-2">{m.label}</p>
+              <p className="text-xl font-black font-mono" style={{ color: m.cor }}>{fmt(m.val)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Tabela de confronto ── */}
+      {!loading && Object.keys(contasMap).length > 0 && (
+        <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded-sm overflow-hidden">
+          {/* Cabeçalho da legenda de colunas */}
+          <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-center gap-4 flex-wrap">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Confronto por Conta</h3>
+            <div className="flex gap-4 ml-auto text-[9px] font-bold uppercase tracking-widest">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#ff4d00] inline-block"/>
+                <span className="text-[#ff4d00]">Questor (Físico)</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#a259ff] inline-block"/>
+                <span className="text-[#a259ff]">Vulcano (Societário)</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#ffcc00] inline-block"/>
+                <span className="text-[#ffcc00]">Δ Divergência</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table
+              className="w-full border-collapse"
+              style={{ minWidth: `${220 + competencias.length * 270 + 140}px` }}
+            >
+              <thead>
+                <tr className="bg-[#111]">
+                  {/* Conta */}
+                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 z-20 bg-[#111] min-w-[220px]">
+                    Conta
+                  </th>
+                  {/* Grupos de colunas por mês */}
+                  {competencias.map(comp => (
+                    <th key={comp} colSpan={1} className="p-0 border-b border-[#1a1a1a] border-l border-[#111]"
+                        style={{ minWidth: '270px' }}>
+                      <div className="px-2 py-1.5 text-center text-[9px] font-black uppercase tracking-widest text-[#666] border-b border-[#222]">
+                        {labelMes(comp)}
+                      </div>
+                      <div className="flex text-[7px] font-black uppercase tracking-widest text-[#333]">
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[#111]">Questor</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[#111]">Vulcano</div>
+                        <div className="flex-1 px-2 py-1 text-right">Δ</div>
+                      </div>
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-white border-b border-[#1a1a1a] min-w-[130px]">
+                    Status Final
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(contasMap).map(([contaId, contaNome]) => (
+                  <ContaConfronto
+                    key={contaId}
+                    contaId={contaId}
+                    contaNome={contaNome}
+                    competencias={competencias}
+                    dadosPorMes={dadosPorMes}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !temDados && !error && (
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+          <div className="w-16 h-16 bg-[#ff4d00]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
+            <ShieldCheck className="text-[#ff4d00]" size={28}/>
+          </div>
+          <p className="font-black uppercase tracking-widest text-white text-sm">
+            Selecione o período e clique em Auditar
+          </p>
+          <p className="text-[10px] text-[#444] uppercase tracking-widest max-w-sm">
+            Confronta movimento e saldo do Questor (físico) com o motor societário Vulcano (POC + tributos) conta a conta
+          </p>
+          <button onClick={fetchTudo} disabled={!selectedEmpresa}
+            className="mt-2 px-6 py-3 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
+            <Zap size={13}/> Iniciar Auditoria
+          </button>
         </div>
       )}
     </div>
