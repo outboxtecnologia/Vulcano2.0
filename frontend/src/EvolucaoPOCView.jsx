@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Construction, RefreshCw, Layers, AlertCircle, Search, Filter, CheckSquare, Square, Building2, Calendar, ChevronDown, ChevronRight, Save } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:6000";
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';

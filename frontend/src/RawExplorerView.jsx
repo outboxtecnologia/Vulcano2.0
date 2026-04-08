@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Database, Play, AlertCircle, RefreshCw, Search } from 'lucide-react';
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:6000";
 
 export const RawExplorerView = () => {
     const [query, setQuery] = useState("SELECT FIRST 10 *\nFROM VENDA\nWHERE TOTALVENDA > 0");

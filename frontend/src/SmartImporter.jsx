@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Database, AlertCircle, Sparkles, Save } from 'lucide-react';
 
-const API_BASE = import.meta?.env?.VITE_API_BASE || 'http://127.0.0.1:8000';
+const API_BASE = import.meta?.env?.VITE_API_BASE || 'http://127.0.0.1:6000';
 
 export default function SmartImporter({ selectedEmpresa }) {
   const [step, setStep] = useState(1);
