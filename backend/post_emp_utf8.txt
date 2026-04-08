@@ -1,0 +1,38 @@
+2280: @app.post("/api/vulcano/empreendimentos")
+2281: async def post_empreendimentos(request: Request):
+2282:     try:
+2283:         data = await request.json()
+2284:         emp_id = data.get("empresa_id")
+2285:         if not emp_id:
+2286:             raise HTTPException(status_code=400, detail="empresa_id obrigatório")
+2287:             
+2288:         conn = get_conn("vulcano")
+2289:         cur = conn.cursor()
+2290:         
+2291:         # Generator for ID
+2292:         cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM EMPREENDIMENTO")
+2293:         new_id = cur.fetchone()[0]
+2294:         
+2295:         query = "INSERT INTO EMPREENDIMENTO (ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, CODIGOEMPRESA, ATIVO, CNO) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+2296:         params = (
+2297:             new_id,
+2298:             str(data.get("nome", "")),
+2299:             float(data.get("metragem", 0) or 0),
+2300:             float(data.get("custo", 0) or 0),
+2301:             data.get("ret", "N"),
+2302:             int(emp_id),
+2303:             "S",
+2304:             str(data.get("cno", ""))
+2305:         )
+2306:         cur.execute(query, params)
+2307:         conn.commit()
+2308:         conn.close()
+2309:         
+2310:         return {"success": True, "id": new_id, "message": "Empreendimento cadastrado com sucesso!"}
+2311:     except Exception as e:
+2312:         if 'conn' in locals() and conn: conn.close()
+2313:         raise HTTPException(status_code=500, detail=str(e))
+2314: 
+2315: @app.post("/api/vulcano/vendas")
+2316: async def post_vendas(request: Request):
+2317:     import datetime

@@ -1,0 +1,46 @@
+Manifesto de Extração de Recebimentos
+
+Objetivo Primário do Ollama: Extrair informações de pagamentos de um relatório em formato textual (resultante de PDF convertido com layout), estruturando-as em um array JSON específico.
+
+Estrutura de Retorno DO OLLAMA Obrigatória:
+O resultado final da extração do Ollama DEVE ser um único objeto JSON com a chave raiz `recebimentos`, cujo valor é um array de objetos. A estrutura exata que o Ollama deve gerar é:
+```json
+{"recebimentos": [
+  {
+    "comprador": "...",
+    "data": "...",
+    "parcela": "...",
+    "valor_parcela": 0.0,
+    "total_pago": 0.0,
+    "desconto": 0.0,
+    "acrescimo": 0.0
+  }
+  // ... mais objetos de pagamento
+]}
+```
+O Ollama DEVE aderir estritamente a estas chaves e tipos de dados. Não adicione ou modifique chaves.
+
+Regras de Extração e Mapeamento de Campos:
+
+1.  Identificação do Bloco de Dados: O Ollama DEVE focar a extração exclusivamente nas linhas que contêm os dados tabulares dos pagamentos. DEVE ignorar cabeçalhos de página, títulos do relatório, rodapés, números de página e quaisquer seções de sumário ou totalizações que não representem um item de pagamento individual.
+
+2.  Reconhecimento de Linhas: Cada linha de pagamento individual no relatório corresponde a um objeto JSON no array `recebimentos`.
+
+3.  Mapeamento e Tipagem dos Campos:
+
+    *   `"comprador"` (string): Extrair o nome completo do comprador, incluindo o código entre parênteses e o CPF/CNPJ. Geralmente, é o primeiro bloco de texto descritivo da linha. Exemplo: "DAVID FAVARETTO (379) - (486.833.619-34)".
+    *   `"data"` (string): Extrair a data do pagamento no formato `DD/MM/AAAA`.
+    *   `"parcela"` (string): Extrair a informação da parcela. Pode incluir números de parcela, total de parcelas e um sufixo (ex: "PM", "PS"). Exemplo: "12/41PM", "2/6PS".
+    *   `"valor_parcela"` (float): Extrair o valor original da parcela. Converter para float, tratando a vírgula como separador decimal e o ponto como separador de milhares (se presente).
+    *   `"total_pago"` (float): Extrair o valor total efetivamente pago. Converter para float, tratando a vírgula como separador decimal e o ponto como separador de milhares (se presente).
+    *   `"desconto"` (float): **CAMPO CALCULADO.** Calcular o desconto como `max(0.0, valor_parcela - total_pago)`. Se `total_pago` for menor que `valor_parcela`, a diferença é o desconto. Caso contrário, o desconto é `0.0`.
+    *   `"acrescimo"` (float): **CAMPO CALCULADO.** Calcular o acréscimo como `max(0.0, total_pago - valor_parcela)`. Se `total_pago` for maior que `valor_parcela`, a diferença é o acréscimo. Caso contrário, o acréscimo é `0.0`.
+
+Cuidados Essenciais (Dicas de Ouro para o Ollama):
+
+*   Consistência de Linhas: O número de linhas extraídas DEVE ser consistente com o total de registros visíveis na tabela do relatório. O histórico de extração sugere relatórios com, por exemplo, 52 linhas; o Ollama DEVE capturar todas elas.
+*   Limpeza de Formato Numérico: O Ollama DEVE remover quaisquer caracteres de moeda (ex: "R$", "$"), espaços extras ou símbolos indesejados dos valores numéricos antes da conversão para float. Utilizar a vírgula como separador decimal e o ponto como separador de milhares (se houver).
+*   Prioridade da Estrutura JSON: O Ollama DEVE aderir RIGOROSAMENTE às chaves JSON (`comprador`, `data`, `parcela`, `valor_parcela`, `total_pago`, `desconto`, `acrescimo`) e ao formato `{"recebimentos": [...]}`. NÃO DEVE introduzir chaves adicionais, nem alterar a capitalização ou grafia das chaves.
+*   Cálculo de Desconto/Acréscimo: É ABSOLUTAMENTE CRUCIAL que "desconto" e "acrescimo" sejam CALCULADOS conforme as fórmulas fornecidas (comparando `valor_parcela` e `total_pago`). Eles NÃO devem ser extraídos como colunas diretas a menos que explicitamente rotuladas como tal no layout e mesmo assim a fórmula deve ser aplicada para consistência. Apenas um dos dois campos (`desconto` ou `acrescimo`) pode ser maior que zero por registro.
+
+Este manifesto DEVE guiar a extração do Ollama para um resultado preciso, completo e no formato JSON rigorosamente esperado.

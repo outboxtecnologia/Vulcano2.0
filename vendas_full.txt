@@ -1,0 +1,488 @@
+export const VendasView = ({ selectedEmpresa }) => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [empreendimentoFilter, setEmpreendimentoFilter] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [distratoModal, setDistratoModal] = useState(null);
+  const [condicoesModal, setCondicoesModal] = useState(null); // { venda, payload, loading, error }
+  
+  const [compradores, setCompradores] = useState([{ id: Date.now(), nome: '', cpf_cnpj: '', percentual: 100 }]);
+  const [condicoes, setCondicoes] = useState([{ id: Date.now() + 1, tipo: 'MENSAL', quantidade: 1, vencimento: '', valor: '', indexador: 'NENHUM' }]);
+
+  const openCondicoes = async (venda) => {
+    setCondicoesModal({ venda, payload: null, loading: true, error: '' });
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas/${encodeURIComponent(venda.id)}/condicoes`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.detail || `Erro HTTP ${res.status}`);
+      setCondicoesModal({ venda, payload: json, loading: false, error: '' });
+    } catch (e) {
+      console.error(e);
+      setCondicoesModal({ venda, payload: null, loading: false, error: e.message || 'Falha ao carregar condições.' });
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    setLoading(true);
+    fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
+      .then(res => res.json())
+      .then(d => {
+        setData(Array.isArray(d) ? d : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, [selectedEmpresa]);
+
+  const uniqueEmps = [...new Set(data.map(v => v.empreendimento))].sort();
+  const filtered = data.filter(v => !empreendimentoFilter || v.empreendimento === empreendimentoFilter);
+
+  const totalVgv = filtered.reduce((acc, curr) => acc + (curr.total || 0), 0);
+  const totalDistratos = filtered.filter(v => v.distrato === 'S').reduce((acc, curr) => acc + (curr.total || 0), 0);
+
+  const addComprador = () => {
+    setCompradores([...compradores, { id: Date.now(), nome: '', cpf_cnpj: '', percentual: 0 }]);
+  };
+  
+  const updateComprador = (id, field, value) => {
+    setCompradores(compradores.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const removeComprador = (id) => {
+    setCompradores(compradores.filter(c => c.id !== id));
+  };
+
+  const addCondicao = () => {
+    setCondicoes([...condicoes, { id: Date.now(), tipo: 'MENSAL', quantidade: 1, vencimento: '', valor: '', indexador: 'NENHUM' }]);
+  };
+
+  const updateCondicao = (id, field, value) => {
+    setCondicoes(condicoes.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const removeCondicao = (id) => {
+    setCondicoes(condicoes.filter(c => c.id !== id));
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const payload = Object.fromEntries(fd);
+    payload.compradores = compradores;
+    payload.condicoes = condicoes;
+    
+    try {
+      await fetch(`${API_BASE}/api/vulcano/vendas`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      alert("Venda cadastrada!"); 
+      e.target.reset(); 
+      setCompradores([{ id: Date.now(), nome: '', cpf_cnpj: '', percentual: 100 }]);
+      setCondicoes([{ id: Date.now() + 1, tipo: 'MENSAL', quantidade: 1, vencimento: '', valor: '', indexador: 'NENHUM' }]);
+      setShowForm(false);
+    } catch (err) { alert("Erro ao cadastrar."); }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tighter uppercase mb-2 text-white flex items-center gap-3"><ShoppingCart className="text-[#007aff]" size={28}/> Painel de Vendas</h2>
+          <p className="text-xs text-[#555] uppercase tracking-[0.3em]">Unidades Comercializadas e Distratos</p>
+        </div>
+        <div className="flex gap-6 text-right">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold mb-1">VGV Período/Empresa</p>
+            <h3 className="text-2xl font-black text-[#007aff]">{formatCurrency(totalVgv)}</h3>
+          </div>
+          <div className="border-l border-[#333] pl-6">
+            <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold mb-1">Distratos Lançados</p>
+            <h3 className="text-2xl font-black text-[#ff4d00]">{formatCurrency(totalDistratos)}</h3>
+          </div>
+        </div>
+        <button onClick={() => setShowForm(!showForm)} className="bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-2 self-end mb-1 ml-6">
+          <Plus size={14}/> Cadastrar Venda
+        </button>
+      </div>
+      
+      {showForm && (
+        <div className="bg-[#131313] border border-[#007aff]/50 rounded-sm p-4 animate-in fade-in slide-in-from-top-4 overflow-y-auto max-h-[60vh] custom-scrollbar">
+          <div className="flex justify-between items-center mb-4 border-b border-[#333] pb-2">
+            <h3 className="text-xs uppercase tracking-widest text-[#007aff] font-bold">Nova Venda</h3>
+            <button type="button" onClick={() => setShowForm(false)} className="text-[#888] hover:text-white text-[10px] uppercase tracking-widest font-bold">FECHAR X</button>
+          </div>
+          
+          <form className="flex flex-col gap-6" onSubmit={handleFormSubmit}>
+            <input type="hidden" name="empresa_id" value={selectedEmpresa} />
+            
+            {/* DADOS GERAIS */}
+            <div className="flex gap-4">
+              <div className="w-24"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">ID Emp.</label><input name="id_empreendimento" type="number" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+              <div className="w-32"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Unidade</label><input name="unidade" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+              <div className="flex-1"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Total Venda</label><input name="total" type="number" step="0.01" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+              <div className="w-40"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Data Venda</label><input name="data" type="date" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+            </div>
+
+            {/* MÚLTIPLOS COMPRADORES */}
+            <div className="border border-[#222] bg-[#0a0a0a] p-3 rounded-sm">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-[10px] text-[#888] uppercase tracking-widest font-bold flex items-center gap-2"><Users size={12}/> Compradores / Sociedade</h4>
+                <button type="button" onClick={addComprador} className="text-[#007aff] hover:text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Adicionar Comprador</button>
+              </div>
+              <div className="flex flex-col gap-3">
+                {compradores.map((comp, idx) => (
+                  <div key={comp.id} className="flex gap-3 items-end">
+                    <div className="flex-1"><label className="text-[10px] text-[#555] uppercase tracking-widest block mb-1">Nome/Razão Social</label><input value={comp.nome} onChange={(e) => updateComprador(comp.id, 'nome', e.target.value)} required className="w-full bg-[#131313] border border-[#333] p-2 text-xs text-white" /></div>
+                    <div className="w-40"><label className="text-[10px] text-[#555] uppercase tracking-widest block mb-1">CPF/CNPJ</label><input value={comp.cpf_cnpj} onChange={(e) => updateComprador(comp.id, 'cpf_cnpj', e.target.value)} required className="w-full bg-[#131313] border border-[#333] p-2 text-xs text-white" /></div>
+                    <div className="w-24"><label className="text-[10px] text-[#555] uppercase tracking-widest block mb-1">% Compra</label><input type="number" step="0.01" value={comp.percentual} onChange={(e) => updateComprador(comp.id, 'percentual', parseFloat(e.target.value) || 0)} required className="w-full bg-[#131313] border border-[#333] p-2 text-xs text-white text-right" /></div>
+                    {compradores.length > 1 && (
+                      <button type="button" onClick={() => removeComprador(comp.id)} className="bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/30 hover:bg-[#ff4d00] hover:text-white p-2 rounded-sm mb-[1px] transition-colors"><AlertCircle size={14}/></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CONDIÇÕES DE PAGAMENTO (MACHINERY) */}
+            <div className="border border-[#222] bg-[#0a0a0a] p-3 rounded-sm overflow-x-auto">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-[10px] text-[#888] uppercase tracking-widest font-bold flex items-center gap-2"><DollarSign size={12}/> Condições de Pagamento / Projeção de Parcelas</h4>
+                <button type="button" onClick={addCondicao} className="text-[#34c759] hover:text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Nova Condição</button>
+              </div>
+              <div className="flex flex-col gap-2 min-w-[700px]">
+                <div className="flex gap-3 px-1 mb-1">
+                  <span className="w-32 text-[10px] text-[#555] uppercase tracking-widest font-bold">Tipo</span>
+                  <span className="w-20 text-[10px] text-[#555] uppercase tracking-widest font-bold">Qtd.</span>
+                  <span className="flex-1 text-[10px] text-[#555] uppercase tracking-widest font-bold">1º Vencimento</span>
+                  <span className="flex-1 text-[10px] text-[#555] uppercase tracking-widest font-bold">Valor Base</span>
+                  <span className="w-32 text-[10px] text-[#555] uppercase tracking-widest font-bold">Indexador</span>
+                  <span className="w-8"></span>
+                </div>
+                {condicoes.map((cond, idx) => (
+                  <div key={cond.id} className="flex gap-3 items-center">
+                    <select value={cond.tipo} onChange={(e) => updateCondicao(cond.id, 'tipo', e.target.value)} className="w-32 bg-[#131313] border border-[#333] p-1.5 text-xs text-white">
+                      <option value="SINAL">Sinal/Ato</option>
+                      <option value="MENSAL">Mensais</option>
+                      <option value="REFORCO_ANUAL">Reforço Anual</option>
+                      <option value="CHAVE">Balão das Chaves</option>
+                      <option value="FINANCIAMENTO">Financiamento</option>
+                    </select>
+                    <input type="number" min="1" value={cond.quantidade} onChange={(e) => updateCondicao(cond.id, 'quantidade', parseInt(e.target.value) || 1)} required className="w-20 bg-[#131313] border border-[#333] p-1.5 text-xs text-white text-center" />
+                    <input type="date" value={cond.vencimento} onChange={(e) => updateCondicao(cond.id, 'vencimento', e.target.value)} required className="flex-1 bg-[#131313] border border-[#333] p-1.5 text-xs text-white" />
+                    <input type="number" step="0.01" value={cond.valor} onChange={(e) => updateCondicao(cond.id, 'valor', e.target.value)} required className="flex-1 bg-[#131313] border border-[#333] p-1.5 text-xs text-white" placeholder="R$" />
+                    <select value={cond.indexador} onChange={(e) => updateCondicao(cond.id, 'indexador', e.target.value)} className="w-32 bg-[#131313] border border-[#333] p-1.5 text-xs text-white">
+                      <option value="NENHUM">Sem Indexador</option>
+                      <option value="INCC">INCC</option>
+                      <option value="IGPM">IGP-M</option>
+                      <option value="IPCA">IPCA</option>
+                    </select>
+                    {condicoes.length > 1 ? (
+                      <button type="button" onClick={() => removeCondicao(cond.id)} className="text-[#ff4d00] hover:text-white w-8 flex justify-center"><AlertCircle size={12}/></button>
+                    ) : <span className="w-8"></span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-2">
+              <button type="submit" className="bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-widest px-8 py-3 rounded-sm hover:opacity-80 transition-opacity">Registrar Contrato de Venda</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="flex gap-6 h-full overflow-hidden">
+        <div className="w-64 bg-[#131313] border border-[#333] rounded-sm flex flex-col shrink-0">
+          <div className="p-4 border-b border-[#333] bg-[#0a0a0a]">
+            <h3 className="text-[10px] uppercase font-bold tracking-widest text-[#555]">Filtro Empreendimento</h3>
+          </div>
+          <div className="overflow-y-auto flex-1 p-2">
+            <div 
+              onClick={() => setEmpreendimentoFilter('')}
+              className={`p-3 text-xs font-bold cursor-pointer transition-colors ${empreendimentoFilter === '' ? 'text-white bg-[#007aff]/10 border-l-2 border-[#007aff]' : 'text-[#888] hover:text-white hover:bg-[#1a1a1a] border-l-2 border-transparent'}`}
+            >
+              &lt;&lt;&lt; Todos &gt;&gt;&gt;
+            </div>
+            {uniqueEmps.map((emp, i) => (
+              <div 
+                key={i} 
+                onClick={() => setEmpreendimentoFilter(emp)}
+                className={`p-3 text-xs cursor-pointer transition-colors truncate ${empreendimentoFilter === emp ? 'text-white bg-[#007aff]/10 border-l-2 border-[#007aff] font-bold' : 'text-[#888] hover:text-white hover:bg-[#1a1a1a] border-l-2 border-transparent'}`} 
+                title={emp}
+              >
+                {emp || 'Indefinido'}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 bg-[#131313] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-xl">
+          <div className="overflow-auto flex-1 relative">
+            {loading && (
+              <div className="absolute inset-0 bg-[#131313]/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                <Loader2 className="animate-spin text-[#007aff] mb-4" size={32} />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#888]">Integrando Vendas...</span>
+              </div>
+            )}
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-[#0a0a0a]">
+                  <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#333]">Venda/Contrato</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#333]">Data Venda</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#333]">Descrição/Unidade</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#333]">CPF/CNPJ</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#333]">Cliente</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#333] text-right">Total Venda</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#34c759] uppercase font-bold border-b border-[#333] text-center">Condições</th>
+                  <th className="p-3 text-[10px] tracking-widest text-[#ff4d00] uppercase font-bold border-b border-[#333] text-center">Distrato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((v) => (
+                  <tr key={v.id} className={`border-b border-[#222] hover:bg-[#1a1a1a] ${v.distrato === 'S' ? 'text-[#ff4d00]/70' : 'text-[#ccc]'}`}>
+                    <td className="p-3 font-mono text-[#888]">{v.id} <span className="text-[#555] ml-1">#{v.num_cad}</span></td>
+                    <td className="p-3">{v.data}</td>
+                    <td className="p-3 font-bold truncate max-w-[200px]" title={v.descricao}>{v.descricao}</td>
+                    <td className="p-3 font-mono text-xs text-[#888]">{v.cliente_cnpj}</td>
+                    <td className="p-3 truncate max-w-[150px]" title={v.cliente_nome}>{v.cliente_nome}</td>
+                    <td className={`p-3 text-right font-black ${v.distrato === 'S' ? 'text-[#ff4d00]' : 'text-[#34c759]'}`}>{formatCurrency(v.total)}</td>
+                    <td className="p-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => openCondicoes(v)}
+                        className="text-[10px] uppercase font-bold text-[#34c759] hover:text-black border border-[#34c759]/40 hover:bg-[#34c759] px-2 py-1 rounded transition-colors"
+                        title="Ver condições de pagamento, parcelas, entrada/reforços (se existir)"
+                      >
+                        Ver
+                      </button>
+                    </td>
+                    <td className="p-3 text-center">
+                      {v.distrato === 'S' ? (
+                        <span className="text-[#ff4d00] font-bold uppercase text-[10px] tracking-widest bg-[#ff4d00]/10 border border-[#ff4d00]/20 px-2 py-1 rounded">Distrato</span>
+                      ) : (
+                        <button onClick={() => setDistratoModal(v)} className="text-[10px] uppercase font-bold text-[#888] hover:text-[#ff4d00] border border-[#333] hover:border-[#ff4d00]/50 px-2 py-1 rounded transition-colors">Distratar</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {!loading && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="p-8 text-center text-[#555] italic">Nenhuma venda encontrada para este filtro.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {distratoModal && (
+        <div className="fixed inset-0 bg-[#131313]/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
+          <div className="bg-[#0a0a0a] border border-[#ff4d00] p-6 rounded-sm max-w-md w-full">
+            <h3 className="text-sm uppercase tracking-widest text-[#ff4d00] font-bold mb-4">Registrar Distrato</h3>
+            <div className="bg-[#131313] p-3 border border-[#333] rounded-sm mb-4">
+              <p className="text-[10px] uppercase tracking-widest text-[#888] font-bold mb-1">Venda Selecionada</p>
+              <p className="text-xs font-bold text-white block truncate mb-1">{distratoModal.descricao}</p>
+              <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold">Cliente: {distratoModal.cliente_nome}</p>
+            </div>
+            
+            <form className="flex flex-col gap-4" onSubmit={async (e) => {
+              e.preventDefault();
+              const fd = new FormData(e.target);
+              fd.append('id_venda', distratoModal.id);
+              try {
+                await fetch(`${API_BASE}/api/distratos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(fd)) });
+                alert("Distrato registrado!"); 
+                setDistratoModal(null);
+                // Optionally trigger reload of data
+              } catch (err) { alert("Erro ao registrar distrato."); }
+            }}>
+              <div>
+                <label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Data do Distrato</label>
+                <input name="data_distrato" type="date" required className="w-full bg-[#131313] border border-[#333] p-2 text-xs text-white" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Valor a Devolver</label>
+                <input name="valor_devolvido" type="number" step="0.01" required className="w-full bg-[#131313] border border-[#333] p-2 text-xs text-white" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Data Previsão Pagto</label>
+                <input name="data_pagamento" type="date" required className="w-full bg-[#131313] border border-[#333] p-2 text-xs text-white" />
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button type="button" onClick={() => setDistratoModal(null)} className="text-[#888] hover:text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 hover:bg-[#1a1a1a] rounded transition-colors">Cancelar</button>
+                <button type="submit" className="bg-[#ff4d00] text-white text-[10px] font-bold uppercase tracking-widest px-6 py-2 rounded-sm hover:opacity-80 transition-opacity">Confirmar Distrato</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {condicoesModal && (
+        <div className="fixed inset-0 bg-[#131313]/90 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
+          <div className="bg-[#0a0a0a] border border-[#34c759]/40 p-6 rounded-sm max-w-5xl w-[95vw] max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex items-start justify-between gap-4 border-b border-[#222] pb-3">
+              <div className="min-w-0">
+                <h3 className="text-sm uppercase tracking-widest text-[#34c759] font-bold">Condições / Parcelas</h3>
+                <p className="text-[10px] uppercase tracking-widest text-[#666] font-bold mt-1 truncate">
+                  Venda #{condicoesModal.venda?.id} · {condicoesModal.venda?.descricao}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCondicoesModal(null)}
+                className="text-[#888] hover:text-white text-[10px] uppercase tracking-widest font-bold"
+              >
+                FECHAR X
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto custom-scrollbar mt-4 space-y-6">
+              {condicoesModal.loading && (
+                <div className="flex items-center gap-3 text-[#888] text-xs font-bold uppercase tracking-widest">
+                  <Loader2 className="animate-spin" size={18} /> Carregando condições...
+                </div>
+              )}
+              {!condicoesModal.loading && condicoesModal.error && (
+                <div className="bg-[#131313] border border-[#ff4d00]/40 p-3 rounded-sm text-[#ff4d00] text-xs font-bold uppercase tracking-widest">
+                  {condicoesModal.error}
+                </div>
+              )}
+
+              {!condicoesModal.loading && condicoesModal.payload && (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-[#131313] border border-[#222] p-3 rounded-sm">
+                      <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold mb-1">Total Venda</p>
+                      <p className="text-lg font-black text-[#34c759]">{formatCurrency(condicoesModal.payload.venda?.total || 0)}</p>
+                    </div>
+                    <div className="bg-[#131313] border border-[#222] p-3 rounded-sm">
+                      <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold mb-1">Cliente</p>
+                      <p className="text-xs font-bold text-white truncate" title={condicoesModal.payload.venda?.cliente?.nome}>
+                        {condicoesModal.payload.venda?.cliente?.nome || '-'}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-widest text-[#777] font-bold mt-1">
+                        {condicoesModal.payload.venda?.cliente?.cnpj || ''}
+                      </p>
+                    </div>
+                    <div className="bg-[#131313] border border-[#222] p-3 rounded-sm">
+                      <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold mb-1">Empreendimento</p>
+                      <p className="text-xs font-bold text-white truncate" title={condicoesModal.payload.venda?.empreendimento}>
+                        {condicoesModal.payload.venda?.empreendimento || '-'}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-widest text-[#777] font-bold mt-1">
+                        Data: {condicoesModal.payload.venda?.data || '-'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#131313] border border-[#222] rounded-sm overflow-hidden">
+                    <div className="p-3 bg-[#0a0a0a] border-b border-[#222]">
+                      <h4 className="text-[10px] uppercase tracking-widest text-[#34c759] font-bold">Formas de pagamento (condição)</h4>
+                    </div>
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[#0f0f0f]">
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222]">Descrição</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-right">Valor</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-center">Qtd</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-center">Ativa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(condicoesModal.payload.formas_pagto || []).map((f) => (
+                          <tr key={f.id} className="border-b border-[#1f1f1f] hover:bg-[#111] text-[#ddd]">
+                            <td className="p-3 font-bold">{f.descricao || '-'}</td>
+                            <td className="p-3 text-right font-mono">{formatCurrency(f.valor || 0)}</td>
+                            <td className="p-3 text-center font-mono text-[#888]">{f.quantidade_parcelas || 0}</td>
+                            <td className="p-3 text-center">
+                              <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-1 rounded border ${f.ativa === 'S' ? 'text-[#34c759] border-[#34c759]/30 bg-[#34c759]/10' : 'text-[#888] border-[#333] bg-[#0a0a0a]'}`}>
+                                {f.ativa === 'S' ? 'Ativa' : 'Inativa'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {(condicoesModal.payload.formas_pagto || []).length === 0 && (
+                          <tr>
+                            <td colSpan="4" className="p-4 text-center text-[#666] italic">Nenhuma forma de pagamento cadastrada para esta venda.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="bg-[#131313] border border-[#222] rounded-sm overflow-hidden">
+                    <div className="p-3 bg-[#0a0a0a] border-b border-[#222] flex items-center justify-between">
+                      <h4 className="text-[10px] uppercase tracking-widest text-[#34c759] font-bold">Parcelas (RECEBER)</h4>
+                      <span className="text-[10px] uppercase tracking-widest text-[#666] font-bold">
+                        {(condicoesModal.payload.parcelas || []).length} itens
+                      </span>
+                    </div>
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[#0f0f0f]">
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222]">Venc.</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222]">Parcela</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222]">Tipo</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-right">Valor</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-right">Pago</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-right">Desc.</th>
+                          <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-right">Variação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(condicoesModal.payload.parcelas || []).map((p) => (
+                          <tr key={p.id} className="border-b border-[#1f1f1f] hover:bg-[#111] text-[#ddd]">
+                            <td className="p-3 font-mono text-[#bbb]">{p.data || '-'}</td>
+                            <td className="p-3 font-mono text-[#888]">{p.parcela || '-'}</td>
+                            <td className="p-3 font-bold">{p.forma_pagto_descricao || p.obs || '-'}</td>
+                            <td className="p-3 text-right font-mono">{formatCurrency(p.valor_parcela || 0)}</td>
+                            <td className={`p-3 text-right font-mono ${(p.total_pago || 0) > 0 ? 'text-[#34c759]' : 'text-[#888]'}`}>{formatCurrency(p.total_pago || 0)}</td>
+                            <td className="p-3 text-right font-mono text-[#ffcc00]">{formatCurrency(p.desconto || 0)}</td>
+                            <td className="p-3 text-right font-mono text-[#a259ff]">{formatCurrency(p.variacao || 0)}</td>
+                          </tr>
+                        ))}
+                        {(condicoesModal.payload.parcelas || []).length === 0 && (
+                          <tr>
+                            <td colSpan="7" className="p-4 text-center text-[#666] italic">Nenhuma parcela encontrada em RECEBER para esta venda.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {(condicoesModal.payload.distratos || []).length > 0 && (
+                    <div className="bg-[#131313] border border-[#ff4d00]/30 rounded-sm overflow-hidden">
+                      <div className="p-3 bg-[#0a0a0a] border-b border-[#222]">
+                        <h4 className="text-[10px] uppercase tracking-widest text-[#ff4d00] font-bold">Distrato(s)</h4>
+                      </div>
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-[#0f0f0f]">
+                            <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222]">Data</th>
+                            <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222] text-right">Valor devolvido</th>
+                            <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold border-b border-[#222]">Pagamento</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(condicoesModal.payload.distratos || []).map((d) => (
+                            <tr key={d.id} className="border-b border-[#1f1f1f] hover:bg-[#111] text-[#ddd]">
+                              <td className="p-3 font-mono">{d.data || '-'}</td>
+                              <td className="p-3 text-right font-mono text-[#ff4d00]">{formatCurrency(d.valor_devolvido || 0)}</td>
+                              <td className="p-3 font-mono">{d.data_pagamento || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

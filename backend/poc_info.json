@@ -1,0 +1,34 @@
+{
+  "POC_cols": [
+    "ID",
+    "ID_EMPREENDIMENTO",
+    "PERIODO",
+    "PERCENTUAL"
+  ],
+  "POC_row": [
+    "30",
+    "210",
+    "2021-12-31",
+    "75.0000"
+  ],
+  "POC_CUSTOS_cols": [
+    "ID",
+    "ID_EMPREENDIMENTO",
+    "MES",
+    "ANO",
+    "PERIODO",
+    "TOTAL_PERIODO",
+    "CUSTO_ACUMULADO",
+    "PERCENTUAL_CONCLUIDO"
+  ],
+  "POC_CUSTOS_row": [
+    "1270",
+    "371",
+    "1",
+    "2025",
+    "01/2025",
+    "2578782.40",
+    "2578782.40",
+    "0E-8"
+  ]
+}

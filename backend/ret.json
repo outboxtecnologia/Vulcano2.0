@@ -1,0 +1,18 @@
+{
+  "empreendimento": {
+    "id": 5,
+    "nome": "EDIFICIO PREMIER RESIDENCE",
+    "custo_orcado": 2187161.08,
+    "custo_real_gasto": 0.0,
+    "fracao_vendida": 1.4913941654671892,
+    "area_vendida": 2942.6400000000003,
+    "area_total": 1973.079999999999,
+    "conta_custo": 5101,
+    "conta_estoque": 5091,
+    "conta_estconc": null,
+    "codigo_cc": 11,
+    "poc_atual": 0.0,
+    "custo_reconhecido_anterior": 0.0,
+    "timeline": []
+  }
+}

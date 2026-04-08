@@ -1,0 +1,1 @@
+{"detail":"Dynamic SQL Error\nSQL error code = -206\nColumn unknown\nR.BAIXADO\nAt line 2, column 51\n"}

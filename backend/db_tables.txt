@@ -1,0 +1,1 @@
+Tables in poc_database.sqlite: ['evolucao_obras', 'import_templates', 'sqlite_sequence', 'pdf_parser_templates', 'empresa_parser_padrao']

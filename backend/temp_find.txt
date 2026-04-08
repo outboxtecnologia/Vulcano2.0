@@ -1,0 +1,79 @@
+11: import asyncio
+164: @app.post("/api/explorer/query")
+489: @app.post("/api/custos/sincronizar_totalizadores/{id_emp}")
+539: @app.post("/api/custos/lcto")
+677: async def add_no_cache_header(request: Request, call_next):
+685: @app.post("/api/generate-pdf-parser")
+686: async def generate_pdf_parser(file: UploadFile = File(...)):
+824: @app.post("/api/poc")
+854: @app.post("/api/templates")
+1205: # Mapeando Tributos de volta pro df
+1240: df['TRIBUTOS_CAIXA_ACUMULADO'] = df['PIS'] + df['COFINS'] + df['IRPJ'] + df['CSLL'] + df['RET'] + df['IRPJ_ADICIONAL']
+1249: df['TRIBUTOS_CAIXA_MES'] = np.where(is_mes_mask, df['TRIBUTOS_CAIXA_ACUMULADO'], 0.0)
+1281: rate_mes = df['TRIBUTOS_CAIXA_MES'] / df['CAIXA_MES']
+1288: df['TRIBUTOS_CAIXA_ACUMULADO'] = df['TRIBUTOS_CAIXA_ACUMULADO'] + (df['HIST_CAIXA'] * final_rate)
+1297: 'TRIBUTOS_CAIXA_ACUMULADO': 'sum',
+1298: 'TRIBUTOS_CAIXA_MES': 'sum',
+1402: "tributos_caixa_acumulado": 0.0, "tributos_caixa_mes": 0.0,
+1403: "tributos_soc_acumulado": 0.0, "tributos_soc_mes": 0.0,
+1435: eff_rate_acum = (row.TRIBUTOS_CAIXA_ACUMULADO / row.RECEITA_CAIXA) if row.RECEITA_CAIXA > 0 else 0
+1437: tributos_soc_acumulada_uni = soc_acumulada_uni * eff_rate_acum
+1439: tributos_soc_mes_uni = soc_mes_uni * eff_rate_acum
+1443: pending_diff = abs(tributos_soc_acumulada_uni - row.TRIBUTOS_CAIXA_ACUMULADO)
+1455: meta_emp["tributos_caixa_acumulado"] += row.TRIBUTOS_CAIXA_ACUMULADO
+1456: meta_emp["tributos_caixa_mes"] += row.TRIBUTOS_CAIXA_MES
+1457: meta_emp["tributos_soc_acumulado"] += tributos_soc_acumulada_uni
+1458: meta_emp["tributos_soc_mes"] += tributos_soc_mes_uni
+1472: "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_caixa_mes": row.TRIBUTOS_CAIXA_MES,
+1473: "tributos_soc_acumulado": tributos_soc_acumulada_uni, "tributos_soc_mes": tributos_soc_mes_uni,
+1491: "tributos_total": row.TRIBUTOS_CAIXA_MES, "tributos_societario": tributos_soc_mes_uni,
+1493: "saldo_tributos": max(0, row.RECEITA_CAIXA - soc_acumulada_uni),
+1495: "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_soc_acumulado": tributos_soc_acumulada_uni
+1502: 'TRIBUTOS_CAIXA_MES': 'sum'
+1510: "trib": row.TRIBUTOS_CAIXA_MES
+1568: @app.post("/api/questor/gerar-lote")
+1569: async def gerar_lote_questor(payload: QuestorLotePayload):
+1684: timeline = collections.defaultdict(lambda: {"receita_caixa": 0.0, "impostos_caixa": 0.0, "receita_poc": 0.0})
+1693: timeline[dt_str]["impostos_caixa"] += imp
+1707: "impostos": timeline[mes]["impostos_caixa"]
+1902: @app.post("/api/vulcano/empreendimentos")
+2260: @app.post("/api/vulcano/recebimentos/baixa")
+2494: @app.post("/api/extract-pdf")
+2495: async def extract_pdf(
+2562: template_result = await asyncio.wait_for(
+2563: asyncio.to_thread(
+2571: except asyncio.TimeoutError:
+2591: recs_h = await asyncio.to_thread(_heuristic_extract_recebimentos_from_pdf, content)
+2688: parsed = await asyncio.wait_for(
+2689: asyncio.to_thread(_gemini_generate_json, **kwargs),
+2692: except asyncio.TimeoutError:
+2723: @app.post("/api/parser/chat")
+2841: @app.post("/api/parser/save")
+3044: @app.post("/api/parser/templates/set-default")
+3064: @app.post("/api/upload-planilha")
+3065: async def upload_planilha(file: UploadFile = File(...)):
+3090: @app.post("/api/schema-match")
+3157: @app.post("/api/vulcano/empreendimentos")
+3158: async def post_empreendimentos(data: EmpreendimentoInput):
+3201: async def put_empreendimentos(emp_id: int, data: EmpreendimentoInput):
+3264: @app.post("/api/vulcano/blocos")
+3265: async def create_bloco(request: Request):
+3290: async def update_bloco(bloco_id: int, request: Request):
+3324: @app.post("/api/vulcano/unidades")
+3325: async def create_unidade(request: Request):
+3353: async def update_unidade(unid_id: int, request: Request):
+3421: @app.post("/api/vulcano/vendas")
+3422: async def post_vendas(request: Request):
+3516: @app.post("/api/distratos")
+3517: async def post_distratos(request: Request):
+3554: @app.post("/api/parser/preview-baixas")
+3709: @app.post("/api/parser/commit-baixas")
+3761: @app.post("/api/fiscal/f200")
+3765: @app.post("/api/fiscal/ret")
+3769: @app.post("/api/fiscal/distratos")
+3773: @app.post("/api/fiscal/dimob")
+3903: @app.post("/api/sped/f200/commit")
+3919: @app.post("/api/sped/ret/commit")
+3927: @app.post("/api/sero/config")
+3931: @app.post("/api/sero/alocacao")
+3944: async def custom_404_handler(request, exc):

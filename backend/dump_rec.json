@@ -1,0 +1,28 @@
+[
+  {
+    "data": "2028-02-29",
+    "total": 0.0,
+    "parcela": 25326.84,
+    "variacao": 0.0,
+    "descricao_venda": "344 / BLOCO UNICO - APTO 1602\r\n / VAGA DE GARAGEM - HB 34, VG 115, VG 116",
+    "cliente_cnpj": "988.350.509-44",
+    "num_parcela": "30/30",
+    "cliente": "PATRICIA BECHARA TASSINARI",
+    "empreendimento": "RESIDENCIAL STUTTGART",
+    "obs": "MIGRACAO PROJETADA",
+    "id": 808246
+  },
+  {
+    "data": "2028-02-29",
+    "total": 0.0,
+    "parcela": 7513.64,
+    "variacao": 0.0,
+    "descricao_venda": "354 / VAGA DE GARAGEM - VG 20 / BLOCO UNICO - APTO 805",
+    "cliente_cnpj": "947.244.660-49",
+    "num_parcela": "24/24",
+    "cliente": "LARISSA BEATRIZ WASKOW",
+    "empreendimento": "RESIDENCIAL STUTTGART",
+    "obs": "MIGRACAO PROJETADA",
+    "id": 815603
+  }
+]

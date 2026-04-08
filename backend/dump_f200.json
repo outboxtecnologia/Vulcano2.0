@@ -1,0 +1,65 @@
+{
+  "success": true,
+  "data": [
+    {
+      "acao": "INSERT/UPDATE",
+      "tabela": "EFDUNIDIMOBILIARIA",
+      "chaves": "Unid: 15396 | DataVenda: 14/05/2024",
+      "valores": {
+        "NUMCADIMOB": "15396",
+        "DESCUNIDIMOB": "Contrato 15396 - ROGER BEGGIATO",
+        "DTOPER": "2024-05-14",
+        "INDOPER": 1
+      },
+      "status": "VALIDO"
+    },
+    {
+      "acao": "INSERT",
+      "tabela": "EFDUNIDIMOBVENDIDA",
+      "chaves": "Unid: 15396 | Compet\u00eancia: 05/2024",
+      "valores": {
+        "VLTOTVEND": 1550000.0,
+        "VLTOTREC": 150000.0,
+        "VLRECACUM": 0.0,
+        "VLBC": 150000.0,
+        "CSTPIS": "01",
+        "ALIQPIS": 0.65,
+        "VLPIS": 975.0,
+        "CSTCOFINS": "01",
+        "ALIQCOFINS": 3.0,
+        "VLCOFINS": 4500.0
+      },
+      "status": "VALIDO"
+    },
+    {
+      "acao": "INSERT/UPDATE",
+      "tabela": "EFDUNIDIMOBILIARIA",
+      "chaves": "Unid: 15162 | DataVenda: 12/02/2024",
+      "valores": {
+        "NUMCADIMOB": "15162",
+        "DESCUNIDIMOB": "Contrato 15162 - JULIANO CANDIDO DA ROSA",
+        "DTOPER": "2024-02-12",
+        "INDOPER": 1
+      },
+      "status": "VALIDO"
+    },
+    {
+      "acao": "INSERT",
+      "tabela": "EFDUNIDIMOBVENDIDA",
+      "chaves": "Unid: 15162 | Compet\u00eancia: 05/2024",
+      "valores": {
+        "VLTOTVEND": 2388000.0,
+        "VLTOTREC": 199371.01,
+        "VLRECACUM": 2194915.26,
+        "VLBC": 199371.01,
+        "CSTPIS": "01",
+        "ALIQPIS": 0.65,
+        "VLPIS": 1295.91,
+        "CSTCOFINS": "01",
+        "ALIQCOFINS": 3.0,
+        "VLCOFINS": 5981.13
+      },
+      "status": "VALIDO"
+    }
+  ]
+}

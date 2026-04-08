@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+
+<html class="light" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface": "#323232",
+              "primary": "#5e5e5e",
+              "error": "#9e3f4e",
+              "tertiary": "#6f576f",
+              "inverse-surface": "#0e0e0e",
+              "surface-container-high": "#e8e8e8",
+              "secondary-fixed-dim": "#ffc8b9",
+              "on-error": "#fff7f7",
+              "primary-fixed-dim": "#d4d4d4",
+              "surface-container-low": "#f3f3f3",
+              "primary-dim": "#525252",
+              "on-secondary-container": "#9b2600",
+              "primary-fixed": "#e2e2e2",
+              "on-surface-variant": "#5f5f5f",
+              "secondary": "#b22e00",
+              "surface-variant": "#e2e2e2",
+              "tertiary-fixed-dim": "#eacbe7",
+              "outline-variant": "#b2b2b2",
+              "surface-dim": "#dadada",
+              "on-background": "#323232",
+              "surface-tint": "#5e5e5e",
+              "surface-container-highest": "#e2e2e2",
+              "background": "#f9f9f9",
+              "inverse-on-surface": "#9d9d9d",
+              "secondary-container": "#ffdbd1",
+              "on-primary-fixed-variant": "#5b5b5b",
+              "on-tertiary-fixed-variant": "#6c546c",
+              "on-secondary-fixed-variant": "#ac2c00",
+              "on-primary-container": "#525252",
+              "surface": "#f9f9f9",
+              "on-secondary-fixed": "#7a1c00",
+              "primary-container": "#e2e2e2",
+              "on-primary-fixed": "#3f3f3f",
+              "inverse-primary": "#ffffff",
+              "secondary-fixed": "#ffdbd1",
+              "on-secondary": "#fff7f5",
+              "error-dim": "#4f0116",
+              "surface-bright": "#f9f9f9",
+              "on-primary": "#f8f8f8",
+              "secondary-dim": "#9d2700",
+              "error-container": "#ff8b9a",
+              "on-tertiary-container": "#614a61",
+              "surface-container": "#eeeeee",
+              "on-tertiary": "#fff7fa",
+              "tertiary-fixed": "#f8d9f6",
+              "surface-container-lowest": "#ffffff",
+              "tertiary-dim": "#634c63",
+              "tertiary-container": "#f8d9f6",
+              "outline": "#7b7b7b",
+              "on-tertiary-fixed": "#4e384e",
+              "on-error-container": "#782232"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Space Grotesk"]
+            },
+            borderRadius: {"DEFAULT": "0rem", "lg": "0rem", "xl": "0rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-space { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-background text-on-surface">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#F9F9F9] dark:bg-[#0e0e0f] text-[#323232] dark:text-[#ffb5a0] border-b-2 border-[#E2E2E2] dark:border-[#5d4038]/20 flex justify-between items-center px-6 h-16 font-['Space_Grotesk'] tracking-tight">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-bold uppercase tracking-tighter text-[#323232] dark:text-[#ffb5a0]">VULCANO ERP</span>
+<div class="hidden md:flex items-center gap-2 bg-surface-container-low px-3 py-1.5 border-b-2 border-outline-variant">
+<span class="material-symbols-outlined text-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-64 font-body" placeholder="Procurar em relatórios..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden md:flex items-center gap-6 mr-6">
+<button class="text-[#B22E00] dark:text-[#ffb5a0] font-bold text-sm hover:bg-[#F3F3F3] dark:hover:bg-zinc-800/50 transition-colors active:scale-95 duration-200">Relatórios</button>
+<button class="text-[#5E5E5E] dark:text-zinc-400 text-sm hover:bg-[#F3F3F3] dark:hover:bg-zinc-800/50 transition-colors active:scale-95 duration-200">Suporte</button>
+</div>
+<div class="flex items-center gap-3">
+<button class="p-2 hover:bg-[#F3F3F3] dark:hover:bg-zinc-800/50 transition-colors"><span class="material-symbols-outlined">light_mode</span></button>
+<button class="p-2 hover:bg-[#F3F3F3] dark:hover:bg-zinc-800/50 transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+<button class="p-2 hover:bg-[#F3F3F3] dark:hover:bg-zinc-800/50 transition-colors"><span class="material-symbols-outlined">settings</span></button>
+<div class="h-8 w-8 bg-surface-container-highest border border-outline-variant flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="professional portrait of a civil engineer in a neutral studio setting with clean lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdy0RZCL0fEuKIZR9E-qsxvA--V-6NME9BpiiBBLE1vdxTl1WMzZ--JQ_Q5k_WyCt_vKnlh3nPZ1zpS0qhscr0X-gfnYVfuTy5-uXobTACDsT01gG2sotmvQIF6mzh8TWJ7bSR8i3pE0W2hAPbm9JcDuwbfQOo40ttM9XBMnEAmqXHf1QvdYhb9yDmjyPfoQi9iLmLyZFyf3C9vr72BFYduEe6s3WZpphrXRt3d3W7fr-6DohTj0wm-iygw6_8h-THB64ymOh5sBZh"/>
+</div>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-64 z-[60] bg-[#F3F3F3] dark:bg-[#0e0e0f] flex flex-col h-full py-6 font-['Inter'] text-sm font-medium">
+<div class="px-6 mb-10">
+<h1 class="font-['Space_Grotesk'] font-black text-xl text-[#323232] dark:text-[#ffb5a0] tracking-tighter">VULCANO</h1>
+<p class="text-[10px] uppercase tracking-widest text-primary">Construction Intelligence</p>
+</div>
+<div class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#5E5E5E] dark:text-zinc-500 hover:bg-[#E2E2E2] dark:hover:bg-zinc-800/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#5E5E5E] dark:text-zinc-500 hover:bg-[#E2E2E2] dark:hover:bg-zinc-800/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">domain</span>
+<span>Empreendimentos</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#5E5E5E] dark:text-zinc-500 hover:bg-[#E2E2E2] dark:hover:bg-zinc-800/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+<span>Fiscal</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#5E5E5E] dark:text-zinc-500 hover:bg-[#E2E2E2] dark:hover:bg-zinc-800/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span>Recebimentos</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#5E5E5E] dark:text-zinc-500 hover:bg-[#E2E2E2] dark:hover:bg-zinc-800/30 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">engineering</span>
+<span>Sero</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#B22E00] border-l-4 border-[#FF4500] bg-[#E2E2E2] dark:bg-[#131314] transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-weight="fill">psychology</span>
+<span>IA</span>
+</a>
+</div>
+<div class="px-4 mb-6">
+<button class="w-full bg-on-surface text-on-primary py-3 px-4 flex items-center justify-center gap-2 hover:bg-primary transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+<span class="font-label uppercase text-xs tracking-widest font-bold">Novo Projeto</span>
+</button>
+</div>
+<div class="border-t border-outline-variant/20 pt-4">
+<a class="flex items-center gap-3 px-4 py-2 text-[#5E5E5E] hover:bg-[#E2E2E2] transition-all" href="#">
+<span class="material-symbols-outlined">support_agent</span>
+<span>Suporte</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-[#5E5E5E] hover:bg-[#E2E2E2] transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="pl-64 pt-16 h-screen flex overflow-hidden">
+<!-- Left Column: Reports List -->
+<section class="w-1/3 bg-surface border-r border-outline-variant/10 flex flex-col">
+<div class="p-8">
+<span class="font-label text-[10px] uppercase tracking-[0.2em] text-secondary font-bold mb-2 block">Document Archive</span>
+<h2 class="text-4xl font-headline font-bold tracking-tight text-on-surface mb-6">Relatórios</h2>
+<div class="space-y-6 overflow-y-auto pr-4 scrollbar-hide">
+<!-- Report Item -->
+<div class="group cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label text-[11px] font-bold text-primary">JUL 2023</span>
+<span class="material-symbols-outlined text-xs text-outline-variant">north_east</span>
+</div>
+<h3 class="font-headline text-lg font-medium leading-tight group-hover:text-secondary transition-colors">Análise de Fluxo de Caixa: Edifício Vulcanos</h3>
+<div class="mt-2 h-0.5 w-0 group-hover:w-full bg-secondary transition-all duration-300"></div>
+</div>
+<div class="group cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label text-[11px] font-bold text-primary">JUN 2023</span>
+<span class="material-symbols-outlined text-xs text-outline-variant">north_east</span>
+</div>
+<h3 class="font-headline text-lg font-medium leading-tight group-hover:text-secondary transition-colors">Auditoria de Recebimentos - Setor B1</h3>
+<div class="mt-2 h-0.5 w-0 group-hover:w-full bg-secondary transition-all duration-300"></div>
+</div>
+<div class="group cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label text-[11px] font-bold text-primary">MAI 2023</span>
+<span class="material-symbols-outlined text-xs text-outline-variant">north_east</span>
+</div>
+<h3 class="font-headline text-lg font-medium leading-tight group-hover:text-secondary transition-colors">Relatório de Impacto Fiscal Sero: Obras Públicas</h3>
+<div class="mt-2 h-0.5 w-0 group-hover:w-full bg-secondary transition-all duration-300"></div>
+</div>
+<div class="group cursor-pointer">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label text-[11px] font-bold text-primary">ABR 2023</span>
+<span class="material-symbols-outlined text-xs text-outline-variant">north_east</span>
+</div>
+<h3 class="font-headline text-lg font-medium leading-tight group-hover:text-secondary transition-colors">Previsão Orçamentária Q4 - Empreendimentos Norte</h3>
+<div class="mt-2 h-0.5 w-0 group-hover:w-full bg-secondary transition-all duration-300"></div>
+</div>
+</div>
+</div>
+<!-- Contextual Stats Monolith -->
+<div class="mt-auto p-8 bg-surface-container-low">
+<div class="mb-8">
+<p class="font-label text-[10px] uppercase tracking-widest text-primary mb-1">Total Processed</p>
+<div class="text-5xl font-headline font-black tracking-tighter">1,284</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="font-label text-[10px] uppercase tracking-widest text-primary mb-1">Accuracy</p>
+<div class="text-xl font-headline font-bold">99.8%</div>
+</div>
+<div>
+<p class="font-label text-[10px] uppercase tracking-widest text-primary mb-1">AI Cycles</p>
+<div class="text-xl font-headline font-bold">12k</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Column: AI Chat Interface -->
+<section class="flex-1 bg-white flex flex-col">
+<!-- Header Chat -->
+<div class="h-20 border-b border-outline-variant/10 flex items-center justify-between px-10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-on-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-white" data-weight="fill">psychology</span>
+</div>
+<div>
+<h4 class="font-headline font-bold text-sm tracking-tight">Vulcano Assistant</h4>
+<div class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-[10px] font-label uppercase tracking-widest text-primary">Online Analysis</span>
+</div>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-3 py-1.5 text-xs font-label uppercase tracking-widest border border-outline-variant hover:bg-surface-container-low transition-colors">Export Chat</button>
+<button class="px-3 py-1.5 text-xs font-label uppercase tracking-widest bg-on-surface text-white hover:bg-primary transition-colors">Clear</button>
+</div>
+</div>
+<!-- Chat Content -->
+<div class="flex-1 overflow-y-auto p-10 space-y-8 scrollbar-hide">
+<!-- AI Message -->
+<div class="max-w-2xl">
+<div class="flex items-start gap-4">
+<div class="bg-on-surface p-6 text-white leading-relaxed font-body text-sm relative">
+                            Olá! Sou o assistente Vulcano. Analisei o Relatório de Fluxo de Caixa do Edifício Vulcanos (Julho 2023). 
+                            <br/><br/>
+                            Identifiquei uma inconsistência de <span class="text-secondary font-bold">R$ 42.300,00</span> nos lançamentos de terraplanagem. Gostaria que eu realizasse o cruzamento com as notas fiscais do período?
+                        </div>
+</div>
+<span class="text-[10px] font-label text-outline-variant mt-2 block uppercase tracking-widest">Vulcano AI • 14:22</span>
+</div>
+<!-- User Message -->
+<div class="max-w-2xl ml-auto flex flex-col items-end">
+<div class="bg-surface-container-highest p-6 text-on-surface leading-relaxed font-body text-sm border-r-4 border-secondary">
+                        Sim, por favor. Aproveite e gere uma visualização de barras comparando o orçado versus o realizado para este item especificamente.
+                    </div>
+<span class="text-[10px] font-label text-outline-variant mt-2 block uppercase tracking-widest">You • 14:23</span>
+</div>
+<!-- AI Message with Data Visual -->
+<div class="max-w-2xl">
+<div class="flex items-start gap-4">
+<div class="bg-on-surface p-6 text-white leading-relaxed font-body text-sm w-full">
+                            Processando cruzamento de dados...
+                            <br/><br/>
+<div class="bg-primary-dim p-4 my-4 flex items-center justify-between border-l-2 border-secondary">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">analytics</span>
+<div>
+<div class="text-[10px] font-label uppercase text-outline-variant">Visualização Gerada</div>
+<div class="font-headline font-medium">Gráfico de Discrepância de Custos</div>
+</div>
+</div>
+<span class="material-symbols-outlined cursor-pointer hover:text-secondary">open_in_new</span>
+</div>
+                            A discrepância ocorre no fornecedor 'Terra Forte LTDA'. O valor orçado era de R$ 120k, enquanto o faturado totalizou R$ 162,3k.
+                        </div>
+</div>
+<span class="text-[10px] font-label text-outline-variant mt-2 block uppercase tracking-widest">Vulcano AI • 14:25</span>
+</div>
+</div>
+<!-- Chat Input -->
+<div class="p-10 border-t border-outline-variant/10">
+<div class="relative flex items-center bg-surface-container-low border-b-2 border-on-surface transition-all focus-within:bg-surface-container-highest">
+<input class="w-full bg-transparent border-none py-4 px-6 focus:ring-0 text-sm font-body text-on-surface" placeholder="Pergunte qualquer coisa sobre seus relatórios fiscais ou obras..." type="text"/>
+<div class="flex items-center gap-4 pr-6">
+<button class="text-outline-variant hover:text-secondary transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<button class="text-outline-variant hover:text-secondary transition-colors">
+<span class="material-symbols-outlined">mic</span>
+</button>
+<button class="bg-on-surface text-white p-2 flex items-center justify-center hover:bg-secondary transition-colors">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+<div class="flex gap-4 mt-4">
+<button class="text-[10px] font-label uppercase tracking-widest text-primary px-3 py-1 bg-surface-container-high hover:bg-secondary hover:text-white transition-all">Consolidar IR</button>
+<button class="text-[10px] font-label uppercase tracking-widest text-primary px-3 py-1 bg-surface-container-high hover:bg-secondary hover:text-white transition-all">Resumo de Obras</button>
+<button class="text-[10px] font-label uppercase tracking-widest text-primary px-3 py-1 bg-surface-container-high hover:bg-secondary hover:text-white transition-all">Alertas Fiscais</button>
+</div>
+</div>
+</section>
+</main>
+<!-- FAB for Quick Actions (Suppressed on this specific task focus but template ready if needed) -->
+<!-- Suppression logic applied: Focused task UI -->
+</body></html>

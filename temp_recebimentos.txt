@@ -1,0 +1,149 @@
+export const RecebimentosView = ({ selectedEmpresa }) => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [empreendimentoFilter, setEmpreendimentoFilter] = useState('');
+  const [unidadeFilter, setUnidadeFilter] = useState('');
+  const [clienteFilter, setClienteFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [showConferencia, setShowConferencia] = useState(false);
+
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    setLoading(true);
+    fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
+      .then(res => res.json())
+      .then(d => {
+        if (!Array.isArray(d)) {
+           console.error("Backend error:", d);
+           setData([]);
+           setLoading(false);
+           return;
+        }
+        setData(d);
+        // auto select first emp if any
+        const emps = [...new Set(d.map(r => r.empreendimento))].sort();
+        if (emps.length > 0) {
+           setEmpreendimentoFilter(emps[0]);
+        } else {
+           setEmpreendimentoFilter('');
+        }
+        setUnidadeFilter('');
+        setClienteFilter('');
+        setDateFrom('');
+        setDateTo('');
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, [selectedEmpresa]);
+
+  const uniqueEmps = [...new Set(data.map(r => r.empreendimento))].sort();
+  const filteredBase = data.filter(r => !empreendimentoFilter || r.empreendimento === empreendimentoFilter);
+  const uniqueUnidades = [...new Set(filteredBase.map(r => r.descricao_venda).filter(Boolean))].sort();
+  const uniqueClientes = [...new Set(filteredBase.map(r => r.cliente).filter(Boolean))].sort();
+
+  const inDateRange = (dateStr) => {
+    // backend retorna YYYY-MM-DD (string)
+    if (!dateFrom && !dateTo) return true;
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    if (dateFrom && dateStr < dateFrom) return false;
+    if (dateTo && dateStr > dateTo) return false;
+    return true;
+  };
+
+  const filtered = filteredBase.filter(r =>
+    inDateRange(r.data) &&
+    (!unidadeFilter || r.descricao_venda === unidadeFilter) &&
+    (!clienteFilter || r.cliente === clienteFilter)
+  );
+
+  useEffect(() => {
+    // quando troca o empreendimento, reseta filtros específicos
+    setUnidadeFilter('');
+    setClienteFilter('');
+    setDateFrom('');
+    setDateTo('');
+  }, [empreendimentoFilter]);
+
+  const totalPago = filtered.reduce((acc, curr) => acc + ((curr.total > 0) ? curr.total : 0), 0);
+  const totalParcela = filtered.reduce((acc, curr) => acc + (curr.parcela || 0), 0);
+  const totalVariacao = filtered.reduce((acc, curr) => acc + (curr.variacao || 0), 0);
+
+  const handleDarBaixa = async (r) => {
+    if (!r.id) return alert("Parcela não possui ID vinculado.");
+    const valorInput = prompt(`Dar baixa na parcela ${r.num_parcela} de ${formatCurrency(r.parcela)}?\nDigite o valor pago:`, r.parcela);
+    if (!valorInput) return;
+    const valorPago = parseFloat(valorInput.replace(',', '.'));
+    if (isNaN(valorPago) || valorPago <= 0) return alert("Valor inválido");
+
+    try {
+      setLoading(true);
+      await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_receber: r.id, valor_pago: valorPago })
+      });
+      alert("Baixa realizada com sucesso!");
+      // reload component
+      fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
+        .then(res => res.json())
+        .then(d => { setData(d); setLoading(false); });
+    } catch (err) {
+      alert("Erro ao dar baixa");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tighter uppercase mb-2 text-white flex items-center gap-3"><DollarSign className="text-[#34c759]" size={28}/> Extrato de Recebimentos</h2>
+          <p className="text-xs text-[#555] uppercase tracking-[0.3em]">Fluxo de Caixa Analítico por Parcela</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <button onClick={() => setShowConferencia(true)} className="bg-[#007aff] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg> Conferir Tabela
+          </button>
+          <button onClick={() => {
+            const csvContent = "data:text/csv;charset=utf-8," + "Data,Total_Pago,Parcela,Variacao,Venda,Cliente\n" + filtered.map(e => `${e.data},${e.total},${e.parcela},${e.variacao},"${e.descricao_venda}","${e.cliente}"`).join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "recebimentos.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }} className="bg-[#333] text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-2">
+            <Download size={14}/> CSV
+          </button>
+          <button onClick={() => setShowForm(!showForm)} className="bg-[#34c759] text-[#111] text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-2">
+            <Plus size={14}/> Lançar Manual
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="bg-[#131313] border border-[#34c759]/50 rounded-sm p-4 animate-in fade-in slide-in-from-top-4">
+          <h3 className="text-xs uppercase tracking-widest text-[#34c759] font-bold mb-4">Novo Recebimento</h3>
+          <form className="flex gap-4 items-end" onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            try {
+              await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(fd)) });
+              alert("Recebimento cadastrado!"); e.target.reset(); setShowForm(false);
+            } catch (err) { alert("Erro ao cadastrar."); }
+          }}>
+            <input type="hidden" name="empresa_id" value={selectedEmpresa} />
+            <div className="w-24"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">ID Venda</label><input name="id_venda" type="number" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+            <div className="w-32"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Parcela (No)</label><input name="parcela" type="number" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+            <div className="w-32"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Valor</label><input name="valor" type="number" step="0.01" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+            <div className="w-40"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Data</label><input name="data" type="date" required className="w-full bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white" /></div>
+            <button type="submit" className="bg-[#34c759] text-[#111] text-[10px] font-bold uppercase tracking-widest px-6 py-2 rounded-sm hover:opacity-80">Salvar</button>
+          </form>
+        </div>
+      )}

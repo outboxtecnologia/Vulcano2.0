@@ -1,0 +1,13 @@
+with open('backend/main.py', 'a', encoding='utf-8') as f:
+    f.write("\n@app.get('/api/debug/venda')\n")
+    f.write("def api_debug_venda():\n")
+    f.write("    conn_v = get_conn('vulcano')\n")
+    f.write("    try:\n")
+    f.write("        cur = conn_v.cursor()\n")
+    f.write("        cur.execute('SELECT FIRST 5 ID, IDUNIDADE FROM VENDA')\n")
+    f.write("        vendas = cur.fetchall()\n")
+    f.write("        cur.execute('SELECT FIRST 5 ID, METRAGEM FROM UNIDADE')\n")
+    f.write("        unis = cur.fetchall()\n")
+    f.write("        return {'vendas': vendas, 'unidades': unis}\n")
+    f.write("    finally:\n")
+    f.write("        conn_v.close()\n")

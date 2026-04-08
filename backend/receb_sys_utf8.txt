@@ -1,0 +1,31 @@
+BAIXA_RECEBER Erro: Dynamic SQL Error
+SQL error code = -204
+Table unknown
+BAIXA_RECEBER
+At line 1, column 23
+\nRECEBIMENTO Erro: Dynamic SQL Error
+SQL error code = -204
+Table unknown
+RECEBIMENTO
+At line 1, column 23
+\nCONTA_RECEBER_BAIXA Erro: Dynamic SQL Error
+SQL error code = -204
+Table unknown
+CONTA_RECEBER_BAIXA
+At line 1, column 23
+\nRECEBER_BAIXA Erro: Dynamic SQL Error
+SQL error code = -204
+Table unknown
+RECEBER_BAIXA
+At line 1, column 23
+\nTITULO_RECEBER Erro: Dynamic SQL Error
+SQL error code = -204
+Table unknown
+TITULO_RECEBER
+At line 1, column 23
+\nTITULO_RECEBER_BAIXA Erro: Dynamic SQL Error
+SQL error code = -204
+Table unknown
+TITULO_RECEBER_BAIXA
+At line 1, column 23
+\nRECEBER (T>0) First Row: (17946, 110, None, datetime.datetime(2016, 2, 22, 0, 0), 800.0, 149.18, 949.18, '08/2015', 'PARCELAS', 225, 0.0, None)\nRECEBER (V>0) First Row: (17946, 110, None, datetime.datetime(2016, 2, 22, 0, 0), 800.0, 149.18, 949.18, '08/2015', 'PARCELAS', 225, 0.0, None)\n

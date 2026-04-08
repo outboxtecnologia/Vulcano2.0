@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VULCANO ERP - Módulo Fiscal (F200)</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container": "#1f1f20",
+                        "primary-fixed-dim": "#ffb5a0",
+                        "on-tertiary-container": "#002a51",
+                        "tertiary-fixed-dim": "#a3c9ff",
+                        "surface": "#131314",
+                        "surface-tint": "#ffb5a0",
+                        "surface-dim": "#131314",
+                        "surface-container-highest": "#353436",
+                        "on-background": "#e5e2e3",
+                        "surface-container-low": "#1b1b1c",
+                        "outline-variant": "#5d4038",
+                        "tertiary-fixed": "#d3e3ff",
+                        "on-surface-variant": "#e7bdb2",
+                        "surface-bright": "#39393a",
+                        "on-primary-fixed": "#3b0900",
+                        "outline": "#ad887e",
+                        "surface-container-lowest": "#0e0e0f",
+                        "primary": "#ffb5a0",
+                        "on-primary-fixed-variant": "#872000",
+                        "on-tertiary-fixed": "#001c39",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#2e4b57",
+                        "tertiary-container": "#3b93f1",
+                        "tertiary": "#a3c9ff",
+                        "secondary-fixed": "#c9e7f7",
+                        "background": "#131314",
+                        "secondary": "#adcbda",
+                        "primary-fixed": "#ffdbd1",
+                        "on-secondary": "#163440",
+                        "inverse-on-surface": "#303031",
+                        "primary-container": "#ff5625",
+                        "error": "#ffb4ab",
+                        "on-surface": "#e5e2e3",
+                        "on-error": "#690005",
+                        "on-secondary-container": "#9fbdcc",
+                        "on-secondary-fixed": "#001f2a",
+                        "inverse-surface": "#e5e2e3",
+                        "secondary-container": "#304d5a",
+                        "on-error-container": "#ffdad6",
+                        "inverse-primary": "#b12d00",
+                        "secondary-fixed-dim": "#adcbda",
+                        "surface-variant": "#353436",
+                        "on-tertiary": "#00315c",
+                        "on-primary-container": "#541100",
+                        "on-primary": "#601400",
+                        "surface-container-high": "#2a2a2b",
+                        "on-tertiary-fixed-variant": "#004883"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3, .brand-font { font-family: 'Space Grotesk', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#131314]/70 backdrop-blur-xl border-b border-[#5d4038]/20 flex justify-between items-center px-6 h-16">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-bold uppercase tracking-tighter text-[#ffb5a0] font-['Space_Grotesk']">VULCANO ERP</span>
+<div class="hidden md:flex gap-6 items-center text-zinc-400 text-sm font-medium">
+<span class="text-[#ffb5a0] font-bold">Fiscal</span>
+<span class="hover:text-zinc-200 transition-colors cursor-pointer">Planejamento</span>
+<span class="hover:text-zinc-200 transition-colors cursor-pointer">Estoque</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center bg-surface-container-lowest px-3 py-1.5 rounded-sm border border-outline-variant/10">
+<span class="material-symbols-outlined text-sm text-outline mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-xs w-48 text-on-surface" placeholder="Buscar lançamento..." type="text"/>
+</div>
+<button class="material-symbols-outlined text-zinc-400 hover:bg-zinc-800/50 p-2 rounded-sm transition-colors">notifications</button>
+<button class="material-symbols-outlined text-zinc-400 hover:bg-zinc-800/50 p-2 rounded-sm transition-colors">settings</button>
+<div class="h-8 w-8 bg-primary-container rounded-sm flex items-center justify-center text-on-primary-container font-bold text-xs">
+                JD
+            </div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-64 z-[60] bg-[#0e0e0f] flex flex-col py-6">
+<div class="px-6 mb-10">
+<h1 class="font-['Space_Grotesk'] font-black text-xl text-[#ffb5a0]">VULCANO</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Construction Intelligence</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">domain</span>
+                Empreendimentos
+            </a>
+<a class="flex items-center gap-3 px-6 py-3 text-[#ffb5a0] border-l-2 border-[#ff5625] bg-[#131314] font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">receipt_long</span>
+                Fiscal
+            </a>
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">payments</span>
+                Recebimentos
+            </a>
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">engineering</span>
+                Sero
+            </a>
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">psychology</span>
+                IA
+            </a>
+</nav>
+<div class="px-6 mb-6">
+<button class="w-full bg-primary-container text-on-primary-container py-3 rounded-sm font-bold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm">add</span>
+                NOVO PROJETO
+            </button>
+</div>
+<div class="mt-auto border-t border-zinc-800/50 pt-4">
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">support_agent</span>
+                Suporte
+            </a>
+<a class="flex items-center gap-3 px-6 py-3 text-zinc-500 hover:text-zinc-200 transition-all font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="ml-64 pt-24 px-10 pb-12 min-h-screen">
+<!-- Header & Filters -->
+<header class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+<div>
+<h2 class="text-4xl font-headline font-bold tracking-tight text-on-surface mb-2">Conferência Fiscal</h2>
+<div class="flex items-center gap-2 text-on-surface-variant/70 text-xs font-medium">
+<span class="material-symbols-outlined text-sm">event</span>
+<span>Período: 01/10/2023 - 31/10/2023</span>
+<span class="mx-2 opacity-30">|</span>
+<span class="material-symbols-outlined text-sm">location_city</span>
+<span>F200 - Unidades Imobiliárias</span>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="group relative">
+<label class="absolute -top-2 left-2 px-1 bg-surface text-[10px] text-primary font-bold uppercase tracking-wider z-10">Empreendimento</label>
+<select class="bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/40 text-sm py-3 px-4 min-w-[240px] rounded-sm appearance-none">
+<option>Residencial Aurora Borealis</option>
+<option>Edifício Sky Tower</option>
+<option>Complexo Industrial Sul</option>
+</select>
+</div>
+<div class="group relative">
+<label class="absolute -top-2 left-2 px-1 bg-surface text-[10px] text-primary font-bold uppercase tracking-wider z-10">Data</label>
+<input class="bg-surface-container-lowest border-none outline-none focus:ring-1 focus:ring-primary/40 text-sm py-3 px-4 rounded-sm" type="date" value="2023-10-25"/>
+</div>
+<button class="bg-surface-container-high hover:bg-surface-container-highest px-4 py-3 rounded-sm flex items-center gap-2 transition-all">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+<span class="text-xs font-bold uppercase tracking-widest">Filtros Avançados</span>
+</button>
+</div>
+</header>
+<div class="grid grid-cols-12 gap-8">
+<!-- Quick Entry Form (Asymmetric Bento) -->
+<section class="col-span-12 xl:col-span-4 space-y-6">
+<div class="bg-surface-container-low p-8 rounded-sm relative overflow-hidden group">
+<!-- Machined Edge Detail -->
+<div class="absolute left-0 top-0 bottom-0 w-0.5 bg-primary-container"></div>
+<h3 class="font-headline text-xl font-bold mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-weight="fill">bolt</span>
+                        Quick Entry F200
+                    </h3>
+<form class="space-y-5">
+<div class="space-y-1">
+<label class="text-[10px] uppercase font-bold text-on-surface-variant/60 tracking-widest ml-1">Unidade / Bloco</label>
+<input autofocus="" class="w-full bg-surface-container-lowest border-none focus:ring-0 focus:border-primary border-b-2 border-transparent transition-all py-3 px-4 text-sm font-mono" placeholder="Ex: A-402" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-1">
+<label class="text-[10px] uppercase font-bold text-on-surface-variant/60 tracking-widest ml-1">Valor da Venda</label>
+<input class="w-full bg-surface-container-lowest border-none focus:ring-0 py-3 px-4 text-sm font-mono text-right" placeholder="R$ 0,00" type="text"/>
+</div>
+<div class="space-y-1">
+<label class="text-[10px] uppercase font-bold text-on-surface-variant/60 tracking-widest ml-1">Data Venda</label>
+<input class="w-full bg-surface-container-lowest border-none focus:ring-0 py-3 px-4 text-sm font-mono" placeholder="DD/MM/AAAA" type="text"/>
+</div>
+</div>
+<div class="space-y-1">
+<label class="text-[10px] uppercase font-bold text-on-surface-variant/60 tracking-widest ml-1">CPF / CNPJ Adquirente</label>
+<input class="w-full bg-surface-container-lowest border-none focus:ring-0 py-3 px-4 text-sm font-mono" placeholder="000.000.000-00" type="text"/>
+</div>
+<div class="pt-4 flex items-center gap-3">
+<button class="flex-1 bg-primary-container text-on-primary-container font-bold py-4 rounded-sm text-xs tracking-widest uppercase hover:brightness-110 active:scale-95 transition-all" type="submit">
+                                Registrar Lançamento
+                            </button>
+<button class="bg-surface-container-highest p-4 rounded-sm text-on-surface-variant hover:text-primary transition-colors" type="button">
+<span class="material-symbols-outlined">qr_code_scanner</span>
+</button>
+</div>
+<p class="text-[10px] text-zinc-500 italic text-center">Atalho: Ctrl + Enter para salvar</p>
+</form>
+</div>
+<!-- Stats Insight Card -->
+<div class="bg-surface-container-lowest border border-outline-variant/10 p-6 rounded-sm">
+<div class="flex justify-between items-start mb-6">
+<span class="text-[10px] font-bold text-primary tracking-widest uppercase">Resumo da Sessão</span>
+<span class="text-xs text-zinc-500">Hoje, 25 Out</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<div class="text-2xl font-headline font-bold">128</div>
+<div class="text-[10px] uppercase text-zinc-500">Processados</div>
+</div>
+<div>
+<div class="text-2xl font-headline font-bold text-error">04</div>
+<div class="text-[10px] uppercase text-zinc-500">Com Erros</div>
+</div>
+</div>
+<div class="mt-6 h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[85%]"></div>
+</div>
+</div>
+</section>
+<!-- Table Section -->
+<section class="col-span-12 xl:col-span-8">
+<div class="bg-surface-container-low rounded-sm overflow-hidden flex flex-col h-full">
+<div class="px-8 py-6 flex justify-between items-center border-b border-outline-variant/10 bg-surface-container-low/50">
+<h3 class="font-headline text-lg font-bold">Lançamentos Recentes</h3>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest text-xs font-bold px-3 py-1.5 rounded-sm hover:text-primary">XML</button>
+<button class="bg-surface-container-highest text-xs font-bold px-3 py-1.5 rounded-sm hover:text-primary">PDF</button>
+<button class="bg-surface-container-highest text-xs font-bold px-3 py-1.5 rounded-sm hover:text-primary">EXCEL</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high/30">
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">Status</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">Unidade</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">Adquirente</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary text-right">Base Calc.</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary text-right">Alíquota</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary text-right">Valor PIS/COF</th>
+<th class="px-6 py-4"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<!-- Row 1 (OK) -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary shadow-[0_0_8px_rgba(163,201,255,0.4)]"></span>
+<span class="text-[10px] font-bold uppercase text-tertiary">Validado</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-mono">B-102</td>
+<td class="px-6 py-4 text-xs font-medium text-zinc-300">Marcos A. Oliveira</td>
+<td class="px-6 py-4 text-sm font-mono text-right">450.000,00</td>
+<td class="px-6 py-4 text-sm font-mono text-right">3,65%</td>
+<td class="px-6 py-4 text-sm font-mono text-right text-tertiary">16.425,00</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-zinc-600 group-hover:text-primary transition-colors">edit_note</button>
+</td>
+</tr>
+<!-- Row 2 (Error) -->
+<tr class="bg-error-container/5 hover:bg-error-container/10 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error shadow-[0_0_8px_rgba(255,180,171,0.4)]"></span>
+<span class="text-[10px] font-bold uppercase text-error">Erro</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-mono">A-305</td>
+<td class="px-6 py-4 text-xs font-medium text-zinc-300">Ana Paula Silva</td>
+<td class="px-6 py-4 text-sm font-mono text-right">210.000,00</td>
+<td class="px-6 py-4 text-sm font-mono text-right">--</td>
+<td class="px-6 py-4 text-sm font-mono text-right text-error">--</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-error">error</button>
+</td>
+</tr>
+<!-- Row 3 (Pending) -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#ffdbd1] shadow-[0_0_8px_rgba(255,219,209,0.4)]"></span>
+<span class="text-[10px] font-bold uppercase text-[#ffdbd1]">Pendente</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-mono">C-222</td>
+<td class="px-6 py-4 text-xs font-medium text-zinc-300">Construtora Norte Ltda</td>
+<td class="px-6 py-4 text-sm font-mono text-right">890.000,00</td>
+<td class="px-6 py-4 text-sm font-mono text-right">0,65%</td>
+<td class="px-6 py-4 text-sm font-mono text-right">5.785,00</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-zinc-600 group-hover:text-primary transition-colors">visibility</button>
+</td>
+</tr>
+<!-- Repeat Row 1 -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="text-[10px] font-bold uppercase text-tertiary">Validado</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-mono">B-204</td>
+<td class="px-6 py-4 text-xs font-medium text-zinc-300">Roberto Kennedy</td>
+<td class="px-6 py-4 text-sm font-mono text-right">315.000,00</td>
+<td class="px-6 py-4 text-sm font-mono text-right">3,65%</td>
+<td class="px-6 py-4 text-sm font-mono text-right text-tertiary">11.497,50</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-zinc-600 group-hover:text-primary transition-colors">edit_note</button>
+</td>
+</tr>
+<!-- Row 4 (OK) -->
+<tr class="hover:bg-surface-container-high/40 transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="text-[10px] font-bold uppercase text-tertiary">Validado</span>
+</div>
+</td>
+<td class="px-6 py-4 text-sm font-mono">D-401</td>
+<td class="px-6 py-4 text-xs font-medium text-zinc-300">Juliana M. Mendes</td>
+<td class="px-6 py-4 text-sm font-mono text-right">620.000,00</td>
+<td class="px-6 py-4 text-sm font-mono text-right">3,65%</td>
+<td class="px-6 py-4 text-sm font-mono text-right text-tertiary">22.630,00</td>
+<td class="px-6 py-4 text-right">
+<button class="material-symbols-outlined text-zinc-600 group-hover:text-primary transition-colors">edit_note</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination / Footer -->
+<div class="mt-auto px-8 py-4 bg-surface-container-lowest/50 flex justify-between items-center text-xs text-zinc-500">
+<div>Exibindo 1-15 de 242 registros</div>
+<div class="flex gap-2">
+<button class="p-2 bg-surface-container-high rounded-sm hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="px-3 py-1 bg-primary-container text-on-primary-container font-bold rounded-sm">1</button>
+<button class="px-3 py-1 hover:bg-surface-container-high rounded-sm">2</button>
+<button class="px-3 py-1 hover:bg-surface-container-high rounded-sm">3</button>
+<button class="p-2 bg-surface-container-high rounded-sm hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Global Alert Section (Asymmetric Editorial) -->
+<section class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="bg-surface-container-low p-8 border-l-2 border-primary-container flex gap-6 items-start">
+<div class="bg-primary/10 p-3 rounded-full text-primary">
+<span class="material-symbols-outlined text-2xl">info</span>
+</div>
+<div>
+<h4 class="font-headline text-lg font-bold mb-2">Atenção ao Bloco F210</h4>
+<p class="text-on-surface-variant text-sm leading-relaxed">
+                        Detectamos divergências no somatório do Bloco F200 vs Bloco F210 para este empreendimento. 
+                        Revise os créditos passíveis de compensação antes de gerar o arquivo SPED.
+                    </p>
+<button class="mt-4 text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2 hover:gap-3 transition-all">
+                        Ir para Conciliação <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="bg-[#131314] p-8 border border-outline-variant/20 rounded-sm relative group overflow-hidden">
+<div class="flex items-center justify-between mb-4">
+<h4 class="font-headline text-lg font-bold">Documentação Auxiliar</h4>
+<span class="material-symbols-outlined text-zinc-700">description</span>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between p-3 bg-surface-container-lowest hover:bg-surface-container-high transition-colors cursor-pointer">
+<span class="text-xs">Manual de Escrituração F200_v1.2.pdf</span>
+<span class="material-symbols-outlined text-sm text-zinc-500">download</span>
+</div>
+<div class="flex items-center justify-between p-3 bg-surface-container-lowest hover:bg-surface-container-high transition-colors cursor-pointer">
+<span class="text-xs">Tabela de Alíquotas RET 2023.xlsx</span>
+<span class="material-symbols-outlined text-sm text-zinc-500">download</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Quick Actions (FAB context) -->
+<button class="fixed bottom-8 right-8 h-14 w-14 bg-primary-container text-on-primary-container rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[100] group">
+<span class="material-symbols-outlined text-2xl" data-weight="fill">chat_bubble</span>
+<div class="absolute right-full mr-4 bg-surface-container-high px-4 py-2 rounded-sm text-xs font-bold opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-all">
+            Suporte Fiscal IA
+        </div>
+</button>
+</body></html>

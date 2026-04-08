@@ -1,0 +1,13 @@
+POC Columns:
+['PERCENTUAL', 'ID', 'ID_EMPREENDIMENTO', 'PERIODO']
+
+(Decimal('56.8800'), 778, 363, datetime.date(2025, 12, 31))
+(Decimal('54.2100'), 777, 363, datetime.date(2025, 11, 30))
+(Decimal('50.7000'), 776, 363, datetime.date(2025, 10, 31))
+(Decimal('47.6800'), 775, 363, datetime.date(2025, 9, 30))
+(Decimal('44.5400'), 774, 363, datetime.date(2025, 8, 31))
+(Decimal('27.6800'), 773, 335, datetime.date(2025, 12, 31))
+(Decimal('26.5400'), 772, 335, datetime.date(2025, 11, 30))
+(Decimal('25.5600'), 771, 335, datetime.date(2025, 10, 31))
+(Decimal('0.0000'), 770, 346, datetime.date(2025, 12, 31))
+(Decimal('82.0000'), 769, 346, datetime.date(2025, 11, 30))

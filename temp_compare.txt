@@ -1,0 +1,31 @@
+{currentView === 'compare' && (
+             <div className="space-y-8 animate-in fade-in max-w-7xl mx-auto w-full">
+               <h2 className="text-4xl font-bold tracking-tighter uppercase text-[var(--v-text-bold)] mb-6">Auditoria Cruzada de ERPs</h2>
+               <div className="magma-card overflow-x-auto rounded-sm p-6">
+                 {compareLoading ? <Loader2 className="animate-spin text-[var(--v-accent)]" size={32}/> : compareData ? (
+                   <table className="w-full text-left border-collapse">
+                     <thead>
+                       <tr>
+                         <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Competência</th>
+                         <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)] text-right">Caixa(Questor)</th>
+                         <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)] text-right">Soc.(Vulcano)</th>
+                         <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)] text-right">Retidos</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {compareData.timeline.map((r, i) => (
+                         <tr key={i} className="border-b border-[var(--v-border)]">
+                           <td className="p-4 text-sm text-[var(--v-text-muted)]">{r.mes}</td>
+                           <td className="p-4 text-sm font-bold text-[var(--v-accent-6)] text-right">{formatCurrency(r.receita_caixa)}</td>
+                           <td className="p-4 text-sm font-bold text-[var(--v-accent-3)] text-right">{formatCurrency(r.receita_poc)}</td>
+                           <td className="p-4 text-sm font-bold text-[var(--v-accent)] text-right">{formatCurrency(r.impostos)}</td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 ) : <p className="text-[var(--v-text-faint)]">Carregando linha do tempo...</p>}
+               </div>
+             </div>
+           )}
+
+           

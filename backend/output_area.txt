@@ -1,0 +1,5 @@
+ERR: No module named 'fdb'
+Traceback (most recent call last):
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\get_area_data.py", line 3, in <module>
+    import fdb
+ModuleNotFoundError: No module named 'fdb'

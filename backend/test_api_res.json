@@ -1,0 +1,995 @@
+{
+  "success": true,
+  "data": [
+    {
+      "empreendimento": "APTO 1413 - ESTEVES JUNIOR",
+      "meta_cpc47": {
+        "vgv": 1590000.0,
+        "poc": 100.0,
+        "receita_societaria": 1590000.0,
+        "caixa_acumulado": 1590050.0,
+        "trib_soc": 104428.4177646576,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "874661 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "1712 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 50.0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "874663 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 1590000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "253 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5118 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 104428.4177646576
+        }
+      ]
+    },
+    {
+      "empreendimento": "APTO 202 - ED. ANCARES",
+      "meta_cpc47": {
+        "vgv": 300000.0,
+        "poc": 100.0,
+        "receita_societaria": 300000.0,
+        "caixa_acumulado": 300000.0,
+        "trib_soc": 19221.326622983222,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "874685 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "874686 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "874687 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 300000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "874665 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 19221.326622983222
+        }
+      ]
+    },
+    {
+      "empreendimento": "COND. PARQUE DA PEDRA TERRENO 103",
+      "meta_cpc47": {
+        "vgv": 300000.0,
+        "poc": 100.0,
+        "receita_societaria": 300000.0,
+        "caixa_acumulado": 300000.0,
+        "trib_soc": 17935.89997631186,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "2999944 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "1712 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "2999946 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 300000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 17935.89997631186
+        }
+      ]
+    },
+    {
+      "empreendimento": "ED. UNIQUE PLACE RESIDENCE",
+      "meta_cpc47": {
+        "vgv": 70665026.54,
+        "poc": 100.0,
+        "receita_societaria": 70665026.54,
+        "caixa_acumulado": 81133872.09,
+        "trib_soc": 2826601.061599999,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "2999895 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "2999923 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 10468845.549999997
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "2999897 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 70665026.54
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5606 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 2826601.061599999
+        }
+      ]
+    },
+    {
+      "empreendimento": "EDIFICIO HS PRIME",
+      "meta_cpc47": {
+        "vgv": 2045000.0,
+        "poc": 100.0,
+        "receita_societaria": 2045000.0,
+        "caixa_acumulado": 2079373.9300000002,
+        "trib_soc": 130183.71225973999,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5495 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5472 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 34373.93000000017
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5497 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 2045000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5530 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "874680 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 130183.71225973999
+        }
+      ]
+    },
+    {
+      "empreendimento": "EDIFICIO PALAS ATHENAS",
+      "meta_cpc47": {
+        "vgv": 23177885.409999996,
+        "poc": 100.0,
+        "receita_societaria": 23177885.409999996,
+        "caixa_acumulado": 24475629.27,
+        "trib_soc": 1424930.112631875,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5272 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5292 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 1297743.8600000031
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5274 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 23177885.409999996
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5293 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "874721 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 1424930.112631875
+        }
+      ]
+    },
+    {
+      "empreendimento": "EMBARCA\u00c7\u00c3O - DEMETRIO",
+      "meta_cpc47": {
+        "vgv": 532800.0,
+        "poc": 100.0,
+        "receita_societaria": 532800.0,
+        "caixa_acumulado": 479186.39,
+        "trib_soc": 32692.464538768545,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5460 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 53613.609999999986
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5563 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5462 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 532800.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5564 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "2999927 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 32692.464538768545
+        }
+      ]
+    },
+    {
+      "empreendimento": "GREEN VILLAGE I E II",
+      "meta_cpc47": {
+        "vgv": 1510750.0,
+        "poc": 100.0,
+        "receita_societaria": 1510750.0,
+        "caixa_acumulado": 1516590.51,
+        "trib_soc": 87789.33984892518,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "2999949 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "1712 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 5840.510000000009
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "2999951 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 1510750.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "6008 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "6105 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 87789.33984892518
+        }
+      ]
+    },
+    {
+      "empreendimento": "HS EXECUTIVE",
+      "meta_cpc47": {
+        "vgv": 2263106.88,
+        "poc": 100.0,
+        "receita_societaria": 2263106.88,
+        "caixa_acumulado": 2280101.5900000003,
+        "trib_soc": 148703.49215733248,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5165 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5192 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 16994.71000000043
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5167 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 2263106.88
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5193 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5184 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 148703.49215733248
+        }
+      ]
+    },
+    {
+      "empreendimento": "LANCHA",
+      "meta_cpc47": {
+        "vgv": 1450000.0,
+        "poc": 100.0,
+        "receita_societaria": 1450000.0,
+        "caixa_acumulado": 1442500.0,
+        "trib_soc": 92985.7836209311,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "874676 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 7500.0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5472 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "874678 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 1450000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5530 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "874680 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 92985.7836209311
+        }
+      ]
+    },
+    {
+      "empreendimento": "RESIDENCIAL DEMETRIO RIBEIRO",
+      "meta_cpc47": {
+        "vgv": 3444641.81,
+        "poc": 100.0,
+        "receita_societaria": 3444641.81,
+        "caixa_acumulado": 1747170.29,
+        "trib_soc": 214291.21827921327,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5460 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 1697471.52
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5563 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5462 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 3444641.81
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5564 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "2999927 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 214291.21827921327
+        }
+      ]
+    },
+    {
+      "empreendimento": "RESIDENCIAL ILHA VENTURA",
+      "meta_cpc47": {
+        "vgv": 16208469.23,
+        "poc": 100.0,
+        "receita_societaria": 16208469.23,
+        "caixa_acumulado": 17865914.82000001,
+        "trib_soc": 1064024.58467676,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5122 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5182 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 1657445.590000011
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5124 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 16208469.23
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5195 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5588 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 1064024.58467676
+        }
+      ]
+    },
+    {
+      "empreendimento": "RESIDENCIAL MONTE BIANCO",
+      "meta_cpc47": {
+        "vgv": 3522789.52,
+        "poc": 100.0,
+        "receita_societaria": 3522789.52,
+        "caixa_acumulado": 3562664.0700000003,
+        "trib_soc": 234022.87636707514,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5040 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5183 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 39874.55000000028
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5042 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 3522789.52
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5088 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5057 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 234022.87636707514
+        }
+      ]
+    },
+    {
+      "empreendimento": "RESIDENCIAL PIEMONTE",
+      "meta_cpc47": {
+        "vgv": 300000.0,
+        "poc": 100.0,
+        "receita_societaria": 300000.0,
+        "caixa_acumulado": 329500.0,
+        "trib_soc": 19948.67180348138,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5000 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "1712 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 29500.0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5008 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 300000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5085 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5054 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 19948.67180348138
+        }
+      ]
+    },
+    {
+      "empreendimento": "RESIDENCIAL QUINTAS DA ROMAS",
+      "meta_cpc47": {
+        "vgv": 1360000.0,
+        "poc": 100.0,
+        "receita_societaria": 1360000.0,
+        "caixa_acumulado": 1105177.5,
+        "trib_soc": 90400.64495674527,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5003 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 254822.5
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "1712 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5011 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 1360000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5087 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5056 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 90400.64495674527
+        }
+      ]
+    },
+    {
+      "empreendimento": "RESIDENCIAL STUTTGART",
+      "meta_cpc47": {
+        "vgv": 113677686.75999996,
+        "poc": 27.68,
+        "receita_societaria": 31465983.695167992,
+        "caixa_acumulado": 31411896.76000001,
+        "trib_soc": 1238673.5093721596,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5653 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 54086.935167983174
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5666 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5665 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 31465983.695167992
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5667 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5669 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 1238673.5093721596
+        }
+      ]
+    },
+    {
+      "empreendimento": "TERRENOS",
+      "meta_cpc47": {
+        "vgv": 10300000.0,
+        "poc": 100.0,
+        "receita_societaria": 10300000.0,
+        "caixa_acumulado": 10300000.0,
+        "trib_soc": 687256.0058496997,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 10300000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 687256.0058496997
+        }
+      ]
+    },
+    {
+      "empreendimento": "TESTE NOME",
+      "meta_cpc47": {
+        "vgv": 7300000.0,
+        "poc": 100.0,
+        "receita_societaria": 7300000.0,
+        "caixa_acumulado": 7625719.78,
+        "trib_soc": 466511.7895234602,
+        "trib_cx": 0
+      },
+      "saldos": [
+        {
+          "chave": "clientes",
+          "natureza": "CLIENTES (Ativo)",
+          "conta": "5125 - CLIENTES",
+          "questor": 0.0,
+          "sistema": 0
+        },
+        {
+          "chave": "antecipacoes",
+          "natureza": "RECEB: ANTECIPA\u00c7\u00d5ES (Passivo)",
+          "conta": "5126 - ADIAN DE CLIENTES",
+          "questor": 0.0,
+          "sistema": 325719.78000000026
+        },
+        {
+          "chave": "receita",
+          "natureza": "RECEITA DE VENDAS (Resultado)",
+          "conta": "5127 - RECEITA DE VENDAS DRE",
+          "questor": 0.0,
+          "sistema": 7300000.0
+        },
+        {
+          "chave": "custos",
+          "natureza": "CUSTO INCORRIDO (Resultado)",
+          "conta": "5194 - CMV",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "diferimentos",
+          "natureza": "CUSTOS A APROPRIAR / DIFERIDO (Ativo)",
+          "conta": "5091 - ESTOQUE CONCLUIDO",
+          "questor": 0.0,
+          "sistema": 0.0
+        },
+        {
+          "chave": "tributos_diferidos",
+          "natureza": "TRIBUTOS DIFERIDOS CFE POC (Passivo/Ativo)",
+          "conta": null,
+          "questor": 0.0,
+          "sistema": 466511.7895234602
+        }
+      ]
+    }
+  ]
+}

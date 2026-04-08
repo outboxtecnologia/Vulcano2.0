@@ -1,0 +1,52 @@
+30: _DEFAULT_DB_QUESTOR = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\QUESTOR_EMPRESA_959.FDB"
+39: genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+41: # Modelo rápido por padrão; use GEMINI_MODEL no .env (ex.: gemini-2.5-flash) se quiser.
+42: GEMINI_MODEL_ID = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+43: # Timeout da extração via Gemini (segundos). Front-end deve esperar pelo menos esse tempo.
+44: GEMINI_EXTRACT_TIMEOUT_SEC = float(os.environ.get("GEMINI_EXTRACT_TIMEOUT_SEC", "300"))
+62: def _require_gemini_key():
+63: if not os.environ.get("GEMINI_API_KEY"):
+64: raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
+66: def _gemini_parse_json_response(raw: str) -> dict:
+70: raise HTTPException(status_code=500, detail="Resposta vazia do LLM (Gemini/Ollama)")
+128: return _gemini_parse_json_response(text_response)
+132: def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str = None) -> dict:
+133: """Chama Gemini e retorna um objeto JSON (via response_mime_type ou parse manual)."""
+134: _require_gemini_key()
+143: GEMINI_MODEL_ID,
+151: model = genai.GenerativeModel(GEMINI_MODEL_ID)
+156: return _gemini_parse_json_response(resp.text)
+639: key = os.environ.get("GEMINI_API_KEY") or ""
+642: "gemini_key_configured": bool(key.strip()),
+643: "gemini_key_len": len(key.strip()),
+649: key = os.environ.get("GEMINI_API_KEY") or ""
+653: "gemini_key_configured": bool(key.strip()),
+654: "gemini_key_len": len(key.strip()),
+655: "gemini_model": GEMINI_MODEL_ID,
+656: "gemini_extract_timeout_sec": GEMINI_EXTRACT_TIMEOUT_SEC,
+687: if not os.environ.get("GEMINI_API_KEY"):
+688: raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
+704: # Prompt Gemini to generate the python script
+705: model = genai.GenerativeModel(GEMINI_MODEL_ID)
+986: script_path = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\export_razao.py"
+987: output_xlsx = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\Razao_Analitico_Limpo.xlsx"
+2495: allow_gemini_fallback: bool = Query(default=True),
+2501: com multipart/file — evita falha de alguns clients com Form+File). Roda o script salvo sem Gemini.
+2540: allow_gemini_fallback = True
+2597: # Se o modelo não encontrou linhas, opcionalmente cai para Gemini para não travar o operador.
+2599: allow_gemini_fallback
+2605: # segue para Gemini abaixo, mas preserva metadado do template
+2613: _require_gemini_key()
+2685: timeout=GEMINI_EXTRACT_TIMEOUT_SEC,
+2691: f"Gemini excedeu {int(GEMINI_EXTRACT_TIMEOUT_SEC)}s na extração (modelo: {GEMINI_MODEL_ID}). "
+2692: f"Aumente GEMINI_EXTRACT_TIMEOUT_SEC no backend/.env ou troque GEMINI_MODEL."
+2702: "parser_source": "gemini" if not template_result else "gemini_fallback",
+2723: _require_gemini_key()
+2725: # Passaremos toda a tabela para que ele possa gerar o índice corretamente para todas as linhas afetadas (Gemini aguenta o contexto).
+2785: "message": f"Tabela ajustada (Gemini). ({len(updates)} ups, {len(deletes)} dels"
+2806: def _gemini_generate_python_plain(prompt: str) -> str:
+2808: _require_gemini_key()
+2810: model = genai.GenerativeModel(GEMINI_MODEL_ID)
+2825: raise HTTPException(status_code=429, detail="Limite de requisições API Gemini (Free Tier) excedido ao gerar script. Aguarde 1 minuto.")
+2826: raise HTTPException(status_code=500, detail=f"Erro ao gerar script Python via Gemini: {str(e)[:200]}")
+2840: _require_gemini_key()

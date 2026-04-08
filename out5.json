@@ -1,0 +1,404 @@
+{
+  "data": [
+    {
+      "empreendimento_id": 335,
+      "empreendimento_nome": "RESIDENCIAL STUTTGART",
+      "contas": [
+        {
+          "conta": 71,
+          "nome": "MATERIAL DE CONSTRUÇAO",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 326480.38999999996,
+          "movimento_debito": 5550.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 5550.0,
+          "saldo_final": 332030.38999999996,
+          "detalhes": [
+            {
+              "chave": 286160,
+              "data": "2024-04-18",
+              "historico": "MATERIAL DE CONSTRUÇAO|165494|",
+              "natureza": "D",
+              "valor": 60.0
+            },
+            {
+              "chave": 286411,
+              "data": "2024-04-26",
+              "historico": "MATERIAL DE CONSTRUCAO|313221",
+              "natureza": "D",
+              "valor": 5490.0
+            }
+          ]
+        },
+        {
+          "conta": 76,
+          "nome": "AGUA",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 0.0,
+          "movimento_debito": 74.62,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 74.62,
+          "saldo_final": 74.62,
+          "detalhes": [
+            {
+              "chave": 288697,
+              "data": "2024-04-22",
+              "historico": "AGUA|04/2024 - OBRA STUTTGART|",
+              "natureza": "D",
+              "valor": 74.62
+            }
+          ]
+        },
+        {
+          "conta": 75,
+          "nome": "IMPOSTOS E TAXAS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 0.0,
+          "movimento_debito": 100578.59,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 100578.59,
+          "saldo_final": 100578.59,
+          "detalhes": [
+            {
+              "chave": 286838,
+              "data": "2024-04-24",
+              "historico": "OUTORGA ONEROSA PROCESSO 00138398/2023 PROJETO 70139 - OBRA STUTTGART|",
+              "natureza": "D",
+              "valor": 100578.59
+            }
+          ]
+        },
+        {
+          "conta": 64,
+          "nome": "SALARIOS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 27880.66,
+          "movimento_debito": 6434.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 6434.0,
+          "saldo_final": 34314.66,
+          "detalhes": [
+            {
+              "chave": 285813,
+              "data": "2024-04-30",
+              "historico": "SALARIOS E ORDENADOS - 04/2024",
+              "natureza": "D",
+              "valor": 6434.0
+            }
+          ]
+        },
+        {
+          "conta": 70,
+          "nome": "FGTS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 2502.1000000000004,
+          "movimento_debito": 651.6100000000001,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 651.6100000000001,
+          "saldo_final": 3153.7100000000005,
+          "detalhes": [
+            {
+              "chave": 285816,
+              "data": "2024-04-30",
+              "historico": "FGTS S/FOLHA DE PAGAMENTO - 04/2024",
+              "natureza": "D",
+              "valor": 514.72
+            },
+            {
+              "chave": 285821,
+              "data": "2024-04-30",
+              "historico": "PROVISAO FGTS S/FERIAS - 04/2024",
+              "natureza": "D",
+              "valor": 57.19
+            },
+            {
+              "chave": 285826,
+              "data": "2024-04-30",
+              "historico": "PROVISAO FGTS S/13O SALARIO - 04/2024",
+              "natureza": "D",
+              "valor": 52.1
+            },
+            {
+              "chave": 285827,
+              "data": "2024-04-30",
+              "historico": "PROVISAO AJUSTE FGTS S/13O SALARIO - 04/2024",
+              "natureza": "D",
+              "valor": 27.6
+            }
+          ]
+        },
+        {
+          "conta": 67,
+          "nome": "FERIAS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 3574.45,
+          "movimento_debito": 714.89,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 714.89,
+          "saldo_final": 4289.34,
+          "detalhes": [
+            {
+              "chave": 285818,
+              "data": "2024-04-30",
+              "historico": "PROVISAO DE FERIAS - 04/2024",
+              "natureza": "D",
+              "valor": 536.16
+            },
+            {
+              "chave": 285819,
+              "data": "2024-04-30",
+              "historico": "PROVISAO 1/3 DE FERIAS - 04/2024",
+              "natureza": "D",
+              "valor": 178.73
+            }
+          ]
+        },
+        {
+          "conta": 69,
+          "nome": "PREVIDENCIA SOCIAL",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 8571.28,
+          "movimento_debito": 2320.1,
+          "movimento_credito": 96.52,
+          "movimento_liquido": 2223.58,
+          "saldo_final": 10794.86,
+          "detalhes": [
+            {
+              "chave": 285820,
+              "data": "2024-04-30",
+              "historico": "PROVISAO INSS S/FERIAS - 04/2024",
+              "natureza": "D",
+              "valor": 195.16
+            },
+            {
+              "chave": 285824,
+              "data": "2024-04-30",
+              "historico": "PROVISAO INSS S/13O SALARIO - 04/2024",
+              "natureza": "D",
+              "valor": 177.77
+            },
+            {
+              "chave": 285825,
+              "data": "2024-04-30",
+              "historico": "PROVISAO AJUSTE INSS S/13O SALARIO - 04/2024",
+              "natureza": "D",
+              "valor": 94.18
+            },
+            {
+              "chave": 285828,
+              "data": "2024-04-30",
+              "historico": "INSS PARTE EMPRESA - 04/2024",
+              "natureza": "D",
+              "valor": 1286.8
+            },
+            {
+              "chave": 285829,
+              "data": "2024-04-30",
+              "historico": "INSS PARTE SAT - 04/2024",
+              "natureza": "D",
+              "valor": 193.02
+            },
+            {
+              "chave": 285830,
+              "data": "2024-04-30",
+              "historico": "INSS PARTE TERCEIROS - 04/2024",
+              "natureza": "D",
+              "valor": 373.17
+            },
+            {
+              "chave": 285831,
+              "data": "2024-04-30",
+              "historico": "Acréscimo FAP Negativo - 04/2024",
+              "natureza": "C",
+              "valor": 96.5
+            },
+            {
+              "chave": 285866,
+              "data": "2024-04-30",
+              "historico": "PROVISAO AJUSTE NEGATIVO DO INSS S/13O SALARIO - 04/2024",
+              "natureza": "C",
+              "valor": 0.02
+            }
+          ]
+        },
+        {
+          "conta": 66,
+          "nome": "13o. SALARIO",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 2680.84,
+          "movimento_debito": 996.16,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 996.16,
+          "saldo_final": 3677.0,
+          "detalhes": [
+            {
+              "chave": 285822,
+              "data": "2024-04-30",
+              "historico": "PROVISAO 13O SALARIO - 04/2024",
+              "natureza": "D",
+              "valor": 651.16
+            },
+            {
+              "chave": 285823,
+              "data": "2024-04-30",
+              "historico": "PROVISAO AJUSTE 13O SALARIO - 04/2024",
+              "natureza": "D",
+              "valor": 345.0
+            }
+          ]
+        },
+        {
+          "conta": 4969,
+          "nome": "DESPESA VALE TRANSPORTE",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 0.0,
+          "movimento_debito": 110.22,
+          "movimento_credito": 110.22,
+          "movimento_liquido": 0.0,
+          "saldo_final": 0.0,
+          "detalhes": [
+            {
+              "chave": 285871,
+              "data": "2024-04-30",
+              "historico": "DESCONTO VALE TRANSPORTE - 04/2024",
+              "natureza": "C",
+              "valor": 110.22
+            },
+            {
+              "chave": 289574,
+              "data": "2024-04-30",
+              "historico": "DESCONTO VALE TRANSPORTE - 04/2024|",
+              "natureza": "D",
+              "valor": 110.22
+            }
+          ]
+        },
+        {
+          "conta": 4868,
+          "nome": "SEGUROS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 1201.6,
+          "movimento_debito": 150.2,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 150.2,
+          "saldo_final": 1351.8,
+          "detalhes": [
+            {
+              "chave": 288488,
+              "data": "2024-04-30",
+              "historico": "517720232M670000043 ALLIANZ SEGUROS VIGENCIA 14/07/2023 A 30/09/2028|",
+              "natureza": "D",
+              "valor": 150.2
+            }
+          ]
+        },
+        {
+          "conta": 5667,
+          "nome": "CUSTO DA UNIDADES RES. STUTTGART",
+          "classif": "3.5.1.01.0001",
+          "saldo_anterior": 0.0,
+          "movimento_debito": 2957.815980000003,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 2957.815980000003,
+          "saldo_final": 2957.815980000003,
+          "detalhes": [
+            {
+              "chave": "VULCANO_SIM",
+              "data": "04/2024 (Sim)",
+              "historico": "Provisão Custo Competência (POC 2.52%)",
+              "natureza": "D",
+              "valor": 2957.815980000003,
+              "virtual": true
+            }
+          ]
+        },
+        {
+          "conta": 5639,
+          "nome": "IMÓVEIS A CONCLUIR-OBRA RES. STUTTGART",
+          "classif": "1.1.2.07.0001",
+          "saldo_anterior": 0.0,
+          "movimento_debito": 0.0,
+          "movimento_credito": 2957.815980000003,
+          "movimento_liquido": -2957.815980000003,
+          "saldo_final": -2957.815980000003,
+          "detalhes": [
+            {
+              "chave": "VULCANO_SIM",
+              "data": "04/2024 (Sim)",
+              "historico": "Contrapartida Reconhec. Custo POC",
+              "natureza": "C",
+              "valor": 2957.815980000003,
+              "virtual": true
+            }
+          ]
+        },
+        {
+          "conta": 41,
+          "nome": "SERVIÇOS DE MAO DE OBRA",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 197070.0,
+          "movimento_debito": 0.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 0.0,
+          "saldo_final": 197070.0,
+          "detalhes": []
+        },
+        {
+          "conta": 45,
+          "nome": "SERVIÇOS DE CONCRETAGEM",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 232517.3,
+          "movimento_debito": 0.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 0.0,
+          "saldo_final": 232517.3,
+          "detalhes": []
+        },
+        {
+          "conta": 63,
+          "nome": "OUTROS SERVIÇOS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 7000.0,
+          "movimento_debito": 0.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 0.0,
+          "saldo_final": 7000.0,
+          "detalhes": []
+        },
+        {
+          "conta": 72,
+          "nome": "LOCAÇAO DE EQUIPAMENTOS",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 49963.0,
+          "movimento_debito": 0.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 0.0,
+          "saldo_final": 49963.0,
+          "detalhes": []
+        },
+        {
+          "conta": 4858,
+          "nome": "SERVIÇOS DE ENGENHARIA",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 74000.0,
+          "movimento_debito": 0.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 0.0,
+          "saldo_final": 74000.0,
+          "detalhes": []
+        },
+        {
+          "conta": 5043,
+          "nome": "SERVIÇOS DE VIGILÂNCIA",
+          "classif": "1.1.3.01.0001",
+          "saldo_anterior": 1739.8,
+          "movimento_debito": 0.0,
+          "movimento_credito": 0.0,
+          "movimento_liquido": 0.0,
+          "saldo_final": 1739.8,
+          "detalhes": []
+        }
+      ]
+    }
+  ]
+}

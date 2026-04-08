@@ -1,0 +1,1 @@
+{"resultados":[{"row":{"unidade":"","total_pago":1500,"dt_vencimento":"10/10/2023","cpf_cnpj":""},"has_date":false,"matched":false,"match_reason":"Rejeitado Sem Amarração","status":"BAIXA_REJEITADA_SEM_UNIDADE","id_receber":null,"db_estado_atual":null,"proposta_ia":null,"erp_data":null}]}

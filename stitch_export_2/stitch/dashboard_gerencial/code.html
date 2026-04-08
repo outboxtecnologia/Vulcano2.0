@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VULCANO ERP - Dashboard Gerencial</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container": "#1f1f20",
+                        "primary-fixed-dim": "#ffb5a0",
+                        "on-tertiary-container": "#002a51",
+                        "tertiary-fixed-dim": "#a3c9ff",
+                        "surface": "#131314",
+                        "surface-tint": "#ffb5a0",
+                        "surface-dim": "#131314",
+                        "surface-container-highest": "#353436",
+                        "on-background": "#e5e2e3",
+                        "surface-container-low": "#1b1b1c",
+                        "outline-variant": "#5d4038",
+                        "tertiary-fixed": "#d3e3ff",
+                        "on-surface-variant": "#e7bdb2",
+                        "surface-bright": "#39393a",
+                        "on-primary-fixed": "#3b0900",
+                        "outline": "#ad887e",
+                        "surface-container-lowest": "#0e0e0f",
+                        "primary": "#ffb5a0",
+                        "on-primary-fixed-variant": "#872000",
+                        "on-tertiary-fixed": "#001c39",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#2e4b57",
+                        "tertiary-container": "#3b93f1",
+                        "tertiary": "#a3c9ff",
+                        "secondary-fixed": "#c9e7f7",
+                        "background": "#131314",
+                        "secondary": "#adcbda",
+                        "primary-fixed": "#ffdbd1",
+                        "on-secondary": "#163440",
+                        "inverse-on-surface": "#303031",
+                        "primary-container": "#ff5625",
+                        "error": "#ffb4ab",
+                        "on-surface": "#e5e2e3",
+                        "on-error": "#690005",
+                        "on-secondary-container": "#9fbdcc",
+                        "on-secondary-fixed": "#001f2a",
+                        "inverse-surface": "#e5e2e3",
+                        "secondary-container": "#304d5a",
+                        "on-error-container": "#ffdad6",
+                        "inverse-primary": "#b12d00",
+                        "secondary-fixed-dim": "#adcbda",
+                        "surface-variant": "#353436",
+                        "on-tertiary": "#00315c",
+                        "on-primary-container": "#541100",
+                        "on-primary": "#601400",
+                        "surface-container-high": "#2a2a2b",
+                        "on-tertiary-fixed-variant": "#004883"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-64 z-[60] bg-[#0e0e0f] flex flex-col py-6 font-['Inter'] text-sm font-medium">
+<div class="px-6 mb-10">
+<h1 class="font-['Space_Grotesk'] font-black text-xl text-[#ffb5a0] tracking-tighter">VULCANO</h1>
+<p class="text-[10px] text-zinc-500 tracking-widest uppercase">Construction Intelligence</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-[#ffb5a0] border-l-2 border-[#ff5625] bg-[#131314] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="domain">domain</span>
+<span>Empreendimentos</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span>Fiscal</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span>Recebimentos</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="engineering">engineering</span>
+<span>Sero</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/30 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span>IA</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-4">
+<button class="w-full bg-primary-container text-on-primary-container py-3 rounded-sm font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity">
+                Novo Projeto
+            </button>
+<div class="pt-4 space-y-1 border-t border-[#5d4038]/10">
+<a class="flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-zinc-200 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="support_agent">support_agent</span>
+<span>Suporte</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-zinc-200 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-0 left-64 right-0 z-50 bg-[#131314]/70 backdrop-blur-xl border-b border-[#5d4038]/20 h-16 flex justify-between items-center px-6">
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-lg" data-icon="search">search</span>
+<input class="bg-surface-container-lowest border-none text-sm rounded-sm pl-10 pr-4 py-2 w-80 focus:ring-1 focus:ring-primary/30 text-on-surface" placeholder="Buscar em VULCANO ERP..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-zinc-400 hover:text-[#ffb5a0] transition-colors flex items-center gap-1 text-sm">
+<span>Help</span>
+</button>
+<div class="flex items-center gap-4">
+<button class="text-zinc-400 hover:text-[#ffb5a0] relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-primary-container rounded-full"></span>
+</button>
+<button class="text-zinc-400 hover:text-[#ffb5a0]">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="h-8 w-8 rounded-sm bg-surface-container-highest overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a professional man in a dark suit against a minimalist gray background, sharp focus, executive look" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDc7MXBNRdVRvc05u--0Hgg7rfSo4RZnPMs6CNBRo3c9RQYBvouAvYMsmRrdh5_mpTttxwjrCBw95iMh8ZsnR4EcLWkLwMn7RISEUuAaGUxRgo6Zu454LTj95xZ_wjz56dG5UGaf0k6hG1tiVNJevpbm6L3b7bsOgOrXzq6P2FhIZjvcvZkWNRChPTFU-7kIvCFq4fcPCczxiwb3eU35WFtsrzC3tehAHxNeMGneIPqtJ5AEHgwbwV-EUPRAIvP603-s60v7rAkSFcu"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="pl-64 pt-16 min-h-screen">
+<div class="p-8 space-y-8">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline text-4xl font-bold text-on-surface tracking-tight">Dashboard Gerencial</h2>
+<p class="text-on-surface-variant font-body text-sm mt-1 uppercase tracking-[0.2em]">Visão Consolidada de Operações &amp; Tributos</p>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-surface-container-high text-on-surface text-xs font-bold uppercase tracking-widest rounded-sm border border-outline-variant/20 hover:bg-surface-container-highest transition-colors">Exportar Relatório</button>
+<button class="px-4 py-2 bg-primary-container text-on-primary-container text-xs font-bold uppercase tracking-widest rounded-sm hover:opacity-90 transition-opacity">Atualizar Dados</button>
+</div>
+</div>
+<!-- Bento Grid Section -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Alerts - Critical Prazos -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-low p-6 flex flex-col justify-between group">
+<div>
+<div class="flex justify-between items-start mb-6">
+<span class="text-primary font-headline text-xs font-bold uppercase tracking-widest">Alertas Críticos</span>
+<span class="material-symbols-outlined text-error" data-icon="warning" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-4 p-3 bg-error/10 border-l-4 border-error">
+<div class="flex-1">
+<p class="text-xs font-bold text-on-surface">Vencimento DAS - Obra Horizon</p>
+<p class="text-[10px] text-error">Expira em 2 horas</p>
+</div>
+<button class="text-[10px] underline uppercase font-bold tracking-tighter">Pagar</button>
+</div>
+<div class="flex items-center gap-4 p-3 bg-surface-container-highest/40 border-l-4 border-primary">
+<div class="flex-1">
+<p class="text-xs font-bold text-on-surface">Conciliação Pendente: Porto Mar</p>
+<p class="text-[10px] text-on-surface-variant">48 lançamentos em aberto</p>
+</div>
+<button class="text-[10px] underline uppercase font-bold tracking-tighter">Ver</button>
+</div>
+</div>
+</div>
+<div class="mt-8">
+<p class="text-4xl font-headline font-bold text-error">03</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Ações urgentes pendentes</p>
+</div>
+</div>
+<!-- Impostos a Pagar -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-lowest border border-outline-variant/10 p-6 flex flex-col">
+<div class="flex justify-between items-start mb-8">
+<div>
+<span class="text-primary font-headline text-xs font-bold uppercase tracking-widest">Impostos Provisionados</span>
+<p class="text-[10px] text-zinc-500 mt-1">Competência: Outubro 2023</p>
+</div>
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<div class="space-y-4 flex-1">
+<div class="flex justify-between items-end border-b border-outline-variant/10 pb-2">
+<span class="text-xs text-on-surface-variant">ISSQN</span>
+<span class="text-lg font-headline font-medium">R$ 45.210,00</span>
+</div>
+<div class="flex justify-between items-end border-b border-outline-variant/10 pb-2">
+<span class="text-xs text-on-surface-variant">INSS Retido</span>
+<span class="text-lg font-headline font-medium">R$ 12.800,50</span>
+</div>
+<div class="flex justify-between items-end border-b border-outline-variant/10 pb-2">
+<span class="text-xs text-on-surface-variant">PIS/COFINS</span>
+<span class="text-lg font-headline font-medium text-primary">R$ 89.440,00</span>
+</div>
+</div>
+<div class="mt-6 pt-4 flex justify-between items-baseline">
+<span class="text-[10px] font-bold uppercase tracking-tighter text-zinc-500">Total Geral</span>
+<span class="text-2xl font-headline font-black text-[#ffb5a0]">R$ 147.450,50</span>
+</div>
+</div>
+<!-- Conciliação Fiscal Status -->
+<div class="col-span-12 lg:col-span-4 bg-[#131314] p-6 relative overflow-hidden group">
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<div class="w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary-container via-transparent to-transparent"></div>
+</div>
+<span class="text-primary font-headline text-xs font-bold uppercase tracking-widest relative z-10">Status de Conciliação</span>
+<div class="mt-8 flex items-center justify-center relative">
+<!-- Custom SVG Chart Simulation -->
+<svg class="w-32 h-32 transform -rotate-90">
+<circle class="text-surface-container-highest" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-primary-container" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-dasharray="364.4" stroke-dashoffset="43.7" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="text-2xl font-headline font-black">88%</span>
+<span class="text-[8px] uppercase font-bold tracking-tighter text-on-surface-variant">Concluído</span>
+</div>
+</div>
+<div class="mt-8 space-y-2 relative z-10">
+<div class="flex justify-between text-[10px] font-bold uppercase tracking-widest">
+<span class="text-on-surface-variant">Conciliado</span>
+<span>R$ 1.2M</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1">
+<div class="bg-primary h-full w-[88%]"></div>
+</div>
+</div>
+</div>
+<!-- Faturamento por Empreendimento (Bar Chart Area) -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-low p-8">
+<div class="flex justify-between items-baseline mb-12">
+<div>
+<h3 class="font-headline text-xl font-bold">Faturamento Mensal</h3>
+<p class="text-xs text-on-surface-variant">Performance por unidade de negócio (Top 5)</p>
+</div>
+<div class="flex gap-4">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-primary-container rounded-full"></span>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Atual</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-surface-container-highest rounded-full"></span>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Projetado</span>
+</div>
+</div>
+</div>
+<div class="h-64 flex items-end justify-between gap-4">
+<!-- Bar 1 -->
+<div class="flex-1 flex flex-col items-center gap-3 group">
+<div class="w-full flex flex-col items-center justify-end gap-1 h-full">
+<div class="w-full bg-surface-container-highest h-[60%] relative">
+<div class="absolute bottom-0 left-0 w-full bg-primary-container h-[80%] transition-all group-hover:bg-primary"></div>
+</div>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant truncate w-full text-center">Residencial Vênus</span>
+</div>
+<!-- Bar 2 -->
+<div class="flex-1 flex flex-col items-center gap-3 group">
+<div class="w-full flex flex-col items-center justify-end gap-1 h-full">
+<div class="w-full bg-surface-container-highest h-[90%] relative">
+<div class="absolute bottom-0 left-0 w-full bg-primary-container h-[70%] transition-all group-hover:bg-primary"></div>
+</div>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant truncate w-full text-center">Torre Titan</span>
+</div>
+<!-- Bar 3 -->
+<div class="flex-1 flex flex-col items-center gap-3 group">
+<div class="w-full flex flex-col items-center justify-end gap-1 h-full">
+<div class="w-full bg-surface-container-highest h-[45%] relative">
+<div class="absolute bottom-0 left-0 w-full bg-primary-container h-[90%] transition-all group-hover:bg-primary"></div>
+</div>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant truncate w-full text-center">Cond. Galáxia</span>
+</div>
+<!-- Bar 4 -->
+<div class="flex-1 flex flex-col items-center gap-3 group">
+<div class="w-full flex flex-col items-center justify-end gap-1 h-full">
+<div class="w-full bg-surface-container-highest h-[100%] relative">
+<div class="absolute bottom-0 left-0 w-full bg-primary-container h-[85%] transition-all group-hover:bg-primary"></div>
+</div>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant truncate w-full text-center">Solaris Hub</span>
+</div>
+<!-- Bar 5 -->
+<div class="flex-1 flex flex-col items-center gap-3 group">
+<div class="w-full flex flex-col items-center justify-end gap-1 h-full">
+<div class="w-full bg-surface-container-highest h-[75%] relative">
+<div class="absolute bottom-0 left-0 w-full bg-primary-container h-[40%] transition-all group-hover:bg-primary"></div>
+</div>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-tighter text-on-surface-variant truncate w-full text-center">Plaza Marte</span>
+</div>
+</div>
+</div>
+<!-- Tabela Compacta de Obras -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-high p-8 flex flex-col">
+<h3 class="font-headline text-xl font-bold mb-6">Obras Recentes</h3>
+<div class="flex-1 overflow-x-auto scrollbar-hide">
+<table class="w-full text-left">
+<thead>
+<tr class="text-[10px] font-bold uppercase tracking-widest text-primary border-b border-outline-variant/20">
+<th class="pb-3 px-2">Empreendimento</th>
+<th class="pb-3 px-2 text-right">Saldo (R$)</th>
+</tr>
+</thead>
+<tbody class="text-xs font-body">
+<tr class="border-b border-outline-variant/5 hover:bg-surface-container-highest/30 transition-colors">
+<td class="py-3 px-2 font-medium">Loteamento Apolo</td>
+<td class="py-3 px-2 text-right font-headline">2.450.000,00</td>
+</tr>
+<tr class="border-b border-outline-variant/5 hover:bg-surface-container-highest/30 transition-colors">
+<td class="py-3 px-2 font-medium">Edifício Cronos</td>
+<td class="py-3 px-2 text-right font-headline">1.120.400,00</td>
+</tr>
+<tr class="border-b border-outline-variant/5 hover:bg-surface-container-highest/30 transition-colors">
+<td class="py-3 px-2 font-medium">Park Industrial Vulcan</td>
+<td class="py-3 px-2 text-right font-headline">8.900.000,00</td>
+</tr>
+<tr class="border-b border-outline-variant/5 hover:bg-surface-container-highest/30 transition-colors">
+<td class="py-3 px-2 font-medium">Res. Terraço Magma</td>
+<td class="py-3 px-2 text-right font-headline">450.200,00</td>
+</tr>
+<tr class="hover:bg-surface-container-highest/30 transition-colors">
+<td class="py-3 px-2 font-medium">Office Center Lava</td>
+<td class="py-3 px-2 text-right font-headline text-error">-(12.400,00)</td>
+</tr>
+</tbody>
+</table>
+</div>
+<button class="mt-6 w-full py-2 bg-surface-container-highest/50 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest border border-outline-variant/10 hover:text-primary transition-all">Ver Portfólio Completo</button>
+</div>
+</div>
+<!-- Footer Details -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-8 border-t border-outline-variant/10">
+<div class="flex items-center gap-4 bg-surface-container-lowest p-4">
+<div class="p-3 bg-tertiary/10 rounded-sm">
+<span class="material-symbols-outlined text-tertiary" data-icon="hub">hub</span>
+</div>
+<div>
+<p class="text-[10px] text-zinc-500 uppercase tracking-widest">Integração ERP</p>
+<p class="text-xs font-bold">Sincronizado há 4 minutos</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-surface-container-lowest p-4">
+<div class="p-3 bg-primary-container/10 rounded-sm">
+<span class="material-symbols-outlined text-primary-container" data-icon="verified_user">verified_user</span>
+</div>
+<div>
+<p class="text-[10px] text-zinc-500 uppercase tracking-widest">Certificado Fiscal</p>
+<p class="text-xs font-bold">Válido até Junho/2024</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-surface-container-lowest p-4">
+<div class="p-3 bg-secondary/10 rounded-sm">
+<span class="material-symbols-outlined text-secondary" data-icon="bolt">bolt</span>
+</div>
+<div>
+<p class="text-[10px] text-zinc-500 uppercase tracking-widest">Processamento IA</p>
+<p class="text-xs font-bold text-primary">Análise Preditiva Ativa</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Visual Polish: Machined Edge for active status -->
+<div class="fixed left-0 top-1/2 -translate-y-1/2 w-1 h-32 bg-primary-container/40 blur-sm z-[70] rounded-r-full"></div>
+</body></html>

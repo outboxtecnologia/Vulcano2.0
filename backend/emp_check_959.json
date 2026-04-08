@@ -1,0 +1,68 @@
+[
+  {
+    "ID": 101,
+    "CODIGOEMPRESA": 599,
+    "NOME": "BOULEVARD FONTE DE TREVI",
+    "POC_COUNT": 2
+  },
+  {
+    "ID": 189,
+    "CODIGOEMPRESA": 412,
+    "NOME": "EDIFICIO RESIDENCIAL AGUAS DE ALONSO",
+    "POC_COUNT": 84
+  },
+  {
+    "ID": 210,
+    "CODIGOEMPRESA": 95,
+    "NOME": "VALENTINA RESIDENCE",
+    "POC_COUNT": 18
+  },
+  {
+    "ID": 252,
+    "CODIGOEMPRESA": 599,
+    "NOME": "ATHENAS RESIDENCE",
+    "POC_COUNT": 25
+  },
+  {
+    "ID": 263,
+    "CODIGOEMPRESA": 95,
+    "NOME": "PRIVIL\u00c9GE RESIDENCE",
+    "POC_COUNT": 38
+  },
+  {
+    "ID": 270,
+    "CODIGOEMPRESA": 95,
+    "NOME": "MAJESTIC RESIDENCE",
+    "POC_COUNT": 47
+  },
+  {
+    "ID": 282,
+    "CODIGOEMPRESA": 95,
+    "NOME": "BELLE VILLE",
+    "POC_COUNT": 47
+  },
+  {
+    "ID": 335,
+    "CODIGOEMPRESA": 959,
+    "NOME": "RESIDENCIAL STUTTGART",
+    "POC_COUNT": 24
+  },
+  {
+    "ID": 363,
+    "CODIGOEMPRESA": 599,
+    "NOME": "SOLARES RESIDENCE",
+    "POC_COUNT": 12
+  },
+  {
+    "ID": 370,
+    "CODIGOEMPRESA": 3900,
+    "NOME": "SEVEN TOWERS",
+    "POC_COUNT": 6
+  },
+  {
+    "ID": 371,
+    "CODIGOEMPRESA": 3901,
+    "NOME": "VITTA TOWERS",
+    "POC_COUNT": 6
+  }
+]

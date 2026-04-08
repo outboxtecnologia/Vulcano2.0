@@ -1,0 +1,22 @@
+{
+  "recebimentos": [
+    {
+      "comprador": {"nome": "JAIRTON RODRIGUES", "id": "", "doc": ""},
+      "data_compra": "14/11/2022",
+      "parcela": "001/01",
+      "valor_parcela": 2259.42,
+      "total_pago": 2276.05,
+      "desconto": "",
+      "acrescimo": ""
+    },
+    {
+      "comprador": {"nome": "MARIA CLARA SOARES", "id": "", "doc": ""},
+      "data_compra": "15/11/2022",
+      "parcela": "002/05",
+      "valor_parcela": 300.00,
+      "total_pago": 300.00,
+      "desconto": "",
+      "acrescimo": ""
+    }
+  ]
+}

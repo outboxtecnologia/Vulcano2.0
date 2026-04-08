@@ -1,0 +1,1 @@
+{"detail":"Dynamic SQL Error\nSQL error code = -303\narithmetic exception, numeric overflow, or string truncation\nstring right truncation\n"}

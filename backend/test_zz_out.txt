@@ -1,0 +1,1 @@
+LCTOs ZZ (CODIGOORIG): [(None, 'ZZ', Decimal('22050.85'), datetime.date(2009, 9, 30)), (None, 'ZZ', Decimal('22050.85'), datetime.date(2009, 9, 30)), (None, 'ZZ', Decimal('4800.00'), datetime.date(2009, 9, 30)), (None, 'ZZ', Decimal('4800.00'), datetime.date(2009, 9, 30)), (None, 'ZZ', Decimal('4526.10'), datetime.date(2009, 9, 30))]

@@ -1,0 +1,42 @@
+﻿=== DB: poc_database.sqlite ===
+Table: evolucao_obras
+CREATE TABLE evolucao_obras (
+            empreendimento TEXT,
+            periodo TEXT,
+            percentual REAL,
+            PRIMARY KEY (empreendimento, periodo)
+        )
+
+Table: import_templates
+CREATE TABLE import_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            target_table TEXT,
+            mapping_json TEXT,
+            data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+
+Table: sqlite_sequence
+CREATE TABLE sqlite_sequence(name,seq)
+
+Table: pdf_parser_templates
+CREATE TABLE pdf_parser_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            python_code TEXT NOT NULL,
+            sample_json TEXT,
+            arquivo_gerado TEXT,
+            data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+
+Table: empresa_parser_padrao
+CREATE TABLE empresa_parser_padrao (
+            empresa_id INTEGER NOT NULL PRIMARY KEY,
+            parser_template_id INTEGER NOT NULL,
+            data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parser_template_id) REFERENCES pdf_parser_templates(id)
+        )
+
+=== DB: db.sqlite3 ===
+=== DB: poc.db ===

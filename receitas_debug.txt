@@ -1,0 +1,37 @@
+168:   const [currentView, setCurrentView] = useState('receitas'); // 'explorer', 'receitas', 'poc', 'compare', 'llama_painel'
+193:   // Receitas State
+194:   const [receitasData, setReceitasData] = useState([]);
+196:   const [loadingReceitas, setLoadingReceitas] = useState(false);
+222:     const base = `${API_BASE}/api/compare/receitas`;
+341:   const fetchReceitas = () => {
+343:     setLoadingReceitas(true);
+359:     fetch(`${API_BASE}/api/receitas-caixa?${params.toString()}`)
+362:         setReceitasData(data.dashboard_data || []);
+365:         setLoadingReceitas(false);
+368:         console.error("Erro ao puxar receitas", err);
+369:         setLoadingReceitas(false);
+384:     if (currentView === 'receitas') {
+385:       fetchReceitas();
+403:     if (currentView === 'receitas') fetchReceitas();
+404:     if (currentView === 'poc') fetchReceitas();
+499:   const filteredReceitasData = receitasData.filter(r => isDateInRange(r.periodo, filterStartDate, filterEndDate));
+502:   const totalCaixa = filteredReceitasData.reduce((acc, r) => acc + (r.receita_caixa || 0), 0);
+503:   const totalPisCofins = filteredReceitasData.reduce((acc, r) => acc + (r.pis || 0) + (r.cofins || 0), 0);
+504:   const totalIrpjCsll = filteredReceitasData.reduce((acc, r) => acc + (r.irpj || 0) + (r.csll || 0), 0);
+505:   const totalRetMacro = filteredReceitasData.reduce((acc, r) => acc + (r.ret || 0), 0);
+511:   const allEmpreendimentos = [...receitasData.map(r => r.empreendimento), ...retData.map(r => r.empreendimento)];
+518:   const aggregatedReceitas = React.useMemo(() => {
+520:       filteredReceitasData.forEach(r => {
+555:   }, [filteredReceitasData]);
+587:             <p className="text-xs text-[#777] mb-8 tracking-widest uppercase pb-4 border-b border-[#222]">Projeção Automática de Partidas Múltiplas {context === 'receitas' ? '(Reconhecimento VGV/Caixa)' : '(Provisão Fiscal IFRS/CPC)'}</p>
+591:                   {context === 'receitas' && (
+758:                     <NavItem icon={<PieChart size={16}/>} label="Dashboard" active={currentView === 'receitas'} onClick={() => setCurrentView('receitas')} />
+951:            {/* Outras telas (Auditoria ERP, Receitas, Questor Schema) */}
+952:            {currentView === 'receitas' && (
+969:                      <button onClick={fetchReceitas} className="bg-primary-container text-on-primary-container font-black uppercase text-[10px] tracking-widest px-8 h-[40px] rounded-sm hover:opacity-90 transition-opacity flex items-center gap-2">
+1004:                       <h4 className="text-3xl font-headline font-black text-error mb-2 relative z-10">-{formatCurrency(aggregatedReceitas.reduce((acc, r) => acc + (r.tributos_societario || 0), 0))}</h4>
+1038:                        {aggregatedReceitas.length > 0 ? aggregatedReceitas.map((agg, i) => {
+1107:                                <tr className="bg-surface-container text-center"><td colSpan={8} className="p-4 border-b border-outline-variant/10"><button onClick={() => setLedgerModalData({emp: agg.empreendimento, context: 'receitas', data: null})} className="inline-flex items-center gap-2 bg-primary-container hover:opacity-90 text-on-primary-container px-6 py-3 rounded-sm uppercase tracking-[0.2em] text-[10px] font-black transition-all">Auditoria D/C Razão Auxiliar</button></td></tr>
+1127:                 {receitasData.length === 0 ? (
+1192:                                             <td className="py-1 text-[#ccc]">{selectedEmpresa === "959" && questorContas ? (questorContas.find(c => c.descricao.includes('RECEITA'))?.classificacao || '3.1.1.01') + ' - Receitas de Obras' : 'Receita de Obras (Resultado)'}</td>
+1454:                      <button onClick={fetchReceitas} className="bg-[#a259ff] text-black font-black uppercase text-xs tracking-widest px-6 h-[40px] mt-auto rounded hover:bg-[#b06eff]">Sincronizar</button>

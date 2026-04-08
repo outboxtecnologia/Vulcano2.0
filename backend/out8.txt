@@ -1,0 +1,83 @@
+--- EMPREENDIMENTOS GET ---
+1049: @app.get("/api/vulcano/empreendimentos")
+1050: def get_vulcano_empreendimentos(empresa_id: int):
+1051:     try:
+1052:         conn = get_conn("vulcano")
+1053:         cur = conn.cursor()
+1054:         cur.execute("SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?", (empresa_id,))
+1055:         
+1056:         def dec(v):
+1057:             if v is None: return ""
+1058:             if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+1059:             return str(v).strip()
+1060:             
+1061:         emps = [{
+1062:             "id": r[0], 
+1063:             "nome": dec(r[1]), 
+1064:             "metragem": float(r[2] or 0), 
+1065:             "custo": float(r[3] or 0), 
+1066:             "ret": dec(r[4]), 
+1067:             "data_conclusao": r[5].strftime('%Y-%m-%d') if hasattr(r[5], 'strftime') else dec(r[5]), 
+1068:             "ativo": dec(r[6])
+1069:         } for r in cur.fetchall()]
+1070:         conn.close()
+1071:         return emps
+1072:     except Exception as e:
+1073:         if 'conn' in locals() and conn: conn.close()
+1074:         raise HTTPException(status_code=500, detail=str(e))
+1075: 
+1076: @app.get("/api/vulcano/clientes")
+1077: def get_vulcano_clientes(empresa_id: int):
+1078:     try:
+1079:         conn = get_conn("vulcano")
+1080:         cur = conn.cursor()
+1081:         cur.execute("""
+1082:             SELECT DISTINCT c.ID, c.NOME, c.CNPJ 
+1083:             FROM CLIENTE c
+1084:             JOIN VENDA v ON c.ID = v.ID_CLIENTE
+1085:             WHERE v.CODIGOEMPRESA = ?
+1086:             ORDER BY c.NOME
+1087:         """, (empresa_id,))
+1088:         
+
+--- VENDAS GET ---
+1105: @app.get("/api/vulcano/vendas")
+1106: def get_vulcano_vendas(empresa_id: int):
+1107:     try:
+1108:         conn = get_conn("vulcano")
+1109:         cur = conn.cursor()
+1110:         cur.execute("""
+1111:             SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME
+1112:             FROM VENDA v
+1113:             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+1114:             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+1115:             WHERE v.CODIGOEMPRESA = ?
+1116:             ORDER BY v.DTOPER DESC
+1117:         """, (empresa_id,))
+1118:         
+1119:         def dec(v):
+1120:             if v is None: return ""
+1121:             if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+1122:             return str(v).strip()
+1123:             
+1124:         vendas = [{
+1125:             "id": r[0], 
+1126:             "num_cad": dec(r[1]), 
+1127:             "data": r[2].strftime('%Y-%m-%d') if hasattr(r[2], 'strftime') else dec(r[2]), 
+1128:             "descricao": dec(r[3]), 
+1129:             "cliente_cnpj": dec(r[4]), 
+1130:             "cliente_nome": dec(r[5]), 
+1131:             "total": float(r[6] or 0), 
+1132:             "distrato": dec(r[7]), 
+1133:             "permuta": dec(r[8]), 
+1134:             "empreendimento": dec(r[9])
+1135:         } for r in cur.fetchall()]
+1136:         conn.close()
+1137:         return vendas
+1138:     except Exception as e:
+1139:         if 'conn' in locals() and conn: conn.close()
+1140:         raise HTTPException(status_code=500, detail=str(e))
+1141: 
+1142: @app.get("/api/vulcano/vendas/{venda_id}/condicoes")
+1143: def get_vulcano_venda_condicoes(venda_id: int):
+1144:     """

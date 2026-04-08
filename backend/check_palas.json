@@ -1,0 +1,150 @@
+{
+  "emps_found": [
+    {
+      "ID": 153,
+      "CODIGOEMPRESA": 959,
+      "NOME": "TESTE NOME",
+      "ESTAB": 1
+    },
+    {
+      "ID": 154,
+      "CODIGOEMPRESA": 959,
+      "NOME": "EDIFICIO PALAS ATHENAS",
+      "ESTAB": 1
+    },
+    {
+      "ID": 155,
+      "CODIGOEMPRESA": 959,
+      "NOME": "HS EXECUTIVE",
+      "ESTAB": 1
+    },
+    {
+      "ID": 160,
+      "CODIGOEMPRESA": 959,
+      "NOME": "EDIFICIO HS PRIME",
+      "ESTAB": 1
+    },
+    {
+      "ID": 156,
+      "CODIGOEMPRESA": 959,
+      "NOME": "RESIDENCIAL MONTE BIANCO",
+      "ESTAB": 1
+    },
+    {
+      "ID": 157,
+      "CODIGOEMPRESA": 959,
+      "NOME": "RESIDENCIAL PIEMONTE",
+      "ESTAB": 1
+    },
+    {
+      "ID": 158,
+      "CODIGOEMPRESA": 959,
+      "NOME": "RESIDENCIAL ILHA VENTURA",
+      "ESTAB": 1
+    },
+    {
+      "ID": 159,
+      "CODIGOEMPRESA": 959,
+      "NOME": "RESIDENCIAL QUINTAS DA ROMAS",
+      "ESTAB": 1
+    },
+    {
+      "ID": 161,
+      "CODIGOEMPRESA": 959,
+      "NOME": "EMBARCA\u00c7\u00c3O - DEMETRIO ",
+      "ESTAB": 1
+    },
+    {
+      "ID": 162,
+      "CODIGOEMPRESA": 959,
+      "NOME": "RESIDENCIAL DEMETRIO RIBEIRO",
+      "ESTAB": 1
+    },
+    {
+      "ID": 163,
+      "CODIGOEMPRESA": 959,
+      "NOME": "LANCHA",
+      "ESTAB": 1
+    },
+    {
+      "ID": 164,
+      "CODIGOEMPRESA": 959,
+      "NOME": "APTO 1413 - ESTEVES JUNIOR",
+      "ESTAB": 1
+    },
+    {
+      "ID": 178,
+      "CODIGOEMPRESA": 959,
+      "NOME": "APTO 202 - ED. ANCARES",
+      "ESTAB": 1
+    },
+    {
+      "ID": 208,
+      "CODIGOEMPRESA": 959,
+      "NOME": "ED. UNIQUE PLACE RESIDENCE",
+      "ESTAB": 1
+    },
+    {
+      "ID": 241,
+      "CODIGOEMPRESA": 959,
+      "NOME": "GREEN VILLAGE I E II",
+      "ESTAB": 1
+    },
+    {
+      "ID": 221,
+      "CODIGOEMPRESA": 959,
+      "NOME": "COND. PARQUE DA PEDRA TERRENO 103 ",
+      "ESTAB": 1
+    },
+    {
+      "ID": 252,
+      "CODIGOEMPRESA": 599,
+      "NOME": "ATHENAS RESIDENCE",
+      "ESTAB": 1
+    },
+    {
+      "ID": 273,
+      "CODIGOEMPRESA": 959,
+      "NOME": "TERRENOS",
+      "ESTAB": 1
+    },
+    {
+      "ID": 335,
+      "CODIGOEMPRESA": 959,
+      "NOME": "RESIDENCIAL STUTTGART",
+      "ESTAB": 1
+    },
+    {
+      "ID": 428,
+      "CODIGOEMPRESA": 959,
+      "NOME": "Edificio Teste",
+      "ESTAB": null
+    }
+  ],
+  "poc_tables": [
+    "POC",
+    "POC_CUSTOS",
+    "POC_CUSTO_MENSAL_REAL"
+  ],
+  "poc_data": {
+    "154": {
+      "POC_CUSTO_MENSAL_REAL": 5
+    },
+    "162": {
+      "POC_CUSTO_MENSAL_REAL": 1
+    },
+    "208": {
+      "POC": 5,
+      "POC_CUSTO_MENSAL_REAL": 5
+    },
+    "252": {
+      "POC": 5,
+      "POC_CUSTOS": 5
+    },
+    "335": {
+      "POC": 5,
+      "POC_CUSTOS": 5,
+      "POC_CUSTO_MENSAL_REAL": 5
+    }
+  }
+}

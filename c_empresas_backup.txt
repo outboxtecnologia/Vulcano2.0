@@ -1,0 +1,12 @@
+@app.get('/api/vulcano/empresas')
+def get_vulcano_empresas():
+    try:
+        conn = get_conn('vulcano')
+        cur = conn.cursor()
+        query = '\n            SELECT DISTINCT e.CODIGOEMPRESA, e.NOMEEMPRESA, e.CNPJ\n            FROM EMPRESA e\n            INNER JOIN EMPREENDIMENTO emp ON emp.CODIGOEMPRESA = e.CODIGOEMPRESA\n            ORDER BY e.CODIGOEMPRESA\n        '
+        cur.execute(query)
+        empresas = [{'id': r[0], 'nome': r[1].strip() if r[1] else '', 'cnpj': r[2].strip() if r[2] else ''} for r in cur.fetchall()]
+        conn.close()
+        return empresas
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

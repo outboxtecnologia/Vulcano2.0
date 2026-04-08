@@ -1,0 +1,28 @@
+177:     <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col">
+441:     <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col">
+448:       <div className="bg-[#131313] border border-[#333] rounded-sm flex-1 flex flex-col overflow-hidden shadow-xl max-w-4xl">
+592:     <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
+764:                           <td className="p-3 text-[var(--v-text)] font-bold truncate max-w-[200px]" title={v.descricao}>{v.descricao}</td>
+766:                           <td className="p-3 text-[var(--v-text-muted)] truncate max-w-[150px]" title={v.cliente_nome}>{v.cliente_nome}</td>
+805:           <div className="magma-card border border-[var(--v-text-red)] p-7 rounded-sm max-w-md w-full shadow-[0_0_50px_rgba(255,59,48,0.15)]">
+843:           <div className="magma-card border border-[var(--v-accent)] p-6 rounded-sm w-full max-w-[1400px] h-full max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(52,199,89,0.1)]">
+1064:     <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
+1229:                             <td className="p-3 text-[var(--v-text-muted)] truncate max-w-[150px]">{r.descricao_venda}</td>
+1230:                             <td className="p-3 text-[var(--v-text)] truncate max-w-[150px] font-bold">{r.cliente}</td>
+1231:                             <td className="p-3 text-[10px] uppercase text-[var(--v-text-faint)] truncate max-w-[100px]">{r.obs}</td>
+1265:            <div className="magma-card w-full h-full max-w-[1600px] flex flex-col border border-[var(--v-border)]">
+1299:                        <td className="p-3 border-r border-[#222] font-sans truncate max-w-[200px]">{r.cliente}</td>
+1300:                        <td className="p-3 border-r border-[#222] font-sans truncate max-w-[150px]">{r.descricao_venda}</td>
+1789:     <div className="space-y-6 animate-in fade-in max-w-[1600px] mx-auto w-full h-full flex flex-col pb-4">
+1893:         <div className="bg-[#131313] border border-[#333] p-8 rounded-sm text-center max-w-2xl mx-auto w-full mt-10 shadow-xl">
+1898:           <div className="max-w-md mx-auto flex flex-col gap-4">
+1921:             <p className="text-[10px] text-[#666] text-center leading-relaxed max-w-md mx-auto">
+1940:               <p className="text-sm font-bold text-[#aaa] tracking-wide text-center max-w-md px-4 leading-relaxed">
+2073:                                  <td className="p-3 text-[#ccc] align-top max-w-[300px]">
+2145:                                                     <span className="text-white text-right max-w-[200px] break-all">{String(v)}</span>
+2153:                                                     <span className="text-white text-right max-w-[200px] break-all">{String(v)}</span>
+2396:     <div className="space-y-8 animate-in fade-in max-w-7xl mx-auto w-full relative">
+2399:             <div className="bg-[#131313] border border-[#333] rounded-sm shadow-xl w-full max-w-6xl max-h-full flex flex-col overflow-hidden">
+2515:       <div className="bg-[#111] border border-[#333] p-4 flex gap-4 items-center rounded-sm max-w-sm mb-6 shadow">
+2666:     <div className="space-y-8 animate-in fade-in max-w-7xl mx-auto w-full pb-20">
+2936:     <div className="flex flex-col h-full w-full max-w-[1600px] mx-auto animate-in fade-in pt-4 pb-12">

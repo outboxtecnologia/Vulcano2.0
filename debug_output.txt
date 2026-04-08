@@ -1,0 +1,11 @@
+Empreendimento: EDIFICIO PALAS ATHENAS
+Empreendimento: EDIFICIO HS PRIME
+Empreendimento: RESIDENCIAL PIEMONTE
+Empreendimento: RESIDENCIAL ILHA VENTURA
+Empreendimento: RESIDENCIAL QUINTAS DA ROMAS
+Empreendimento: RESIDENCIAL DEMETRIO RIBEIRO
+Empreendimento: ED. UNIQUE PLACE RESIDENCE
+Empreendimento: GREEN VILLAGE I E II
+Empreendimento: RESIDENCIAL STUTTGART
+   VIRTUAL: CUSTO DA UNIDADES RES. STUTTGART -> {'chave': 'VULCANO_SIM', 'data': '04/2024 (Sim)', 'historico': 'Provisão Custo Competência (POC 2.52%)', 'natureza': 'D', 'valor': 2957.815980000003, 'virtual': True}
+   VIRTUAL: IMÓVEIS A CONCLUIR-OBRA RES. STUTTGART -> {'chave': 'VULCANO_SIM', 'data': '04/2024 (Sim)', 'historico': 'Contrapartida Reconhec. Custo POC', 'natureza': 'C', 'valor': 2957.815980000003, 'virtual': True}

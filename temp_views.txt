@@ -1,0 +1,33 @@
+238:     if (currentView === 'compare') {
+385:     if (currentView === 'receitas') {
+389:     if (currentView === 'poc') {
+392:     if (currentView === 'compare') {
+396:     if (currentView === 'llama_painel') {
+404:     if (currentView === 'receitas') fetchReceitas();
+405:     if (currentView === 'poc') fetchReceitas();
+406:     if (currentView === 'compare') fetchCompare();
+407:     if (currentView === 'llama_painel') {
+752:                     <NavItem icon={<Building2 size={16}/>} label="Empreendimentos" active={currentView === 'empreendimentos'} onClick={() => setCurrentView('empreendimentos')} />
+753:                     <NavItem icon={<Users size={16}/>} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />
+754:                     <NavItem icon={<ShoppingCart size={16}/>} label="Vendas" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />
+755:                     <NavItem icon={<DollarSign size={16}/>} label="Recebimentos" active={currentView === 'recebimentos'} onClick={() => setCurrentView('recebimentos')} />
+758:                     <NavItem icon={<Database size={16}/>} label="Database Explorer" active={currentView === 'explorer'} onClick={() => setCurrentView('explorer')} />
+759:                     <NavItem icon={<PieChart size={16}/>} label="Dashboard" active={currentView === 'receitas'} onClick={() => setCurrentView('receitas')} />
+760:                     <NavItem icon={<Landmark size={16}/>} label="Tributos Globais" active={currentView === 'tributos'} onClick={() => setCurrentView('tributos')} />
+761:                     <NavItem icon={<Construction size={16}/>} label="Evolução POC" active={currentView === 'poc'} onClick={() => setCurrentView('poc')} />
+762:                     <NavItem icon={<ShieldAlert size={16}/>} label="Auditoria ERP" active={currentView === 'compare'} onClick={() => setCurrentView('compare')} />
+763:                     <NavItem icon={<Zap size={16}/>} label="Conversor XML" active={currentView === 'conciliador'} onClick={() => setCurrentView('conciliador')} />
+764:                     <NavItem icon={<Briefcase size={16}/>} label="Fiscal & SPED" active={currentView === 'fiscal'} onClick={() => setCurrentView('fiscal')} />
+765:                     <NavItem icon={<Activity size={16}/>} label="Sero INSS" active={currentView === 'sero'} onClick={() => setCurrentView('sero')} />
+829:                                  {currentView === 'poc' && (
+953:            {currentView === 'receitas' && (
+1265:            {currentView === 'compare' && (
+1295:            {currentView === 'explorer' && (
+1323:            {currentView === 'tributos' && (() => {
+1576:            {currentView === 'empreendimentos' && <EmpreendimentosView selectedEmpresa={selectedEmpresa} />}
+1577:            {currentView === 'clientes' && <ClientesView selectedEmpresa={selectedEmpresa} />}
+1578:            {currentView === 'vendas' && <VendasView selectedEmpresa={selectedEmpresa} />}
+1579:            {currentView === 'recebimentos' && <RecebimentosView selectedEmpresa={selectedEmpresa} />}
+1580:            {currentView === 'conciliador' && <ConciliadorView selectedEmpresa={selectedEmpresa} />}
+1581:            {currentView === 'fiscal' && <FiscalView selectedEmpresa={selectedEmpresa} />}
+1582:            {currentView === 'sero' && <SeroView selectedEmpresa={selectedEmpresa} />}

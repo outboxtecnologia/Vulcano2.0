@@ -1,0 +1,13 @@
+with open('main.py', 'a', encoding='utf-8') as f:
+    f.write("\n@app.get('/api/debug/area_val/{id_emp}')\n")
+    f.write("def api_debug_area_val(id_emp: int):\n")
+    f.write("    conn_v = get_conn('vulcano')\n")
+    f.write("    try:\n")
+    f.write("        cur = conn_v.cursor()\n")
+    f.write("        cur.execute('SELECT SUM(U.METRAGEM) FROM UNIDADE U JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ?', (id_emp,))\n")
+    f.write("        r1 = cur.fetchone()\n")
+    f.write("        cur.execute(\"SELECT SUM(U.METRAGEM) FROM VENDAUNIDADE VU JOIN VENDA V ON V.ID = VU.IDVENDA JOIN UNIDADE U ON U.ID = VU.IDUNIDADE JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ? AND COALESCE(V.DISTRATO, 'N') NOT IN ('T', 'S', '1')\", (id_emp,))\n")
+    f.write("        r2 = cur.fetchone()\n")
+    f.write("        return {'id_emp': id_emp, 'r1': r1, 'r2': r2}\n")
+    f.write("    finally:\n")
+    f.write("        conn_v.close()\n")

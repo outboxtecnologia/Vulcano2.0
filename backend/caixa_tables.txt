@@ -1,0 +1,1 @@
+LANCAMENTO_CONTABIL\n  Row: (11992, 103, 6, datetime.date(2022, 12, 31), 4828, 1553, 4828, '12/2022 - DONA ALAÍDE', 'Quinto', Decimal('29.88'), 'VU0522120600103', Decimal('0.00'), 'N', 'IMP', None, None, None)\nUSUARIOCAIXA\n  Row: ('KLAUS', 5)\n

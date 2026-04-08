@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VULCANO | Company Selector</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ff5625",
+                        "on-primary": "#ffffff",
+                        "surface": "#0a0a0a",
+                        "on-surface": "#e5e2e3",
+                        "on-surface-variant": "#a3a3a3",
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                    },
+                },
+            },
+        }
+    </script>
+<style>.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24
+    }
+.immersive-bg {
+    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.4), rgba(10, 10, 10, 0.8)), url(https://lh3.googleusercontent.com/aida-public/AB6AXuBatkh8E_3pzEq9jEGasHgA7ukK09yMMyDGLVpiItN1Tb9u7FwNFdc3R7cM2wIehrHDaxH4vmdRpZXDOjwrbWmBV9X8uQg_ojutosEu-6RnqmYZ4LjcdV26vF5Dbwx-XP0gjAHdD9WjiZd0sxdZkUUvJzDGNv_GQTcAtzE1qU3HVZzvHtUN2XxIe-cKLRv4iZFS5D2YBsZuSAPtWZA41aDk5Xk9-8ypIRlZnpEpsf6kUWvTESvwH31KqZ9CVnvIwMrxiK7UAyzPBHM9);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed
+    }
+.ethereal-glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1)
+    }
+.ethereal-glass:hover {
+    background: rgba(255, 86, 37, 0.05);
+    border-color: rgba(255, 86, 37, 0.4);
+    box-shadow: 0 0 40px rgba(255, 86, 37, 0.1);
+    transform: translatey(-12px)
+    }
+.magma-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(255, 86, 37, 0.15) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+    z-index: -1
+    }
+.group:hover .magma-glow {
+    opacity: 1
+    }
+.text-glow {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.1)
+    }
+@keyframes float {
+    0% {
+        transform: translateY(0px);
+        } 50% {
+        transform: translateY(-10px);
+        } 100% {
+        transform: translateY(0px);
+        }
+    }
+.floating {
+    animation: float 6s ease-in-out infinite
+    }</style>
+</head>
+<body class="bg-surface text-on-surface font-body overflow-hidden h-screen w-screen relative selection:bg-primary/30 selection:text-white">
+<!-- Immersive Background -->
+<div class="fixed inset-0 immersive-bg z-0"></div>
+<!-- Content Wrapper -->
+<div class="relative z-10 h-full w-full flex flex-col items-center justify-between py-12 px-8">
+<!-- Minimal Top Navigation -->
+<header class="w-full max-w-7xl flex justify-between items-center opacity-40 hover:opacity-100 transition-opacity duration-700">
+<span class="font-headline text-lg font-light tracking-[0.6em]">VULCANO</span>
+<div class="flex gap-6 text-[10px] uppercase tracking-[0.3em]">
+<span class="cursor-pointer hover:text-primary transition-colors">Access Log</span>
+<span class="cursor-pointer hover:text-primary transition-colors">Network</span>
+</div>
+</header>
+<!-- Main Selection Area -->
+<main class="w-full max-w-6xl flex flex-col items-center gap-16 mb-12">
+<div class="text-center space-y-4">
+<h1 class="font-headline text-5xl md:text-7xl font-extralight tracking-tight text-white/90 text-glow">
+                    Select your environment
+                </h1>
+<p class="font-body text-[10px] text-on-surface-variant uppercase tracking-[0.5em] opacity-50">Precision Audit Ecosystem</p>
+</div>
+<!-- Company Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full px-4">
+<!-- Card 1: VULCANO CONSTRUTORA -->
+<div class="group relative floating" style="animation-delay: 0s;">
+<div class="magma-glow"></div>
+<div class="ethereal-glass p-12 flex flex-col h-[480px] justify-between cursor-pointer rounded-sm">
+<div class="space-y-8">
+<div class="w-10 h-10 flex items-center justify-center border border-white/10 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all duration-500">
+<span class="material-symbols-outlined text-white/40 group-hover:text-primary transition-colors" data-icon="architecture">architecture</span>
+</div>
+<div class="space-y-3">
+<h3 class="font-headline text-xl font-light tracking-widest text-white/80 group-hover:text-white transition-colors">VULCANO CONSTRUTORA</h3>
+<p class="text-on-surface-variant text-xs leading-relaxed font-light tracking-wide opacity-60 group-hover:opacity-100 transition-opacity">Infrastructure and high-scale civil engineering management.</p>
+</div>
+</div>
+<div class="flex items-center gap-3 text-primary opacity-0 group-hover:opacity-100 transition-all duration-700 translate-y-4 group-hover:translate-y-0">
+<span class="text-[10px] uppercase tracking-[0.4em]">Initialize</span>
+<span class="material-symbols-outlined text-sm">north_east</span>
+</div>
+</div>
+</div>
+<!-- Card 2: SOLARIS HOLDING -->
+<div class="group relative floating" style="animation-delay: 1.5s;">
+<div class="magma-glow"></div>
+<div class="ethereal-glass p-12 flex flex-col h-[480px] justify-between cursor-pointer rounded-sm">
+<div class="space-y-8">
+<div class="w-10 h-10 flex items-center justify-center border border-white/10 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all duration-500">
+<span class="material-symbols-outlined text-white/40 group-hover:text-primary transition-colors" data-icon="account_balance">account_balance</span>
+</div>
+<div class="space-y-3">
+<h3 class="font-headline text-xl font-light tracking-widest text-white/80 group-hover:text-white transition-colors">SOLARIS HOLDING</h3>
+<p class="text-on-surface-variant text-xs leading-relaxed font-light tracking-wide opacity-60 group-hover:opacity-100 transition-opacity">Asset management and diversified capital investment audits.</p>
+</div>
+</div>
+<div class="flex items-center gap-3 text-primary opacity-0 group-hover:opacity-100 transition-all duration-700 translate-y-4 group-hover:translate-y-0">
+<span class="text-[10px] uppercase tracking-[0.4em]">Initialize</span>
+<span class="material-symbols-outlined text-sm">north_east</span>
+</div>
+</div>
+</div>
+<!-- Card 3: TITAN LOGÍSTICA -->
+<div class="group relative floating" style="animation-delay: 3s;">
+<div class="magma-glow"></div>
+<div class="ethereal-glass p-12 flex flex-col h-[480px] justify-between cursor-pointer rounded-sm">
+<div class="space-y-8">
+<div class="w-10 h-10 flex items-center justify-center border border-white/10 group-hover:border-primary/40 group-hover:bg-primary/10 transition-all duration-500">
+<span class="material-symbols-outlined text-white/40 group-hover:text-primary transition-colors" data-icon="conveyor_belt">conveyor_belt</span>
+</div>
+<div class="space-y-3">
+<h3 class="font-headline text-xl font-light tracking-widest text-white/80 group-hover:text-white transition-colors">TITAN LOGÍSTICA</h3>
+<p class="text-on-surface-variant text-xs leading-relaxed font-light tracking-wide opacity-60 group-hover:opacity-100 transition-opacity">Supply chain optimization and material flow tracking systems.</p>
+</div>
+</div>
+<div class="flex items-center gap-3 text-primary opacity-0 group-hover:opacity-100 transition-all duration-700 translate-y-4 group-hover:translate-y-0">
+<span class="text-[10px] uppercase tracking-[0.4em]">Initialize</span>
+<span class="material-symbols-outlined text-sm">north_east</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Minimal Footer -->
+<footer class="w-full max-w-7xl flex justify-between items-end opacity-40 hover:opacity-100 transition-opacity duration-700 border-t border-white/5 pt-6">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2">
+<span class="w-1 h-1 bg-primary rounded-full animate-pulse"></span>
+<p class="text-[9px] font-body text-white/60 uppercase tracking-[0.2em]">Live Nodes Active</p>
+</div>
+</div>
+<div class="flex gap-8">
+<button class="font-headline text-[9px] uppercase tracking-[0.4em] hover:text-primary transition-colors">Security Protocol</button>
+<button class="font-headline text-[9px] uppercase tracking-[0.4em] hover:text-primary transition-colors">System Archive</button>
+</div>
+</footer>
+</div>
+<!-- Mouse Interaction Script -->
+<script>
+        document.addEventListener('mousemove', (e) => {
+            const cards = document.querySelectorAll('.magma-glow');
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            
+            cards.forEach(glow => {
+                const rect = glow.parentElement.getBoundingClientRect();
+                const x = mouseX - rect.left;
+                const y = mouseY - rect.top;
+                glow.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(255, 86, 37, 0.2) 0%, transparent 70%)`;
+            });
+        });
+    </script>
+</body></html>

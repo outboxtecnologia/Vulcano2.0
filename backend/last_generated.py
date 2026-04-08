@@ -1,0 +1,110 @@
+import re
+import pdfplumber
+import json
+import sys
+
+def parse_money(value_str):
+    """Converts a monetary string (e.g., '18.423,64', '0,00') to a float."""
+    try:
+        # Remove thousands separator ('.') and replace decimal comma (',') with a dot ('.')
+        return float(value_str.replace('.', '').replace(',', '.'))
+    except ValueError:
+        # In case of parsing error, return 0.0 or handle as appropriate
+        return 0.0
+
+def extract(pdf_path):
+    all_records = []
+    
+    # Regex to capture a full data line based on the provided sample text.
+    # It identifies specific tokens and skips others based on their position and format.
+    # 
+    # Named groups for extraction:
+    #   <data>: The payment date (Dt. baixa), e.g., '04/08/2025'
+    #   <comprador_raw>: The buyer's name, potentially followed by an internal ID in parentheses.
+    #                    This will be cleaned up to retain only the name.
+    #   <parcela>: The installment number (ParcTC), e.g., '12/41PM'. Flexible format (alphanumeric with slashes).
+    #   <valor_parcela_str>: Value of the installment (Vl. baixa), e.g., '18.423,64'.
+    #   <acrescimo_str>: Accrued amount (Acréscimo), e.g., '0,00' or '172,84'.
+    #   <desconto_str>: Discount amount (Desconto), e.g., '0,00'.
+    #   <total_pago_str>: Total paid amount (Líquido), e.g., '18.423,64'.
+    
+    line_pattern = re.compile(
+        r"""^(?P<data>\d{2}/\d{2}/\d{4})"""             # 1. Capture 'data' (Dt. baixa: DD/MM/YYYY) at the start of the line
+        r"""\s+"""                                       # Whitespace separator
+        r"""(?P<comprador_raw>[A-Za-zÀ-ÖØ-öø-ÿ\s.-]+?)""" # 2. Capture 'comprador_raw' (buyer's name, non-greedy, includes accented chars, periods, hyphens)
+        r"""(?:\s*\(\d+\)\s*(?:-\s*\(\S+\))?)?"""   # Optional: Non-capturing group for (ID) - (CPF/CNPJ) block.
+                                                           # \S+ is used for the CPF/CNPJ part to handle potential non-whitespace characters
+                                                           # if it were on the same line, even if it's typically split.
+        r"""\s+"""                                       # Whitespace separator
+        r"""(?:\d{2}/\d{2}/\d{4})"""                     # Non-capturing Dt. Emissão
+        r"""\s+\S+"""                                     # Non-capturing Documento Título (e.g., CT.1403)
+        r"""\s+\d+"""                                     # Non-capturing Unid. princ (e.g., 755)
+        r"""\s+(?P<parcela>[\w/]+)"""                    # 3. Capture 'parcela' (e.g., '12/41PM'), alphanumeric with slashes
+        r"""\s+\S+"""                                     # Non-capturing Code unit (e.g., 1403)
+        r"""\s+\d+"""                                     # Non-capturing another numeric field (e.g., 1)
+        r"""\s+\d{2}/\d{2}/\d{4}"""                    # Non-capturing Dt. vecto (e.g., 010/08/2025)
+        r"""\s+"""                                       # Whitespace separator
+        r"""(?P<valor_parcela_str>[\d.,]+)"""            # 4. Capture 'valor_parcela_str' (Vl. baixa)
+        r"""\s+"""                                       # Whitespace separator
+        r"""(?P<acrescimo_str>[\d.,]+)"""                 # 5. Capture 'acrescimo_str'
+        r"""(?:\s+[\d.,]+){2}"""                         # Non-capturing: skip 'Seguro' and 'Taxa adm' (two more monetary values)
+        r"""\s+"""                                       # Whitespace separator
+        r"""(?P<desconto_str>[\d.,]+)"""                 # 6. Capture 'desconto_str'
+        r"""\s+"""                                       # Whitespace separator
+        r"""(?P<total_pago_str>[\d.,]+)"""              # 7. Capture 'total_pago_str' (Líquido)
+        r"""(?:\s+.*)?"""                                # Non-capturing: match any remaining characters on the line flexibly, as per instructions.
+    )
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            # Extract raw text from the page. x_tolerance can help with words slightly spaced apart.
+            text = page.extract_text(x_tolerance=2)
+            lines = text.split('\n')
+            
+            for line in lines:
+                line = line.strip()
+                # Skip empty lines, header lines, and "Total do dia" summary lines
+                if not line or "Dt. baixa Cliente" in line or "Total do dia" in line:
+                    continue
+                
+                match = line_pattern.match(line)
+                if match:
+                    record = match.groupdict()
+                    
+                    # Clean up the 'comprador' name:
+                    # Remove leading/trailing whitespace.
+                    # If the captured name includes an ID in parentheses (e.g., "DAVID FAVARETTO (379)"),
+                    # truncate the string at the first '(' to get just the name.
+                    comprador = record['comprador_raw'].strip()
+                    if '(' in comprador:
+                        comprador = comprador.split('(')[0].strip()
+                    
+                    # Convert monetary string values to float using the helper function
+                    valor_parcela = parse_money(record['valor_parcela_str'])
+                    total_pago = parse_money(record['total_pago_str'])
+                    desconto = parse_money(record['desconto_str'])
+                    acrescimo = parse_money(record['acrescimo_str'])
+                    
+                    # Append the extracted and cleaned record to the list
+                    all_records.append({
+                        "comprador": comprador,
+                        "data": record['data'],
+                        "parcela": record['parcela'],
+                        "valor_parcela": valor_parcela,
+                        "total_pago": total_pago,
+                        "desconto": desconto,
+                        "acrescimo": acrescimo
+                    })
+    
+    return all_records
+
+if __name__ == "__main__":
+    # Ensure a PDF path is provided as a command-line argument
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <pdf_path>")
+        sys.exit(1)
+    
+    pdf_path = sys.argv[1]
+    extracted_data = extract(pdf_path)
+    # Print the extracted data as a JSON array, ensuring proper handling of non-ASCII characters
+    print(json.dumps(extracted_data, ensure_ascii=False, indent=2))

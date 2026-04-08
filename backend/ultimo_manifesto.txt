@@ -1,0 +1,6 @@
+Comprador na col 1 (Nome, ID, Doc).
+Data na col 2 (DD/MM/AAAA), Parcela na col 3.
+Valor_parcela na col 4, Total_pago na col 5.
+Desconto na col 6, Acrescimo na col 7.
+Extraia TODAS as linhas financeiras similares, ignore o resto.
+Formato de saída: {"recebimentos": [...]}

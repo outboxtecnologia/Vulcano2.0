@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="pt-br"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container": "#1f1f20",
+              "primary-fixed-dim": "#ffb5a0",
+              "on-tertiary-container": "#002a51",
+              "tertiary-fixed-dim": "#a3c9ff",
+              "surface": "#131314",
+              "surface-tint": "#ffb5a0",
+              "surface-dim": "#131314",
+              "surface-container-highest": "#353436",
+              "on-background": "#e5e2e3",
+              "surface-container-low": "#1b1b1c",
+              "outline-variant": "#5d4038",
+              "tertiary-fixed": "#d3e3ff",
+              "on-surface-variant": "#e7bdb2",
+              "surface-bright": "#39393a",
+              "on-primary-fixed": "#3b0900",
+              "outline": "#ad887e",
+              "surface-container-lowest": "#0e0e0f",
+              "primary": "#ffb5a0",
+              "on-primary-fixed-variant": "#872000",
+              "on-tertiary-fixed": "#001c39",
+              "error-container": "#93000a",
+              "on-secondary-fixed-variant": "#2e4b57",
+              "tertiary-container": "#3b93f1",
+              "tertiary": "#a3c9ff",
+              "secondary-fixed": "#c9e7f7",
+              "background": "#131314",
+              "secondary": "#adcbda",
+              "primary-fixed": "#ffdbd1",
+              "on-secondary": "#163440",
+              "inverse-on-surface": "#303031",
+              "primary-container": "#ff5625",
+              "error": "#ffb4ab",
+              "on-surface": "#e5e2e3",
+              "on-error": "#690005",
+              "on-secondary-container": "#9fbdcc",
+              "on-secondary-fixed": "#001f2a",
+              "inverse-surface": "#e5e2e3",
+              "secondary-container": "#304d5a",
+              "on-error-container": "#ffdad6",
+              "inverse-primary": "#b12d00",
+              "secondary-fixed-dim": "#adcbda",
+              "surface-variant": "#353436",
+              "on-tertiary": "#00315c",
+              "on-primary-container": "#541100",
+              "on-primary": "#601400",
+              "surface-container-high": "#2a2a2b",
+              "on-tertiary-fixed-variant": "#004883"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0e0e0f; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #5d403833; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary/30 min-h-screen">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-64 z-[60] bg-[#0e0e0f] flex flex-col py-6">
+<div class="px-6 mb-10">
+<h1 class="font-['Space_Grotesk'] font-black text-xl text-[#ffb5a0]">VULCANO</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Construction Intelligence</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 transition-all hover:bg-zinc-800/30" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-medium text-sm">Dashboard</span>
+</a>
+<!-- Active State -->
+<a class="flex items-center gap-3 px-4 py-3 text-[#ffb5a0] border-l-2 border-[#ff5625] bg-[#131314] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="domain">domain</span>
+<span class="font-medium text-sm">Empreendimentos</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 transition-all hover:bg-zinc-800/30" href="#">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+<span class="font-medium text-sm">Fiscal</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 transition-all hover:bg-zinc-800/30" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-medium text-sm">Recebimentos</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 transition-all hover:bg-zinc-800/30" href="#">
+<span class="material-symbols-outlined" data-icon="engineering">engineering</span>
+<span class="font-medium text-sm">Sero</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-zinc-200 transition-all hover:bg-zinc-800/30" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span class="font-medium text-sm">IA</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-4">
+<button class="w-full bg-primary-container text-on-primary-container py-3 px-4 rounded-sm font-bold text-xs flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-lg" data-icon="add">add</span>
+                Novo Projeto
+            </button>
+<div class="pt-4 border-t border-[#5d4038]/10">
+<a class="flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-zinc-200 transition-all text-sm" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="support_agent">support_agent</span>
+                    Suporte
+                </a>
+<a class="flex items-center gap-3 px-4 py-2 text-zinc-500 hover:text-zinc-200 transition-all text-sm" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="logout">logout</span>
+                    Logout
+                </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="pl-64 min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-64 right-0 z-50 h-16 bg-[#131314]/70 backdrop-blur-xl border-b border-[#5d4038]/20 flex items-center justify-between px-8">
+<div class="flex items-center gap-4 w-1/3">
+<div class="relative w-full group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" data-icon="search">search</span>
+<input class="w-full bg-surface-container-lowest border-none text-sm py-2 pl-10 pr-4 focus:ring-1 focus:ring-primary/30 placeholder:text-zinc-600 rounded-sm" placeholder="Buscar empreendimento por nome ou CNPJ..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 pr-6 border-r border-[#5d4038]/20">
+<button class="text-zinc-400 hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-primary-container rounded-full border-2 border-surface"></span>
+</button>
+<button class="text-zinc-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">Eng. Roberto Silva</p>
+<p class="text-[10px] text-zinc-500 uppercase tracking-wider">Superintendente</p>
+</div>
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-[#5d4038]/30 object-cover" data-alt="professional portrait of a middle-aged engineer wearing a safety vest and hardhat, clean background, sharp corporate photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_eAEy8TEeDlqt_Lepgicia_1rgdNY8hoPZUWE4A34CK3RcD_fqi7xrm0T9qfU5346LBpN7Dm_py4gxCDuIo72bYwBkvl-USt93C24cfkqRa4OV9zS6b6qGFQlSHTNRR5MdfCwgPLyHdtVzgOCVXn69uG0HUPjkjKsEytD4nILof_XkaaI2YuVn66iFrSPZdBZRqXapEt3Qc-Wzq3wNKbsRx0Q8Bjaq5wVgsTDneUkDOSTjOLILq9WZphMMI5JWelAWKWmy3aZhKq8"/>
+</div>
+</div>
+</header>
+<!-- Viewport Content -->
+<div class="pt-24 px-8 pb-12">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
+<div>
+<h2 class="text-4xl font-headline font-bold tracking-tight text-on-surface mb-2">Central de Empreendimentos</h2>
+<p class="text-on-surface-variant max-w-xl text-sm leading-relaxed">
+                        Gestão unificada de canteiros de obra. Monitore o progresso fiscal, valide documentações e gerencie o fluxo de recebimentos de cada projeto ativo no ecossistema VULCANO.
+                    </p>
+</div>
+<!-- Stats Summary Bento Style -->
+<div class="flex gap-4">
+<div class="bg-surface-container-low p-4 min-w-[120px] rounded-sm flex flex-col justify-between border-l-2 border-primary">
+<span class="text-[10px] uppercase font-bold text-zinc-500">Ativos</span>
+<span class="text-2xl font-headline font-bold text-primary">24</span>
+</div>
+<div class="bg-surface-container-low p-4 min-w-[120px] rounded-sm flex flex-col justify-between">
+<span class="text-[10px] uppercase font-bold text-zinc-500">Em Pausa</span>
+<span class="text-2xl font-headline font-bold text-tertiary">03</span>
+</div>
+<div class="bg-surface-container-low p-4 min-w-[120px] rounded-sm flex flex-col justify-between">
+<span class="text-[10px] uppercase font-bold text-zinc-500">Concluídos</span>
+<span class="text-2xl font-headline font-bold text-on-surface">142</span>
+</div>
+</div>
+</div>
+<!-- Filters Bar -->
+<div class="flex items-center justify-between mb-6 bg-surface-container-lowest p-2 rounded-sm border border-[#5d4038]/10">
+<div class="flex items-center gap-1">
+<button class="px-4 py-2 bg-primary-container text-on-primary-container text-xs font-bold rounded-sm active:scale-95 transition-all">Todos</button>
+<button class="px-4 py-2 text-zinc-500 hover:text-zinc-200 text-xs font-bold rounded-sm transition-all">Em andamento</button>
+<button class="px-4 py-2 text-zinc-500 hover:text-zinc-200 text-xs font-bold rounded-sm transition-all">Concluído</button>
+<button class="px-4 py-2 text-zinc-500 hover:text-zinc-200 text-xs font-bold rounded-sm transition-all">Pausado</button>
+</div>
+<div class="flex items-center gap-2 px-2">
+<button class="flex items-center gap-2 text-zinc-400 hover:text-on-surface transition-colors text-xs font-medium px-3 py-1.5 border border-[#5d4038]/20 rounded-sm">
+<span class="material-symbols-outlined text-sm" data-icon="filter_list">filter_list</span>
+                        Filtros Avançados
+                    </button>
+<button class="flex items-center gap-2 text-zinc-400 hover:text-on-surface transition-colors text-xs font-medium px-3 py-1.5 border border-[#5d4038]/20 rounded-sm">
+<span class="material-symbols-outlined text-sm" data-icon="download">download</span>
+                        Exportar
+                    </button>
+</div>
+</div>
+<!-- Data Table Container -->
+<div class="bg-surface-container-low overflow-hidden rounded-sm">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high border-b border-[#5d4038]/10">
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">Nome da Obra</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">CNPJ</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary">Localização</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary text-right">Status</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary text-right">Progresso Fiscal</th>
+<th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-primary text-right">Ações</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-[#5d4038]/5">
+<!-- Row 1 -->
+<tr class="hover:bg-zinc-800/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-headline font-bold text-on-surface group-hover:text-primary transition-colors">Residencial Vesta Towers</span>
+<span class="text-[10px] text-zinc-500 font-medium">ID: VUL-2024-001</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-zinc-400">12.345.678/0001-90</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 text-zinc-400">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="text-xs">Balneário Camboriú, SC</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-tertiary-container/20 text-tertiary-container uppercase tracking-tighter">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-container mr-1.5 animate-pulse"></span>
+                                    Em andamento
+                                </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex flex-col items-end gap-1.5">
+<div class="flex items-center gap-3 w-32">
+<div class="flex-1 bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full" style="width: 68%"></div>
+</div>
+<span class="text-xs font-bold text-on-surface">68%</span>
+</div>
+<span class="text-[9px] text-zinc-500 font-bold uppercase">Última atualização: 2h atrás</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="px-3 py-1.5 text-[10px] font-bold bg-secondary-container/50 text-secondary-fixed-dim rounded-sm hover:bg-secondary-container transition-all">Lançar Fiscal</button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded-sm transition-colors text-zinc-500 hover:text-on-surface">
+<span class="material-symbols-outlined text-lg" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="bg-surface/30 hover:bg-zinc-800/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-headline font-bold text-on-surface group-hover:text-primary transition-colors">Complexo Logístico Delta</span>
+<span class="text-[10px] text-zinc-500 font-medium">ID: VUL-2023-014</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-zinc-400">98.765.432/0002-11</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 text-zinc-400">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="text-xs">Extrema, MG</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-tertiary-container/20 text-tertiary-container uppercase tracking-tighter">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-container mr-1.5"></span>
+                                    Em andamento
+                                </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex flex-col items-end gap-1.5">
+<div class="flex items-center gap-3 w-32">
+<div class="flex-1 bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full" style="width: 92%"></div>
+</div>
+<span class="text-xs font-bold text-on-surface">92%</span>
+</div>
+<span class="text-[9px] text-zinc-500 font-bold uppercase">Aguardando habite-se</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="px-3 py-1.5 text-[10px] font-bold bg-secondary-container/50 text-secondary-fixed-dim rounded-sm hover:bg-secondary-container transition-all">Lançar Fiscal</button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded-sm transition-colors text-zinc-500 hover:text-on-surface">
+<span class="material-symbols-outlined text-lg" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-zinc-800/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-headline font-bold text-on-surface group-hover:text-primary transition-colors">Condomínio Horizon Park</span>
+<span class="text-[10px] text-zinc-500 font-medium">ID: VUL-2022-089</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-zinc-400">45.890.123/0001-44</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 text-zinc-400">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="text-xs">Barra da Tijuca, RJ</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-400 uppercase tracking-tighter">
+<span class="w-1.5 h-1.5 rounded-full bg-zinc-500 mr-1.5"></span>
+                                    Concluído
+                                </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex flex-col items-end gap-1.5">
+<div class="flex items-center gap-3 w-32">
+<div class="flex-1 bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full" style="width: 100%"></div>
+</div>
+<span class="text-xs font-bold text-on-surface">100%</span>
+</div>
+<span class="text-[9px] text-zinc-500 font-bold uppercase">Arquivado em: 15/01</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="px-3 py-1.5 text-[10px] font-bold text-zinc-400 hover:text-on-surface border border-[#5d4038]/20 rounded-sm hover:border-primary transition-all">Ver Detalhes</button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded-sm transition-colors text-zinc-500 hover:text-on-surface">
+<span class="material-symbols-outlined text-lg" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface/30 hover:bg-zinc-800/20 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex flex-col">
+<span class="font-headline font-bold text-on-surface group-hover:text-primary transition-colors">Vulcano Headquarters B</span>
+<span class="text-[10px] text-zinc-500 font-medium">ID: VUL-2024-005</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-zinc-400">33.001.222/0001-08</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2 text-zinc-400">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+<span class="text-xs">Curitiba, PR</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-error-container/20 text-error uppercase tracking-tighter">
+<span class="w-1.5 h-1.5 rounded-full bg-error mr-1.5"></span>
+                                    Pausado
+                                </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex flex-col items-end gap-1.5">
+<div class="flex items-center gap-3 w-32">
+<div class="flex-1 bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full" style="width: 15%"></div>
+</div>
+<span class="text-xs font-bold text-on-surface">15%</span>
+</div>
+<span class="text-[9px] text-error font-bold uppercase">Restrição de Alvará</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="px-3 py-1.5 text-[10px] font-bold text-zinc-400 hover:text-on-surface border border-[#5d4038]/20 rounded-sm hover:border-primary transition-all">Ver Detalhes</button>
+<button class="p-1.5 hover:bg-surface-container-highest rounded-sm transition-colors text-zinc-500 hover:text-on-surface">
+<span class="material-symbols-outlined text-lg" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination -->
+<div class="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-t border-[#5d4038]/10">
+<div class="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                        Mostrando <span class="text-on-surface">1-10</span> de <span class="text-on-surface">24</span> resultados
+                    </div>
+<div class="flex items-center gap-2">
+<button class="p-2 text-zinc-500 hover:text-primary transition-colors disabled:opacity-30" disabled="">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 flex items-center justify-center text-xs font-bold bg-primary text-on-primary-container rounded-sm">1</button>
+<button class="w-8 h-8 flex items-center justify-center text-xs font-bold text-zinc-500 hover:text-on-surface transition-colors">2</button>
+<button class="w-8 h-8 flex items-center justify-center text-xs font-bold text-zinc-500 hover:text-on-surface transition-colors">3</button>
+</div>
+<button class="p-2 text-zinc-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Contextual Help / Asymmetric Card -->
+<div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="md:col-span-2 bg-surface-container-high/50 p-8 rounded-sm relative overflow-hidden border border-[#5d4038]/10">
+<div class="relative z-10">
+<span class="inline-block px-2 py-1 bg-tertiary text-on-tertiary text-[9px] font-black uppercase mb-4 tracking-tighter">Vulcano Intelligence</span>
+<h3 class="text-2xl font-headline font-bold text-on-surface mb-3">Análise Preditiva de Custo</h3>
+<p class="text-sm text-on-surface-variant leading-relaxed max-w-lg mb-6">
+                            Nossa IA detectou que o empreendimento <strong class="text-primary">Vesta Towers</strong> possui 12% de chance de exceder o orçamento fiscal no próximo trimestre com base nos lançamentos atuais. Recomendamos uma revisão do cronograma Sero.
+                        </p>
+<button class="text-primary text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:translate-x-2 transition-transform">
+                            Ver análise detalhada
+                            <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<span class="material-symbols-outlined absolute -bottom-10 -right-10 text-[200px] opacity-5 text-primary select-none pointer-events-none" data-icon="trending_up">trending_up</span>
+</div>
+<div class="bg-gradient-to-br from-primary-container/20 to-surface-container-high p-8 rounded-sm flex flex-col justify-between border border-[#5d4038]/20">
+<div>
+<span class="material-symbols-outlined text-primary mb-4 text-3xl" data-icon="verified_user">verified_user</span>
+<h4 class="font-headline font-bold text-lg text-on-surface mb-2">Conformidade Ativa</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">
+                            Todos os empreendimentos listados estão operando sob as normativas mais recentes do FISCO Federal.
+                        </p>
+</div>
+<div class="mt-6">
+<div class="w-full bg-surface-container-highest h-0.5 rounded-full mb-2">
+<div class="bg-tertiary h-full w-full"></div>
+</div>
+<span class="text-[9px] font-bold text-tertiary uppercase tracking-widest">Status: 100% compliant</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB Action (Suppressed according to rules if not contextually perfect, but here useful for New Action) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50">
+<span class="material-symbols-outlined text-2xl" data-icon="add" style="font-variation-settings: 'FILL' 1;">add</span>
+</button>
+</body></html>

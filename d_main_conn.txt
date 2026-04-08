@@ -1,0 +1,9 @@
+def get_conn(db_name='vulcano', empresa_id=None):
+    questor_db = DB_PATH_QUESTOR
+    if db_name == 'questor' and empresa_id is not None:
+        import os
+        base_dir = os.path.dirname(DB_PATH_QUESTOR)
+        possible_path = os.path.join(base_dir, f'QUESTOR_EMPRESA_{empresa_id}.FDB')
+        if os.path.exists(possible_path):
+            questor_db = possible_path
+    return firebirdsql.connect(host=FIREBIRD_HOST, database=questor_db if db_name == 'questor' else DB_PATH_VULCANO, port=FIREBIRD_PORT, user=FIREBIRD_USER, password=FIREBIRD_PASSWORD, charset='WIN1252')

@@ -1,0 +1,29 @@
+1194: @app.get("/api/vulcano/empreendimentos")
+1195: def get_vulcano_empreendimentos(empresa_id: int):
+1196:     try:
+1197:         conn = get_conn("vulcano")
+1198:         cur = conn.cursor()
+1199:         cur.execute("SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO, CNO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?", (empresa_id,))
+1200:         
+1201:         def dec(v):
+1202:             if v is None: return ""
+1203:             if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+1204:             return str(v).strip()
+1205:             
+1206:         emps = [{
+1207:             "id": r[0], 
+1208:             "nome": dec(r[1]), 
+1209:             "metragem": float(r[2] or 0), 
+1210:             "custo": float(r[3] or 0), 
+1211:             "ret": dec(r[4]), 
+1212:             "data_conclusao": r[5].strftime('%Y-%m-%d') if hasattr(r[5], 'strftime') else dec(r[5]), 
+1213:             "ativo": dec(r[6]),
+1214:             "cno": dec(r[7])
+1215:         } for r in cur.fetchall()]
+1216:         conn.close()
+1217:         return emps
+1218:     except Exception as e:
+1219:         if 'conn' in locals() and conn: conn.close()
+1220:         raise HTTPException(status_code=500, detail=str(e))
+1221: 
+1222: @app.get("/api/vulcano/clientes")

@@ -1,0 +1,246 @@
+CAP:
+
+API:
+{
+  "empreendimento": {
+    "id": 335,
+    "nome": "RESIDENCIAL STUTTGART",
+    "custo_orcado": 35000000.0,
+    "custo_real_gasto": 16847713.74,
+    "fracao_vendida": 0.9087234645764222,
+    "area_vendida": 9647.862499999992,
+    "area_total": 10616.939999999991,
+    "conta_custo": 5667,
+    "conta_estoque": 5639,
+    "conta_estconc": 5669,
+    "codigo_cc": 35,
+    "poc_atual": 48.13632497,
+    "custo_reconhecido_anterior": 4656334.9,
+    "timeline": [
+      {
+        "mes": 6,
+        "ano": 2025,
+        "periodo": "2025-06",
+        "valor": 787217.97,
+        "poc": 57.6648154,
+        "status": "Integrado"
+      },
+      {
+        "mes": 5,
+        "ano": 2025,
+        "periodo": "2025-05",
+        "valor": 485354.0,
+        "poc": 55.4156212,
+        "status": "Integrado"
+      },
+      {
+        "mes": 4,
+        "ano": 2025,
+        "periodo": "2025-04",
+        "valor": 683002.13,
+        "poc": 54.02889548,
+        "status": "Integrado"
+      },
+      {
+        "mes": 3,
+        "ano": 2025,
+        "periodo": "2025-03",
+        "valor": 573663.38,
+        "poc": 52.07746082,
+        "status": "Integrado"
+      },
+      {
+        "mes": 2,
+        "ano": 2025,
+        "periodo": "2025-02",
+        "valor": 493620.26,
+        "poc": 50.4384226,
+        "status": "Integrado"
+      },
+      {
+        "mes": 1,
+        "ano": 2025,
+        "periodo": "2025-01",
+        "valor": 312113.91,
+        "poc": 49.028079,
+        "status": "Integrado"
+      },
+      {
+        "mes": 12,
+        "ano": 2024,
+        "periodo": "2024-12",
+        "valor": 12191378.84,
+        "poc": 48.13632497,
+        "status": "Integrado"
+      },
+      {
+        "mes": 11,
+        "ano": 2024,
+        "periodo": "2024-11",
+        "valor": 665499.04,
+        "poc": 13.303814,
+        "status": "Integrado"
+      },
+      {
+        "mes": 10,
+        "ano": 2024,
+        "periodo": "2024-10",
+        "valor": 727914.99,
+        "poc": 11.40238817,
+        "status": "Integrado"
+      },
+      {
+        "mes": 9,
+        "ano": 2024,
+        "periodo": "2024-09",
+        "valor": 946840.4,
+        "poc": 9.32263105,
+        "status": "Integrado"
+      },
+      {
+        "mes": 8,
+        "ano": 2024,
+        "periodo": "2024-08",
+        "valor": 737196.71,
+        "poc": 6.61737277,
+        "status": "Integrado"
+      },
+      {
+        "mes": 7,
+        "ano": 2024,
+        "periodo": "2024-07",
+        "valor": 320329.78,
+        "poc": 4.51109645,
+        "status": "Integrado"
+      },
+      {
+        "mes": 6,
+        "ano": 2024,
+        "periodo": "2024-06",
+        "valor": 170404.19,
+        "poc": 3.59586851,
+        "status": "Integrado"
+      },
+      {
+        "mes": 5,
+        "ano": 2024,
+        "periodo": "2024-05",
+        "valor": 35594.72,
+        "poc": 3.1089994,
+        "status": "Integrado"
+      },
+      {
+        "mes": 4,
+        "ano": 2024,
+        "periodo": "2024-04",
+        "valor": 117373.65,
+        "poc": 3.0073002,
+        "status": "Integrado"
+      },
+      {
+        "mes": 3,
+        "ano": 2024,
+        "periodo": "2024-03",
+        "valor": 17548.07,
+        "poc": 2.67194691,
+        "status": "Integrado"
+      },
+      {
+        "mes": 2,
+        "ano": 2024,
+        "periodo": "2024-02",
+        "valor": 10787.89,
+        "poc": 2.62180957,
+        "status": "Integrado"
+      },
+      {
+        "mes": 1,
+        "ano": 2024,
+        "periodo": "2024-01",
+        "valor": 99675.09,
+        "poc": 2.59098702,
+        "status": "Integrado"
+      },
+      {
+        "mes": 12,
+        "ano": 2023,
+        "periodo": "2023-12",
+        "valor": 65540.67,
+        "poc": 2.30620105,
+        "status": "Integrado"
+      },
+      {
+        "mes": 11,
+        "ano": 2023,
+        "periodo": "2023-11",
+        "valor": 224385.98,
+        "poc": 2.118942,
+        "status": "Integrado"
+      },
+      {
+        "mes": 10,
+        "ano": 2023,
+        "periodo": "2023-10",
+        "valor": 383851.6,
+        "poc": 1.4778392,
+        "status": "Integrado"
+      },
+      {
+        "mes": 9,
+        "ano": 2023,
+        "periodo": "2023-09",
+        "valor": 80761.25,
+        "poc": 0.38112034,
+        "status": "Integrado"
+      },
+      {
+        "mes": 8,
+        "ano": 2023,
+        "periodo": "2023-08",
+        "valor": 260.2,
+        "poc": 0.15037391,
+        "status": "Integrado"
+      },
+      {
+        "mes": 7,
+        "ano": 2023,
+        "periodo": "2023-07",
+        "valor": 39.87,
+        "poc": 0.14963048,
+        "status": "Integrado"
+      },
+      {
+        "mes": 6,
+        "ano": 2023,
+        "periodo": "2023-06",
+        "valor": 15864.9,
+        "poc": 0.14951657,
+        "status": "Integrado"
+      },
+      {
+        "mes": 5,
+        "ano": 2023,
+        "periodo": "2023-05",
+        "valor": 33538.74,
+        "poc": 0.10418828,
+        "status": "Integrado"
+      },
+      {
+        "mes": 4,
+        "ano": 2023,
+        "periodo": "2023-04",
+        "valor": 2360.0,
+        "poc": 0.00836331,
+        "status": "Integrado"
+      },
+      {
+        "mes": 1,
+        "ano": 2023,
+        "periodo": "2023-01",
+        "valor": 567.16,
+        "poc": 0.00162045,
+        "status": "Integrado"
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+915: "detalhes": []
+925: contas_fisicas[conta]["detalhes"].append({
+949: "detalhes": []
+960: contas_virtuais[conta_id]["detalhes"].append({
+1185: "detalhes": []
+4062: @app.get("/api/vulcano/empreendimentos/{emp_id}/detalhes")
+4063: def get_empreendimento_detalhes(emp_id: int):

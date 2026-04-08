@@ -1,0 +1,151 @@
+--- get_receitas_caixa ---
+519: @app.get("/api/receitas-caixa")
+520: def get_receitas_caixa(empresa_id: int | None = None):
+521:     conn = get_conn("questor")
+522:     cur = conn.cursor()
+523: 
+524:     query = """
+525:     SELECT 
+526:         v.CODIGOEMPRESA,
+527:         v.CODIGOESTAB,
+528:         i.IDENTEMP, 
+529:         i.DESCUNIDIMOB, 
+530:         i.CPFCNPJADQU, 
+531:         v.COMPRECEB, 
+532:         v.VLTOTREC, 
+533:         v.VLBC, 
+534:         v.VLPIS, 
+535:         v.VLCOFINS,
+536:         v.VLTOTVEND
+537:     FROM EFDUNIDIMOBVENDIDA v
+538:     JOIN EFDUNIDIMOBILIARIA i ON v.CODIGOEMPRESA = i.CODIGOEMPRESA AND v.CODIGOESTAB = i.CODIGOESTAB AND v.NUMCADIMOB = i.NUMCADIMOB
+539:     {where_empresa}
+540:     ORDER BY v.COMPRECEB DESC
+541:     """
+542:     try:
+543:         where_empresa = ""
+544:         params = []
+545:         if empresa_id is not None:
+546:             where_empresa = "WHERE v.CODIGOEMPRESA = ?"
+547:             params.append(int(empresa_id))
+548: 
+549:         cur.execute(query.format(where_empresa=where_empresa), tuple(params))
+550:         rows = cur.fetchall()
+551:         
+552:         import collections
+553:         import datetime
+554:         
+555:         def decode_val(val):
+556:             if isinstance(val, datetime.date) or hasattr(val, 'strftime'):
+557:                 return val.strftime('%Y-%m-%d')
+558:             if isinstance(val, bytes):
+559:                 try:
+560:                     return val.decode('win1252', 'ignore').strip()
+561:                 except:
+562:                     return str(val)
+563:             if isinstance(val, str):
+564:                 return val.strip()
+565:             return val
+566: 
+567:         monthly_totals = collections.defaultdict(float)
+568:         parsed_rows = []
+569:         
+570:         for r in rows:
+571:             periodo_str = decode_val(r[4])
+572:             try:
+573:                 dt = datetime.datetime.strptime(periodo_str, '%Y-%m-%d')
+574:                 ym = (dt.year, dt.month)
+575:             except:
+576:                 ym = (1900, 1)
+577:                 
+578:             base_calc = float(r[6] or 0)
+579:             monthly_totals[ym] += base_calc
+580:             
+581:             parsed_rows.append({
+582:                 "raw": r,
+583:                 "ym": ym,
+584:                 "base_calc": base_calc,
+585:                 "empresa_id": r[0],
+586:                 "estabelecimento": r[1],
+587:                 "empreendimento": decode_val(r[2]),
+588:                 "unidade": decode_val(r[3]),
+589:                 "comprador": decode_val(r[4]),
+590:                 "periodo": periodo_str,
+591:                 "receita_caixa": float(r[6] or 0),
+592:                 "vgv": float(r[10] or 0)
+593:             })
+594: 
+595:         quarters_data = collections.defaultdict(list)
+596:         for ym in monthly_totals.keys():
+597:             yq = (ym[0], (ym[1] - 1) // 3 + 1)
+598:             if ym not in quarters_data[yq]:
+599:                 quarters_data[yq].append(ym)
+600:                 
+601:         month_adicional = {}
+602:         for yq, months in quarters_data.items():
+603:             month3 = (yq[0], yq[1] * 3)
+604:             month1 = (yq[0], yq[1] * 3 - 2)
+605:             month2 = (yq[0], yq[1] * 3 - 1)
+606:             
+607:             quarter_base = monthly_totals.get(month1, 0) + monthly_totals.get(month2, 0) + monthly_totals.get(month3, 0)
+608:             quarter_adicional = max(0, (quarter_base * 0.08) - 60000) * 0.10
+609:             
+610:             m1_adicional = max(0, (monthly_totals.get(month1, 0) * 0.08) - 20000) * 0.10
+611:             m2_adicional = max(0, (monthly_totals.get(month2, 0) * 0.08) - 20000) * 0.10
+612:             m3_adicional = quarter_adicional - m1_adicional - m2_adicional
+613:             
+614:             month_adicional[month1] = m1_adicional
+615:             month_adicional[month2] = m2_adicional
+616:             month_adicional[month3] = m3_adicional
+617: 
+618:         # Get POCs
+619:         conn_sq = sqlite3.connect(POC_DATABASE_FILE)
+620:         c_sq = conn_sq.cursor()
+621:         c_sq.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras')
+622:         poc_map = {(r[0], r[1]): r[2] for r in c_sq.fetchall()}
+623:         conn_sq.close()
+624:         
+625:         # O(1) Lookup Table format agnostic (DD/MM/YYYY or YYYY-MM)
+626:         poc_lookup = {}
+627:         for (p_emp, p_per), p_val in poc_map.items():
+628:             if p_per:
+629:                 val_ym = ""
+630:                 if "/" in p_per:
+631:                     parts = p_per.strip().split("/")
+632:                     if len(parts) == 3: # DD/MM/YYYY
+633:                         val_ym = f"{parts[2]}-{parts[1].zfill(2)}"
+634:                     elif len(parts) == 2: # MM/YYYY
+635:                         val_ym = f"{parts[1]}-{parts[0].zfill(2)}"
+636:                 elif "-" in p_per:
+637:                     parts = p_per.strip().split("-")
+638:                     if len(parts) >= 2: # YYYY-MM...
+639:                         val_ym = f"{parts[0]}-{parts[1].zfill(2)}"
+640:                 
+641:                 if val_ym:
+642:                     poc_lookup[(p_emp, val_ym)] = p_val / 100.0
+643: 
+644:         # Get total VGV per Empreendimento
+645:         unidades_vgv = {}
+646:         for p in parsed_rows:
+647:             key = (p["empreendimento"], p["unidade"], p["comprador"])
+648:             current_vgv = unidades_vgv.get(key, 0)
+649:             unidades_vgv[key] = max(current_vgv, p["vgv"])
+650:         
+651:         vgv_por_empreendimento = collections.defaultdict(float)
+652:         for (emp, uni, comp), vgv in unidades_vgv.items():
+653:             if emp:
+654:                 vgv_por_empreendimento[emp] += vgv
+655: 
+656:         data = []
+657:         for p in parsed_rows:
+658:             base = p["base_calc"]
+659:             ym = p["ym"]
+660:             total_m = monthly_totals.get(ym, 0)
+661:             fraction = (base / total_m) if total_m > 0 else 0
+662:             
+663:             adicional_unit = month_adicional.get(ym, 0) * fraction
+664:             irpj_calc = (base * 0.012) + adicional_unit
+665:             csll_calc = base * 0.0108
+666:             
+667:             pis_db = float(p["raw"][8] or 0)
+668:             cofins_db = float(p["raw"][9] or 0)

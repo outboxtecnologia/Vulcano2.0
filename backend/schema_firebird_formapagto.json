@@ -1,0 +1,61 @@
+{
+  "VENDA": [
+    "ID",
+    "CODIGOEMPRESA",
+    "CODIGOESTAB",
+    "NUMCADIMOB",
+    "CNPJ",
+    "DTOPER",
+    "INDOPER",
+    "UNIDIMOB",
+    "DESCUNIDIMOB",
+    "NUMCONT",
+    "INFCOMP",
+    "INDNATEMP",
+    "TOTALVENDA",
+    "IDEMPREENDIMENTO",
+    "DISTRATO",
+    "DATADISTRATO",
+    "IDTEMP",
+    "IDVENDAVINCULADA",
+    "REAJUSTAR_PELO_CUB",
+    "PERMUTA",
+    "CONTA_PERMUTA",
+    "QUITADA",
+    "ID_CLIENTE"
+  ],
+  "VENDAFORMAPAGTO": [
+    "ID",
+    "IDVENDA",
+    "DESCRICAO",
+    "VALOR",
+    "MENSAL",
+    "IDFORMAREPARCELAMENTO",
+    "DATAREPARCELAMENTO",
+    "ATIVA",
+    "SALDOATUALIZADO",
+    "QUANTIDADE_PARCELAS"
+  ],
+  "VENDAFORMAPAGTOPRAZO": [
+    "ID",
+    "IDVENDAFORMAPAGTO",
+    "DATA",
+    "REFERENCIA",
+    "VALOR",
+    "VALOR_PAGO"
+  ],
+  "RECEBER": [
+    "ID",
+    "IDVENDA",
+    "IDCLIENTE",
+    "DATA",
+    "VALORPARCELA",
+    "VALORVARIACAO",
+    "TOTALPAGO",
+    "PARCELA",
+    "OBS",
+    "IDVENDAFORMAPAGTO",
+    "DESCONTO",
+    "IDVENDAFORMAPAGTOPRAZO"
+  ]
+}

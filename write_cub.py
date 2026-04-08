@@ -1,0 +1,14 @@
+import os
+results = []
+for root, dirs, files in os.walk(r'c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer'):
+    for f in files:
+        if f.endswith('.md') or f.endswith('.txt'):
+            path = os.path.join(root, f)
+            if 'node_modules' in path or '.venv' in path: continue
+            try:
+                for idx, l in enumerate(open(path, encoding='utf-8', errors='ignore')):
+                    if 'cub' in l.lower():
+                        results.append(f"{f}:{idx+1}:{l.strip()}")
+            except: pass
+with open(r'c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\cub_res2.txt', 'w', encoding='utf-8') as fw:
+    fw.write('\n'.join(results))

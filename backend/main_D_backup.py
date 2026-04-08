@@ -1,0 +1,3866 @@
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+import firebirdsql
+import pdfplumber
+import google.generativeai as genai
+import os
+import re
+import io
+import tempfile
+import asyncio
+import math
+import sys
+from datetime import date, datetime, time as time_type
+import numpy as np
+import pandas as pd
+
+
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from dotenv import load_dotenv
+
+# Carrega variáveis sempre a partir do `backend/.env`, independente do CWD.
+_DOTENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(dotenv_path=_DOTENV_PATH, override=True)
+
+_DEFAULT_DB_QUESTOR = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\QUESTOR_EMPRESA_959.FDB"
+_DEFAULT_DB_VULCANO = r"C:\Users\dirfe\OneDrive\Documentos\Vulcano\VULCANO.FDB"
+DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", _DEFAULT_DB_QUESTOR)
+DB_PATH_VULCANO = os.environ.get("DB_PATH_VULCANO", _DEFAULT_DB_VULCANO)
+FIREBIRD_HOST = os.environ.get("FIREBIRD_HOST", "localhost")
+FIREBIRD_PORT = int(os.environ.get("FIREBIRD_PORT", "3050"))
+FIREBIRD_USER = os.environ.get("FIREBIRD_USER", "SYSDBA")
+FIREBIRD_PASSWORD = os.environ.get("FIREBIRD_PASSWORD", "masterkey")
+
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+
+# Modelo rápido por padrão; use GEMINI_MODEL no .env (ex.: gemini-2.5-flash) se quiser.
+GEMINI_MODEL_ID = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Timeout da extração via Gemini (segundos). Front-end deve esperar pelo menos esse tempo.
+GEMINI_EXTRACT_TIMEOUT_SEC = float(os.environ.get("GEMINI_EXTRACT_TIMEOUT_SEC", "300"))
+
+LAST_RAW_PDF_TEXT_FOR_PARSER = ""
+
+OLLAMA_API_BASE = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
+OLLAMA_MODEL_ID = os.environ.get("OLLAMA_MODEL_ID", "qwen2.5:3b")
+
+# SQLite: prefere `backend/poc_database.sqlite`; se não existir, usa legado no cwd (onde o uvicorn foi iniciado).
+POC_DATABASE_FILE = os.environ.get("POC_DATABASE_FILE", "db.sqlite3")
+_poc_backend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_database.sqlite")
+_poc_cwd = os.path.join(os.getcwd(), "poc_database.sqlite")
+if os.path.isfile(_poc_backend):
+    POC_DATABASE_FILE = _poc_backend
+elif os.path.isfile(_poc_cwd):
+    POC_DATABASE_FILE = _poc_cwd
+else:
+    POC_DATABASE_FILE = _poc_backend
+
+def _require_gemini_key():
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
+
+def _gemini_parse_json_response(raw: str) -> dict:
+    import json
+    raw = (raw or "").strip()
+    if not raw:
+        raise HTTPException(status_code=500, detail="Resposta vazia do LLM (Gemini/Ollama)")
+
+    
+    start_obj = raw.find("{")
+    start_arr = raw.find("[")
+    if start_obj == -1 and start_arr == -1:
+        raise HTTPException(status_code=500, detail="Nenhum JSON detectado na resposta do LLM")
+    
+    start_idx = -1
+    if start_obj != -1 and start_arr != -1:
+        start_idx = min(start_obj, start_arr)
+    else:
+        start_idx = max(start_obj, start_arr)
+        
+    sub = raw
+    if start_idx != -1:
+        end_obj = raw.rfind("}")
+        end_arr = raw.rfind("]")
+        end_idx = max(end_obj, end_arr)
+            
+        if end_idx >= start_idx:
+            sub = raw[start_idx : end_idx + 1]
+            
+    try:
+        return json.loads(sub)
+    except json.JSONDecodeError as de:
+        raise HTTPException(status_code=500, detail=f"Erro ao extrair JSON do texto ({str(de)}):\n{raw[:200]}")
+
+def _ollama_generate_json(prompt: str) -> dict:
+    import urllib.request
+    import urllib.error
+    import json
+    with open("debug_ollama_prompt.txt", "w", encoding="utf-8") as f:
+        f.write(prompt)
+
+    import urllib.error
+    import json
+    url = f"{OLLAMA_API_BASE}/api/generate"
+    data = json.dumps({
+        "model": OLLAMA_MODEL_ID,
+        "prompt": prompt,
+        "format": "json",
+        "options": {
+            "num_ctx": 24576,
+            "temperature": 0.0
+        },
+        "stream": False
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            body = resp.read().decode("utf-8")
+            res_json = json.loads(body)
+            # Ollama returns 'response' field with the generated string
+            text_response = res_json.get("response", "")
+            with open("debug_ollama_response.txt", "w", encoding="utf-8") as f:
+                f.write(text_response)
+            
+            return _gemini_parse_json_response(text_response)
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"Erro conectando ao Ollama ({OLLAMA_API_BASE}): {e}")
+
+def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str = None) -> dict:
+    """Chama Gemini e retorna um objeto JSON (via response_mime_type ou parse manual)."""
+    _require_gemini_key()
+    resp = None
+    
+    contents = [prompt]
+    if file_data and mime_type:
+        contents.append({"mime_type": mime_type, "data": file_data})
+
+    try:
+        model = genai.GenerativeModel(
+            GEMINI_MODEL_ID,
+            generation_config={"response_mime_type": "application/json"},
+        )
+        resp = model.generate_content(contents)
+    except Exception as e:
+        if "429" in str(e) or "ResourceExhausted" in str(e) or "Quota" in str(e):
+            raise HTTPException(status_code=429, detail=f"Limite na API Gratuita excedido: {str(e)[:300]}")
+        
+        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        fallback_contents = [prompt + "\n\nResponda somente um objeto JSON válido, sem markdown nem texto fora do JSON."]
+        if file_data and mime_type:
+             fallback_contents.append({"mime_type": mime_type, "data": file_data})
+        resp = model.generate_content(fallback_contents)
+    return _gemini_parse_json_response(resp.text)
+
+app = FastAPI(title="Questor Data Explorer API")
+
+from pydantic import BaseModel
+class RawQuery(BaseModel):
+    query: str
+
+@app.post("/api/explorer/query")
+def api_explorer_query(payload: RawQuery):
+    conn = get_conn("vulcano")
+    try:
+        cur = conn.cursor()
+        cur.execute(payload.query)
+        if not cur.description:
+            conn.commit()
+            return {"success": True, "columns": [], "rows": [], "message": "Comando executado sem retorno (Commit)"}
+            
+        cols = [desc[0] for desc in cur.description]
+        rows = [list(r) for r in cur.fetchall()]
+        return {"success": True, "columns": cols, "rows": rows}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/tables")
+def api_tables(db: str = "questor"):
+    if db not in ("questor", "vulcano"): return {"tables": []}
+    conn = get_conn(db)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL ORDER BY RDB$RELATION_NAME")
+        tables = [str(r[0]).strip() for r in cur.fetchall()]
+        return {"tables": tables}
+    finally:
+        conn.close()
+
+@app.get("/api/table/{table_name}/data")
+def api_table_data(table_name: str, db: str = "questor"):
+    if db not in ("questor", "vulcano"): return {"columns": [], "data": []}
+    
+    # Safe regex to prevent injection
+    import re
+    if not re.match(r"^[A-Za-z0-9_]+$", table_name):
+        raise HTTPException(status_code=400, detail="Nome de tabela inválido")
+        
+    conn = get_conn(db)
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT FIRST 100 * FROM {table_name}")
+        cols = [desc[0].strip() for desc in cur.description]
+        data = []
+        for r in cur.fetchall():
+            row_dict = {}
+            for i, col in enumerate(cols):
+                val = r[i]
+                if isinstance(val, (bytes, bytearray)):
+                    val = val.decode('win1252', 'ignore')
+                row_dict[col] = val
+            data.append(row_dict)
+        return {"columns": cols, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+class CustoLctoReq(BaseModel):
+    empresa_id: int
+    empreendimento_id: int
+    mes: int
+    ano: int
+    valor_custo: float
+    percentual: float
+    historico: str
+
+@app.get("/api/empreendimentos/basico")
+def api_empreendimentos_basico(empresa_id: int = 959):
+    conn = get_conn("vulcano")
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT ID, NOME FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'", (empresa_id,))
+        emps = [{"id": r[0], "nome": r[1]} for r in cur.fetchall()]
+        return {"empreendimentos": emps}
+    finally:
+        conn.close()
+
+@app.get("/api/custos/dashboard/{id_emp}")
+def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
+    conn_vulcano = get_conn("vulcano")
+    try:
+        cur = conn_vulcano.cursor()
+        cur.execute("""
+            SELECT ID, NOME, CUSTOORCADO, CONTACUSTO, CONTAESTAND, CONTAESTCONC, CODIGOCENTROCUSTO
+            FROM EMPREENDIMENTO 
+            WHERE ID = ?
+        """, (id_emp,))
+        r = cur.fetchone()
+        if not r:
+            return {"empreendimento": None}
+            
+        nome_emp = r[1]
+        cc_emp = r[6]
+        
+        # --- 1. APURACAO DO % VENDIDO (Física/Vendas Vulcano) ---
+        fracao_vendida = 0.0
+        try:
+            cur.execute("""
+                SELECT 
+                    (SELECT SUM(U.METRAGEM) FROM UNIDADE U JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ?) as TOTAL_AREA,
+                    (SELECT SUM(U.METRAGEM) 
+                     FROM VENDAUNIDADE VU 
+                     JOIN VENDA V ON V.ID = VU.IDVENDA 
+                     JOIN UNIDADE U ON U.ID = VU.IDUNIDADE 
+                     JOIN BLOCO B ON B.ID = U.IDBLOCO 
+                     WHERE B.IDEMPREENDIMENTO = ? AND COALESCE(V.DISTRATO, 'N') NOT IN ('T', 'S', '1')
+                    ) as SOLD_AREA
+                FROM RDB$DATABASE
+            """, (id_emp, id_emp))
+            
+            area_row = cur.fetchone()
+            if area_row and area_row[0] and area_row[0] > 0:
+                fracao_vendida = float(area_row[1] or 0) / float(area_row[0])
+                area_v = float(area_row[1] or 0)
+                area_t = float(area_row[0])
+            else:
+                area_v = 0.0
+                area_t = 0.0
+        except Exception as e:
+            import traceback
+            with open('backend_error.txt', 'w') as err_f:
+                err_f.write(traceback.format_exc())
+            area_v = 0.0
+            area_t = 0.0
+            pass
+
+        
+        # --- 2. APURACAO DO CUSTO TOTAL GASTO (Cubo Totalizador Vulcano) ---
+        custo_real_gasto = 0.0
+        try:
+            cur.execute("SELECT SUM(CUSTO_TOTAL) FROM POC_CUSTO_MENSAL_REAL WHERE ID_EMPREENDIMENTO = ? AND (ANO < ? OR (ANO = ? AND MES <= ?))", (id_emp, ano, ano, mes))
+            crg = cur.fetchone()
+            if crg and crg[0]:
+                custo_real_gasto = float(crg[0])
+        except Exception as e:
+            pass
+        
+        emp_detail = {
+            "id": id_emp, "nome": nome_emp, "custo_orcado": float(r[2] or 0.0),
+            "custo_real_gasto": custo_real_gasto, "fracao_vendida": fracao_vendida,
+            "area_vendida": area_v, "area_total": area_t,
+            "conta_custo": r[3], "conta_estoque": r[4], "conta_estconc": r[5], "codigo_cc": cc_emp
+        }
+        
+        import sqlite3
+        conn_lite = sqlite3.connect(POC_DATABASE_FILE)
+        cur_lite = conn_lite.cursor()
+        try:
+            periodo_str = f"{ano}-{str(mes).zfill(2)}"
+            cur_lite.execute("SELECT percentual FROM evolucao_obras WHERE empreendimento = ? AND periodo <= ? ORDER BY periodo DESC LIMIT 1", (nome_emp, periodo_str))
+            poc_row = cur_lite.fetchone()
+            emp_detail["poc_atual"] = float(poc_row[0]) if poc_row else 0.0
+        except sqlite3.OperationalError:
+            emp_detail["poc_atual"] = 0.0
+        finally:
+            conn_lite.close()
+            
+        cur.execute("SELECT SUM(TOTAL_PERIODO) FROM POC_CUSTOS WHERE ID_EMPREENDIMENTO = ? AND (ANO < ? OR (ANO = ? AND MES < ?))", (id_emp, ano, ano, mes))
+        c_acumulado = cur.fetchone()
+        emp_detail["custo_reconhecido_anterior"] = float(c_acumulado[0]) if c_acumulado and c_acumulado[0] else 0.0
+        
+        cur.execute("SELECT MES, ANO, TOTAL_PERIODO, PERCENTUAL_CONCLUIDO FROM POC_CUSTOS WHERE ID_EMPREENDIMENTO = ? ORDER BY ANO DESC, MES DESC", (id_emp,))
+        emp_detail["timeline"] = [
+            {
+                "mes": c[0], 
+                "ano": c[1], 
+                "periodo": f"{str(c[1]).zfill(4)}-{str(c[0]).zfill(2)}",
+                "valor": float(c[2] or 0), 
+                "poc": float(c[3] or 0), 
+                "status": "Integrado"
+            } 
+            for c in cur.fetchall()
+        ]
+            
+        return {"empreendimento": emp_detail}
+    finally:
+        conn_vulcano.close()
+
+@app.get("/api/custos/detalhamento/{id_emp}")
+def api_custos_detalhamento(id_emp: int, empresa_id: int = 959):
+    conn_vulcano = get_conn("vulcano")
+    conn_questor = get_conn("questor")
+    try:
+        # Puxar CC e Conta de Custo
+        cur_v = conn_vulcano.cursor()
+        cur_v.execute("SELECT CONTACUSTO, CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (id_emp,))
+        emp_info = cur_v.fetchone()
+        if not emp_info:
+            return {"extrato_gerencial": [], "extrato_contabil": []}
+            
+        conta_custo = emp_info[0]
+        cc_emp = emp_info[1]
+        
+        cur_q = conn_questor.cursor()
+        
+        extrato_gerencial = []
+        try:
+            cur_v.execute("SELECT ANO, MES, SUM(CUSTO_TOTAL) FROM POC_CUSTO_MENSAL_REAL WHERE ID_EMPREENDIMENTO = ? GROUP BY ANO, MES ORDER BY ANO DESC, MES DESC", (id_emp,))
+            for g in cur_v.fetchall():
+                extrato_gerencial.append({"ano": g[0], "mes": g[1], "valor": float(g[2])})
+        except Exception as e:
+            print("Erro Gerencial Extrato Cache:", e)
+
+        extrato_contabil = []
+        if conta_custo:
+            try:
+                cur_q.execute("""
+                    SELECT DATALCTOCTB, VALORLCTOCTB, CHAVELCTOCTB 
+                    FROM LCTOCTB 
+                    WHERE CODIGOEMPRESA = ? 
+                          AND CONTACTBDEB = ? 
+                          AND CHAVEORIGEM LIKE 'VU%'
+                    ORDER BY DATALCTOCTB DESC
+                """, (empresa_id, int(conta_custo)))
+                for c in cur_q.fetchall():
+                    extrato_contabil.append({"data": str(c[0]), "valor": float(c[1]), "chave": c[2]})
+            except Exception as e:
+                print("Erro Contabil Extrato:", e)
+                
+        return {
+            "extrato_gerencial": extrato_gerencial,
+            "extrato_contabil": extrato_contabil
+        }
+    finally:
+        conn_vulcano.close()
+        conn_questor.close()
+
+@app.post("/api/custos/sincronizar_totalizadores/{id_emp}")
+def api_custos_sincronizar_totalizadores(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
+    conn_vulcano = get_conn("vulcano")
+    conn_questor = get_conn("questor")
+    try:
+        cur_v = conn_vulcano.cursor()
+        cur_q = conn_questor.cursor()
+        
+        # Limpar tabela ODS para TODO o histórico do empreendimento
+        cur_v.execute("DELETE FROM POC_CUSTO_MENSAL_REAL WHERE ID_EMPREENDIMENTO = ?", (id_emp,))
+        
+        cur_v.execute("SELECT CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (id_emp,))
+        emp_inf = cur_v.fetchone()
+        if not emp_inf or not emp_inf[0]:
+            raise HTTPException(status_code=400, detail="Centro de Custo não mapeado neste empreendimento.")
+            
+        cc_emp = int(emp_inf[0])
+        
+        # Sincroniza TODO o histórico deste empreendimento (muito rápido por ser apenas 1 CC)
+        cur_q.execute("""
+            SELECT extract(year from lctoger.datalctoctb),
+                   extract(month from lctoger.datalctoctb),
+                   coalesce(sum(coalesce(lctoger.valorlctoger*lctoger.naturlctoctb, 0)), 0)
+            FROM lctoger
+            INNER JOIN lctoctb ON lctoctb.codigoempresa = lctoger.codigoempresa 
+                AND lctoctb.chavelctoctb = lctoger.chavelctoctb
+            WHERE lctoger.codigoempresa = ? AND lctoger.codigocentrocusto = ?
+            AND not (lctoctb.codigohistctb = 370 and lctoger.naturlctoctb = -1)
+            GROUP BY 1, 2
+        """, (empresa_id, cc_emp))
+        
+        res_mensal = cur_q.fetchall()
+        for (a, m, total) in res_mensal:
+            competencia = f"{int(a)}-{str(int(m)).zfill(2)}"
+            cur_v.execute("""
+                INSERT INTO POC_CUSTO_MENSAL_REAL (ID_EMPREENDIMENTO, ANO, MES, COMPETENCIA, CUSTO_TOTAL)
+                VALUES (?, ?, ?, ?, ?)
+            """, (id_emp, int(a), int(m), competencia, float(total)))
+                
+        conn_vulcano.commit()
+        return {"success": True, "message": "Histórico Completo Sincronizado para este Prédio!"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        conn_vulcano.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn_vulcano.close()
+        conn_questor.close()
+
+@app.post("/api/custos/lcto")
+def api_custos_lcto(req: CustoLctoReq):
+    conn_vulcano = get_conn("vulcano")
+    conn_questor = get_conn("questor")
+    try:
+        # 1. Obter informações de conta no Vulcano
+        cur_v = conn_vulcano.cursor()
+        cur_v.execute("SELECT CONTACUSTO, CONTAESTAND, CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (req.empreendimento_id,))
+        emp_info = cur_v.fetchone()
+        if not emp_info or not emp_info[0] or not emp_info[1]:
+            raise HTTPException(400, "Contas Contábeis de Custo ou Estoque não parametrizadas no Empreendimento.")
+            
+        conta_debito = int(emp_info[0])
+        conta_credito = int(emp_info[1])
+        codigo_cc = int(emp_info[2]) if emp_info[2] else None
+        
+        # 2. Inserir em POC_CUSTOS no Vulcano
+        # Generate ID (simulated seq)
+        cur_v.execute("SELECT MAX(ID) FROM POC_CUSTOS")
+        max_id = cur_v.fetchone()[0] or 0
+        new_id = max_id + 1
+        
+        periodo_str = f"{req.ano}-{str(req.mes).zfill(2)}"
+        
+        # Sum previously accumulated cost
+        cur_v.execute("SELECT SUM(TOTAL_PERIODO) FROM POC_CUSTOS WHERE ID_EMPREENDIMENTO = ?", (req.empreendimento_id,))
+        custo_acumulado = cur_v.fetchone()[0] or 0.0
+        novo_acumulado = float(custo_acumulado) + req.valor_custo
+        
+        cur_v.execute("""
+            INSERT INTO POC_CUSTOS (ID, ID_EMPREENDIMENTO, MES, ANO, PERIODO, TOTAL_PERIODO, CUSTO_ACUMULADO, PERCENTUAL_CONCLUIDO)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (new_id, req.empreendimento_id, req.mes, req.ano, periodo_str, req.valor_custo, novo_acumulado, req.percentual))
+        
+        # 3. Inserir em LCTOCTB no Questor
+        cur_q = conn_questor.cursor()
+        
+        # Pegar ultima chave de lote ou seq
+        # (Em um ambiente real, geramos CHAVELCTOCTB com triggers/sequences ou UUID, aqui usamos timestamp simulado)
+        import time
+        chave_lcto = int(time.time() * 10)
+        data_fim_mes = f"{req.ano}-{str(req.mes).zfill(2)}-28" # simplificado para dia 28
+        
+        # SQL Insert into Questor - Simplificado. Em prod real tem fields requeridos.
+        # Garantindo a inclusão de CODIGOLCTOPROG genérico caso seja Not Null.
+        cur_q.execute("""
+            INSERT INTO LCTOCTB 
+            (CODIGOEMPRESA, CHAVELCTOCTB, DATALCTOCTB, VALORLCTOCTB, CONTACTBDEB, CONTACTBCRED, CODIGOHISTCTB, COMPLHIST, ORIGEMDADO, CODIGOLCTOPROG, CHAVEORIGEM)
+            VALUES (?, ?, CAST(? AS DATE), ?, ?, ?, 99, ?, 1, 1, ?)
+        """, (req.empresa_id, chave_lcto, data_fim_mes, req.valor_custo, conta_debito, conta_credito, req.historico, 'VU_POC'))
+             
+        conn_vulcano.commit()
+        conn_questor.commit()
+        
+        return {"success": True, "message": "Custo integrado com sucesso ao Vulcano e Questor (LCTOCTB).", "valor": req.valor_custo}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        conn_vulcano.rollback()
+        conn_questor.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn_vulcano.close()
+        conn_questor.close()
+
+@app.get("/api/dimob/preview")
+def api_preview_dimob(ano: int = 2025, empresa_id: int = 959):
+    try:
+        from gerar_dimob import preview_dimob
+        res = preview_dimob(ano, empresa_id)
+        if hasattr(res, 'get') and not res.get("success"):
+            raise HTTPException(status_code=400, detail=res.get("message"))
+        return res
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/dimob/gerar")
+def api_gerar_dimob(ano: int = 2025, empresa_id: int = 959):
+    try:
+        from gerar_dimob import gerar_dimob
+        arquivo_saida = f"DIMOB_{ano}_EMP_{empresa_id}.txt"
+        gerar_dimob(ano, empresa_id, arquivo_saida)
+        if os.path.exists(arquivo_saida):
+            return FileResponse(
+                path=arquivo_saida, 
+                filename=arquivo_saida, 
+                media_type="text/plain",
+                headers={"Content-Disposition": f"attachment; filename={arquivo_saida}"}
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Arquivo não foi gerado.")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/health")
+def api_health():
+    key = os.environ.get("GEMINI_API_KEY") or ""
+    return {
+        "ok": True,
+        "gemini_key_configured": bool(key.strip()),
+        "gemini_key_len": len(key.strip()),
+    }
+
+@app.get("/api/debug/env")
+def debug_env():
+    """Diagnóstico rápido (não expõe segredos)."""
+    key = os.environ.get("GEMINI_API_KEY") or ""
+    return {
+        "dotenv_path": _DOTENV_PATH,
+        "dotenv_exists": os.path.isfile(_DOTENV_PATH),
+        "gemini_key_configured": bool(key.strip()),
+        "gemini_key_len": len(key.strip()),
+        "gemini_model": GEMINI_MODEL_ID,
+        "gemini_extract_timeout_sec": GEMINI_EXTRACT_TIMEOUT_SEC,
+        "cwd": os.getcwd(),
+        "python_exe": sys.executable if "sys" in globals() else "",
+        "firebird_host": FIREBIRD_HOST,
+        "firebird_port": FIREBIRD_PORT,
+        "db_path_vulcano": DB_PATH_VULCANO,
+        "db_path_vulcano_exists": os.path.isfile(DB_PATH_VULCANO),
+        "db_path_questor": DB_PATH_QUESTOR,
+        "db_path_questor_exists": os.path.isfile(DB_PATH_QUESTOR),
+    }
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from fastapi import Request
+@app.middleware("http")
+async def add_no_cache_header(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+@app.post("/api/generate-pdf-parser")
+async def generate_pdf_parser(file: UploadFile = File(...)):
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
+        
+    try:
+        # Read the PDF into memory
+        pdf_bytes = await file.read()
+        
+        # Extract text from the first 5 pages using pdfplumber
+        extracted_text = ""
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            pages_to_process = min(5, len(pdf.pages))
+            for i in range(pages_to_process):
+                extracted_text += pdf.pages[i].extract_text(layout=True) + "\n"
+        
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="Cannot extract text from this PDF (it might be an image/scanned).")
+            
+        # Prompt Gemini to generate the python script
+        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        prompt_instructions = f"""Você é um Engenheiro de Software Python Sênior especialista em ETL e processamento de finanças usando Pandas.
+Abaixo está o texto extraído da amostra do layout do relatório em PDF do sistema ERP (limite de 5 páginas).
+
+Seu objetivo é gerar um SCRIPT PYTHON (.py) determinístico, que use `pdfplumber` e Expressões Regulares (re) ou split lines para ler TODO o PDF arquivo por arquivo, encontrar e agrupar os dados tubulares, e retornar APENAS O CÓDIGO FONTE PYTHON puro (sem blocos markdown ```python), sem texto adicional!
+
+O código deve ter uma função principal chamada `parse_pdf(file_path)` que retorna um `pandas.DataFrame`.
+O código gerado deve ser robusto e incluir documentação interna para tratamento de erros no layout.
+Assuma que as bibliotecas "pdfplumber", "pandas" e "re" estarão disponíveis.
+
+ESTRUTURA DA AMOSTRA DO TEXTO DO PDF:
+---
+{extracted_text[:12000]}
+---
+
+ESCREVA APENAS O CÓDIGO PYTHON DA FUNÇÃO, ABSOLUTAMENTE NENHUMA EXPLICAÇÃO ANTES OU DEPOIS. INICIE DIRETAMENTE COM AS IMPORTAÇÕES:
+import pdfplumber
+import pandas as pd
+import re"""
+
+        response = model.generate_content(prompt_instructions)
+        python_code = response.text
+        
+        # Strip markdown syntax if the model ignored the instructions
+        if python_code.startswith("```"):
+            lines = python_code.split('\n')
+            if len(lines) > 2:
+                python_code = '\n'.join(lines[1:-1])
+                
+        return {"code": python_code.strip()}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+import sqlite3
+from pydantic import BaseModel
+
+def init_sqlite():
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS evolucao_obras (
+            empreendimento TEXT,
+            periodo TEXT,
+            percentual REAL,
+            PRIMARY KEY (empreendimento, periodo)
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS import_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            target_table TEXT,
+            mapping_json TEXT,
+            data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS pdf_parser_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            python_code TEXT NOT NULL,
+            sample_json TEXT,
+            arquivo_gerado TEXT,
+            data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS empresa_parser_padrao (
+            empresa_id INTEGER NOT NULL PRIMARY KEY,
+            parser_template_id INTEGER NOT NULL,
+            data_atualizacao DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parser_template_id) REFERENCES pdf_parser_templates(id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_sqlite()
+
+def get_conn(db_name="vulcano", empresa_id=None):
+    questor_db = DB_PATH_QUESTOR
+    if db_name == "questor" and empresa_id is not None:
+        import os
+        base_dir = os.path.dirname(DB_PATH_QUESTOR)
+        possible_path = os.path.join(base_dir, f"QUESTOR_EMPRESA_{empresa_id}.FDB")
+        if os.path.exists(possible_path):
+            questor_db = possible_path
+
+    return firebirdsql.connect(
+        host=FIREBIRD_HOST,
+        database=questor_db if db_name == "questor" else DB_PATH_VULCANO,
+        port=FIREBIRD_PORT,
+        user=FIREBIRD_USER,
+        password=FIREBIRD_PASSWORD,
+        charset="WIN1252"
+    )
+
+def _table_has_column(cur, table_name: str, column_name: str) -> bool:
+    """
+    Checks if a Firebird table has a given column name.
+    Uses system metadata (RDB$RELATION_FIELDS).
+    """
+    cur.execute(
+        """
+        SELECT 1
+        FROM RDB$RELATION_FIELDS
+        WHERE RDB$RELATION_NAME = ? AND RDB$FIELD_NAME = ?
+        """,
+        (table_name.upper(), column_name.upper()),
+    )
+    return cur.fetchone() is not None
+
+class PocInput(BaseModel):
+    empreendimento: str
+    periodo: str
+    percentual: float
+
+@app.post("/api/poc")
+def save_poc(input_data: PocInput):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO evolucao_obras (empreendimento, periodo, percentual) 
+        VALUES (?, ?, ?)
+        ON CONFLICT(empreendimento, periodo) DO UPDATE SET percentual=excluded.percentual
+    ''', (input_data.empreendimento, input_data.periodo, input_data.percentual))
+    conn.commit()
+    conn.close()
+    return {"message": "Salvo com sucesso"}
+
+class ExtratoRequest(BaseModel):
+    competencia: str
+    empresa_id: Optional[str] = None
+    
+class QuestorLoteItem(BaseModel):
+    contaDebito: str
+    contaCredito: str
+    valor: float
+    historico: str
+
+class QuestorLotePayload(BaseModel):
+    competencia: str
+    empresa: int
+    itens: List[QuestorLoteItem]
+    
+# Rotas e Implementações
+
+@app.post("/api/templates")
+def save_template(template: TemplateInput):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute('INSERT INTO import_templates (nome, target_table, mapping_json) VALUES (?, ?, ?)',
+              (template.nome, template.target_table, template.mapping_json))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+@app.get("/api/templates")
+def get_templates(target_table: str = None):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    if target_table:
+        c.execute('SELECT id, nome, target_table, mapping_json, data_criacao FROM import_templates WHERE target_table = ? ORDER BY id DESC', (target_table,))
+    else:
+        c.execute('SELECT id, nome, target_table, mapping_json, data_criacao FROM import_templates ORDER BY id DESC')
+    rows = c.fetchall()
+    conn.close()
+    return [{"id": r[0], "nome": r[1], "target_table": r[2], "mapping_json": r[3], "data_criacao": r[4]} for r in rows]
+
+@app.get("/api/poc")
+def get_poc():
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras ORDER BY periodo DESC')
+    rows = c.fetchall()
+    conn.close()
+    return {"data": [{"empreendimento": r[0], "periodo": r[1], "percentual": r[2]} for r in rows]}
+
+
+@app.get("/api/tables")
+def get_tables(db: str = "questor"):
+    conn = get_conn(db)
+    cur = conn.cursor()
+    cur.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 ORDER BY RDB$RELATION_NAME")
+    tables = [row[0].strip() for row in cur.fetchall()]
+    conn.close()
+    return {"tables": tables}
+
+# --- QUESTOR AUXILIARY TABLES ENDPOINTS ---
+@app.get("/api/questor/contas")
+def get_questor_contas():
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        cur.execute("SELECT CODIGOTABCTB, DESCRTABCTB FROM TABELACONTABIL ORDER BY DESCRTABCTB")
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        contas = [{"id": r[0], "descricao": dec(r[1])} for r in cur.fetchall()]
+        conn.close()
+        return contas
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/plano-contas-espec")
+def get_questor_plano_contas_espec(empresa_id: int):
+    try:
+        conn = get_conn("questor", empresa_id)
+        cur = conn.cursor()
+        
+        # TIPOCONTA = 2 means Analytical (Analítica, where entries are posted). 1 is Synthetic.
+        query = """
+            SELECT CONTACTB, CLASSIFCONTA, DESCRCONTA, TIPOCONTA 
+            FROM PLANOESPEC 
+            WHERE CODIGOEMPRESA = ? AND CLASSIFCONTA IS NOT NULL
+            ORDER BY CLASSIFCONTA
+        """
+        cur.execute(query, (int(empresa_id),))
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        contas = [{"id": r[0], "classificacao": r[1].strip(), "descricao": dec(r[2]), "tipo": int(r[3] or 1)} for r in cur.fetchall()]
+        conn.close()
+        return {"contas": contas}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/centrocusto")
+def get_questor_centrocusto():
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        cur.execute("SELECT CODIGOCENTROCUSTO, DESCRCENTROCUSTO FROM CENTROCUSTO ORDER BY DESCRCENTROCUSTO")
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        centros = [{"id": r[0], "descricao": dec(r[1])} for r in cur.fetchall()]
+        conn.close()
+        return centros
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/historicos")
+def get_questor_historicos():
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        cur.execute("SELECT CODIGOHISTCTB, DESCRHISTCTB FROM HISTORICOCTB ORDER BY DESCRHISTCTB")
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        historicos = [{"id": r[0], "descricao": dec(r[1])} for r in cur.fetchall()]
+        conn.close()
+        return historicos
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+import subprocess
+import os
+from fastapi.responses import FileResponse
+
+@app.get("/api/export-razao")
+def export_razao():
+    script_path = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\export_razao.py"
+    output_xlsx = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\Razao_Analitico_Limpo.xlsx"
+    
+    subprocess.run(["python", script_path], check=True)
+    
+    if os.path.exists(output_xlsx):
+        return FileResponse(path=output_xlsx, filename="Razao_Analitico_Questor.xlsx", media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:
+        raise HTTPException(status_code=500, detail="Erro ao gerar o Excel")
+
+@app.get("/api/table/{table_name}/schema")
+def get_schema(table_name: str, db: str = "questor"):
+    conn = get_conn(db)
+    cur = conn.cursor()
+    query = """
+    SELECT rf.RDB$FIELD_NAME, f.RDB$FIELD_TYPE
+    FROM RDB$RELATION_FIELDS rf
+    JOIN RDB$FIELDS f ON rf.RDB$FIELD_SOURCE = f.RDB$FIELD_NAME
+    WHERE rf.RDB$RELATION_NAME = ?
+    ORDER BY rf.RDB$FIELD_POSITION
+    """
+    cur.execute(query, (table_name.upper(),))
+    
+    type_map = {7: "SMALLINT", 8: "INTEGER", 10: "REAL", 12: "DATE", 13: "TIME", 14: "CHAR", 16: "BIGINT", 27: "DOUBLE PRECISION", 35: "TIMESTAMP", 37: "VARCHAR", 261: "BLOB"}
+    cols = [{"name": row[0].strip(), "type": type_map.get(row[1], "UNKNOWN")} for row in cur.fetchall()]
+    conn.close()
+    return {"columns": cols}
+
+@app.get("/api/table/{table_name}/data")
+def get_data(table_name: str, limit: int = 150, db: str = "questor", empresa_id: int | None = None):
+    conn = get_conn(db)
+    cur = conn.cursor()
+    try:
+        order_clause = ""
+        if table_name.upper() == "LCTOCTB":
+            order_clause = " ORDER BY DATALCTOCTB DESC"
+
+        where_clause = ""
+        params = []
+        if empresa_id is not None:
+            try:
+                if _table_has_column(cur, table_name, "CODIGOEMPRESA"):
+                    where_clause = ' WHERE "CODIGOEMPRESA" = ?'
+                    params.append(int(empresa_id))
+            except Exception:
+                # If metadata lookup fails, fall back to unfiltered data
+                where_clause = ""
+                params = []
+
+        cur.execute(f'SELECT FIRST {limit} * FROM "{table_name.upper()}"{where_clause}{order_clause}', tuple(params))
+        rows = cur.fetchall()
+        cols = [desc[0] for desc in cur.description]
+        
+        formatted_rows = []
+        for r in rows:
+            row_dict = {}
+            for i, val in enumerate(r):
+                if isinstance(val, bytes):
+                    try:
+                        row_dict[cols[i]] = val.decode('win1252', 'ignore')
+                    except:
+                        row_dict[cols[i]] = "<BINARY>"
+                else:
+                    row_dict[cols[i]] = val
+            formatted_rows.append(row_dict)
+            
+        conn.close()
+        return {"data": formatted_rows, "columns": cols}
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/receitas-caixa")
+def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = None, data_fim: str | None = None, empreendimentos_ids: str | None = None):
+    # Pandas Vectorized Engine Start
+    import pandas as pd
+    import numpy as np
+    import collections
+    import datetime
+    import calendar
+    
+    if data_ini and len(data_ini) == 7:
+        data_ini = f"{data_ini}-01"
+    if data_fim and len(data_fim) == 7:
+        # Pega o ultimo dia do mes
+        y, m = map(int, data_fim.split("-"))
+        last_day = calendar.monthrange(y, m)[1]
+        data_fim = f"{data_fim}-{last_day:02d}"
+    
+    conn = get_conn("vulcano")
+    cur = conn.cursor()
+
+    query = """
+    SELECT 
+        v.CODIGOEMPRESA,
+        v.CODIGOESTAB,
+        e.NOME AS EMPREENDIMENTO,
+        v.UNIDIMOB AS UNIDADE,
+        c.NOME AS COMPRADOR,
+        r.DATA AS DATA_RECEBIMENTO,
+        r.TOTALPAGO AS RECEITA_CAIXA,
+        r.VALORPARCELA,
+        r.VALORVARIACAO,
+        v.TOTALVENDA AS VGV_BASE,
+        e.RET,
+        v.DISTRATO,
+        v.DATADISTRATO,
+        v.ID AS IDVENDA
+    FROM VENDA v
+    JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+    LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+    LEFT JOIN RECEBER r ON r.IDVENDA = v.ID AND r.TOTALPAGO > 0
+    """
+    
+    try:
+        conditions = []
+        params = []
+        if empresa_id is not None:
+            conditions.append("v.CODIGOEMPRESA = ?")
+            params.append(int(empresa_id))
+            
+        if empreendimentos_ids:
+            # Parse comma-separated string to list of ints
+            try:
+                emp_list = [int(p.strip()) for p in empreendimentos_ids.split(",") if p.strip()]
+                if emp_list:
+                    # Create IN clause with placeholders
+                    placeholders = ",".join(["?"] * len(emp_list))
+                    conditions.append(f"e.ID IN ({placeholders})")
+                    params.extend(emp_list)
+            except ValueError:
+                pass
+
+        
+        join_conditions = ""
+        join_params = []
+        
+        if data_fim:
+            join_conditions += " AND r.DATA <= ?"
+            join_params.append(data_fim)
+            
+        if data_ini:
+            join_conditions += " AND r.DATA >= ?"
+            join_params.append(data_ini)
+        
+        query = query.replace("AND r.TOTALPAGO > 0", "AND r.TOTALPAGO > 0" + join_conditions)
+            
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        query += " ORDER BY r.DATA DESC NULLS LAST"
+        
+        df = pd.read_sql_query(query, conn, params=tuple(join_params + params))
+        # Global Sanitization
+        df = df.replace({np.nan: 0.0}) 
+        
+        # Saneamento Vetorizável
+        df['EMPREENDIMENTO'] = df['EMPREENDIMENTO'].fillna('').astype(str).str.strip()
+        
+        def safe_decode(x):
+            if isinstance(x, bytes):
+                try: return x.decode('win1252', 'ignore').strip()
+                except: return str(x)
+            return str(x).strip() if x is not None else ''
+
+        # Decodificações que dependem de blob/win1252 ainda usam map rápido
+        df['EMPREENDIMENTO'] = df['EMPREENDIMENTO'].map(safe_decode)
+        df['UNIDADE'] = df['UNIDADE'].map(safe_decode)
+        df['COMPRADOR'] = df['COMPRADOR'].map(safe_decode)
+        
+        df['DATA_RECEBIMENTO'] = pd.to_datetime(df['DATA_RECEBIMENTO'], errors='coerce')
+        df['RECEITA_CAIXA'] = df['RECEITA_CAIXA'].fillna(0.0).astype(float)
+        df['VALORPARCELA'] = df['VALORPARCELA'].fillna(0.0).astype(float)
+        df['VALORVARIACAO'] = df['VALORVARIACAO'].fillna(0.0).astype(float)
+        df['VGV_BASE'] = df['VGV_BASE'].fillna(0.0).astype(float)
+        
+        df['RET_FLAG'] = df['RET'].astype(str).str.upper().str.strip() == 'S'
+        df['DISTRATO_FLAG'] = df['DISTRATO'].astype(str).str.upper().str.strip() == 'S'
+        
+        df['VGV'] = np.where(df['DISTRATO_FLAG'], 0.0, df['VGV_BASE'])
+        
+        # Acréscimo
+        acrescimo_base = np.maximum(0, df['RECEITA_CAIXA'] - df['VALORPARCELA'])
+        df['ACRESCIMO'] = np.maximum(df['VALORVARIACAO'], acrescimo_base)
+        
+        # Vectorized Module YM (Period)
+        df['YM'] = df['DATA_RECEBIMENTO'].dt.to_period('M')
+        # Filtro de Competência e Totalizadores Nativos
+        # Para montar monthly_totals, filtramos ret == false
+        df_non_ret_valid = df[(~df['RET_FLAG']) & (df['RECEITA_CAIXA'] > 0) & df['DATA_RECEBIMENTO'].notnull()]
+        monthly_groups = df_non_ret_valid.groupby('YM')['RECEITA_CAIXA'].sum()
+        
+        # Computar month_adicional dicionário simulando a lógica iterativa nativa
+        quarters_data = collections.defaultdict(list)
+        for ym_period, m_total in monthly_groups.items():
+            dt = ym_period.to_timestamp()
+            ym = (dt.year, dt.month)
+            yq = (dt.year, (dt.month - 1) // 3 + 1)
+            quarters_data[yq].append(ym)
+            
+        monthly_totals_native = { (p.year, p.month): v for p, v in monthly_groups.items() }
+
+        month_adicional = {}
+        for yq, months in quarters_data.items():
+            month3 = (yq[0], yq[1] * 3)
+            month1 = (yq[0], yq[1] * 3 - 2)
+            month2 = (yq[0], yq[1] * 3 - 1)
+            
+            quarter_base = monthly_totals_native.get(month1, 0) + monthly_totals_native.get(month2, 0) + monthly_totals_native.get(month3, 0)
+            quarter_adicional = max(0, (quarter_base * 0.08) - 60000) * 0.10
+            
+            m1_adicional = max(0, (monthly_totals_native.get(month1, 0) * 0.08) - 20000) * 0.10
+            m2_adicional = max(0, (monthly_totals_native.get(month2, 0) * 0.08) - 20000) * 0.10
+            m3_adicional = quarter_adicional - m1_adicional - m2_adicional
+            
+            month_adicional[month1] = m1_adicional
+            month_adicional[month2] = m2_adicional
+            month_adicional[month3] = m3_adicional
+
+        # Mapeando Tributos de volta pro df
+        # Zerando colunas inicialmente
+        for col in ['PIS', 'COFINS', 'IRPJ', 'CSLL', 'RET', 'IRPJ_ADICIONAL']:
+            df[col] = 0.0
+            
+        # Para operações válidas (onde teve recebimento)
+        mask_valid = (df['RECEITA_CAIXA'] > 0) & df['DATA_RECEBIMENTO'].notnull()
+        m_ret = mask_valid & df['RET_FLAG']
+        m_nret = mask_valid & (~df['RET_FLAG'])
+        
+        # RET Fix
+        df.loc[m_ret, 'RET'] = df.loc[m_ret, 'RECEITA_CAIXA'] * 0.04
+        
+        # NRET Fix
+        df.loc[m_nret, 'PIS'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.0065
+        df.loc[m_nret, 'COFINS'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.03
+        df.loc[m_nret, 'IRPJ'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.012
+        df.loc[m_nret, 'CSLL'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.0108
+
+        # IRPJ Adicional vetorizado via Series.map
+        # Precisamos transformar YM nativo (Period) para tuple (Y, M) para bater com month_adicional keys
+        # Para performance, fazemos o mapeamento no nível das chaves do período
+        if len(month_adicional) > 0:
+            def ym_to_tuple(period_val):
+                if pd.isna(period_val): return (1900, 1)
+                return (period_val.year, period_val.month)
+            
+            df_tuple_keys = df.loc[m_nret, 'YM'].map(ym_to_tuple)
+            adicional_series = df_tuple_keys.map(lambda k: month_adicional.get(k, 0.0)).astype(float)
+            total_m_series = df_tuple_keys.map(lambda k: monthly_totals_native.get(k, 0.0)).astype(float)
+            
+            fraction = df.loc[m_nret, 'RECEITA_CAIXA'] / total_m_series
+            fraction = fraction.replace([np.inf, -np.inf, np.nan], 0)
+            df.loc[m_nret, 'IRPJ_ADICIONAL'] = fraction * adicional_series
+
+        df['TRIBUTOS_CAIXA_ACUMULADO'] = df['PIS'] + df['COFINS'] + df['IRPJ'] + df['CSLL'] + df['RET'] + df['IRPJ_ADICIONAL']
+        
+        # Window Masks para Mês (data_ini)
+        target_ini_date = data_ini if data_ini else "1900-01-01"
+        target_dt = pd.to_datetime(target_ini_date)
+        is_mes_mask = df['DATA_RECEBIMENTO'] >= target_dt
+        
+        df['CAIXA_MES'] = np.where(is_mes_mask, df['RECEITA_CAIXA'], 0.0)
+        df['ACRESCIMO_CAIXA_MES'] = np.where(is_mes_mask, df['ACRESCIMO'], 0.0)
+        df['TRIBUTOS_CAIXA_MES'] = np.where(is_mes_mask, df['TRIBUTOS_CAIXA_ACUMULADO'], 0.0)
+        for col in ['PIS', 'COFINS', 'IRPJ', 'CSLL', 'RET', 'IRPJ_ADICIONAL']:
+            df[f'{col}_MES'] = np.where(is_mes_mask, df[col], 0.0)
+
+        # Se houver data_ini, faremos uma micro-query de todo o histórico puramente numérico (Super rápida)
+        # Para resgatar o Saldo Acumulado sem estourar 2 minutos travando no JOIN de nomes e strings velhos
+        if data_ini:
+            cur.execute(f"""
+                SELECT r.IDVENDA, SUM(r.TOTALPAGO), SUM(r.VALORVARIACAO)
+                FROM RECEBER r
+                JOIN VENDA v ON r.IDVENDA = v.ID
+                WHERE r.DATA < ? AND r.TOTALPAGO > 0 AND v.CODIGOEMPRESA = ?
+                GROUP BY r.IDVENDA
+            """, [data_ini, int(empresa_id) if empresa_id else 0])
+            hist_rows = cur.fetchall()
+            if hist_rows:
+                # Processamento relâmpago do Acumulado Histórico para Vendas Existentes
+                hist_dict = {row[0]: (row[1] or 0.0, row[2] or 0.0) for row in hist_rows}
+                
+                # Mapeando os recibos passados de volta para nosso df principal agregado de forma vetorial
+                def sum_hist_caixa(vid): return float(hist_dict.get(vid, (0.0, 0.0))[0])
+                def sum_hist_acres(vid): return float(hist_dict.get(vid, (0.0, 0.0))[1])
+                
+                df['HIST_CAIXA'] = df['IDVENDA'].apply(sum_hist_caixa)
+                df['HIST_ACRES'] = df['IDVENDA'].apply(sum_hist_acres)
+                
+                # A RECEITA_CAIXA global passa a contemplar as parcelas pagas no passado
+                df['RECEITA_CAIXA'] = df['RECEITA_CAIXA'] + df['HIST_CAIXA']
+                df['ACRESCIMO'] = df['ACRESCIMO'] + df['HIST_ACRES']
+                
+                # Recalcula Taxa Acumulada da Base Histórica simplificada
+                # Aplicamos a % efetiva do mês transacionado (RET/PRES) sobre a massa passada
+                rate_mes = df['TRIBUTOS_CAIXA_MES'] / df['CAIXA_MES']
+                rate_mes = rate_mes.fillna(0.0).replace([np.inf, -np.inf], 0.0)
+                
+                # Se CAIXA_MES for 0 (Sem pagamentos novos), a taxa assumida será RET (4%) ou PIS/COFINS (5.93%)
+                fallback_rate = np.where(df['RET_FLAG'], 0.04, 0.0593)
+                final_rate = np.where(df['CAIXA_MES'] > 0, rate_mes, fallback_rate)
+                
+                df['TRIBUTOS_CAIXA_ACUMULADO'] = df['TRIBUTOS_CAIXA_ACUMULADO'] + (df['HIST_CAIXA'] * final_rate)
+                
+        # Agrupamento no nível da Unidade Comercial
+        unit_group = df.groupby(['EMPREENDIMENTO', 'UNIDADE', 'COMPRADOR', 'IDVENDA']).agg({
+            'VGV': 'first',
+            'RECEITA_CAIXA': 'sum',
+            'CAIXA_MES': 'sum',
+            'ACRESCIMO': 'sum',
+            'ACRESCIMO_CAIXA_MES': 'sum',
+            'TRIBUTOS_CAIXA_ACUMULADO': 'sum',
+            'TRIBUTOS_CAIXA_MES': 'sum',
+            'PIS': 'sum', 'PIS_MES': 'sum',
+            'COFINS': 'sum', 'COFINS_MES': 'sum',
+            'IRPJ': 'sum', 'IRPJ_MES': 'sum',
+            'CSLL': 'sum', 'CSLL_MES': 'sum',
+            'RET': 'sum', 'RET_MES': 'sum',
+            'IRPJ_ADICIONAL': 'sum', 'IRPJ_ADICIONAL_MES': 'sum',
+        }).reset_index()
+
+        # Agora operamos POC (SQL -> Dict -> Map)
+        emp_contas_by_name = {}
+        poc_map = {}
+        try:
+            cur.execute("""
+                SELECT REPLACE(C.CLASSIFICACAO, '.', ''), CX.DESCRICAO 
+                FROM CONTA_CONTABIL C 
+                JOIN CONTA CX ON C.ID_CONTA = CX.NOCONTA
+            """)
+            nomes_contas = {str(r[0]).strip(): (r[1].decode('win1252', 'ignore') if isinstance(r[1], bytes) else str(r[1])).strip() for r in cur.fetchall()}
+            
+            def fmt_cta(codigo, default_desc):
+                if not codigo: return default_desc
+                c = str(codigo).strip()
+                desc = nomes_contas.get(c, default_desc)
+                return f"{c} - {desc}"
+
+            cur.execute("""
+                SELECT ID, NOME, CONTACLI, CONTAADICLI, CONTAREC, CONTADESPESA, CONTACAIXA, 
+                       CONTAVARIACAO, CONTAESTAND, CONTAESTCON, CONTACUSTO, 
+                       CONTADEVOLUCAO, CONTALUCROACUM, CONTA_ESTORNO_DEVOLUCAO, OBRACONCLUIDA
+                FROM EMPREENDIMENTO
+            """)
+            emps_all = cur.fetchall()
+            for ev in emps_all:
+                emp_name_str = (ev[1].decode('win1252', 'ignore').strip() if isinstance(ev[1], bytes) else str(ev[1]).strip()) if ev[1] else str(ev[0])
+                
+                emp_contas_by_name[emp_name_str] = {
+                    "CONTACLI": fmt_cta(ev[2] if len(ev) > 2 else None, "CLIENTES"),
+                    "CONTAADICLI": fmt_cta(ev[3] if len(ev) > 3 else None, "ADIAN DE CLIENTES"),
+                    "CONTAREC": fmt_cta(ev[4] if len(ev) > 4 else None, "RECEITA DE VENDAS DRE"),
+                    "CONTADESPESA": fmt_cta(ev[5] if len(ev) > 5 else None, "DESPESA TRIBUTARIA DRE"),
+                    "CONTACAIXA": fmt_cta(ev[6] if len(ev) > 6 else None, "BANCOS CONTA MOVIMENTO"),
+                    "CONTAVARIACAO": fmt_cta(ev[7] if len(ev) > 7 else None, "RECEITA DE VARIACOES DRE"),
+                    "CONTAESTAND": fmt_cta(ev[8] if len(ev) > 8 else None, "ESTOQUE EM ANDAMENTO"),
+                    "CONTAESTCON": fmt_cta(ev[9] if len(ev) > 9 else None, "ESTOQUE CONCLUIDO"),
+                    "CONTACUSTO": fmt_cta(ev[10] if len(ev) > 10 else None, "CMV"),
+                    "CONTADEVOLUCAO": fmt_cta(ev[11] if len(ev) > 11 else None, "DISTRATOS DRE"),
+                    "CONTALUCROACUM": fmt_cta(ev[12] if len(ev) > 12 else None, "LUCROS ACUMULADOS"),
+                    "CONTA_ESTORNO_DEVOLUCAO": fmt_cta(ev[13] if len(ev) > 13 else None, "ESTORNOS DISTRATOS DRE")
+                }
+                is_concluida = str(ev[14]).strip().upper() == 'S' if len(ev) > 14 and ev[14] else False
+                if is_concluida:
+                    poc_map[(emp_name_str, '2000-01')] = 100.0
+        except Exception as e:
+            print("POC/Empresa Warning:", e)
+            
+        try:
+            cur.execute("""
+                SELECT e.NOME, p.PERIODO, p.PERCENTUAL 
+                FROM POC p JOIN EMPREENDIMENTO e ON p.ID_EMPREENDIMENTO = e.ID
+            """)
+            for row in cur.fetchall():
+                emp_nome, periodo, p = row
+                if not emp_nome or not periodo: continue
+                emp_name_str = (emp_nome.decode('win1252', 'ignore').strip() if isinstance(emp_nome, bytes) else str(emp_nome).strip())
+                p_str = (periodo.decode('win1252', 'ignore').strip() if isinstance(periodo, bytes) else str(periodo).strip())
+                ym_key = p_str[:7]
+                current_val = poc_map.get((emp_name_str, ym_key), 0.0)
+                raw_p = float(p or 0)
+                capped_p = raw_p if raw_p <= 100.0 else 100.0
+                poc_map[(emp_name_str, ym_key)] = max(current_val, capped_p)
+        except Exception as e:
+            print("Aviso Lendo POC Oficial Vulcano:", e)
+            
+        poc_list_by_emp = collections.defaultdict(list)
+        for (p_emp, val_ym), p_val in poc_map.items():
+            poc_list_by_emp[p_emp].append((val_ym, p_val / 100.0))
+        for k in poc_list_by_emp:
+            poc_list_by_emp[k].sort(key=lambda x: x[0])
+
+        anchor_ym = data_fim[:7] if data_fim else datetime.datetime.now().strftime("%Y-%m")
+        
+        def get_poc_at_or_before(emp_name, target_ym_str):
+            best_poc = 0.0
+            for ym_key, val in poc_list_by_emp.get(emp_name, []):
+                if ym_key <= target_ym_str: best_poc = val
+                else: break
+            return best_poc
+
+        def get_poc_strictly_before(emp_name, target_ym_str):
+            best_poc = 0.0
+            for ym_key, val in poc_list_by_emp.get(emp_name, []):
+                if ym_key < target_ym_str: best_poc = val
+                else: break
+            return best_poc
+
+        # Consolidação Emp (Nível 1)
+        # Ao invés de usar pandas para isso, construímos o dictionary nativo `dashboard_meta` e o json flat `data`
+        # Isso é super rápido agora que iteramos sobre as unidades agrupadas (centenas, não mais centenas de milhares)
+        
+        dashboard_meta = collections.defaultdict(lambda: {
+             "vgv": 0.0, "poc": 0.0, "poc_anterior": 0.0, "poc_mes": 0.0,
+             "receita_societaria": 0.0, "receita_soc_mes": 0.0,
+             "caixa_acumulado": 0.0, "caixa_mes": 0.0,
+             "tributos_caixa_acumulado": 0.0, "tributos_caixa_mes": 0.0,
+             "tributos_soc_acumulado": 0.0, "tributos_soc_mes": 0.0,
+             "pis": 0.0, "cofins": 0.0, "csll": 0.0, "irpj": 0.0, "ret": 0.0, "irpj_adicional": 0.0,
+             "unidades": []
+        })
+
+        data_export = []
+        for row in unit_group.itertuples(index=False):
+            emp = str(row.EMPREENDIMENTO)
+            uni = str(row.UNIDADE)
+            comp = str(row.COMPRADOR)
+            
+            # Setup initial POC if new EMP
+            if dashboard_meta[emp]["poc_mes"] == 0 and dashboard_meta[emp]["poc"] == 0:
+                final_ym = data_fim[:7] if data_fim else datetime.datetime.now().strftime("%Y-%m")
+                start_ym = data_ini[:7] if data_ini else None
+                
+                poc_ac_temp = get_poc_at_or_before(emp, final_ym)
+                poc_ant_temp = get_poc_strictly_before(emp, start_ym) if start_ym else 0.0
+                poc_mes = max(0, poc_ac_temp - poc_ant_temp)
+                
+                dashboard_meta[emp]["poc"] = poc_ac_temp * 100.0
+                dashboard_meta[emp]["poc_anterior"] = poc_ant_temp * 100.0
+                dashboard_meta[emp]["poc_mes"] = poc_mes * 100.0
+                dashboard_meta[emp]["contas_contabeis"] = emp_contas_by_name.get(emp, {})
+                dashboard_meta[emp]["historico_poc"] = [{"periodo": x[0], "poc": x[1]*100} for x in poc_list_by_emp.get(emp, [])]
+                
+            poc_acumulado = dashboard_meta[emp]["poc"] / 100.0
+            poc_mes = dashboard_meta[emp]["poc_mes"] / 100.0
+            
+            soc_acumulada_uni = row.VGV * poc_acumulado
+            soc_mes_uni = row.VGV * poc_mes
+            
+            eff_rate_acum = (row.TRIBUTOS_CAIXA_ACUMULADO / row.RECEITA_CAIXA) if row.RECEITA_CAIXA > 0 else 0
+            
+            tributos_soc_acumulada_uni = soc_acumulada_uni * eff_rate_acum
+            # Usar a taxa efetiva acumulada do histórico da unidade para prever passivo tributário sobre o crescimento do POC no período
+            tributos_soc_mes_uni = soc_mes_uni * eff_rate_acum
+            
+            # Filtro Poda de UI (Zerar visual da UI para unidades ociosas que não tenham pendência fiscal considerável)
+            is_idle = (row.CAIXA_MES == 0) and (soc_mes_uni == 0)
+            pending_diff = abs(tributos_soc_acumulada_uni - row.TRIBUTOS_CAIXA_ACUMULADO)
+            
+            if is_idle and pending_diff < 5.0 and data_ini is not None:
+                continue # Pula unidade completamente
+
+            # Aggregating into Dashboard Meta Empreendimento
+            meta_emp = dashboard_meta[emp]
+            meta_emp["vgv"] += row.VGV
+            meta_emp["receita_societaria"] += soc_acumulada_uni
+            meta_emp["receita_soc_mes"] += soc_mes_uni
+            meta_emp["caixa_acumulado"] += row.RECEITA_CAIXA
+            meta_emp["caixa_mes"] += row.CAIXA_MES
+            meta_emp["tributos_caixa_acumulado"] += row.TRIBUTOS_CAIXA_ACUMULADO
+            meta_emp["tributos_caixa_mes"] += row.TRIBUTOS_CAIXA_MES
+            meta_emp["tributos_soc_acumulado"] += tributos_soc_acumulada_uni
+            meta_emp["tributos_soc_mes"] += tributos_soc_mes_uni
+            
+            meta_emp["pis"] += row.PIS
+            meta_emp["cofins"] += row.COFINS
+            meta_emp["csll"] += row.CSLL
+            meta_emp["irpj"] += row.IRPJ
+            meta_emp["ret"] += row.RET
+            meta_emp["irpj_adicional"] += row.IRPJ_ADICIONAL
+            
+
+            meta_emp["unidades"].append({
+                "unidade": uni, "comprador": comp, "vgv": row.VGV,
+                "caixa_acumulado": row.RECEITA_CAIXA, "caixa_mes": row.CAIXA_MES,
+                "soc_acumulado": soc_acumulada_uni, "soc_mes": soc_mes_uni,
+                "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_caixa_mes": row.TRIBUTOS_CAIXA_MES,
+                "tributos_soc_acumulado": tributos_soc_acumulada_uni, "tributos_soc_mes": tributos_soc_mes_uni,
+                "trib_detalhe_caixa_acumulado": {
+                    "pis": row.PIS, "cofins": row.COFINS, "irpj": row.IRPJ, 
+                    "csll": row.CSLL, "ret": row.RET, "irpj_adicional": row.IRPJ_ADICIONAL
+                },
+                "trib_detalhe_caixa_mes": {
+                    "pis": row.PIS_MES, "cofins": row.COFINS_MES, "irpj": row.IRPJ_MES, 
+                    "csll": row.CSLL_MES, "ret": row.RET_MES, "irpj_adicional": row.IRPJ_ADICIONAL_MES
+                }
+            })
+            
+            # Flat Data for UI rendering
+            data_export.append({
+                "estabelecimento": "1", "empreendimento": emp, "unidade": uni, "comprador": comp,
+                "periodo": anchor_ym + "-01", "vgv": row.VGV,
+                "receita_caixa": row.CAIXA_MES, "base_calculo": row.CAIXA_MES,
+                "receita_societaria": soc_mes_uni, "poc": meta_emp["poc"],
+                "pis": row.PIS_MES, "cofins": row.COFINS_MES, "irpj": row.IRPJ_MES, "csll": row.CSLL_MES, "ret": row.RET_MES,
+                "tributos_total": row.TRIBUTOS_CAIXA_MES, "tributos_societario": tributos_soc_mes_uni,
+                "saldo_clientes": max(0, soc_acumulada_uni - row.RECEITA_CAIXA),
+                "saldo_tributos": max(0, row.RECEITA_CAIXA - soc_acumulada_uni),
+                "caixa_acumulado": row.RECEITA_CAIXA, "soc_acumulado": soc_acumulada_uni,
+                "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_soc_acumulado": tributos_soc_acumulada_uni
+            })
+
+        # Native Evolution Timeline
+        timeline_grouped = df[df['RECEITA_CAIXA'] > 0].groupby('YM').agg({
+             'RECEITA_CAIXA': 'sum',
+             'TRIBUTOS_CAIXA_ACUMULADO': 'sum'
+        }).reset_index()
+        
+        dashboard_timeline = []
+        for row in timeline_grouped.itertuples(index=False):
+             dashboard_timeline.append({
+                  "periodo": str(row.YM),
+                  "caixa": row.RECEITA_CAIXA,
+                  "trib": row.TRIBUTOS_CAIXA_ACUMULADO
+             })
+
+        valid_dashboard_meta = {k: v for k, v in dashboard_meta.items() if len(v["unidades"]) > 0}
+
+        conn.close()
+        return {
+            "dashboard_data": data_export, 
+            "ret_consolidado": [], 
+            "dashboard_meta": valid_dashboard_meta,
+            "dashboard_timeline": dashboard_timeline
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/compare/pessoas")
+def get_compare_pessoas(empresa_id: int | None = None):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        if empresa_id is not None:
+            cur.execute(
+                """
+                SELECT FIRST 300 DISTINCT c.ID, c.NOME, c.CNPJ
+                FROM CLIENTE c
+                JOIN VENDA v ON v.ID_CLIENTE = c.ID
+                WHERE v.CODIGOEMPRESA = ?
+                ORDER BY c.NOME
+                """,
+                (int(empresa_id),),
+            )
+        else:
+            cur.execute("SELECT FIRST 300 ID, NOME, CNPJ FROM CLIENTE ORDER BY NOME")
+        clientes = [{"id": r[0], "nome": r[1].strip() if r[1] else "", "cnpj": r[2].strip() if r[2] else ""} for r in cur.fetchall()]
+        conn.close()
+        return {"clientes": clientes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/compare/empreendimentos")
+def get_compare_empreendimentos(empresa_id: int | None = None):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        if empresa_id is not None:
+            cur.execute("SELECT ID, NOME, CUSTOORCADO, METRAGEMTOTAL FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?", (int(empresa_id),))
+        else:
+            cur.execute("SELECT ID, NOME, CUSTOORCADO, METRAGEMTOTAL FROM EMPREENDIMENTO")
+        emps = [{"id": r[0], "nome": r[1].strip() if r[1] else "", "custo": r[2], "metragem": r[3]} for r in cur.fetchall()]
+        conn.close()
+        return {"empreendimentos": emps}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/questor/gerar-lote")
+async def gerar_lote_questor(payload: QuestorLotePayload):
+    """
+    INJECT DATA INTO QUESTOR ERP.
+    Inserts a new Lote into LOTECTB and its items into LCTOCTB.
+    """
+    try:
+        conn = get_questor_connection()
+        cursor = conn.cursor()
+        
+        # Aqui ficará a transação SQL de Escrita Real (INSERT LOTECTB / LCTOCTB).
+        # Para a validação 01 de hoje, estamos estruturando o Payload recebido do React!
+        
+        lote_id_simulado = 99999
+        print(f"--> [QUESTOR] Recebido Ordem de Lote para Comp: {payload.competencia}")
+        for it in payload.itens:
+            print(f"   => D: {it.contaDebito} | C: {it.contaCredito} | R$ {it.valor}")
+            
+        conn.close()
+        return {"status": "success", "message": "Lote validado e mapeado com sucesso", "lote_id": lote_id_simulado}
+    except Exception as e:
+        print("Erro Questor POST:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/compare/receitas")
+def get_compare_receitas(emp: str = None, empresa_id: int | None = None):
+    try:
+        conn_v = get_conn("vulcano")
+        cur_v = conn_v.cursor()
+        
+        # Pega as vendas do Vulcano
+        venda_query = """
+            SELECT e.NOME, v.TOTALVENDA, v.DTOPER, v.DISTRATO, v.DATADISTRATO, e.OBRACONCLUIDA 
+            FROM VENDA AS v 
+            INNER JOIN EMPREENDIMENTO AS e ON v.IDEMPREENDIMENTO = e.ID
+        """
+        where = []
+        params = []
+        if emp:
+            where.append("e.NOME LIKE ?")
+            params.append('%' + emp + '%')
+        if empresa_id is not None:
+            where.append("v.CODIGOEMPRESA = ?")
+            params.append(int(empresa_id))
+
+        if where:
+            cur_v.execute(venda_query + " WHERE " + " AND ".join(where), tuple(params))
+        else:
+            cur_v.execute(venda_query)
+        vendas_v = cur_v.fetchall()
+        
+        conn_sq = sqlite3.connect(POC_DATABASE_FILE)
+        c_sq = conn_sq.cursor()
+        c_sq.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras')
+        poc_map = {(r[0], r[1]): r[2] for r in c_sq.fetchall()}
+        conn_sq.close()
+        
+        poc_lookup = {}
+        for (p_emp, p_per), p_val in poc_map.items():
+            # If we are filtering, skip POCs that don't match
+            if emp and emp.lower() not in p_emp.lower():
+                continue
+
+            if p_per:
+                val_ym = ""
+                if "/" in p_per:
+                    parts = p_per.strip().split("/")
+                    if len(parts) == 3: val_ym = f"{parts[2]}-{parts[1].zfill(2)}"
+                    elif len(parts) == 2: val_ym = f"{parts[1]}-{parts[0].zfill(2)}"
+                elif "-" in p_per:
+                    parts = p_per.strip().split("-")
+                    if len(parts) >= 2: val_ym = f"{parts[0]}-{parts[1].zfill(2)}"
+                if val_ym:
+                    poc_lookup[(p_emp, val_ym)] = p_val / 100.0
+
+        vgv_ativos = 0.0
+        distratos_totais = 0.0
+        for r in vendas_v:
+            valor = float(r[1] or 0)
+            is_distrato = str(r[3]).strip() == 'S' if r[3] else False
+            if is_distrato: distratos_totais += valor
+            else: vgv_ativos += valor
+            
+            # Se concluída for 'S', forçamos POC 100% no mapa de lookup
+            if len(r) > 5 and r[5]:
+                if str(r[5]).strip().upper() == 'S':
+                    emp_nm_lookup = str(r[0]).strip()
+                    poc_lookup[(emp_nm_lookup, '2000-01')] = 1.0
+
+        # 2. Busca Receita Fiscal (Questor)
+        conn_q = get_conn("questor")
+        cur_q = conn_q.cursor()
+        
+        fiscal_query = """
+            SELECT v.COMPRECEB, SUM(v.VLTOTREC), SUM(v.VLPIS + v.VLCOFINS)
+            FROM EFDUNIDIMOBVENDIDA v
+            JOIN EFDUNIDIMOBILIARIA i ON v.CODIGOEMPRESA = i.CODIGOEMPRESA AND v.CODIGOESTAB = i.CODIGOESTAB AND v.NUMCADIMOB = i.NUMCADIMOB
+        """
+        where_q = []
+        params_q = []
+        if emp:
+            where_q.append("i.IDENTEMP LIKE ?")
+            params_q.append('%' + emp + '%')
+        if empresa_id is not None:
+            where_q.append("v.CODIGOEMPRESA = ?")
+            params_q.append(int(empresa_id))
+
+        if where_q:
+            cur_q.execute(fiscal_query + " WHERE " + " AND ".join(where_q) + " GROUP BY v.COMPRECEB", tuple(params_q))
+        else:
+            cur_q.execute(fiscal_query + " GROUP BY v.COMPRECEB")
+            
+        fiscal_q = cur_q.fetchall()
+        
+        import collections
+        import datetime
+        timeline = collections.defaultdict(lambda: {"receita_caixa": 0.0, "impostos_caixa": 0.0, "receita_poc": 0.0})
+        
+        receita_fiscal_total = 0.0
+        for r in fiscal_q:
+            if not r[0]: continue
+            dt_str = r[0].strftime('%Y-%m') if hasattr(r[0], 'strftime') else str(r[0])[:7]
+            val = float(r[1] or 0)
+            imp = float(r[2] or 0)
+            timeline[dt_str]["receita_caixa"] += val
+            timeline[dt_str]["impostos_caixa"] += imp
+            receita_fiscal_total += val
+
+        for (e_name, ym), poc_val in poc_lookup.items():
+            # Apply percentage to the active VGV of THAT enterprise, but since we are lazy loading vgv_ativos it's shared...
+            # A more precise metric would aggregate VGV per project, but for now we distribute it.
+            timeline[ym]["receita_poc"] += (vgv_ativos * poc_val) / len(poc_lookup) if len(poc_lookup) else 0
+
+        arr_timeline = []
+        for mes in sorted(timeline.keys()):
+            arr_timeline.append({
+                "mes": mes,
+                "receita_caixa": timeline[mes]["receita_caixa"],
+                "receita_poc": timeline[mes]["receita_poc"],
+                "impostos": timeline[mes]["impostos_caixa"]
+            })
+
+        conn_v.close()
+        conn_q.close()
+
+        return {
+            "kpis": {
+                "vgv_total": vgv_ativos,
+                "distratos": distratos_totais,
+                "receita_fiscal": receita_fiscal_total
+            },
+            "timeline": arr_timeline
+        }
+    except Exception as e:
+        if 'conn_v' in locals(): conn_v.close()
+        if 'conn_q' in locals(): conn_q.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ia-historico-relacionado")
+def get_ia_historico_relacionado(emp: str, periodo: str, empresa_id: int | None = None):
+    try:
+        dados_relacionados = []
+        
+        # 1. Puxar do Questor (EFDUNIDIMOBVENDIDA)
+        conn_q = get_conn("questor")
+        cur_q = conn_q.cursor()
+        
+        # Formata mes para YYYY-MM ou YYYY-MM-DD dependendo de como esta gravado
+        # Questor guarda datas. Vamos buscar pelo mes/ano
+        year, month = periodo.split('-') if '-' in periodo else (periodo[:4], periodo[5:7])
+        
+        query_q = """
+            SELECT v.COMPRECEB, v.VLTOTREC, v.NUMCADIMOB, i.DESCUNIDIMOB, i.CPFCNPJADQU, v.VLTOTVEND
+            FROM EFDUNIDIMOBVENDIDA v
+            JOIN EFDUNIDIMOBILIARIA i ON v.CODIGOEMPRESA = i.CODIGOEMPRESA AND v.CODIGOESTAB = i.CODIGOESTAB AND v.NUMCADIMOB = i.NUMCADIMOB
+            WHERE i.IDENTEMP LIKE ? AND EXTRACT(YEAR FROM v.COMPRECEB) = ? AND EXTRACT(MONTH FROM v.COMPRECEB) = ?
+            {where_empresa}
+        """
+        where_empresa = ""
+        params_q = ['%' + emp + '%', int(year), int(month)]
+        if empresa_id is not None:
+            where_empresa = " AND v.CODIGOEMPRESA = ?"
+            params_q.append(int(empresa_id))
+
+        cur_q.execute(query_q.format(where_empresa=where_empresa), tuple(params_q))
+        linhas_q = cur_q.fetchall()
+        
+        for idx, r in enumerate(linhas_q):
+            dt_str = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])
+            dados_relacionados.append({
+                "id": f"q_{idx}",
+                "data": dt_str,
+                "valor": float(r[1] or 0),
+                "unidade": r[3].strip() if r[3] else str(r[2]),
+                "cliente": r[4].strip() if r[4] else "N/A",
+                "origem": "Questor",
+                "categoria": "EFDUNIDIMOBVENDIDA (Rec. Fiscal)"
+            })
+            
+        conn_q.close()
+
+        # 2. Puxar do Vulcano (VENDA e EXT_RECEBER)
+        # Assumindo que temos tabela VENDA
+        conn_v = get_conn("vulcano")
+        cur_v = conn_v.cursor()
+        
+        query_v = """
+            SELECT v.DTOPER, v.TOTALVENDA, e.NOME, v.ID
+            FROM VENDA v
+            JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE e.NOME LIKE ? AND EXTRACT(YEAR FROM v.DTOPER) = ? AND EXTRACT(MONTH FROM v.DTOPER) = ?
+            {where_empresa}
+        """
+        try:
+            where_empresa = ""
+            params_v = ['%' + emp + '%', int(year), int(month)]
+            if empresa_id is not None:
+                where_empresa = " AND v.CODIGOEMPRESA = ?"
+                params_v.append(int(empresa_id))
+
+            cur_v.execute(query_v.format(where_empresa=where_empresa), tuple(params_v))
+            linhas_v = cur_v.fetchall()
+            for idx, r in enumerate(linhas_v):
+                dt_str = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])
+                dados_relacionados.append({
+                    "id": f"v_venda_{idx}",
+                    "data": dt_str,
+                    "valor": float(r[1] or 0),
+                    "unidade": r[2].strip() if r[2] else "N/A",
+                    "cliente": "Vulcano Venda",
+                    "origem": "Vulcano",
+                    "categoria": "VENDA (VGV Bruto)"
+                })
+        except Exception as query_err:
+            print("Erro ao ler tabela VENDA no Vulcano:", query_err)
+            
+        conn_v.close()
+        
+        # Ordenar os dados por data descedente
+        dados_relacionados.sort(key=lambda x: x["data"], reverse=True)
+        
+        return dados_relacionados
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- VULCANO REAL DATA ENDPOINTS ---
+@app.get("/api/vulcano/empresas")
+def get_vulcano_empresas():
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        query = """
+            SELECT DISTINCT e.CODIGOEMPRESA, e.NOMEEMPRESA, e.CNPJ
+            FROM EMPRESA e
+            INNER JOIN EMPREENDIMENTO emp ON emp.CODIGOEMPRESA = e.CODIGOEMPRESA
+            ORDER BY e.CODIGOEMPRESA
+        """
+        cur.execute(query)
+        empresas = [{"id": r[0], "nome": r[1].strip() if r[1] else "", "cnpj": r[2].strip() if r[2] else ""} for r in cur.fetchall()]
+        conn.close()
+        return empresas
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/vulcano/empreendimentos")
+def get_vulcano_empreendimentos(empresa_id: int):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        query = """SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO, CNO, 
+                   CONTACAIXA, CONTACLI, CODIGOCENTROCUSTO, CONTAESTAND, CONTAESTCON,
+                   CONTADESPESA, CONTAREC, CONTAVARIACAO, CONTALUCROACUM,
+                   CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI,
+                   ENDERECO, CONTADEVOLUCAO, CODIGO_HIST_ESTORNO_SALDO, CONTAADICLI
+                   FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?"""
+        cur.execute(query, (empresa_id,))
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        emps = [{
+            "id": r[0], 
+            "nome": dec(r[1]), 
+            "metragem": float(r[2] or 0), 
+            "custo": float(r[3] or 0), 
+            "ret": dec(r[4]), 
+            "data_conclusao": r[5].strftime('%Y-%m-%d') if hasattr(r[5], 'strftime') else dec(r[5]), 
+            "ativo": dec(r[6]),
+            "cno": dec(r[7]),
+            "conta_caixa": r[8], "conta_clientes": r[9], "centro_custo": r[10], "conta_estand": r[11],
+            "conta_estcon": r[12], "conta_despesa": r[13], "conta_rec": r[14], "conta_variacao": r[15],
+            "conta_lucroacum": r[16], "hist_venda": r[17], "hist_recebimento": r[18], 
+            "hist_variacao": r[19], "hist_distrato": r[20],
+            "endereco": dec(r[21]), "conta_devolucao": r[22], "hist_estorno": r[23],
+            "conta_adi_cli": r[24]
+        } for r in cur.fetchall()]
+        conn.close()
+        return emps
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class EmpreendimentoInput(BaseModel):
+    id: int = None
+    nome: str
+    metragem: float = 0
+    custo: float = 0
+    ret: str = 'N'
+    cno: str = ''
+    ativo: str = 'S'
+    endereco: str = ''
+    data_conclusao: str = ''
+    # Accounting Mapping
+    conta_caixa: int = 0
+    conta_clientes: int = 0
+    conta_adi_cli: int = 0
+    conta_estand: int = 0
+    conta_estcon: int = 0
+    conta_despesa: int = 0
+    conta_rec: int = 0
+    conta_variacao: int = 0
+    conta_devolucao: int = 0
+    centro_custo: int = 0
+    # History
+    hist_venda: int = 0
+    hist_recebimento: int = 0
+    hist_variacao: int = 0
+    hist_distrato: int = 0
+    hist_estorno: int = 0
+    empresa_id: int
+
+@app.post("/api/vulcano/empreendimentos")
+def post_vulcano_empreendimento(data: EmpreendimentoInput):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM EMPREENDIMENTO")
+        new_id = cur.fetchone()[0]
+        
+        query = """INSERT INTO EMPREENDIMENTO (
+            ID, CODIGOEMPRESA, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, CNO, ATIVO, ENDERECO, DATACONCLUSAO,
+            CONTACAIXA, CONTACLI, CONTAADICLI, CONTAESTAND, CONTAESTCON, CONTADESPESA, CONTAREC, 
+            CONTAVARIACAO, CONTADEVOLUCAO, CODIGOCENTROCUSTO, 
+            CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI, CODIGO_HIST_ESTORNO_SALDO
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        
+        params = (
+            new_id, 
+            data.empresa_id, 
+            data.nome.encode("cp1252", "ignore"), 
+            data.metragem, 
+            data.custo, 
+            data.ret, 
+            data.cno.encode("cp1252", "ignore"), 
+            data.ativo, 
+            data.endereco.encode("cp1252", "ignore"), 
+            data.data_conclusao or None,
+            data.conta_caixa, data.conta_clientes, data.conta_adi_cli, data.conta_estand, data.conta_estcon, 
+            data.conta_despesa, data.conta_rec, data.conta_variacao, data.conta_devolucao, data.centro_custo,
+            data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_distrato, data.hist_estorno
+        )
+        cur.execute(query, params)
+        conn.commit()
+        conn.close()
+        return {"success": True, "id": new_id}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/vulcano/empreendimentos/{emp_id}")
+def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        query = """UPDATE EMPREENDIMENTO SET 
+            NOME = ?, METRAGEMTOTAL = ?, CUSTOORCADO = ?, RET = ?, CNO = ?, ATIVO = ?, ENDERECO = ?, DATACONCLUSAO = ?,
+            CONTACAIXA = ?, CONTACLI = ?, CONTAADICLI = ?, CONTAESTAND = ?, CONTAESTCON = ?, CONTADESPESA = ?, 
+            CONTAREC = ?, CONTAVARIACAO = ?, CONTADEVOLUCAO = ?, CODIGOCENTROCUSTO = ?, 
+            CODIGOHISTVENDA = ?, CODIGOHISTRECEBIMENTO = ?, CODIGOHISTVARIACAO = ?, CODIGOHISTBAIXAADI = ?, 
+            CODIGO_HIST_ESTORNO_SALDO = ?
+            WHERE ID = ?"""
+        
+        params = (
+            data.nome.encode("cp1252", "ignore"), 
+            data.metragem, 
+            data.custo, 
+            data.ret, 
+            data.cno.encode("cp1252", "ignore"), 
+            data.ativo, 
+            data.endereco.encode("cp1252", "ignore"), 
+            data.data_conclusao or None,
+            data.conta_caixa, data.conta_clientes, data.conta_adi_cli, data.conta_estand, data.conta_estcon, 
+            data.conta_despesa, data.conta_rec, data.conta_variacao, data.conta_devolucao, data.centro_custo,
+            data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_distrato, data.hist_estorno,
+            emp_id
+        )
+        cur.execute(query, params)
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/vulcano/clientes")
+def get_vulcano_clientes(empresa_id: int):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT c.ID, c.NOME, c.CNPJ 
+            FROM CLIENTE c
+            JOIN VENDA v ON c.ID = v.ID_CLIENTE
+            WHERE v.CODIGOEMPRESA = ?
+            ORDER BY c.NOME
+        """, (empresa_id,))
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        clientes = [{
+            "id": r[0], 
+            "nome": dec(r[1]), 
+            "cpf_cnpj": dec(r[2])
+        } for r in cur.fetchall()]
+        conn.close()
+        return clientes
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/vulcano/vendas")
+def get_vulcano_vendas(empresa_id: int):
+    try:
+        conn = get_conn("vulcano")
+        query = """
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO
+            FROM VENDA v
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE v.CODIGOEMPRESA = ?
+            ORDER BY v.DTOPER DESC
+        """
+        df = pd.read_sql_query(query, conn, params=(empresa_id,))
+        df = df.replace({np.nan: None})
+        conn.close()
+
+        def safe_dec(x):
+            if isinstance(x, bytes):
+                return x.decode('cp1252', 'ignore').strip()
+            return str(x).strip() if x is not None else ""
+
+        # Vetorização rápida de decodificação para colunas críticas
+        for col in ['NUMCADIMOB', 'DESCUNIDIMOB', 'CNPJ', 'CLIENTE_NOME', 'DISTRATO', 'PERMUTA', 'EMPREENDIMENTO']:
+            if col in df.columns:
+                df[col] = df[col].map(safe_dec)
+
+        # Vetorização de formatação de data e numéricos
+        df['DTOPER'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+        df['TOTALVENDA'] = df['TOTALVENDA'].fillna(0).astype(float)
+
+        # Mapeamento de colunas direto pro JSON
+        df_mapped = df.rename(columns={
+            'ID': 'id',
+            'NUMCADIMOB': 'num_cad',
+            'DTOPER': 'data',
+            'DESCUNIDIMOB': 'descricao',
+            'CNPJ': 'cliente_cnpj',
+            'CLIENTE_NOME': 'cliente_nome',
+            'TOTALVENDA': 'total',
+            'DISTRATO': 'distrato',
+            'PERMUTA': 'permuta',
+            'EMPREENDIMENTO': 'empreendimento'
+        })
+
+        return df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'permuta', 'empreendimento']].to_dict('records')
+
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/vulcano/vendas/{venda_id}/condicoes")
+def get_vulcano_venda_condicoes(venda_id: int):
+    """
+    Detalhes de condições/parcelas de uma venda (Vulcano):
+    - Formas de pagamento (VENDAFORMAPAGTO)
+    - Parcelas previstas/pagas (RECEBER)
+    - Distrato (se houver)
+    """
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        def dec(v):
+            if v is None:
+                return ""
+            if isinstance(v, bytes):
+                return v.decode("win1252", "ignore").strip()
+            return str(v).strip()
+
+        # Venda (resumo)
+        cur.execute(
+            """
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, v.TOTALVENDA, v.DISTRATO, v.DATADISTRATO, v.PERMUTA, e.NOME, c.ID, c.CNPJ, c.NOME
+            FROM VENDA v
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            WHERE v.ID = ?
+            """,
+            (int(venda_id),),
+        )
+        r = cur.fetchone()
+        if not r:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Venda não encontrada")
+        venda = {
+            "id": r[0],
+            "num_cad": dec(r[1]),
+            "data": r[2].strftime("%Y-%m-%d") if hasattr(r[2], "strftime") else dec(r[2]),
+            "descricao": dec(r[3]),
+            "total": float(r[4] or 0),
+            "distrato": dec(r[5]),
+            "data_distrato": r[6].strftime("%Y-%m-%d") if hasattr(r[6], "strftime") else dec(r[6]),
+            "permuta": dec(r[7]),
+            "empreendimento": dec(r[8]),
+            "cliente": {
+                "id": r[9],
+                "cnpj": dec(r[10]),
+                "nome": dec(r[11]),
+            },
+        }
+
+        # Formas de pagamento (condições)
+        cur.execute(
+            """
+            SELECT ID, DESCRICAO, VALOR, MENSAL, ATIVA, QUANTIDADE_PARCELAS, SALDOATUALIZADO, DATAREPARCELAMENTO
+            FROM VENDAFORMAPAGTO
+            WHERE IDVENDA = ?
+            ORDER BY ID
+            """,
+            (int(venda_id),),
+        )
+        formas = []
+        forma_by_id = {}
+        for rr in cur.fetchall():
+            f = {
+                "id": rr[0],
+                "descricao": dec(rr[1]),
+                "valor": float(rr[2] or 0),
+                "mensal": dec(rr[3]),
+                "ativa": dec(rr[4]),
+                "quantidade_parcelas": int(rr[5] or 0),
+                "saldo_atualizado": float(rr[6] or 0),
+                "data_reparcelamento": rr[7].strftime("%Y-%m-%d") if hasattr(rr[7], "strftime") else dec(rr[7]),
+            }
+            formas.append(f)
+            forma_by_id[f["id"]] = f
+
+        # Parcelas (contas a receber) vinculadas à venda
+        cur.execute(
+            """
+            SELECT r.ID, r.DATA, r.PARCELA, r.VALORPARCELA, r.VALORVARIACAO, r.DESCONTO, r.TOTALPAGO, r.OBS, r.IDVENDAFORMAPAGTO
+            FROM RECEBER r
+            WHERE r.IDVENDA = ?
+            ORDER BY r.DATA, r.ID
+            """,
+            (int(venda_id),),
+        )
+        parcelas = []
+        for rr in cur.fetchall():
+            forma_id = rr[8]
+            parcelas.append(
+                {
+                    "id": rr[0],
+                    "data": rr[1].strftime("%Y-%m-%d") if hasattr(rr[1], "strftime") else dec(rr[1]),
+                    "parcela": dec(rr[2]),
+                    "valor_parcela": float(rr[3] or 0),
+                    "variacao": float(rr[4] or 0),
+                    "desconto": float(rr[5] or 0),
+                    "total_pago": float(rr[6] or 0),
+                    "obs": dec(rr[7]),
+                    "forma_pagto_id": int(forma_id) if forma_id is not None else None,
+                    "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
+                }
+            )
+
+        # Distrato (quando houver)
+        cur.execute(
+            """
+            SELECT ID, DATA, VALORDEVOLVIDO, DATAPAGAMENTO
+            FROM DISTRATO
+            WHERE IDVENDA = ?
+            ORDER BY DATA DESC
+            """,
+            (int(venda_id),),
+        )
+        distratos = []
+        for rr in cur.fetchall():
+            distratos.append(
+                {
+                    "id": rr[0],
+                    "data": rr[1].strftime("%Y-%m-%d") if hasattr(rr[1], "strftime") else dec(rr[1]),
+                    "valor_devolvido": float(rr[2] or 0),
+                    "data_pagamento": rr[3].strftime("%Y-%m-%d") if hasattr(rr[3], "strftime") else dec(rr[3]),
+                }
+            )
+
+        conn.close()
+        return {
+            "venda": venda,
+            "formas_pagto": formas,
+            "parcelas": parcelas,
+            "distratos": distratos,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "conn" in locals() and conn:
+            conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/vulcano/recebimentos")
+def get_vulcano_recebimentos(empresa_id: int):
+    try:
+        conn = get_conn("vulcano")
+        query = """
+            SELECT r.DATA, r.TOTALPAGO, r.VALORPARCELA, r.VALORVARIACAO, v.DESCUNIDIMOB, c.CNPJ, r.PARCELA, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO, r.OBS, r.ID, v.TOTALVENDA, r.DESCONTO
+            FROM RECEBER r
+            JOIN VENDA v ON r.IDVENDA = v.ID
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE v.CODIGOEMPRESA = ?
+            ORDER BY r.DATA DESC
+        """
+        df = pd.read_sql_query(query, conn, params=(empresa_id,))
+        df = df.replace({np.nan: None})
+        conn.close()
+
+        def safe_dec(x):
+            if isinstance(x, bytes):
+                return x.decode('cp1252', 'ignore').strip()
+            return str(x).strip() if x is not None else ""
+
+        for col in ['DESCUNIDIMOB', 'CNPJ', 'PARCELA', 'CLIENTE_NOME', 'EMPREENDIMENTO', 'OBS']:
+            if col in df.columns:
+                df[col] = df[col].map(safe_dec)
+
+        # Vetorização de formatação de data e numéricos
+        df['DATA'] = pd.to_datetime(df['DATA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+        df['TOTALPAGO'] = df['TOTALPAGO'].fillna(0).astype(float)
+        df['VALORPARCELA'] = df['VALORPARCELA'].fillna(0).astype(float)
+        df['VALORVARIACAO'] = df['VALORVARIACAO'].fillna(0).astype(float)
+        df['DESCONTO'] = df['DESCONTO'].fillna(0).astype(float)
+
+        # Mapeamento de colunas direto para JSON
+        df_mapped = df.rename(columns={
+            'ID': 'id',
+            'DATA': 'data',
+            'TOTALPAGO': 'total',
+            'VALORPARCELA': 'parcela',
+            'VALORVARIACAO': 'variacao',
+            'DESCUNIDIMOB': 'descricao_venda',
+            'CNPJ': 'cliente_cnpj',
+            'PARCELA': 'num_parcela',
+            'CLIENTE_NOME': 'cliente',
+            'EMPREENDIMENTO': 'empreendimento',
+            'OBS': 'obs',
+            'DESCONTO': 'desconto'
+        })
+
+        # Preenche possiveis nans que sobraram para serializar com json seguro
+        df_mapped = df_mapped.fillna('')
+        
+        return df_mapped[['id', 'data', 'total', 'parcela', 'variacao', 'descricao_venda', 'cliente_cnpj', 'num_parcela', 'cliente', 'empreendimento', 'obs', 'desconto']].to_dict('records')
+
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class BaixaInput(BaseModel):
+    id_receber: int
+    valor_pago: float
+
+@app.post("/api/vulcano/recebimentos/baixa")
+def baixa_recebimento(data: BaixaInput):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("UPDATE RECEBER SET TOTALPAGO = ? WHERE ID = ?", (data.valor_pago, data.id_receber))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+import pandas as pd
+import re
+
+def _rows_from_parser_result(result):
+    if result is None:
+        return []
+    if isinstance(result, pd.DataFrame):
+        try:
+            cleaned = result.replace({float("nan"): None})
+            return cleaned.to_dict(orient="records")
+        except Exception:
+            return result.to_dict(orient="records")
+    if isinstance(result, list):
+        return result
+    raise HTTPException(
+        status_code=500,
+        detail="O parser deve retornar uma lista de dicts ou um pandas.DataFrame.",
+    )
+
+
+def _sanitize_extracted_rows(rows: list) -> list:
+    """Garante JSON válido no navegador (sem NaN/Infinity, tipos numpy/datetime nativos)."""
+
+    def fix_val(v):
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+        if isinstance(v, float):
+            return v if math.isfinite(v) else None
+        if isinstance(v, str):
+            return v
+        if isinstance(v, (datetime, date)):
+            try:
+                return v.isoformat()
+            except Exception:
+                return str(v)
+        if isinstance(v, time_type):
+            try:
+                return v.isoformat()
+            except Exception:
+                return str(v)
+        if isinstance(v, dict):
+            return {str(k): fix_val(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [fix_val(x) for x in v]
+        if hasattr(v, "item"):
+            try:
+                return fix_val(v.item())
+            except Exception:
+                pass
+        if hasattr(v, "isoformat") and not isinstance(v, (bytes, bytearray)) and not isinstance(v, (dict, list, tuple)):
+            try:
+                return v.isoformat()
+            except Exception:
+                pass
+        return str(v)
+
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append({str(k): fix_val(val) for k, val in row.items()})
+    return out
+
+
+def _extract_with_saved_parser(content: bytes, filename: str, template_id: int):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute("SELECT python_code FROM pdf_parser_templates WHERE id = ?", (int(template_id),))
+    row = c.fetchone()
+    conn.close()
+    if not row or not (row[0] or "").strip():
+        raise HTTPException(status_code=404, detail="Modelo não configurado. Não há regras salvas para este layout.")
+    manifesto = row[0]
+
+    chunks = []
+    max_pages = 4  # Aumentado para 4 (pois o PDF pode ter capa/resumo, 3 paginas deixava a tabela de fora)
+    max_chars = 3000
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        for i, page in enumerate(pdf.pages):
+            if i >= max_pages:
+                break
+            extracted = page.extract_text(layout=True) or page.extract_text() or ""
+            if not extracted.strip():
+                continue
+            chunks.append(f"--- Página {i + 1} ---\n{extracted[:max_chars]}")
+
+    text_content = "\n\n".join(chunks)
+
+    prompt = f"""Você extrai dicionários financeiros de relatórios em PDF com inteligência.
+Retorne APENAS um JSON válido seguindo a chave "recebimentos" contendo a lista.
+
+[MANUAL DE EXTRAÇÃO DA EMPRESA ATUAL (OBRIGO VOCÊ A SEGUIR AS REGRAS ABAIXO!)]
+{manifesto}
+
+[DADOS TEXTUAIS DO PDF MODO LAYOUT PARA LEITURA]
+{text_content}"""
+
+    parsed = _ollama_generate_json(prompt)
+    recs = parsed.get("recebimentos", [])
+    if not isinstance(recs, list):
+        recs = []
+
+    return {
+        "filename": filename,
+        "extracted_data": _sanitize_extracted_rows(recs),
+        "parser_source": "template",
+        "parser_template_id": template_id,
+        "hint": f"Lido via Ollama (modelo: {OLLAMA_MODEL_ID}) usando as regras salvas."
+    }
+
+
+def _heuristic_money_br(value) -> float:
+    if value is None:
+        return 0.0
+    t = re.sub(r"[^\d,.\-]", "", str(value).strip())
+    if not t or t == "-":
+        return 0.0
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    try:
+        return float(t)
+    except ValueError:
+        return 0.0
+
+
+def _heuristic_extract_recebimentos_from_pdf(content: bytes) -> list:
+    """
+    Fallback quando o .py salvo não casa com o PDF: regex tolerante + texto com e sem layout.
+    Não substitui um parser bem afinado; evita 0 linhas em layouts comuns de faturamento.
+    """
+    date_re = re.compile(r"\d{2}/\d{2}/\d{4}")
+    parcel_token = r"(?:\d{1,3}/\d{1,3}|\d{1,3}-\d{1,3})[A-Za-z]*"
+    parcel_re = re.compile(parcel_token)
+    skip_kw = ("FATURAMENTO", "RELATÓRIO", "CNPJ", "EMPREENDIMENTO", "RESUMO", "TOTAIS", "SOMA ")
+
+    def skip_line(line: str) -> bool:
+        if len(line.strip()) < 8:
+            return True
+        if date_re.search(line) is None:
+            return True
+        u = line.upper()
+        if sum(1 for k in ("PARCELA", "VALOR", "VENC", "CLIENTE", "COMPRADOR", "NOME") if k in u) >= 4:
+            return True
+        for k in skip_kw:
+            if k in u and parcel_re.search(line) is None:
+                return True
+        return False
+
+    p4 = re.compile(
+        rf"(?P<nome>.+?)\s+(?P<dt>\d{{2}}/\d{{2}}/\d{{4}})\s+(?P<parc>{parcel_token})\s+"
+        r"(?P<v1>[\d\.,\-]+)\s+(?P<v2>[\d\.,\-]+)\s+(?P<v3>[\d\.,\-]+)\s+(?P<v4>[\d\.,\-]+)\s*$",
+        re.UNICODE,
+    )
+    p3 = re.compile(
+        rf"(?P<nome>.+?)\s+(?P<dt>\d{{2}}/\d{{2}}/\d{{4}})\s+(?P<parc>{parcel_token})\s+"
+        r"(?P<v1>[\d\.,\-]+)\s+(?P<v2>[\d\.,\-]+)\s+(?P<v3>[\d\.,\-]+)\s*$",
+        re.UNICODE,
+    )
+
+    results = []
+    seen_keys: set = set()
+    seen_norm_lines: set = set()
+
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+        for page in pdf.pages:
+            texts = []
+            a = page.extract_text(layout=True) or ""
+            b = page.extract_text() or ""
+            if a.strip():
+                texts.append(a)
+            if b.strip() and b != a:
+                texts.append(b)
+            for text in texts:
+                for raw in text.splitlines():
+                    line = " ".join(raw.split())
+                    norm = line.strip()
+                    if not norm or norm in seen_norm_lines:
+                        continue
+                    seen_norm_lines.add(norm)
+                    if skip_line(line):
+                        continue
+                    m = p4.search(line) or p3.search(line)
+                    if not m:
+                        continue
+                    nome = re.sub(r"^[|\s\-–:.]+", "", m.group("nome"))
+                    nome = re.sub(r"[|\s\-–:.]+$", "", nome).strip()
+                    if len(nome) < 2:
+                        continue
+                    dt = m.group("dt")
+                    parc = m.group("parc").replace("-", "/")
+                    v1 = _heuristic_money_br(m.group("v1"))
+                    v2 = _heuristic_money_br(m.group("v2"))
+                    v3 = _heuristic_money_br(m.group("v3"))
+                    _gd = m.groupdict()
+                    v4 = (
+                        _heuristic_money_br(_gd["v4"])
+                        if _gd.get("v4") is not None
+                        else 0.0
+                    )
+                    key = (nome, dt, parc, round(v1, 2), round(v2, 2))
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    results.append(
+                        {
+                            "comprador": nome,
+                            "data": dt,
+                            "parcela": parc,
+                            "valor_parcela": v1,
+                            "total_pago": v2,
+                            "desconto": v3,
+                            "acrescimo": v4,
+                        }
+                    )
+    return results
+
+
+@app.post("/api/extract-pdf")
+async def extract_pdf(
+    file: UploadFile = File(...),
+    parser_template_id: int | None = Query(default=None),
+    empresa_id: int | None = Query(default=None),
+    allow_gemini_fallback: bool = Query(default=True),
+    heuristic_fallback: bool = Query(default=True),
+    import_mode: str = Form(default="recebimentos")
+):
+    """
+    Extrai dados do PDF. Envie `parser_template_id` ou `empresa_id` na **query string** (recomendado
+    com multipart/file — evita falha de alguns clients com Form+File). Roda o script salvo sem Gemini.
+    Se só `empresa_id` e houver padrão em empresa_parser_padrao, usa esse modelo. Senão: IA.
+    """
+    try:
+        content = await file.read()
+        mime_type = file.content_type or "application/pdf"
+        
+        chunks = []
+        max_pages = 18
+        max_chars = 9000
+        
+        if "pdf" in mime_type.lower():
+            try:
+                with pdfplumber.open(io.BytesIO(content)) as pdf:
+                    for i, page in enumerate(pdf.pages):
+                        if i >= max_pages:
+                            break
+                        extracted = page.extract_text(layout=True) or page.extract_text() or ""
+                        if extracted.strip():
+                            chunks.append(f"--- Página {i + 1} ---\n{extracted[:max_chars]}")
+            except Exception:
+                pass
+
+        is_vision = False
+        if not chunks:
+            if not ("image" in mime_type.lower() or "pdf" in mime_type.lower()):
+                 raise HTTPException(status_code=400, detail="Formato não suportado. Envie PDF ou Imagem.")
+            is_vision = True
+            combined = "[Documento Multimodal anexado diretamente à Inteligência (Vision)]"
+        else:
+            combined = "\n\n".join(chunks)
+
+        global LAST_RAW_PDF_TEXT_FOR_PARSER
+        LAST_RAW_PDF_TEXT_FOR_PARSER = combined[:4000]
+        raw_text_lines = [ln for ln in LAST_RAW_PDF_TEXT_FOR_PARSER.split("\n") if ln.strip()]
+
+        tid = parser_template_id
+        if is_vision or import_mode != 'recebimentos':
+            tid = None
+            allow_gemini_fallback = True
+            
+        if tid is None and empresa_id is not None and import_mode == 'recebimentos':
+            conn = sqlite3.connect(POC_DATABASE_FILE)
+            c = conn.cursor()
+            c.execute(
+                "SELECT parser_template_id FROM empresa_parser_padrao WHERE empresa_id = ?",
+                (int(empresa_id),),
+            )
+            row = c.fetchone()
+            conn.close()
+            if row and row[0] is not None:
+                tid = int(row[0])
+
+        template_result = None
+        if tid is not None:
+            try:
+                # Or LLM inference might take too long
+                template_result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _extract_with_saved_parser,
+                        content,
+                        file.filename or "upload.pdf",
+                        tid,
+                    ),
+                    timeout=600.0,
+                )
+            except asyncio.TimeoutError:
+                return {
+                    "filename": file.filename or "upload.pdf",
+                    "extracted_data": [],
+                    "parser_source": "template",
+                    "parser_template_id": int(tid),
+                    "hint": "O Ollama excedeu o tempo limite de 10 minutos (Processamento pesado de PDF no processador/RAM). Tente um PDF menor ou um modelo mais leve.",
+                    "error": True,
+                    "raw_text_lines": raw_text_lines
+                }
+            ex_list = (
+                template_result.get("extracted_data")
+                if isinstance(template_result.get("extracted_data"), list)
+                else []
+            )
+            if (
+                heuristic_fallback
+                and isinstance(template_result, dict)
+                and len(ex_list) == 0
+            ):
+                recs_h = await asyncio.to_thread(_heuristic_extract_recebimentos_from_pdf, content)
+                if recs_h:
+                    return {
+                        "filename": file.filename or "upload.pdf",
+                        "extracted_data": _sanitize_extracted_rows(recs_h),
+                        "parser_source": "heuristic",
+                        "parser_template_id": int(tid),
+                        "hint": "OLLAMA Não retornou linhas via Prompt. Caímos na leitura heurística bruta; use dados com cautela ou gere novas Regras.",
+                        "raw_text_lines": raw_text_lines
+                    }
+            # Se o modelo não encontrou linhas, opcionalmente cai para Gemini para não travar o operador.
+            if (
+                allow_gemini_fallback
+                and isinstance(template_result, dict)
+                and isinstance(template_result.get("extracted_data"), list)
+                and len(template_result.get("extracted_data")) == 0
+            ):
+                template_id_used = template_result.get("parser_template_id") or tid
+                # segue para Gemini abaixo, mas preserva metadado do template
+                tid = int(template_id_used) if template_id_used is not None else tid
+                template_result = {"parser_template_id": tid}
+            else:
+                if isinstance(template_result, dict):
+                    template_result["raw_text_lines"] = raw_text_lines
+                return template_result
+
+        _require_gemini_key()
+
+        if import_mode == 'vendas':
+            prompt = f"""Você extrai dados comerciais e financeiros estruturados de CONTRATOS, FICHAS ou EXTRATOS DE VENDAS IMOBILIÁRIAS.
+Texto vem de PDF extraído via OCR ou text.
+
+Sua tarefa é extrair os dados e adequá-los ao SCHEMA CANÔNICO de VENDA (para o banco Vulcano).
+Regras de Mapeamento:
+1. 'cliente_doc': CPF ou CNPJ do Comprador. Retorne somente os números ou formatado.
+2. 'empreendimento': Nome do empreendimento/condomínio.
+3. 'unidade': Número do lote, apartamento ou unidade.
+4. 'data_venda': Data da operação/assinatura (DTOPER).
+5. 'numero_contrato': Número do contrato.
+6. 'valor_total': Valor Total da Venda/Transação (float, ex: 1234.56).
+7. 'condicoes_pagamento': Uma lista de objetos detalhando a forma de pagamento, com 'descricao' (ex: Sinal, Mensais, Financiamento), 'valor' (float) e 'quantidade_parcelas' (int).
+
+SAÍDA
+Retorne APENAS JSON válido, sem omitir as chaves principais:
+{{
+  "registros": [
+    {{
+      "cliente_doc": "...", "empreendimento": "...", "unidade": "...",
+      "data_venda": "...", "numero_contrato": "...", "valor_total": 0.0,
+      "condicoes_pagamento": [
+        {{ "descricao": "...", "valor": 0.0, "quantidade_parcelas": 1 }}
+      ]
+    }}
+  ]
+}}
+Não inclua markdown, comentários ou texto fora do JSON.
+
+Text extraído:
+{combined}
+"""
+        else:
+            prompt = f"""Você extrai linhas de RECEBIMENTOS/PAGAMENTOS/PARCELAS de relatórios imobiliários.
+Texto vem de PDF com `pdfplumber` (colunas desalinhadas, quebras de linha).
+
+Sua tarefa é extrair os dados e adequá-los ao SCHEMA CANÔNICO OBRIGATÓRIO (para o banco Vulcano).
+Regras de Mapeamento:
+1. 'comprador': Nome do cliente. Limpe sujeiras como '|'.
+2. 'cpf_cnpj': CPF ou CNPJ formatado ou apenas números. SEPARE do nome se vierem juntos.
+3. 'empreendimento': Nome do prédio/projeto (frequentemente no cabeçalho geral ou colunas).
+4. 'unidade': Número do apartamento/lote (ex: 1403, 102).
+5. 'dt_vencimento': Data original de corte da parcela.
+6. 'dt_pagamento': Data da baixa/recebimento no banco.
+7. 'parcela': Número (ex: 12/41 PM). Ignorar linhas sem parcela.
+8. Valores (float, ex: 1234.56): 'valor_raiz', 'descontos', 'acrescimos_variacoes' (some Juros+Multa+Seguro+Taxas), 'total_pago' (Líquido). Se não achar, use 0.0.
+
+SAÍDA
+Retorne APENAS JSON válido, sem omitir as chaves (se não existir, deixe "", null ou 0.0):
+{{
+  "registros": [
+    {{
+      "comprador": "...", "cpf_cnpj": "...", "empreendimento": "...", "unidade": "...",
+      "dt_vencimento": "...", "dt_pagamento": "...", "parcela": "...",
+      "valor_raiz": 0.0, "descontos": 0.0, "acrescimos_variacoes": 0.0, "total_pago": 0.0
+    }}
+  ]
+}}
+Não inclua markdown, comentários ou texto fora do JSON. Extraia TODAS as linhas similares.
+
+Text extraído:
+{combined}
+"""
+        try:
+            kwargs = {"prompt": prompt}
+            if is_vision:
+                kwargs["file_data"] = content
+                kwargs["mime_type"] = mime_type
+                
+            parsed = await asyncio.wait_for(
+                asyncio.to_thread(_gemini_generate_json, **kwargs),
+                timeout=GEMINI_EXTRACT_TIMEOUT_SEC,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=504,
+                detail=(
+                    f"Gemini excedeu {int(GEMINI_EXTRACT_TIMEOUT_SEC)}s na extração (modelo: {GEMINI_MODEL_ID}). "
+                    f"Aumente GEMINI_EXTRACT_TIMEOUT_SEC no backend/.env ou troque GEMINI_MODEL."
+                ),
+            )
+        recs = parsed.get("registros", parsed.get("recebimentos", []))
+        if not isinstance(recs, list):
+            recs = []
+        recs = _sanitize_extracted_rows(recs)
+        out = {
+            "filename": file.filename,
+            "extracted_data": recs,
+            "parser_source": "gemini" if not template_result else "gemini_fallback",
+            "pages_used": len(chunks),
+            "raw_text_lines": raw_text_lines
+        }
+        if template_result and template_result.get("parser_template_id") is not None:
+            out["parser_template_id"] = int(template_result["parser_template_id"])
+        return out
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar PDF: {str(e)}")
+
+class ParserChatInput(BaseModel):
+    instruction: str
+    current_data: list
+
+@app.post("/api/parser/chat")
+def parser_chat(data: ParserChatInput):
+    import json
+    import copy
+    try:
+        _require_gemini_key()
+        n = len(data.current_data)
+        # Passaremos toda a tabela para que ele possa gerar o índice corretamente para todas as linhas afetadas (Gemini aguenta o contexto).
+        preview = data.current_data 
+        idx_hint = f"Temos {n} itens no total." if n else "Vazia."
+        prompt = f"""Você é um especialista em engenharia de dados (Data Wrangler).
+O usuário deseja higienizar ou corrigir falhas contínuas na tabela JSON extraída do PDF.
+Instrução do usuário (Frequentemente ele dará apenas 2 ou 3 amostras do Texto PDF): "{data.instruction}"
+
+[ATENÇÃO ESTREMA]
+A instrução do usuário pode usar exemplos isolados (ex: "A unidade nessas linhas é 102"), MAS ISSO É UMA REGRA DE HIGIENIZAÇÃO GERAL. 
+Sua tarefa é INFERIR A REGRA LÓGICA (ex: A unidade pegou o valor errado) E APLICÁ-LA EM TODAS AS {n} LINHAS DA TABELA ABAIXO. Avalie minuciosamente TODAS as posições e corrija TODAS que sofrem do mesmo erro de padrão. Se ele falou sobre as "unidades", provavelmente TODAS AS UNIDADES estão estragadas com o valor contábil.
+
+Tabela Completa Atual:
+{json.dumps(preview, ensure_ascii=False, indent=2)}
+
+NÃO DEVOLVA A TABELA INTEIRA! Devolva um array gigante de 'operations' para consertar TODOS os índices afetados. Use "update" para dados e "delete" para sumir com lixo.
+Formato:
+{{
+  "operations": [
+    {{ "action": "update", "index": 0, "field": "data", "value": "01/01/2025" }},
+    {{ "action": "delete", "index": 5 }}
+  ]
+}}
+Se não houver nada a fazer, retorne {{"operations": []}}.
+"""
+        parsed = _gemini_generate_json(prompt)
+        ops = parsed.get("operations", [])
+        if not isinstance(ops, list):
+            ops = []
+
+        updated_data = copy.deepcopy(data.current_data)
+        updates = [op for op in ops if op.get("action") == "update" and "index" in op and "field" in op]
+        deletes = [op for op in ops if op.get("action") == "delete" and "index" in op]
+
+        errors = 0
+        for op in updates:
+            try:
+                idx = int(op["index"])
+                if 0 <= idx < len(updated_data):
+                    updated_data[idx][op["field"]] = str(op.get("value", ""))
+            except (ValueError, TypeError):
+                errors += 1
+
+        deletes.sort(
+            key=lambda x: int(x.get("index", -1))
+            if isinstance(x.get("index"), (int, str)) and str(x.get("index")).isdigit()
+            else -1,
+            reverse=True,
+        )
+        for op in deletes:
+            try:
+                idx = int(op["index"])
+                if 0 <= idx < len(updated_data):
+                    updated_data.pop(idx)
+            except (ValueError, TypeError):
+                errors += 1
+
+        if "updated_data" in parsed and isinstance(parsed["updated_data"], list) and not ops:
+            updated_data = parsed["updated_data"]
+
+        return {
+            "message": f"Tabela ajustada (Gemini). ({len(updates)} ups, {len(deletes)} dels"
+            + (f", {errors} erros" if errors else "")
+            + ")",
+            "updated_data": updated_data,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+import os
+import time
+
+class ParserSaveInput(BaseModel):
+    history: list
+    final_data: list
+    nome: str | None = None
+    descricao: str | None = None
+    empresa_id: int | None = None
+    definir_padrao_empresa: bool = True
+
+def _gemini_generate_python_plain(prompt: str) -> str:
+    """Fallback quando JSON com python_code fica grande ou inválido."""
+    _require_gemini_key()
+    try:
+        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        resp = model.generate_content(
+            prompt
+            + "\n\nResponda APENAS com o código-fonte Python completo. Sem markdown, sem explicação."
+        )
+        text = (resp.text or "").strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            if len(lines) > 2:
+                text = "\n".join(lines[1:-1])
+                if text.lower().startswith("python"):
+                    text = text[6:].lstrip("\n")
+        return text
+    except Exception as e:
+        if "429" in str(e) or "ResourceExhausted" in str(e) or "Quota" in str(e):
+            raise HTTPException(status_code=429, detail="Limite de requisições API Gemini (Free Tier) excedido ao gerar script. Aguarde 1 minuto.")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar script Python via Gemini: {str(e)[:200]}")
+
+class ParserSaveInput(BaseModel):
+    nome: str | None = None
+    descricao: str | None = None
+    history: list[dict[str, str]]
+    final_data: list[dict[str, str | float]]
+    empresa_id: int | None = None
+    definir_padrao_empresa: bool = False
+
+@app.post("/api/parser/save")
+def parser_save(data: ParserSaveInput):
+    import json
+    try:
+        _require_gemini_key()
+        chat_context = ""
+        for msg in data.history:
+            chat_context += f"[{msg.get('role', '?').upper()}]: {msg.get('content', '')}\n"
+
+        sample = data.final_data[:5] if data.final_data else []
+        prompt = f"""Você é um Engenheiro de Dados Sênior criando REGRAS ESTÁTICAS DE EXTRAÇÃO ("Manifesto") para um modelo Menor e Restrito (Qwen 3B).
+Ele não tem raciocínio profundo, então você deve guiá-lo ESCREVENDO AS POSIÇÕES ESPACIAIS LITERAIS.
+Com base neste histórico de chat de correções (se houver):
+{chat_context}
+
+E no formato JSON de amostra:
+{json.dumps(sample, ensure_ascii=False, indent=2)}
+
+Sua tarefa é ESCREVER UM TEXTO DE ATÉ 12 LINHAS ensinando LITERALMENTE o Qwen 3B a mapear o SCHEMA VULCANO.
+Instrua-o com regras rústicas de posicionamento. Exemplo de linguagem: "O CNPJ está grudado na col 2. A Unidade está na col 4 da primeira reta da linha. Os valores estão agrupados na Reta Final: o 1º é a parcela, o 2º é Acréscimo, o 5º é Desconto. Retorne tudo como float 0.0."
+OBRIGATÓRIO: Force o Qwen a extrair estritamente as exatas chaves JSON expostas na amostra acima, definindo posições claras para `cpf_cnpj`, `unidade`, as duas datas e toda a consolidação de pagamentos (total_pago, valor_raiz, descontos, acrescimos_variacoes).
+
+O Qwen extrairá TODAS as linhas financeiras que achar parecidas e ignorará o resto. O formato de saída central dele DEVE ser `{{"recebimentos": [...]}}`.
+
+Retorne APENAS um JSON com a chave `python_code` cujo valor seja este pequeno guia gerado em texto bruto (sem aspas markdown).
+"""
+        code_to_save = None
+        try:
+            parsed = _gemini_generate_json(prompt)
+            pc = parsed.get("python_code")
+            if isinstance(pc, str) and pc.strip():
+                code_to_save = pc
+        except Exception:
+            pass
+        if not code_to_save or not code_to_save.strip():
+            code_to_save = (
+                "Siga estruturação de recebimentos. "
+                "Retorne chaves de recebimento. Ignore todos os valores lixo."
+            )
+
+        template_id = None
+        nome_registro = (data.nome or "").strip() or f"Parser_Prompt_{int(time.time())}"
+        descricao = (data.descricao or "Gerado com Assistant").strip()
+        filename = "sem_codigo_ollama.txt"
+        
+        try:
+            conn = sqlite3.connect(POC_DATABASE_FILE)
+            c = conn.cursor()
+            sample_store = json.dumps(sample, ensure_ascii=False)[:80000]
+            c.execute(
+                """INSERT INTO pdf_parser_templates (nome, descricao, python_code, sample_json, arquivo_gerado)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (nome_registro, descricao, code_to_save, sample_store, filename),
+            )
+            template_id = c.lastrowid
+            if data.empresa_id is not None and data.definir_padrao_empresa:
+                c.execute(
+                    """INSERT INTO empresa_parser_padrao (empresa_id, parser_template_id)
+                       VALUES (?, ?)
+                       ON CONFLICT(empresa_id) DO UPDATE SET
+                         parser_template_id=excluded.parser_template_id,
+                         data_atualizacao=CURRENT_TIMESTAMP""",
+                    (int(data.empresa_id), template_id),
+                )
+            conn.commit()
+            conn.close()
+        except Exception as db_err:
+            print("parser_save DB:", db_err)
+
+        return {
+            "filename": filename,
+            "filepath": "banco_de_dados",
+            "status": "Manifesto Ollama salvo com sucesso" if template_id else "Erro ao salvar o manifesto no banco.",
+            "code": code_to_save,
+            "python_code": code_to_save,
+            "template_id": template_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ParserTemplateSetDefault(BaseModel):
+    empresa_id: int
+    parser_template_id: int
+
+
+@app.get("/api/parser/templates")
+def list_parser_templates(empresa_id: int | None = None):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    padrao_id = None
+    if empresa_id is not None:
+        c.execute(
+            "SELECT parser_template_id FROM empresa_parser_padrao WHERE empresa_id = ?",
+            (int(empresa_id),),
+        )
+        row = c.fetchone()
+        if row:
+            padrao_id = row[0]
+    c.execute(
+        "SELECT id, nome, descricao, data_criacao, arquivo_gerado FROM pdf_parser_templates ORDER BY id DESC"
+    )
+    rows = c.fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "id": r[0],
+                "nome": r[1],
+                "descricao": r[2],
+                "data_criacao": r[3],
+                "arquivo_gerado": r[4],
+                "is_padrao_empresa": padrao_id is not None and r[0] == padrao_id,
+            }
+        )
+    return out
+
+@app.delete("/api/parser/template/{template_id}")
+def delete_parser_template(template_id: int):
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        c = conn.cursor()
+        c.execute("SELECT arquivo_gerado FROM pdf_parser_templates WHERE id = ?", (template_id,))
+        row = c.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Template não encontrado.")
+        
+        c.execute("DELETE FROM pdf_parser_templates WHERE id = ?", (template_id,))
+        c.execute("UPDATE empresa_parser_padrao SET parser_template_id = NULL WHERE parser_template_id = ?", (template_id,))
+        conn.commit()
+        conn.close()
+        
+        try:
+            if row[0]:
+                filepath = os.path.join(os.getcwd(), "parsers", row[0])
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+        except Exception:
+            pass
+            
+        return {"status": "ok", "message": "Template excluído com sucesso."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/parser/template/{template_id}")
+def delete_parser_template(template_id: int):
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        c = conn.cursor()
+        c.execute("SELECT arquivo_gerado FROM pdf_parser_templates WHERE id = ?", (template_id,))
+        row = c.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Template não encontrado.")
+        
+        c.execute("DELETE FROM pdf_parser_templates WHERE id = ?", (template_id,))
+        c.execute("UPDATE empresa_parser_padrao SET parser_template_id = NULL WHERE parser_template_id = ?", (template_id,))
+        conn.commit()
+        conn.close()
+        
+        try:
+            if row[0]:
+                filepath = os.path.join(os.getcwd(), "parsers", row[0])
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+        except Exception:
+            pass
+            
+        return {"status": "ok", "message": "Template excluído com sucesso."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/parser/templates/{template_id}")
+def get_parser_template(template_id: int):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute(
+        "SELECT id, nome, descricao, python_code, sample_json, data_criacao, arquivo_gerado FROM pdf_parser_templates WHERE id = ?",
+        (template_id,),
+    )
+    r = c.fetchone()
+    conn.close()
+    if not r:
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    return {
+        "id": r[0],
+        "nome": r[1],
+        "descricao": r[2],
+        "python_code": r[3],
+        "sample_json": r[4],
+        "data_criacao": r[5],
+        "arquivo_gerado": r[6],
+    }
+
+
+@app.post("/api/parser/templates/set-default")
+def set_parser_template_default(body: ParserTemplateSetDefault):
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    c = conn.cursor()
+    c.execute("SELECT 1 FROM pdf_parser_templates WHERE id = ?", (body.parser_template_id,))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Template não encontrado")
+    c.execute(
+        """INSERT INTO empresa_parser_padrao (empresa_id, parser_template_id)
+           VALUES (?, ?)
+           ON CONFLICT(empresa_id) DO UPDATE SET
+             parser_template_id=excluded.parser_template_id,
+             data_atualizacao=CURRENT_TIMESTAMP""",
+        (int(body.empresa_id), int(body.parser_template_id)),
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+@app.post("/api/upload-planilha")
+async def upload_planilha(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        if file.filename.lower().endswith('.csv'):
+            try:
+                df = pd.read_csv(io.BytesIO(content), sep=None, engine='python')
+            except:
+                df = pd.read_csv(io.BytesIO(content), encoding='latin1', sep=None, engine='python')
+        elif file.filename.lower().endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Formato não suportado. Use CSV ou Excel.")
+            
+        columns = df.columns.tolist()
+        df = df.fillna('')
+        data_preview = df.head(10).to_dict(orient='records')
+        
+        return {
+            "filename": file.filename,
+            "columns": columns,
+            "preview": data_preview
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
+
+@app.post("/api/schema-match")
+def schema_match(payload: dict):
+    import json
+    columns = payload.get("columns", [])
+    target = payload.get("target_table", "")
+
+    prompt = f"""You are an expert database administrator and data analyst.
+Map the following imported worksheet columns:
+{json.dumps(columns, ensure_ascii=False)}
+
+To a valid schema for the target context: {target}.
+
+Return ONLY a valid JSON object whose keys are the exact source column names (strings) and values are the target field names (strings) or null if no mapping.
+No markdown, no explanation, no wrapper keys — only the mapping object."""
+
+    try:
+        mapping = _gemini_generate_json(prompt)
+        if not isinstance(mapping, dict):
+            raise HTTPException(status_code=500, detail="Gemini não retornou um objeto JSON de mapeamento")
+        return {"mapping": mapping}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao analisar schema com Gemini: {str(e)}")
+
+
+
+# --- VULCANO MVP DAY 1 CRUD ENDPOINTS ---
+from fastapi import Request
+
+class EmpreendimentoInput(BaseModel):
+    empresa_id: int
+    nome: str
+    metragem: float | None = 0.0
+    custo: float | None = 0.0
+    ret: str | None = "N"
+    cno: str | None = ""
+    conta_caixa: str | None = None
+    conta_clientes: str | None = None
+    centro_custo: str | None = None
+    conta_estand: str | None = None
+    conta_estcon: str | None = None
+    conta_despesa: str | None = None
+    conta_rec: str | None = None
+    conta_variacao: str | None = None
+    conta_lucroacum: str | None = None
+    hist_venda: str | None = None
+    hist_recebimento: str | None = None
+    hist_variacao: str | None = None
+    hist_distrato: str | None = None
+    endereco: str | None = None
+    conta_devolucao: str | None = None
+    hist_estorno: str | None = None
+
+@app.post("/api/vulcano/empreendimentos")
+async def post_empreendimentos(data: EmpreendimentoInput):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        # Lock transacional básico com generator max ID
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM EMPREENDIMENTO")
+        new_id = cur.fetchone()[0]
+        
+        def s_int(v):
+            if not v: return None
+            v_str = str(v).split(' - ')[0].strip()
+            return int(v_str) if v_str.isdigit() else None
+        
+        fields = ["ID", "NOME", "METRAGEMTOTAL", "CUSTOORCADO", "RET", "CODIGOEMPRESA", "ATIVO", "CNO", 
+                  "CONTACAIXA", "CONTACLI", "CODIGOCENTROCUSTO", "CONTAESTAND", "CONTAESTCON", 
+                  "CONTADESPESA", "CONTAREC", "CONTAVARIACAO", "CONTALUCROACUM", 
+                  "CODIGOHISTVENDA", "CODIGOHISTRECEBIMENTO", "CODIGOHISTVARIACAO", "CODIGOHISTBAIXAADI",
+                  "ENDERECO", "CONTADEVOLUCAO", "CODIGO_HIST_ESTORNO_SALDO"]
+        
+        query = f"INSERT INTO EMPREENDIMENTO ({','.join(fields)}) VALUES ({','.join(['?']*len(fields))})"
+        
+        params = (
+            new_id, str(data.nome), float(data.metragem or 0), float(data.custo or 0),
+            data.ret, data.empresa_id, "S", str(data.cno or ""),
+            s_int(data.conta_caixa), s_int(data.conta_clientes), s_int(data.centro_custo),
+            s_int(data.conta_estand), s_int(data.conta_estcon), s_int(data.conta_despesa),
+            s_int(data.conta_rec), s_int(data.conta_variacao), s_int(data.conta_lucroacum),
+            s_int(data.hist_venda), s_int(data.hist_recebimento), 
+            s_int(data.hist_variacao), s_int(data.hist_distrato),
+            data.endereco, s_int(data.conta_devolucao), s_int(data.hist_estorno)
+        )
+        cur.execute(query, params)
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "id": new_id, "message": "Empreendimento cadastrado com sucesso!"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=f"Falha de gravação no banco Vulcano: {str(e)}")
+
+@app.put("/api/vulcano/empreendimentos/{emp_id}")
+async def put_empreendimentos(emp_id: int, data: EmpreendimentoInput):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        def s_int(v):
+            if not v: return None
+            v_str = str(v).split(' - ')[0].strip()
+            return int(v_str) if v_str.isdigit() else None
+            
+        query = """UPDATE EMPREENDIMENTO SET 
+                   NOME=?, METRAGEMTOTAL=?, CUSTOORCADO=?, RET=?, CNO=?,
+                   CONTACAIXA=?, CONTACLI=?, CODIGOCENTROCUSTO=?, CONTAESTAND=?, CONTAESTCON=?,
+                   CONTADESPESA=?, CONTAREC=?, CONTAVARIACAO=?, CONTALUCROACUM=?,
+                   CODIGOHISTVENDA=?, CODIGOHISTRECEBIMENTO=?, CODIGOHISTVARIACAO=?, CODIGOHISTBAIXAADI=?,
+                   ENDERECO=?, CONTADEVOLUCAO=?, CODIGO_HIST_ESTORNO_SALDO=?
+                   WHERE ID=?"""
+                   
+        params = (
+            str(data.nome), float(data.metragem or 0), float(data.custo or 0),
+            data.ret, str(data.cno or ""),
+            s_int(data.conta_caixa), s_int(data.conta_clientes), s_int(data.centro_custo),
+            s_int(data.conta_estand), s_int(data.conta_estcon), s_int(data.conta_despesa),
+            s_int(data.conta_rec), s_int(data.conta_variacao), s_int(data.conta_lucroacum),
+            s_int(data.hist_venda), s_int(data.hist_recebimento), 
+            s_int(data.hist_variacao), s_int(data.hist_distrato),
+            data.endereco, s_int(data.conta_devolucao), s_int(data.hist_estorno),
+            emp_id
+        )
+        cur.execute(query, params)
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "message": "Empreendimento atualizado com sucesso!"}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=f"Falha de atualização Vulcano: {str(e)}")
+
+@app.delete("/api/vulcano/empreendimentos/{emp_id}")
+def delete_empreendimento(emp_id: int):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        cur.execute("SELECT COUNT(1) FROM VENDA WHERE IDEMPREENDIMENTO = ?", (emp_id,))
+        count_vendas = cur.fetchone()[0]
+        if count_vendas > 0:
+            raise HTTPException(status_code=400, detail=f"Ação bloqueada: Existem {count_vendas} vendas vinculadas a esta infraestrutura.")
+            
+        cur.execute("DELETE FROM UNIDADE WHERE ID_BLOCO IN (SELECT ID FROM BLOCO WHERE IDEMPREENDIMENTO = ?)", (emp_id,))
+        cur.execute("DELETE FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (emp_id,))
+        cur.execute("DELETE FROM EMPREENDIMENTO WHERE ID = ?", (emp_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Empreendimento removido permanentemente."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=f"Erro interno ao deletar: {str(e)}")
+
+@app.post("/api/vulcano/blocos")
+async def create_bloco(request: Request):
+    conn = None
+    try:
+        data = await request.json()
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM BLOCO")
+        new_id = cur.fetchone()[0]
+        
+        id_emp = int(data.get("id_empreendimento", 0))
+        nome_bloco = str(data.get("nome", "NOVO BLOCO"))
+        
+        query = "INSERT INTO BLOCO (ID, IDEMPREENDIMENTO, NOME) VALUES (?, ?, ?)"
+        cur.execute(query, (new_id, id_emp, nome_bloco.encode('cp1252', 'ignore')))
+        
+        conn.commit()
+        conn.close()
+        return {"id": new_id, "success": True}
+    except Exception as e:
+        print(f"Error in create_bloco: {e}")
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/vulcano/blocos/{bloco_id}")
+async def update_bloco(bloco_id: int, request: Request):
+    conn = None
+    try:
+        data = await request.json()
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        nome_bloco = str(data.get("nome", ""))
+        query = "UPDATE BLOCO SET NOME = ? WHERE ID = ?"
+        cur.execute(query, (nome_bloco.encode('cp1252', 'ignore'), bloco_id))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        print(f"Error in update_bloco: {e}")
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/vulcano/blocos/{bloco_id}")
+def delete_bloco(bloco_id: int):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("DELETE FROM UNIDADE WHERE IDBLOCO = ?", (bloco_id,))
+        cur.execute("DELETE FROM BLOCO WHERE ID = ?", (bloco_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/vulcano/unidades")
+async def create_unidade(request: Request):
+    conn = None
+    try:
+        data = await request.json()
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM UNIDADE")
+        new_id = cur.fetchone()[0]
+        
+        query = "INSERT INTO UNIDADE (ID, IDBLOCO, DESCRICAO, METRAGEM, NUMCADIMOB) VALUES (?, ?, ?, ?, ?)"
+        cur.execute(query, (
+            new_id, 
+            int(data.get("id_bloco", 0)), 
+            str(data.get("descricao", "")).encode('cp1252', 'ignore'), 
+            float(data.get("metragem") or 0), 
+            str(data.get("inscricao", "")).encode('cp1252', 'ignore')
+        ))
+        
+        conn.commit()
+        conn.close()
+        return {"id": new_id, "success": True}
+    except Exception as e:
+        print(f"Error in create_unidade: {e}")
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/vulcano/unidades/{unid_id}")
+async def update_unidade(unid_id: int, request: Request):
+    conn = None
+    try:
+        data = await request.json()
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        query = "UPDATE UNIDADE SET DESCRICAO = ?, METRAGEM = ?, NUMCADIMOB = ? WHERE ID = ?"
+        cur.execute(query, (
+            str(data.get("descricao", "")).encode('cp1252', 'ignore'), 
+            float(data.get("metragem") or 0), 
+            str(data.get("inscricao", "")).encode('cp1252', 'ignore'),
+            unid_id
+        ))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        print(f"Error in update_unidade: {e}")
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/vulcano/unidades/{unid_id}")
+def delete_unidade(unid_id: int):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        cur.execute("DELETE FROM UNIDADE WHERE ID = ?", (unid_id,))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        if conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/vulcano/empreendimentos/{emp_id}/detalhes")
+def get_empreendimento_detalhes(emp_id: int):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        cur.execute("SELECT ID, NOME FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (emp_id,))
+        blocos = [{"id": r[0], "nome": r[1].decode('win1252', 'ignore').strip() if isinstance(r[1], bytes) else str(r[1] or "").strip()} for r in cur.fetchall()]
+        
+        unidades = []
+        if blocos:
+            b_ids = [str(b['id']) for b in blocos]
+            placeholders = ",".join(["?"] * len(b_ids))
+            cur.execute(f"SELECT ID, IDBLOCO, DESCRICAO, METRAGEM, NUMCADIMOB FROM UNIDADE WHERE IDBLOCO IN ({placeholders})", tuple(b_ids))
+            for r in cur.fetchall():
+                unidades.append({
+                    "id": r[0],
+                    "id_bloco": r[1],
+                    "descricao": r[2].decode('win1252', 'ignore').strip() if isinstance(r[2], bytes) else str(r[2] or "").strip(),
+                    "metragem": float(r[3] or 0),
+                    "inscricao": str(r[4] or "")
+                })
+                
+        conn.close()
+        return {"blocos": blocos, "unidades": unidades}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/vulcano/vendas")
+async def post_vendas(request: Request):
+    import datetime
+    
+    def add_dt(dt_str, qty, tipo):
+        try:
+            d = datetime.datetime.strptime(dt_str, "%Y-%m-%d").date()
+        except:
+            return None
+        if qty == 0: return d
+        if tipo == "REFORCO_ANUAL":
+            return datetime.date(d.year + qty, d.month, d.day)
+        else: # MENSAL or default
+            month = d.month - 1 + qty
+            year = d.year + month // 12
+            month = month % 12 + 1
+            day = min(d.day, [31, 29 if year % 4 == 0 and not year % 100 == 0 or year % 400 == 0 else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month-1])
+            return datetime.date(year, month, day)
+
+    try:
+        data = await request.json()
+        empresa_id = data.get("empresa_id")
+        if not empresa_id:
+            raise HTTPException(status_code=400, detail="empresa_id obrigatório")
+            
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        # 1. Inserir VENDA principal
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDA")
+        new_id = cur.fetchone()[0]
+        
+        query = "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', 'N')"
+        date_str = data.get("data", "")
+        id_empreendimento = int(data.get("id_empreendimento", 0) or 0)
+        
+        params = (
+            new_id,
+            id_empreendimento,
+            "MVP-" + str(new_id),
+            date_str,
+            str(data.get("unidade", "")),
+            float(data.get("total", 0) or 0),
+            int(empresa_id)
+        )
+        cur.execute(query, params)
+        
+        # 2. Inserir Condições (Grupos de Parcelas / Formas de Pagamento)
+        condicoes = data.get("condicoes", [])
+        for cond in condicoes:
+            cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTO")
+            fp_id = cur.fetchone()[0]
+            
+            tipo = cond.get("tipo", "MENSAL")
+            qtd = int(cond.get("quantidade", 1))
+            valor_base = float(cond.get("valor", 0))
+            venc_inicial = cond.get("vencimento", "")
+            
+            # Ajuste de label e flag "Mensal"
+            mensal_flag = "S" if tipo == "MENSAL" else "N"
+            descricao_fp = f"{tipo} ({qtd}x)"
+            
+            q_fp = "INSERT INTO VENDAFORMAPAGTO (ID, IDVENDA, DESCRICAO, VALOR, MENSAL, ATIVA, QUANTIDADE_PARCELAS) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            cur.execute(q_fp, (fp_id, new_id, descricao_fp, valor_base * qtd, mensal_flag, "S", qtd))
+            
+            # 3. Desenrolar Prazos dessa Forma de Pagto (VENDAFORMAPAGTOPRAZO)
+            if venc_inicial and qtd > 0:
+                for i in range(qtd):
+                    dt_prazo = add_dt(venc_inicial, i, tipo)
+                    dt_prazo_str = dt_prazo.strftime("%Y-%m-%d") if dt_prazo else venc_inicial
+                    
+                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTOPRAZO")
+                    prazo_id = cur.fetchone()[0]
+                    
+                    q_prazo = "INSERT INTO VENDAFORMAPAGTOPRAZO (ID, IDVENDAFORMAPAGTO, DATA, REFERENCIA, VALOR, VALOR_PAGO) VALUES (?, ?, ?, ?, ?, ?)"
+                    referencia = f"{i+1}/{qtd}"
+                    
+                    cur.execute(q_prazo, (prazo_id, fp_id, dt_prazo_str, referencia, valor_base, 0.0))
+                    
+                    # 4. Materializar imediatamente no RECEBER (para o operador ver parcelas a vencer)
+                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+                    rec_id = cur.fetchone()[0]
+                    q_rec = """
+                        INSERT INTO RECEBER (ID, IDVENDA, DATA, VALORPARCELA, PARCELA, OBS, IDVENDAFORMAPAGTO, IDVENDAFORMAPAGTOPRAZO, TOTALPAGO)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """
+                    cur.execute(q_rec, (rec_id, new_id, dt_prazo_str, valor_base, referencia, "GERADA NA VENDA", fp_id, prazo_id, 0.0))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True, "id": new_id, "message": "Venda e Condições cadastradas!"}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/distratos")
+async def post_distratos(request: Request):
+    try:
+        data = await request.json()
+        id_venda = data.get("id_venda")
+        if not id_venda:
+            raise HTTPException(status_code=400, detail="id_venda obrigatório")
+            
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM DISTRATO")
+        new_id = cur.fetchone()[0]
+        
+        q_dist = "INSERT INTO DISTRATO (ID, IDVENDA, DATA, VALORDEVOLVIDO, DATAPAGAMENTO) VALUES (?, ?, ?, ?, ?)"
+        pr_dist = (
+            new_id,
+            int(id_venda),
+            data.get("data_distrato"),
+            float(data.get("valor_devolvido", 0) or 0),
+            data.get("data_pagamento")
+        )
+        cur.execute(q_dist, pr_dist)
+        
+        # update venda flag
+        cur.execute("UPDATE VENDA SET DISTRATO = 'S', DATADISTRATO = ? WHERE ID = ?", (data.get("data_distrato"), int(id_venda)))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True, "id": new_id, "message": "Distrato registrado!"}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class PreviewBaixasInput(BaseModel):
+    empresa_id: int
+    extracted_data: list[dict]
+
+@app.post("/api/parser/preview-baixas")
+def preview_baixas(data: PreviewBaixasInput):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        results = []
+        for row in data.extracted_data:
+            unidade = str(row.get("unidade", "")).strip()
+            total_pago = float(row.get("total_pago", 0) or 0)
+            valor_raiz = float(row.get("valor_raiz", 0) or 0)
+            dt_vencimento = str(row.get("dt_vencimento", "")).strip()
+            
+            if not unidade:
+                results.append({
+                    "row": row,
+                    "status": "BAIXA_REJEITADA_SEM_UNIDADE",
+                    "id_receber": None,
+                    "db_estado_atual": None,
+                    "proposta_ia": None
+                })
+                continue
+            
+            raw_cpf = str(row.get("cpf_cnpj", "")).strip()
+            cpf_clean = ''.join(c for c in raw_cpf if c.isdigit())
+            
+            # Buscar Venda primeiro
+            cur.execute("""
+                SELECT FIRST 1 v.ID, c.NOME, c.ID
+                FROM VENDA v
+                LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+                WHERE v.CODIGOEMPRESA = ? 
+                  AND (
+                      UPPER(v.DESCUNIDIMOB) LIKE UPPER(?)
+                      OR REPLACE(REPLACE(REPLACE(c.CNPJ, '.', ''), '-', ''), '/', '') = ?
+                  )
+            """, (data.empresa_id, f"%{unidade}%", cpf_clean if cpf_clean else "VAZIO"))
+            v_row = cur.fetchone()
+            
+            if not v_row:
+                results.append({"row": row, "status": "BAIXA_REJEITADA_SEM_UNIDADE", "id_receber": None, "db_estado_atual": None, "proposta_ia": None})
+                continue
+                
+            v_id, c_nome, c_id = v_row
+            
+            # 1. Tentar Match em RECEBER em aberto
+            cur.execute("SELECT ID, DATA, VALORPARCELA, TOTALPAGO, PARCELA, OBS FROM RECEBER WHERE IDVENDA = ? AND (TOTALPAGO IS NULL OR TOTALPAGO = 0)", (v_id,))
+            abertas = cur.fetchall()
+            match_perfeito = None
+            
+            for p in abertas:
+                p_id, p_venc, p_valor, p_pago, p_parcela, p_obs = p
+                if (float(p_valor or 0) > 0 and (abs(float(p_valor) - total_pago) < 5.0 or abs(float(p_valor) - valor_raiz) < 5.0)):
+                    match_perfeito = p
+                    break
+                parcela_pdf = str(row.get("parcela", "")).strip()
+                if parcela_pdf and str(p_parcela).strip() == parcela_pdf:
+                    match_perfeito = p
+                    break
+            
+            def dec(vx):
+                if vx is None: return ""
+                if isinstance(vx, bytes): return vx.decode('win1252', 'ignore')
+                return str(vx)
+                
+            if match_perfeito:
+                p_id, p_venc, p_valor, p_pago, p_parcela, p_obs = match_perfeito
+                results.append({
+                    "row": row,
+                    "status": "MATCH_PERFEITO",
+                    "id_receber": p_id,
+                    "db_estado_atual": {
+                        "venda": v_id,
+                        "cliente": dec(c_nome),
+                        "vencimento": p_venc.strftime('%d/%m/%Y') if hasattr(p_venc, 'strftime') else dec(p_venc),
+                        "valor_parcela": float(p_valor or 0),
+                        "parcela": dec(p_parcela),
+                        "pago_hoje": float(p_pago or 0)
+                    },
+                    "proposta_ia": {
+                        "novo_total_pago": total_pago,
+                        "novo_desconto": float(row.get("descontos", 0) or 0),
+                        "novo_acrescimo": float(row.get("acrescimos_variacoes", 0) or 0),
+                        "projetada": False
+                    }
+                })
+            else:
+                # 2. Tentar Projeção (VENDAFORMAPAGTOPRAZO limitando pelo que já ta no RECEBER)
+                cur.execute("SELECT DATA FROM RECEBER WHERE IDVENDA = ?", (v_id,))
+                rdates = [str(x[0])[:7] for x in cur.fetchall() if x[0]]
+                
+                cur.execute("""
+                    SELECT p.ID, p.DATA, p.VALOR, f.DESCRICAO, p.REFERENCIA, f.ID
+                    FROM VENDAFORMAPAGTOPRAZO p
+                    JOIN VENDAFORMAPAGTO f ON p.IDVENDAFORMAPAGTO = f.ID
+                    WHERE f.IDVENDA = ?
+                """, (v_id,))
+                prazos = cur.fetchall()
+                
+                proj_match = None
+                for pr in prazos:
+                    pr_id, pr_data, pr_valor, f_desc, pr_ref, f_id = pr
+                    pr_data_prefix = str(pr_data)[:7] if pr_data else ""
+                    if pr_data_prefix in rdates:
+                        continue # já existe algo no receber para este mes/ano da projeção
+                        
+                    if (float(pr_valor or 0) > 0 and (abs(float(pr_valor) - total_pago) < 5.0 or abs(float(pr_valor) - valor_raiz) < 5.0)):
+                        proj_match = pr
+                        break
+                        
+                if proj_match:
+                    pr_id, pr_data, pr_valor, f_desc, pr_ref, f_id = proj_match
+                    results.append({
+                        "row": row,
+                        "status": "PROJETADA_NOVA_LINHA",
+                        "id_receber": None,
+                        "db_estado_atual": {
+                            "venda": v_id,
+                            "cliente": dec(c_nome),
+                            "vencimento": pr_data.strftime('%d/%m/%Y') if hasattr(pr_data, 'strftime') else dec(pr_data),
+                            "valor_parcela": float(pr_valor or 0),
+                            "parcela": f"Nova ({dec(f_desc)} - {dec(pr_ref)})",
+                            "pago_hoje": 0
+                        },
+                        "proposta_ia": {
+                            "novo_total_pago": total_pago,
+                            "novo_desconto": float(row.get("descontos", 0) or 0),
+                            "novo_acrescimo": float(row.get("acrescimos_variacoes", 0) or 0),
+                            "projetada": True,
+                            "proj_payload": {
+                                "idvenda": v_id,
+                                "idcliente": c_id,
+                                "idformapagto": f_id,
+                                "idprazopagto": pr_id,
+                                "data_vencimento": pr_data.strftime('%Y-%m-%d') if hasattr(pr_data, 'strftime') else str(pr_data),
+                                "valor_previsto": float(pr_valor or 0),
+                                "referencia": dec(pr_ref)
+                            }
+                        }
+                    })
+                else:
+                    results.append({"row": row, "status": "NAO_ENCONTRADO_OU_JA_PAGO", "id_receber": None, "db_estado_atual": None, "proposta_ia": None})
+                    
+        return {"resultados": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
+class CommitBaixasInput(BaseModel):
+    empresa_id: int
+    lote_efetivado: list[dict]
+
+@app.post("/api/parser/commit-baixas")
+def commit_baixas(data: CommitBaixasInput):
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        sucessos = 0
+        for item in data.lote_efetivado:
+            rid = item.get("id_receber")
+            prop = item.get("proposta_ia", {})
+            
+            if prop.get("projetada") and prop.get("proj_payload"):
+                pl = prop["proj_payload"]
+                cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+                rid = cur.fetchone()[0]
+                
+                cur.execute("""
+                    INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, PARCELA, OBS, IDVENDAFORMAPAGTO, IDVENDAFORMAPAGTOPRAZO)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (rid, pl["idvenda"], pl["idcliente"], pl["data_vencimento"], pl["valor_previsto"], pl["referencia"], "PROJ INDUZIDA", pl.get("idformapagto"), pl.get("idprazopagto")))
+                
+                cur.execute("UPDATE VENDAFORMAPAGTOPRAZO SET VALOR_PAGO = ? WHERE ID = ?", (float(prop.get("novo_total_pago", 0)), pl["idprazopagto"]))
+
+            if not rid: continue
+            
+            cur.execute("SELECT TOTALPAGO FROM RECEBER WHERE ID = ?", (rid,))
+            r = cur.fetchone()
+            if not r or (r[0] is not None and float(r[0]) > 0):
+                continue
+                
+            cur.execute(
+                "UPDATE RECEBER SET TOTALPAGO = ?, DESCONTO = ?, VALORVARIACAO = ?, OBS = ? WHERE ID = ?",
+                (
+                    float(prop.get("novo_total_pago", 0)),
+                    float(prop.get("novo_desconto", 0)),
+                    float(prop.get("novo_acrescimo", 0)),
+                    "BAIXA IA PROJETADA" if prop.get("projetada") else "BAIXA IA LOTE CONVERSOR PDF",
+                    int(rid)
+                )
+            )
+            sucessos += 1
+            
+        conn.commit()
+        return {"success": True, "baixados": sucessos}
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+# --- ROTAS BASE: ÁREA FISCAL E SERO ---
+@app.post("/api/fiscal/f200")
+def fiscal_injetar_f200():
+    return {"success": True, "message": "Simulação de injeção de F200 concluída (Tabelas Venda/Recebimento). Backend conectará no Questor."}
+
+@app.post("/api/fiscal/ret")
+def fiscal_injetar_ret():
+    return {"success": True, "message": "Simulação de injeção RET concluída (EFDINCORPIMOBRET)."}
+
+@app.post("/api/fiscal/distratos")
+def fiscal_injetar_distratos():
+    return {"success": True, "message": "Ajuste de Distratos processado. (EFDAJUSTEPISCOFINS)"}
+
+@app.post("/api/fiscal/dimob")
+def fiscal_gerar_dimob():
+    return {"success": True, "message": "Arquivo DIMOB gerado estruturalmente."}
+
+@app.get("/api/sero/cub")
+def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        compet_db = compet + '-31'
+        cur.execute("SELECT FIRST 1 VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND VALOR IS NOT NULL AND MES <= ? ORDER BY MES DESC", (compet_db,))
+        r = cur.fetchone()
+        conn.close()
+        return {"cub": float(r[0]) if r and r[0] else None}
+    except Exception as e:
+        return {"error": str(e), "cub": None}
+
+@app.get("/api/sero/maodeobra")
+def get_sero_maodeobra(empresa_id: int = Query(..., description="ID da Empresa logada")):
+    conn = None
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        
+        q = """
+            SELECT 
+                p.COMPET, 
+                c.CODIGOOUTEMP, 
+                o.NOMEOUTEMP,
+                o.INSCRFEDERAL,
+                SUM(c.VALOREVENTO) as VALOR_ALOCADO
+            FROM CALCULORATEIO c
+            JOIN PERIODOCALCULO p ON c.CODIGOPERCALCULO = p.CODIGOPERCALCULO AND c.CODIGOEMPRESA = p.CODIGOEMPRESA
+            LEFT JOIN OUTRAEMPRESA o ON c.CODIGOOUTEMP = o.CODIGOOUTEMP
+            WHERE c.CODIGOEVENTO = 5041 AND c.CODIGOEMPRESA = ?
+            GROUP BY p.COMPET, c.CODIGOOUTEMP, o.NOMEOUTEMP, o.INSCRFEDERAL
+            ORDER BY p.COMPET DESC
+        """
+        cur.execute(q, (empresa_id,))
+        rows = cur.fetchall()
+        
+        obras = {}
+        alocacoes = []
+        for row in rows:
+            compet_dt, cod_out, nome_out, inscr, valor = row
+            compet_str = compet_dt.strftime("%Y-%m") if hasattr(compet_dt, 'strftime') else str(compet_dt)
+            nome_str = nome_out.decode('win1252', 'ignore') if isinstance(nome_out, bytes) else str(nome_out)
+            inscr_str = str(inscr or "")
+            
+            if cod_out not in obras:
+                obras[cod_out] = {
+                    "nome": nome_str, 
+                    "cno": inscr_str, 
+                    "alocado_total": 0, 
+                    "min_compet": compet_str,
+                    "max_compet": compet_str
+                }
+            else:
+                if compet_str < obras[cod_out]["min_compet"]:
+                    obras[cod_out]["min_compet"] = compet_str
+                if compet_str > obras[cod_out]["max_compet"]:
+                    obras[cod_out]["max_compet"] = compet_str
+                    
+            val = float(valor or 0)
+            obras[cod_out]["alocado_total"] += val
+            
+            alocacoes.append({
+                "compet": compet_str,
+                "codigo_obra": cod_out,
+                "nome_obra": nome_str,
+                "cno": inscr_str,
+                "valor_recolhido": val
+            })
+            
+        conn_v = None
+        cno_dados = {}
+        try:
+            import re
+            conn_v = get_conn("vulcano")
+            cur_v = conn_v.cursor()
+            cur_v.execute("SELECT CNO, METRAGEMTOTAL, DATAINICIORET, DATACONCLUSAO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?", (empresa_id,))
+            for r in cur_v.fetchall():
+                cno_val = r[0].decode('win1252', 'ignore').strip() if isinstance(r[0], bytes) else str(r[0] or "").strip()
+                cno_val = re.sub(r'\D', '', cno_val)
+                if cno_val: 
+                    dt_ini = r[2].strftime("%Y-%m-%d") if r[2] and hasattr(r[2], 'strftime') else str(r[2])[:10] if r[2] else None
+                    dt_fim = r[3].strftime("%Y-%m-%d") if r[3] and hasattr(r[3], 'strftime') else str(r[3])[:10] if r[3] else None
+                    cno_dados[cno_val] = {
+                        "metragem": float(r[1] or 0),
+                        "data_inicio": dt_ini,
+                        "data_fim": dt_fim
+                    }
+        except Exception:
+            pass
+        finally:
+            if conn_v: conn_v.close()
+            
+        for k, v in obras.items():
+            clean_cno = re.sub(r'\D', '', str(v.get("cno", "")))
+            dados_emp = cno_dados.get(clean_cno, {})
+            obras[k]["metragem"] = dados_emp.get("metragem", 0.0)
+            
+            dt_ini = dados_emp.get("data_inicio")
+            if not dt_ini and v.get("min_compet"):
+                dt_ini = v["min_compet"] + "-01"
+                
+            dt_fim = dados_emp.get("data_fim")
+            if not dt_fim and v.get("max_compet"):
+                dt_fim = v["max_compet"] + "-28"
+                
+            obras[k]["data_inicio"] = dt_ini
+            obras[k]["data_fim"] = dt_fim
+
+        return {
+            "obras": [{"codigo": k, **v} for k, v in obras.items()],
+            "alocacoes": alocacoes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.get("/api/sped/f200/preview")
+def sped_f200_preview(empresa_id: int, ano: int, mes: int):
+    from injector_sped import processar_f200
+    res = processar_f200(empresa_id, ano, mes, dry_run=True)
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
+    return res
+
+@app.post("/api/sped/f200/commit")
+def sped_f200_commit(empresa_id: int, ano: int, mes: int):
+    from injector_sped import processar_f200
+    res = processar_f200(empresa_id, ano, mes, dry_run=False)
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
+    return res
+
+@app.get("/api/sped/ret/preview")
+def sped_ret_preview(empresa_id: int, ano: int, mes: int):
+    from injector_sped import processar_ret
+    res = processar_ret(empresa_id, ano, mes, dry_run=True)
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
+    return res
+
+@app.post("/api/sped/ret/commit")
+def sped_ret_commit(empresa_id: int, ano: int, mes: int):
+    from injector_sped import processar_ret
+    res = processar_ret(empresa_id, ano, mes, dry_run=False)
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
+    return res
+
+@app.post("/api/sero/config")
+def sero_salvar_config():
+    return {"success": True, "message": "Expectativa de INSS da Obra/CNO salva com sucesso."}
+
+@app.post("/api/sero/alocacao")
+def sero_registrar_alocacao():
+    return {"success": True, "message": "Alocação de folha do mês registrada."}
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+    @app.exception_handler(404)
+    async def custom_404_handler(request, exc):
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"error": "Frontend build not found"}
+
+@app.get('/api/debug/venda')
+def api_debug_venda():
+    conn_v = get_conn('vulcano')
+    try:
+        cur = conn_v.cursor()
+        cur.execute('SELECT FIRST 5 ID, IDUNIDADE FROM VENDA')
+        vendas = cur.fetchall()
+        cur.execute('SELECT FIRST 5 ID, METRAGEM FROM UNIDADE')
+        unis = cur.fetchall()
+        return {'vendas': vendas, 'unidades': unis}
+    finally:
+        conn_v.close()
+
+@app.get('/api/debug/area')
+def api_debug_area():
+    conn_v = get_conn('vulcano')
+    try:
+        cur = conn_v.cursor()
+        cur.execute('''SELECT 
+            (SELECT SUM(U.METRAGEM) FROM UNIDADE U JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = 5) as TOTAL_AREA,
+            (SELECT SUM(U.METRAGEM) FROM VENDAUNIDADE VU JOIN VENDA V ON V.ID = VU.IDVENDA JOIN UNIDADE U ON U.ID = VU.IDUNIDADE JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = 5 AND COALESCE(V.DISTRATO, 'N') NOT IN ('T', 'S', '1')) as SOLD_AREA
+        FROM RDB$DATABASE''')
+        res = cur.fetchone()
+        return {'status': 'ok', 'res': str(res)}
+    except Exception as e:
+        return {'status': 'error', 'error': str(e)}
+    finally:
+        conn_v.close()

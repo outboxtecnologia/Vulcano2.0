@@ -1,0 +1,5 @@
+Dynamic SQL Error
+SQL error code = -204
+Table unknown
+CTB_CONTA
+At line 1, column 68

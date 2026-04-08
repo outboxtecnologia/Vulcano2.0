@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapeamento de Telas - Questor Explorer / Vulcano 2.0</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #161b22;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid #30363d;
+        }
+        h1 {
+            color: #ff4d00;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 10px;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .mermaid-container {
+            margin: 40px 0;
+            display: flex;
+            justify-content: center;
+            background: #0d1117;
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            overflow-x: auto;
+        }
+    </style>
+    <!-- Incluindo a biblioteca Mermaid -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+</head>
+<body>
+
+<div class="container">
+    <h1>Arquitetura de Dados e Componentes</h1>
+    <p style="text-align: center; color: #8b949e;">Mapeamento visual ao vivo entre Telas Frontend e as Entidades nos Bancos Questor / Vulcano.</p>
+
+    <div class="mermaid-container">
+        <!-- O bloco mermaid puro aqui dentro -->
+        <div class="mermaid">
+flowchart TD
+    %% Cores e Estilos
+    classDef frontend fill:#ff4d00,stroke:#222,stroke-width:2px,color:#000,font-weight:bold;
+    classDef backend fill:#222,stroke:#ff4d00,stroke-width:2px,color:#fff;
+    classDef questor fill:#0033cc,stroke:#000,stroke-width:2px,color:#fff,font-weight:bold;
+    classDef vulcano fill:#b30000,stroke:#000,stroke-width:2px,color:#fff,font-weight:bold;
+    classDef propria fill:#339933,stroke:#000,stroke-width:2px,color:#fff;
+
+    %% Bancos de Dados
+    subgraph Databases[Bancos Origem]
+        Q[(Questor FDB)]:::questor
+        V[(Vulcano FDB)]:::vulcano
+        S[(SQLite Próprio)]:::propria
+    end
+
+    %% Backend
+    subgraph Back[Motor Backend Python]
+        API[API Gateway]:::backend
+        LLM[LLM Gemini Extraction]:::backend
+    end
+
+    %% Frontend Telas
+    subgraph Front[Telas de Visualização Cortex]
+        T1([1. Empreendimentos]):::frontend
+        T2([2. Fechamento Custos]):::frontend
+        T3([3. Sero INSS]):::frontend
+        T4([4. Vendas e Recebimentos]):::frontend
+        T5([5. Smart Importer \ PDF]):::frontend
+        T6([6. Raw Explorer]):::frontend
+    end
+
+    %% Roteamentos
+    Q <--> |firebirdsql| API
+    V <--> |firebirdsql| API
+    S <--> |sqlite3| API
+    
+    API <--> LLM
+    
+    API <--> T1
+    API <--> T2
+    API <--> T3
+    API <--> T4
+    API <--> T5
+    API <--> T6
+
+    %% Vínculos de Negócio
+    T1 -.->|Cadastra/Espelha| V
+    T1 -.->|Planos de Contas| Q
+    
+    T2 -.->|Puxa Gastos LCTOGER| Q
+    T2 -.->|Evolução de Obra| S
+    T2 -.->|Guarda Custo e Venda| V
+    
+    T3 -.->|Verifica Folha de Pagto| Q
+    T3 -.->|Metragens p/ CUB| V
+    
+    T5 -.->|Converte PDF p/ JSON| LLM
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

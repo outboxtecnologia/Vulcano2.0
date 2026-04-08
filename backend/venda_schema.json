@@ -1,0 +1,94 @@
+{
+  "tables": [
+    "VENDAFORMAPAGTOPRAZOREAJUSTE",
+    "VENDAFORMAPAGTOREAJUSTE",
+    "VENDA_INDICE_REAJUSTE_TABELA",
+    "VENDAREPARCELAMENTO",
+    "VENDA",
+    "VENDAFORMAPAGTO",
+    "VENDAFORMAPAGTOPRAZO",
+    "VENDAUNIDADE"
+  ],
+  "schemas": {
+    "VENDAFORMAPAGTOPRAZOREAJUSTE": [
+      "ID",
+      "ID_VENDA_FORMA_PAGTO_PRAZO",
+      "ID_INDICE_REAJUSTE",
+      "ID_INDICE_REAJUSTE_TABELA",
+      "PERCENTUAL_REAJUSTE",
+      "VALOR_PARCELA_ANTERIOR",
+      "VALOR_PARCELA_NOVO"
+    ],
+    "VENDAFORMAPAGTOREAJUSTE": [
+      "ID",
+      "IDVENDAFORMAPAGTO",
+      "DATAREAJUSTE",
+      "INDICEREAJUSTE",
+      "VALOR_ADICIONAL",
+      "VALOR_PARCELA_ANTERIOR"
+    ],
+    "VENDA_INDICE_REAJUSTE_TABELA": [
+      "ID",
+      "ID_VENDA",
+      "ID_INDICE_REAJUSTE_TABELA"
+    ],
+    "VENDAREPARCELAMENTO": [
+      "ID",
+      "IDVENDA",
+      "IDFORMAPAGTO",
+      "DATA",
+      "SALDOATUALIZADO"
+    ],
+    "VENDA": [
+      "ID",
+      "CODIGOEMPRESA",
+      "CODIGOESTAB",
+      "NUMCADIMOB",
+      "CNPJ",
+      "DTOPER",
+      "INDOPER",
+      "UNIDIMOB",
+      "DESCUNIDIMOB",
+      "NUMCONT",
+      "INFCOMP",
+      "INDNATEMP",
+      "TOTALVENDA",
+      "IDEMPREENDIMENTO",
+      "DISTRATO",
+      "DATADISTRATO",
+      "IDTEMP",
+      "IDVENDAVINCULADA",
+      "REAJUSTAR_PELO_CUB",
+      "PERMUTA",
+      "CONTA_PERMUTA",
+      "QUITADA",
+      "ID_CLIENTE"
+    ],
+    "VENDAFORMAPAGTO": [
+      "ID",
+      "IDVENDA",
+      "DESCRICAO",
+      "VALOR",
+      "MENSAL",
+      "IDFORMAREPARCELAMENTO",
+      "DATAREPARCELAMENTO",
+      "ATIVA",
+      "SALDOATUALIZADO",
+      "QUANTIDADE_PARCELAS"
+    ],
+    "VENDAFORMAPAGTOPRAZO": [
+      "ID",
+      "IDVENDAFORMAPAGTO",
+      "DATA",
+      "REFERENCIA",
+      "VALOR",
+      "VALOR_PAGO"
+    ],
+    "VENDAUNIDADE": [
+      "ID",
+      "IDVENDA",
+      "IDUNIDADE",
+      "IDUNIDADEANTERIOR"
+    ]
+  }
+}

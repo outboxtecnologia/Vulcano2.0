@@ -1,0 +1,56 @@
+@app.get("/api/sero/maodeobra")
+def get_sero_maodeobra(empresa_id: int = Query(..., description="ID da Empresa logada")):
+    conn = None
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        
+        q = """
+            SELECT 
+                p.COMPET, 
+                c.CODIGOOUTEMP, 
+                o.NOMEOUTEMP,
+                o.INSCRFEDERAL,
+                SUM(c.VALOREVENTO) as VALOR_ALOCADO
+            FROM CALCULORATEIO c
+            JOIN PERIODOCALCULO p ON c.CODIGOPERCALCULO = p.CODIGOPERCALCULO AND c.CODIGOEMPRESA = p.CODIGOEMPRESA
+            LEFT JOIN OUTRAEMPRESA o ON c.CODIGOOUTEMP = o.CODIGOOUTEMP
+            WHERE c.CODIGOEVENTO = 5041 AND c.CODIGOEMPRESA = ?
+            GROUP BY p.COMPET, c.CODIGOOUTEMP, o.NOMEOUTEMP, o.INSCRFEDERAL
+            ORDER BY p.COMPET DESC
+        """
+        cur.execute(q, (empresa_id,))
+        rows = cur.fetchall()
+        
+        obras = {}
+        alocacoes = []
+        for row in rows:
+            compet_dt, cod_out, nome_out, inscr, valor = row
+            compet_str = compet_dt.strftime("%Y-%m") if hasattr(compet_dt, 'strftime') else str(compet_dt)
+            nome_str = nome_out.decode('win1252', 'ignore') if isinstance(nome_out, bytes) else str(nome_out)
+            inscr_str = str(inscr or "")
+            
+            if cod_out not in obras:
+                obras[cod_out] = {"nome": nome_str, "cno": inscr_str, "alocado_total": 0}
+            
+            val = float(valor or 0)
+            obras[cod_out]["alocado_total"] += val
+            
+            alocacoes.append({
+                "compet": compet_str,
+                "codigo_obra": cod_out,
+                "nome_obra": nome_str,
+                "cno": inscr_str,
+                "valor_recolhido": val
+            })
+            
+        return {
+            "obras": [{"codigo": k, **v} for k, v in obras.items()],
+            "alocacoes": alocacoes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+@app.post("/api/sero/config")

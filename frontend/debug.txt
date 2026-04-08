@@ -1,0 +1,24 @@
+--- MATCH 689 ---
+684:          </div>
+685:          
+686:       </div>
+687: 
+688:       </div>
+689:       {/* FOOTER KPIs */}
+690:       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 shrink-0">
+691:          <div className="border border-white/5 bg-[#121212] rounded p-6 relative">
+692:             <h4 className="text-[10px] text-[#888] font-bold uppercase tracking-[0.2em] mb-2">VGV Lançado (Métricas Atuais)</h4>
+693:             <div className="text-3xl font-bold tracking-tight text-white mb-2">{formatCurrency(totalVgv)}</div>
+
+--- MATCH 1104 ---
+1099:          
+1100:          </div>
+1101:       </div>
+1102: 
+1103:       </div>
+1104:       {/* FOOTER KPIs */}
+1105:       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 shrink-0">
+1106:          <div className="border border-white/5 bg-[#121212] rounded p-6 relative">
+1107:             <h4 className="text-[10px] text-[#888] font-bold uppercase tracking-[0.2em] mb-2">{activeTab === 'RECEBER' ? 'TOTAL A RECEBER (MÊS)' : 'TOTAL HISTÓRICO'}</h4>
+1108:             <div className="text-3xl font-bold tracking-tight text-white mb-2">{formatCurrency(totalPendente)}</div>
+

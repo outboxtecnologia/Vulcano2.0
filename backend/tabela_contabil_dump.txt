@@ -1,0 +1,6 @@
+['CODIGOTABCTB', 'DESCRTABCTB', 'CODIGOGRUPOTABELACONTABIL', 'FORMACTB', 'TIPOLCTO', 'NIVELLCTODEBITO', 'NIVELLCTOCREDITO', 'CODIGOHIST', 'COMPLHIST']
+(1, 'Salários e Ordenados', 0, 1, 3, 1, 1, 0, 'SALARIOS E ORDENADOS')
+(1, 'Salários e Ordenados', 1, 2, 3, 1, 1, 0, 'SALARIOS E ORDENADOS')
+(1, 'Salários e Ordenados', 2, 1, 3, 1, 1, 0, 'SALARIOS E ORDENADOS')
+(2, 'Férias Pagas', 0, 1, 3, 1, 1, 0, 'FERIAS PAGAS')
+(2, 'Férias Pagas', 1, 2, 3, 1, 1, 0, 'FERIAS PAGAS')

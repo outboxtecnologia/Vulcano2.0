@@ -1,0 +1,47 @@
+@app.get("/api/questor/contas")
+def get_questor_contas():
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        cur.execute("SELECT CODIGOTABCTB, DESCRTABCTB FROM TABELACONTABIL ORDER BY DESCRTABCTB")
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        contas = [{"id": r[0], "descricao": dec(r[1])} for r in cur.fetchall()]
+        conn.close()
+        return contas
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/plano-contas-espec")
+def get_questor_plano_contas_espec(empresa_id: int):
+    try:
+        conn = get_conn("questor", empresa_id)
+        cur = conn.cursor()
+        
+        # TIPOCONTA = 2 means Analytical (Analítica, where entries are posted). 1 is Synthetic.
+        query = """
+            SELECT CLASSIFCONTA, DESCRCONTA, TIPOCONTA 
+            FROM PLANOESPEC 
+            WHERE CODIGOEMPRESA = ? AND CLASSIFCONTA IS NOT NULL
+            ORDER BY CLASSIFCONTA
+        """
+        cur.execute(query, (int(empresa_id),))
+        
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+            
+        contas = [{"classificacao": r[0].strip(), "descricao": dec(r[1]), "tipo": int(r[2] or 1)} for r in cur.fetchall()]
+        conn.close()
+        return {"contas": contas}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/centrocusto")

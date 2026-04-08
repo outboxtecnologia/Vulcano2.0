@@ -1,0 +1,6 @@
+['ID', 'ID_INDICE_REAJUSTE', 'MES', 'PERCENTUAL_VARIACAO', 'VALOR']
+(1, 1, datetime.date(2019, 3, 31), Decimal('0.4200'), None)
+(2, 1, datetime.date(2019, 6, 30), Decimal('1.4100'), None)
+(3, 1, datetime.date(2019, 5, 31), Decimal('0.1700'), None)
+(4, 1, datetime.date(2019, 4, 30), Decimal('0.2400'), None)
+(5, 1, datetime.date(2019, 7, 31), Decimal('1.0200'), None)

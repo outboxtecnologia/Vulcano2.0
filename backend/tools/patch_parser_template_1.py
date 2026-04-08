@@ -1,0 +1,128 @@
+"""Atualiza o modelo de parser #1 (sqlite) com versão mais tolerante a relatórios de faturamento."""
+import sqlite3
+import os
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DB = os.path.join(_ROOT, "poc_database.sqlite")
+
+NEW_CODE = r'''import pdfplumber
+import re
+import json
+import sys
+
+# Cabeçalhos / sumários comuns (evitar linha de título como dado)
+_SKIP_IF_NO_DATE = (
+    "FATURAMENTO", "RELATÓRIO", "PÁGINA", "PAGE ", "CNPJ", "EMPREENDIMENTO",
+    "RESUMO", "TOTAIS", "SOMA ",
+)
+
+_DATE = re.compile(r"\d{2}/\d{2}/\d{4}")
+_PARCEL = re.compile(r"\d{1,3}/\d{1,3}[A-Za-z]*")
+
+
+def parse_money(s):
+    if s is None:
+        return 0.0
+    t = re.sub(r"[^\d,.-]", "", str(s).strip())
+    if not t:
+        return 0.0
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    try:
+        return float(t)
+    except ValueError:
+        return 0.0
+
+
+def _skip_line(line):
+    u = line.upper().strip()
+    if len(u) < 8:
+        return True
+    if _DATE.search(line) is None:
+        return True
+    # Linha só de cabeçalho de tabela (várias palavras-chave, sem padrão de parcela)
+    if sum(1 for k in ("PARCELA", "VALOR", "VENC", "NOME", "CLIENTE", "COMPRADOR") if k in u) >= 3:
+        return True
+    for k in _SKIP_IF_NO_DATE:
+        if k in u and _PARCEL.search(line) is None:
+            return True
+    return False
+
+
+# comprador + data + parcela + 4 valores
+P4 = re.compile(
+    r"(?P<nome>.+?)\s+(?P<dt>\d{2}/\d{2}/\d{4})\s+(?P<parc>\d{1,3}/\d{1,3}[A-Za-z]*)\s+"
+    r"(?P<v1>[\d\.,]+)\s+(?P<v2>[\d\.,]+)\s+(?P<v3>[\d\.,]+)\s+(?P<v4>[\d\.,]+)\s*$",
+    re.UNICODE,
+)
+# comprador + data + parcela + 3 valores
+P3 = re.compile(
+    r"(?P<nome>.+?)\s+(?P<dt>\d{2}/\d{2}/\d{4})\s+(?P<parc>\d{1,3}/\d{1,3}[A-Za-z]*)\s+"
+    r"(?P<v1>[\d\.,]+)\s+(?P<v2>[\d\.,]+)\s+(?P<v3>[\d\.,]+)\s*$",
+    re.UNICODE,
+)
+
+
+def extract(pdf_path):
+    results = []
+    seen = set()
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text(layout=True) or page.extract_text() or ""
+            for raw in text.splitlines():
+                line = " ".join(raw.split())
+                if _skip_line(line):
+                    continue
+                m = P4.search(line) or P3.search(line)
+                if not m:
+                    continue
+                nome = re.sub(r"^[|\s\-–:.]+", "", m.group("nome")).strip()
+                nome = re.sub(r"[|\s\-–:.]+$", "", nome).strip()
+                if len(nome) < 2:
+                    continue
+                dt = m.group("dt")
+                parc = m.group("parc")
+                v1 = parse_money(m.group("v1"))
+                v2 = parse_money(m.group("v2"))
+                v3 = parse_money(m.group("v3"))
+                if "v4" in m.groupdict() and m.group("v4") is not None:
+                    v4 = parse_money(m.group("v4"))
+                else:
+                    v4 = 0.0
+                key = (nome, dt, parc, round(v1, 2), round(v2, 2))
+                if key in seen:
+                    continue
+                seen.add(key)
+                results.append({
+                    "comprador": nome,
+                    "data": dt,
+                    "parcela": parc,
+                    "valor_parcela": v1,
+                    "total_pago": v2,
+                    "desconto": v3,
+                    "acrescimo": v4,
+                })
+    return results
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        print(json.dumps(extract(sys.argv[1]), ensure_ascii=False, indent=2))
+'''
+
+
+def main():
+    conn = sqlite3.connect(_DB)
+    c = conn.cursor()
+    c.execute(
+        "UPDATE pdf_parser_templates SET python_code = ? WHERE id = 1",
+        (NEW_CODE,),
+    )
+    n = c.rowcount
+    conn.commit()
+    conn.close()
+    print("ok: updated rows", n)
+
+
+if __name__ == "__main__":
+    main()

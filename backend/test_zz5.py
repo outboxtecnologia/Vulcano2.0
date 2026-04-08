@@ -1,0 +1,9 @@
+import firebirdsql
+try:
+    conn = firebirdsql.connect(host='localhost', port=3050, user='SYSDBA', password='masterkey', database=r'C:\\Users\\dirfe\\.gemini\\antigravity\\scratch\\questor_mapping\\QUESTOR_EMPRESA_959.FDB')
+    cur = conn.cursor()
+    cur.execute("SELECT FIRST 5 NUMERODCTO, CODIGOORIGLCTOCTB, VALORLCTOCTB, DATALCTOCTB FROM LCTOCTB WHERE CODIGOORIGLCTOCTB STARTING WITH 'ZZ'")
+    res = cur.fetchall()
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_zz_out.txt', 'w', encoding='utf-8').write('LCTOs ZZ (CODIGOORIG): ' + str(res))
+except Exception as e:
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_zz_out.txt', 'w', encoding='utf-8').write(str(e))

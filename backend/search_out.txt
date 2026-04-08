@@ -1,0 +1,11 @@
+2180: # Para a validação 01 de hoje, estamos estruturando o Payload recebido do React!
+3288: prompt = f"""Você extrai dados comerciais e financeiros estruturados de CONTRATOS, FICHAS ou EXTRATOS DE VENDAS IMOBILIÁRIAS.
+3545: "Siga estruturação de recebimentos. "
+3918: raise HTTPException(status_code=400, detail=f"Ação bloqueada: Existem {count_vendas} vendas vinculadas a esta infraestrutura.")
+3932: @app.post("/api/vulcano/blocos")
+3957: @app.patch("/api/vulcano/blocos/{bloco_id}")
+3977: @app.delete("/api/vulcano/blocos/{bloco_id}")
+3992: @app.post("/api/vulcano/unidades")
+4020: @app.patch("/api/vulcano/unidades/{unid_id}")
+4044: @app.delete("/api/vulcano/unidades/{unid_id}")
+4443: return {"success": True, "message": "Arquivo DIMOB gerado estruturalmente."}
