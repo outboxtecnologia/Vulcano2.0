@@ -281,24 +281,27 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     setLoading(false);
   }, [selectedEmpresa, competencias, filtroEmpId]);
 
-  // ── União de todas as contas (fisico ∪ virtual) por código ───────────────
+  // ── Apenas contas que o Vulcano calculou para injeção (contas_virtuais) ──
   const contasMap = useMemo(() => {
     const m = {};
-    Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
-      [...(fisico || []), ...(virtual || [])].forEach(c => {
+    Object.values(dadosPorMes).forEach(({ virtual }) => {
+      (virtual || []).forEach(c => {
         if (!m[c.conta]) m[c.conta] = c.nome || `Conta ${c.conta}`;
       });
     });
-    return m; // { contaId → nome }
+    return m; // { contaId → nome } — apenas contas com lançamento societário
   }, [dadosPorMes]);
 
-  // ── Métricas globais ──────────────────────────────────────────────────────
+  // ── Métricas globais — filtra fisico apenas nas contas que geramos ────────
   const metrics = useMemo(() => {
     let totMovFisico = 0, totMovVirtual = 0;
     let contasConciliadas = 0, contasDivergentes = 0;
+    const contasVirtualIds = Object.keys(contasMap);
 
     Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
-      (fisico  || []).forEach(c => { totMovFisico  += c.movimento_liquido || 0; });
+      // Questor: só as contas que o Vulcano calcula
+      (fisico || []).filter(c => contasVirtualIds.includes(String(c.conta)))
+        .forEach(c => { totMovFisico += c.movimento_liquido || 0; });
       (virtual || []).forEach(c => { totMovVirtual += c.movimento_liquido || 0; });
     });
 
@@ -331,7 +334,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           <ShieldCheck className="text-[#ff4d00]" size={36}/> Auditoria ERP
         </h2>
         <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">
-          Confronto Físico (Questor) × Societário (Vulcano POC) — Saldo e Movimento por Conta
+          Contas a Injetar no Questor — Calculado (Vulcano) × Registrado (Questor)
         </p>
       </div>
 
