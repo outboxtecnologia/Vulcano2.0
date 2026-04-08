@@ -1,18 +1,76 @@
+# ─── Segredos / Ambiente ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+chavejson.json
+secrets/
+credentials.json
+service-account*.json
+google-credentials.json
+
+# ─── Dependências ────────────────────────────────────────────────────────────
 node_modules/
 frontend/node_modules/
+.pnp
+
+# ─── Python ──────────────────────────────────────────────────────────────────
 backend/.venv/
+venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
-*.log
-out.log
+
+# ─── Build / Dist ────────────────────────────────────────────────────────────
+dist/
+frontend/dist/
+build/
+*.tsbuildinfo
+
+# ─── Banco de dados local ────────────────────────────────────────────────────
 *.sqlite
 *.FDB
 *.fdb
-dist/
-frontend/dist/
+poc_database.sqlite
+
+# ─── Logs / Debug ────────────────────────────────────────────────────────────
+*.log
+out.log
+build_error.log
 build_error.txt
 debug_ollama_prompt.txt
 debug_ollama_response.txt
-chavejson.json
-.env
+debug*.txt
+error_log.txt
+scripts/auto-commit.log
+
+# ─── Arquivos temporários de debug ───────────────────────────────────────────
+dump.json
+debug*.py
+fix_*.py
+replace_script*.py
+ultimate_rebuild*.py
+ultimate_recovery.py
+emergency_recovery*.py
+recover_script*.py
+append_debug.py
+
+# ─── IDE / OS ────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Exports / Temporários ───────────────────────────────────────────────────
+*.tmp
+*.xlsx
+*.csv
+tmp_*.json
+tmp_*.txt
+temp_*.txt
