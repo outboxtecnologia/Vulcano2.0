@@ -1334,7 +1334,173 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         conn_vulcano.close()
         conn_questor.close()
 
+@app.get("/api/questor/saldo-contas")
+def api_saldo_contas(
+    empresa_id: int = 959,
+    mes: int = None,
+    ano: int = None,
+    contas: str = None,            # CSV de códigos: "4910,4845,4995"
+    empreendimento_id: str = None  # opcional, para filtrar por CC via LCTOGER
+):
+    """
+    Busca movimentos de contas específicas diretamente em LCTOCTB (sem filtro de CC).
+    Usado pela Auditoria ERP para verificar o que está fisicamente registrado no Questor
+    para as contas que o Vulcano vai (ou já) injetar.
+    """
+    conn_q = get_conn("questor")
+    conn_v = get_conn("vulcano")
+    try:
+        if not contas:
+            return {"data": []}
+
+        lista_contas = [int(c.strip()) for c in contas.split(",") if c.strip().isdigit()]
+        if not lista_contas:
+            return {"data": []}
+
+        cur_q = conn_q.cursor()
+        cur_v = conn_v.cursor()
+
+        # Período (se fornecido)
+        data_ini = None
+        data_fim = None
+        if mes and ano:
+            data_ini = f"{ano}-{str(mes).zfill(2)}-01"
+            if int(mes) == 12:
+                data_fim = f"{ano+1}-01-01"
+            else:
+                data_fim = f"{ano}-{str(int(mes)+1).zfill(2)}-01"
+
+        # Plano de contas (para nomes)
+        cur_q.execute("SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
+        plano = {r[0]: str(r[1] or "").strip() for r in cur_q.fetchall()}
+
+        # CC do empreendimento (para filtro opcional via LCTOGER)
+        cc_filtro = None
+        if empreendimento_id:
+            cur_v.execute("SELECT CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (int(empreendimento_id),))
+            row = cur_v.fetchone()
+            if row and row[0]:
+                cc_filtro = int(row[0])
+
+        resultado = {}
+
+        for conta_id in lista_contas:
+            # Query principal: LCTOCTB direto por DEB ou CRED
+            placeholders = "?"
+
+            if data_ini and data_fim:
+                if cc_filtro:
+                    # Com filtro de CC via LCTOGER (para ver apenas lançamentos do empreendimento)
+                    query = """
+                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                        FROM LCTOCTB C
+                        WHERE C.CODIGOEMPRESA = ?
+                          AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
+                          AND C.DATALCTOCTB >= CAST(? AS DATE)
+                          AND C.DATALCTOCTB < CAST(? AS DATE)
+                          AND EXISTS (
+                              SELECT 1 FROM LCTOGER G
+                              WHERE G.CODIGOEMPRESA = C.CODIGOEMPRESA
+                                AND G.CHAVELCTOCTB = C.CHAVELCTOCTB
+                                AND G.CODIGOCENTROCUSTO = ?
+                          )
+                        ORDER BY C.DATALCTOCTB ASC
+                    """
+                    cur_q.execute(query, (empresa_id, conta_id, conta_id, data_ini, data_fim, cc_filtro))
+                else:
+                    query = """
+                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                        FROM LCTOCTB C
+                        WHERE C.CODIGOEMPRESA = ?
+                          AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
+                          AND C.DATALCTOCTB >= CAST(? AS DATE)
+                          AND C.DATALCTOCTB < CAST(? AS DATE)
+                        ORDER BY C.DATALCTOCTB ASC
+                    """
+                    cur_q.execute(query, (empresa_id, conta_id, conta_id, data_ini, data_fim))
+            else:
+                cur_q.execute("""
+                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                    FROM LCTOCTB C
+                    WHERE C.CODIGOEMPRESA = ?
+                      AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
+                    ORDER BY C.DATALCTOCTB ASC
+                """, (empresa_id, conta_id, conta_id))
+
+            rows = cur_q.fetchall()
+            mov_deb = 0.0
+            mov_cred = 0.0
+            detalhes = []
+
+            for (chave, dt, cdeb, ccred, hist_raw, valor) in rows:
+                if isinstance(hist_raw, (bytes, bytearray)):
+                    hist = hist_raw.decode("cp1252", "ignore")
+                elif hasattr(hist_raw, "read"):
+                    hist = hist_raw.read().decode("cp1252", "ignore")
+                else:
+                    hist = str(hist_raw or "")
+
+                v = float(valor or 0)
+                # Natureza em relação a esta conta
+                if cdeb == conta_id:
+                    nat = "D"
+                    mov_deb += v
+                else:
+                    nat = "C"
+                    mov_cred += v
+
+                detalhes.append({
+                    "chave": chave,
+                    "data": str(dt),
+                    "historico": hist.strip(),
+                    "natureza": nat,
+                    "valor": v
+                })
+
+            mov_liq = mov_deb - mov_cred
+
+            # Saldo anterior (antes do período)
+            saldo_anterior = 0.0
+            if data_ini:
+                try:
+                    cur_q.execute("""
+                        SELECT SUM(CASE WHEN CONTACTBDEB = ? THEN VALORLCTOCTB ELSE -VALORLCTOCTB END)
+                        FROM LCTOCTB
+                        WHERE CODIGOEMPRESA = ?
+                          AND (CONTACTBDEB = ? OR CONTACTBCRED = ?)
+                          AND DATALCTOCTB < CAST(? AS DATE)
+                    """, (conta_id, empresa_id, conta_id, conta_id, data_ini))
+                    r = cur_q.fetchone()
+                    saldo_anterior = float(r[0] or 0) if r and r[0] is not None else 0.0
+                except Exception:
+                    pass
+
+            resultado[conta_id] = {
+                "conta": conta_id,
+                "nome": plano.get(conta_id, f"Conta {conta_id}"),
+                "saldo_anterior": saldo_anterior,
+                "movimento_debito": mov_deb,
+                "movimento_credito": mov_cred,
+                "movimento_liquido": mov_liq,
+                "saldo_final": saldo_anterior + mov_liq,
+                "detalhes": detalhes
+            }
+
+        return {"data": list(resultado.values())}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn_q.close()
+        conn_v.close()
+
 @app.get("/api/health")
+
 def api_health():
     key = os.environ.get("GEMINI_API_KEY") or ""
     return {

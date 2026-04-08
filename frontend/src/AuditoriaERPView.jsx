@@ -232,7 +232,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
   const periodoValido = competencias.length <= 18;
 
-  // ── Fetch em paralelo, separando fisico e virtual ────────────────────────
+  // ── Fetch: virtual via contabilizacoes, fisico via saldo-contas direto no LCTOCTB ──
   const fetchTudo = useCallback(async () => {
     if (!selectedEmpresa || !periodoValido) return;
     setLoading(true);
@@ -241,37 +241,50 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     try {
       await Promise.all(competencias.map(async (comp) => {
         const [ano, mes] = comp.split('-').map(Number);
-        let url = `${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}`;
-        if (filtroEmpId) url += `&empreendimento_id=${filtroEmpId}`;
-        const resp = await fetch(url);
-        const json = await resp.json();
 
-        // Consolida por conta, separando os dois lados
+        // 1. Busca virtual (motor societário Vulcano)
+        let urlV = `${API_BASE}/api/questor/contabilizacoes?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}`;
+        if (filtroEmpId) urlV += `&empreendimento_id=${filtroEmpId}`;
+        const respV = await fetch(urlV);
+        const jsonV = await respV.json();
+
+        const accVirtual = {};
         const mergeConta = (source, acc) => {
           (source || []).forEach(c => {
             const k = String(c.conta);
             if (!acc[k]) {
               acc[k] = { ...c, detalhes: [...(c.detalhes || [])] };
             } else {
-              acc[k].saldo_anterior   = (acc[k].saldo_anterior   || 0) + (c.saldo_anterior   || 0);
-              acc[k].movimento_debito = (acc[k].movimento_debito || 0) + (c.movimento_debito || 0);
-              acc[k].movimento_credito= (acc[k].movimento_credito|| 0) + (c.movimento_credito|| 0);
-              acc[k].movimento_liquido= (acc[k].movimento_liquido|| 0) + (c.movimento_liquido|| 0);
-              acc[k].saldo_final      = (acc[k].saldo_final      || 0) + (c.saldo_final      || 0);
+              acc[k].saldo_anterior    = (acc[k].saldo_anterior    || 0) + (c.saldo_anterior    || 0);
+              acc[k].movimento_debito  = (acc[k].movimento_debito  || 0) + (c.movimento_debito  || 0);
+              acc[k].movimento_credito = (acc[k].movimento_credito || 0) + (c.movimento_credito || 0);
+              acc[k].movimento_liquido = (acc[k].movimento_liquido || 0) + (c.movimento_liquido || 0);
+              acc[k].saldo_final       = (acc[k].saldo_final       || 0) + (c.saldo_final       || 0);
               acc[k].detalhes.push(...(c.detalhes || []));
             }
           });
         };
+        (jsonV.data || []).forEach(emp => mergeConta(emp.contas_virtuais, accVirtual));
+        const virtualList = Object.values(accVirtual);
 
-        const accFisico  = {};
-        const accVirtual = {};
-        (json.data || []).forEach(emp => {
-          mergeConta(emp.contas_fisicas,  accFisico);
-          mergeConta(emp.contas_virtuais, accVirtual);
-        });
+        // 2. Busca físico do Questor diretamente pelo LCTOCTB para as contas calculadas
+        let fisicoList = [];
+        if (virtualList.length > 0) {
+          const contasCsv = virtualList.map(c => c.conta).join(',');
+          let urlF = `${API_BASE}/api/questor/saldo-contas?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}&contas=${contasCsv}`;
+          if (filtroEmpId) urlF += `&empreendimento_id=${filtroEmpId}`;
+          try {
+            const respF = await fetch(urlF);
+            const jsonF = await respF.json();
+            fisicoList = jsonF.data || [];
+          } catch (ef) {
+            console.warn('saldo-contas error:', ef);
+          }
+        }
+
         novos[comp] = {
-          fisico:  Object.values(accFisico),
-          virtual: Object.values(accVirtual),
+          fisico:  fisicoList,
+          virtual: virtualList,
         };
       }));
       setDadosPorMes(novos);
@@ -280,6 +293,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     }
     setLoading(false);
   }, [selectedEmpresa, competencias, filtroEmpId]);
+
 
   // ── Apenas contas que o Vulcano calculou para injeção (contas_virtuais) ──
   const contasMap = useMemo(() => {
