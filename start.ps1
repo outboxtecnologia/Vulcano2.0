@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-function Write-Info($msg) { Write-Host "[questor_explorer] $msg" -ForegroundColor Cyan }
+function Write-Info($msg) { Write-Host "[vulcano2.0] $msg" -ForegroundColor Cyan }
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backend = Join-Path $root "backend"
@@ -27,10 +27,10 @@ if (!(Test-Path "$envFile") -and (Test-Path "$envExample")) { Copy-Item "$envExa
 if (Test-Path "$envFile") {
   $envText = Get-Content "$envFile" -Raw
   if ($envText -match '^\s*GEMINI_API_KEY\s*=\s*$' -or $envText -notmatch '^\s*GEMINI_API_KEY\s*=\s*\S+' ) {
-    Write-Host '[questor_explorer] ATENÇÃO: GEMINI_API_KEY está vazia no backend/.env (a extração por IA não vai funcionar).' -ForegroundColor Yellow
+    Write-Host '[vulcano2.0] ATENÇÃO: GEMINI_API_KEY está vazia no backend/.env (a extração por IA não vai funcionar).' -ForegroundColor Yellow
   }
 } else {
-  Write-Host '[questor_explorer] ATENÇÃO: backend/.env não encontrado. Crie a partir de .env.example e preencha GEMINI_API_KEY.' -ForegroundColor Yellow
+  Write-Host '[vulcano2.0] ATENÇÃO: backend/.env não encontrado. Crie a partir de .env.example e preencha GEMINI_API_KEY.' -ForegroundColor Yellow
 }
 
 # Libera a porta 8002 antes de subir o uvicorn (evita ficar preso em processos antigos/reloaders).
@@ -40,7 +40,7 @@ try {
     $pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique
     foreach ($p in $pids) {
       if ($p) {
-        Write-Host "[questor_explorer] Finalizando processo na porta 8002 (PID=$p)..." -ForegroundColor Yellow
+        Write-Host "[vulcano2.0] Finalizando processo na porta 8002 (PID=$p)..." -ForegroundColor Yellow
         try { taskkill /PID $p /T /F | Out-Null } catch {}
         try { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } catch {}
       }
@@ -55,7 +55,7 @@ for ($i = 0; $i -lt 25; $i++) {
   Start-Sleep -Milliseconds 200
 }
 if (Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue) {
-  Write-Host "[questor_explorer] ATENÇÃO: ainda existe algo escutando na porta 8002. O backend pode não iniciar." -ForegroundColor Red
+  Write-Host "[vulcano2.0] ATENÇÃO: ainda existe algo escutando na porta 8002. O backend pode não iniciar." -ForegroundColor Red
 }
 
 # Evita travamentos do reload/watchfiles em algumas máquinas: subimos sem --reload.
@@ -82,7 +82,7 @@ try {
     $pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique
     foreach ($p in $pids) {
       if ($p) {
-        Write-Host "[questor_explorer] Finalizando processo na porta 5173 (PID=$p)..." -ForegroundColor Yellow
+        Write-Host "[vulcano2.0] Finalizando processo na porta 5173 (PID=$p)..." -ForegroundColor Yellow
         try { taskkill /PID $p /T /F | Out-Null } catch {}
         try { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue } catch {}
       }

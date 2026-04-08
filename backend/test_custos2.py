@@ -11,6 +11,6 @@ try:
             out += f"Cols of {t}: {desc}\n"
         except:
             pass
-    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_custo_out.txt', 'w', encoding='utf-8').write(out)
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_custo_out.txt', 'w', encoding='utf-8').write(out)
 except Exception as e:
-    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_custo_out.txt', 'w', encoding='utf-8').write(str(e))
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_custo_out.txt', 'w', encoding='utf-8').write(str(e))

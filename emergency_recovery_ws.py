@@ -42,10 +42,10 @@ for c in vulcano_candidates[:3]:
 
 if app_candidates:
     best_app = app_candidates[0][0]
-    shutil.copy2(best_app, r'C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\App.jsx')
+    shutil.copy2(best_app, r'C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\App.jsx')
     print(f"Restored App.jsx from {best_app}")
 
 if vulcano_candidates:
     best_vulcano = vulcano_candidates[0][0]
-    shutil.copy2(best_vulcano, r'C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\VulcanoViews.jsx')
+    shutil.copy2(best_vulcano, r'C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\VulcanoViews.jsx')
     print(f"Restored VulcanoViews.jsx from {best_vulcano}")

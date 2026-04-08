@@ -22,8 +22,8 @@
   <Actions>
     <Exec>
       <Command>C:\Program Files\Git\bin\bash.exe</Command>
-      <Arguments>-c "C:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/scripts/auto-commit.sh"</Arguments>
-      <WorkingDirectory>C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer</WorkingDirectory>
+      <Arguments>-c "C:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/scripts/auto-commit.sh"</Arguments>
+      <WorkingDirectory>C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>

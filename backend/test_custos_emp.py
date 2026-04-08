@@ -4,6 +4,6 @@ try:
     cur = conn.cursor()
     cur.execute("SELECT FIRST 1 * FROM EMPREENDIMENTO")
     desc = [d[0] for d in cur.description]
-    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_custo_out.txt', 'w', encoding='utf-8').write("EMPREENDIMENTO: " + str(desc))
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_custo_out.txt', 'w', encoding='utf-8').write("EMPREENDIMENTO: " + str(desc))
 except Exception as e:
-    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_custo_out.txt', 'w', encoding='utf-8').write(str(e))
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_custo_out.txt', 'w', encoding='utf-8').write(str(e))

@@ -1,5 +1,5 @@
 ﻿
-C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\App.jsx
+C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\App.jsx
   1420:13  error  Parsing error: Adjacent JSX elements must be wrapped in an enclosing tag
 
 Ô£û 1 problem (1 error, 0 warnings)

@@ -30,10 +30,10 @@ def main():
             row = cur_q.fetchone()
             output += f'RESULTADO PARA CONTA CUSTO {ccusto}: {row}\n'
             
-        open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_saldos_out.txt', 'w', encoding='utf-8').write(output)
+        open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_saldos_out.txt', 'w', encoding='utf-8').write(output)
             
     except Exception as e:
-        open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_saldos_out.txt', 'w', encoding='utf-8').write('ERROR: ' + str(e))
+        open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_saldos_out.txt', 'w', encoding='utf-8').write('ERROR: ' + str(e))
 
 if __name__ == '__main__':
     main()

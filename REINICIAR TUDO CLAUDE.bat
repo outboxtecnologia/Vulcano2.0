@@ -7,7 +7,7 @@ echo         REINICIANDO QUESTOR EXPLORER (BACK + FRONT)
 echo ==============================================================
 echo.
 
-set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer
+set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0
 set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
 

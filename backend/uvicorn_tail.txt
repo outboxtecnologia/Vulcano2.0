@@ -1,17 +1,17 @@
          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
     return await get_async_backend().run_sync_in_worker_thread(
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
     return await future
            ^^^^^^^^^^^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
     result = context.run(func, *args)
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\main.py", line 250, in api_custos_dashboard_by_id
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\main.py", line 250, in api_custos_dashboard_by_id
     cur.execute("""
     ~~~~~~~~~~~^^^^
         SELECT ID, NOME, CUSTOORCADO, CONTACUSTO, CONTAESTAND, CONTAESTCON, CODIGOCENTROCUSTO
@@ -22,21 +22,21 @@
         ^^^^^^^^^^^^
     """, (id_emp,))
     ^^^^^^^^^^^^^^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 284, in execute
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 284, in execute
     self._execute(query, params)
     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 256, in _execute
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 256, in _execute
     stmt = self._get_stmt(query)
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 244, in _get_stmt
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 244, in _get_stmt
     stmt.prepare(query)
     ~~~~~~~~~~~~^^^^^^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 132, in prepare
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 132, in prepare
     (h, oid, buf) = self.trans.connection._op_response()
                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 659, in _op_response
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 659, in _op_response
     return self._parse_op_response()
            ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 643, in _parse_op_response
+  File "C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\.venv\Lib\site-packages\firebirdsql\fbcore.py", line 643, in _parse_op_response
     raise OperationalError(message, gds_codes, sql_code)
 firebirdsql.err.OperationalError: Dynamic SQL Error
 SQL error code = -206

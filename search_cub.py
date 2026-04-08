@@ -1,5 +1,5 @@
 import os
-for root, dirs, files in os.walk(r'c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer'):
+for root, dirs, files in os.walk(r'c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0'):
     for f in files:
         if f.endswith('.md') or f.endswith('.txt'):
             path = os.path.join(root, f)

@@ -1,7 +1,7 @@
 import os
 
 def patch_backend():
-    main_path = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend\main.py"
+    main_path = r"C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend\main.py"
     with open(main_path, "r", encoding="utf-8") as f:
         content = f.read()
 
