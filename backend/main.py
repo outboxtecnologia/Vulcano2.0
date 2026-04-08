@@ -55,7 +55,7 @@ try:
     # O GOOGLE_APPLICATION_CREDENTIALS carrega a service account automaticamente
     vertexai.init(project="questor-explorer-prod", location="us-central1")
     HAS_VERTEXAI = True
-except ImportError:
+except Exception:
     HAS_VERTEXAI = False
 
 # Modelo rápido por padrão; use GEMINI_MODEL no .env (ex.: gemini-2.5-flash) se quiser.
