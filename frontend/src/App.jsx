@@ -64,21 +64,15 @@ export default function App() {
   useEffect(() => {
     // Avisa o usuario se estiver lento após 4s
     const slowTimer = setTimeout(() => setLoadingSlow(true), 4000);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15000); // 15s timeout
-    fetch(`${API_BASE}/api/vulcano/empresas`, { signal: ctrl.signal })
+    fetch(`${API_BASE}/api/vulcano/empresas`)
       .then(r => r.json())
       .then(d => { setGlobalEmpresas(Array.isArray(d) ? d : (d.data || [])); setEmpresasLoading(false); setLoadingSlow(false); })
       .catch(e => {
-        if (e.name === 'AbortError') {
-          setEmpresasError('Timeout: o banco de dados Vulcano não respondeu. Use entrada manual abaixo.');
-        } else {
-          setEmpresasError('Erro de conexão (porta 8000). Verifique o backend ou use entrada manual.');
-        }
+        setEmpresasError('Erro de conexão (porta 8000). Verifique o backend ou use entrada manual.');
         setEmpresasLoading(false); setLoadingSlow(false);
       })
-      .finally(() => { clearTimeout(timer); clearTimeout(slowTimer); });
-    return () => { ctrl.abort(); clearTimeout(timer); clearTimeout(slowTimer); };
+      .finally(() => { clearTimeout(slowTimer); });
+    return () => { clearTimeout(slowTimer); };
   }, []);
 
 

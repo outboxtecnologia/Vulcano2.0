@@ -53,11 +53,12 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
     const virtual  = lista.virtual?.find(r => String(r.conta) === String(contaId));
     return {
       comp,
-      movFisico:    fisico?.movimento_liquido   || 0,
+      temFisico:    !!fisico,
+      movFisico:    fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0,
       saldoFisico:  fisico?.saldo_final         || 0,
       movVirtual:   virtual?.movimento_liquido  || 0,
       saldoVirtual: virtual?.saldo_final        || 0,
-      diffMov:      (virtual?.movimento_liquido || 0) - (fisico?.movimento_liquido || 0),
+      diffMov:      (virtual?.movimento_liquido || 0) - (fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0),
       diffSaldo:    (virtual?.saldo_final       || 0) - (fisico?.saldo_final       || 0),
       detalhesFisico:   fisico?.detalhes  || [],
       detalhesVirtual:  virtual?.detalhes || [],
@@ -75,7 +76,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const temDivergencia   = abs(totalDiffMov) >= DIVERGENCIA_CORTE || abs(totalDiffSaldo) >= DIVERGENCIA_CORTE;
 
   // Só mostra contas que têm qualquer movimento em algum lado
-  const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0);
+  const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual);
   if (!temQualquerDado) return null;
 
   return (
@@ -95,24 +96,38 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
         </td>
 
         {/* Por competência: mov fisico / mov virtual / diff */}
-        {porComp.map(({ comp, movFisico, movVirtual, diffMov }) => (
+        {porComp.map(({ comp, movFisico, movVirtual, diffMov, saldoFisico, saldoVirtual, temFisico }) => (
           <td key={comp} className="px-1 py-0" style={{ minWidth: '270px' }}>
             <div className="flex gap-0 h-full">
               {/* Questor */}
-              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[10px] text-[#888] border-r border-[#1a1a1a]">
-                {abs(movFisico) > 0.01 ? (
-                  <span className={movFisico >= 0 ? 'text-[#34c759]/70' : 'text-[#ff4d00]/70'}>
-                    {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
-                  </span>
-                ) : <span className="text-[#252525]">—</span>}
+              <div className="flex-1 px-2 py-2.5 text-right border-r border-[#1a1a1a] flex flex-col justify-center">
+                <div className="font-mono text-[10px] font-bold">
+                  {temFisico || abs(movFisico) > 0.01 ? (
+                    <span className={movFisico == 0 ? 'text-[#888]' : movFisico >= 0 ? 'text-[#34c759]/70' : 'text-[#ff4d00]/70'}>
+                      {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
+                    </span>
+                  ) : <span className="text-[#252525]">—</span>}
+                </div>
+                {abs(saldoFisico) > 0.01 && (
+                  <div className="text-[8px] font-mono text-[#555] mt-0.5" title="Saldo Final no Mês">
+                    S: {fmt(saldoFisico)}
+                  </div>
+                )}
               </div>
               {/* Vulcano */}
-              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[10px] text-[#888] border-r border-[#1a1a1a]">
-                {abs(movVirtual) > 0.01 ? (
-                  <span className={movVirtual >= 0 ? 'text-[#a259ff]/80' : 'text-[#ff9f0a]/80'}>
-                    {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
-                  </span>
-                ) : <span className="text-[#252525]">—</span>}
+              <div className="flex-1 px-2 py-2.5 text-right border-r border-[#1a1a1a] flex flex-col justify-center">
+                <div className="font-mono text-[10px] font-bold">
+                  {abs(movVirtual) > 0.01 ? (
+                    <span className={movVirtual >= 0 ? 'text-[#a259ff]/80' : 'text-[#ff9f0a]/80'}>
+                      {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
+                    </span>
+                  ) : <span className="text-[#252525]">—</span>}
+                </div>
+                {abs(saldoVirtual) > 0.01 && (
+                  <div className="text-[8px] font-mono text-[#555] mt-0.5" title="Saldo Final no Mês (Virtual)">
+                    S: {fmt(saldoVirtual)}
+                  </div>
+                )}
               </div>
               {/* Delta */}
               <div className="flex-1 px-2 py-2.5 text-right font-mono text-[11px] font-bold">
@@ -239,7 +254,11 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     setError('');
     const novos = {};
     try {
-      await Promise.all(competencias.map(async (comp) => {
+      const virtuaisPorMes = {};
+      const contasGlobais = new Set();
+
+      // PASS 1: Busca Virtual para todos os meses (SEQUENCIAL PARA EVITAR LOCK DO FIREBIRD)
+      for (const comp of competencias) {
         const [ano, mes] = comp.split('-').map(Number);
 
         // 1. Busca virtual (motor societário Vulcano)
@@ -266,13 +285,22 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         };
         (jsonV.data || []).forEach(emp => mergeConta(emp.contas_virtuais, accVirtual));
         const virtualList = Object.values(accVirtual);
+        
+        virtualList.forEach(c => contasGlobais.add(c.conta));
+        virtuaisPorMes[comp] = virtualList;
+      }
 
-        // 2. Busca físico do Questor diretamente pelo LCTOCTB para as contas calculadas
-        let fisicoList = [];
-        if (virtualList.length > 0) {
-          const contasCsv = virtualList.map(c => c.conta).join(',');
+      // PASS 2: Busca Físico (Questor) para todos os meses usando a união de todas as contas
+      const contasCsv = Array.from(contasGlobais).join(',');
+      
+      if (contasGlobais.size > 0) {
+        for (const comp of competencias) {
+          const [ano, mes] = comp.split('-').map(Number);
+          
+          let fisicoList = [];
           let urlF = `${API_BASE}/api/questor/saldo-contas?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}&contas=${contasCsv}`;
           if (filtroEmpId) urlF += `&empreendimento_id=${filtroEmpId}`;
+          
           try {
             const respF = await fetch(urlF);
             const jsonF = await respF.json();
@@ -280,13 +308,18 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           } catch (ef) {
             console.warn('saldo-contas error:', ef);
           }
-        }
 
-        novos[comp] = {
-          fisico:  fisicoList,
-          virtual: virtualList,
-        };
-      }));
+          novos[comp] = {
+            fisico:  fisicoList,
+            virtual: virtuaisPorMes[comp],
+          };
+        }
+      } else {
+        competencias.forEach(comp => {
+          novos[comp] = { fisico: [], virtual: [] };
+        });
+      }
+
       setDadosPorMes(novos);
     } catch (e) {
       setError(String(e));

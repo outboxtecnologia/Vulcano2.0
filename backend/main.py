@@ -1436,37 +1436,18 @@ def api_saldo_contas(
             placeholders = "?"
 
             if data_ini and data_fim:
-                if cc_filtro:
-                    # Com filtro de CC via LCTOGER (para ver apenas lançamentos do empreendimento)
-                    query = """
-                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
-                        FROM LCTOCTB C
-                        WHERE C.CODIGOEMPRESA = ?
-                          AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
-                          AND C.DATALCTOCTB >= CAST(? AS DATE)
-                          AND C.DATALCTOCTB < CAST(? AS DATE)
-                          AND EXISTS (
-                              SELECT 1 FROM LCTOGER G
-                              WHERE G.CODIGOEMPRESA = C.CODIGOEMPRESA
-                                AND G.CHAVELCTOCTB = C.CHAVELCTOCTB
-                                AND G.CODIGOCENTROCUSTO = ?
-                          )
-                        ORDER BY C.DATALCTOCTB ASC
-                    """
-                    cur_q.execute(query, (empresa_id, conta_id, conta_id, data_ini, data_fim, cc_filtro))
-                else:
-                    query = """
-                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
-                        FROM LCTOCTB C
-                        WHERE C.CODIGOEMPRESA = ?
-                          AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
-                          AND C.DATALCTOCTB >= CAST(? AS DATE)
-                          AND C.DATALCTOCTB < CAST(? AS DATE)
-                        ORDER BY C.DATALCTOCTB ASC
-                    """
-                    cur_q.execute(query, (empresa_id, conta_id, conta_id, data_ini, data_fim))
+                query = """
+                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                    FROM LCTOCTB C
+                    WHERE C.CODIGOEMPRESA = ?
+                      AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
+                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                      AND C.DATALCTOCTB >= CAST(? AS DATE)
+                      AND C.DATALCTOCTB < CAST(? AS DATE)
+                    ORDER BY C.DATALCTOCTB ASC
+                """
+                cur_q.execute(query, (empresa_id, conta_id, conta_id, data_ini, data_fim))
             else:
                 cur_q.execute("""
                     SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
@@ -1474,6 +1455,7 @@ def api_saldo_contas(
                     FROM LCTOCTB C
                     WHERE C.CODIGOEMPRESA = ?
                       AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
+                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
                     ORDER BY C.DATALCTOCTB ASC
                 """, (empresa_id, conta_id, conta_id))
 
@@ -1519,6 +1501,7 @@ def api_saldo_contas(
                         WHERE CODIGOEMPRESA = ?
                           AND (CONTACTBDEB = ? OR CONTACTBCRED = ?)
                           AND DATALCTOCTB < CAST(? AS DATE)
+                          AND (CODIGOORIGLCTOCTB IS NULL OR CODIGOORIGLCTOCTB <> 'ZZ')
                     """, (conta_id, empresa_id, conta_id, conta_id, data_ini))
                     r = cur_q.fetchone()
                     saldo_anterior = float(r[0] or 0) if r and r[0] is not None else 0.0
