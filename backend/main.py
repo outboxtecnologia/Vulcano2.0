@@ -127,6 +127,7 @@ else:
     POC_DATABASE_FILE = _poc_backend
 
 def _require_gemini_key():
+    if HAS_VERTEXAI: return
     if not os.environ.get("GEMINI_API_KEY"):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
 
@@ -213,10 +214,13 @@ async def _gemini_generate_json_async(prompt: str, file_data: bytes = None, mime
     for attempt in range(max_retries):
         try:
             model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
-            model = model_cls(
-                GEMINI_MODEL_ID,
-                generation_config={"response_mime_type": "application/json"},
-            )
+            gen_cfg = {
+                "response_mime_type": "application/json",
+                "max_output_tokens": 8192,
+            }
+            if HAS_VERTEXAI:
+                gen_cfg["thinking_config"] = {"thinking_budget": 0}
+            model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
             # Descomente o fallback abaixo para forçar json text ou algo do tipo em caso de falha silenciosa.
             
             resp = await model.generate_content_async(contents)
@@ -258,10 +262,13 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
 
     try:
         model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
-        model = model_cls(
-            GEMINI_MODEL_ID,
-            generation_config={"response_mime_type": "application/json"},
-        )
+        gen_cfg = {
+            "response_mime_type": "application/json",
+            "max_output_tokens": 8192,
+        }
+        if HAS_VERTEXAI:
+            gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         resp = model.generate_content(contents)
     except Exception:
         model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
@@ -993,9 +1000,24 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
             )
             receitas_meta = json_resp.get("dashboard_meta", {})
             impostos_config = json_resp.get("impostos_config", [])
+            
+            y, m = int(ano), int(mes)
+            if m in (1, 2, 3): pq_y, pq_m = y - 1, 12
+            elif m in (4, 5, 6): pq_y, pq_m = y, 3
+            elif m in (7, 8, 9): pq_y, pq_m = y, 6
+            else: pq_y, pq_m = y, 9
+            
+            json_pq = get_receitas_caixa(
+                empresa_id=empresa_id, 
+                data_ini=f"{pq_y}-{str(pq_m).zfill(2)}", 
+                data_fim=f"{pq_y}-{str(pq_m).zfill(2)}"
+            )
+            receitas_meta_pq = json_pq.get("dashboard_meta", {})
+            
         except Exception as e:
             print(f"Erro ao obter receitas: {e}")
             receitas_meta = {}
+            receitas_meta_pq = {}
             impostos_config = []
         
         # Datas de corte
@@ -1008,88 +1030,122 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         # Auxiliar: Plano Espec
         cur_q.execute("SELECT CONTACTB, CLASSIFCONTA, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
         plano = {r[0]: {"classif": r[1], "nome": r[2]} for r in cur_q.fetchall()}
+        
+        # Auxiliar: Identificar contas de Imposto a Recolher para considerar apenas Apropriações (Créditos) no físico
+        cur_v.execute("SELECT CONTA_CRED_IMP_REC_DARF FROM IMPOSTO")
+        contas_imposto_recolher = {str(r[0]).strip() for r in cur_v.fetchall() if r[0]}
             
+        contas_fisicas_empresa = {}
+        saldo_anterior_por_conta = {} 
+
+        # --- SALDO ANTERIOR GLOBAL (Empresa-wide) ---
+        cur_q.execute("""
+            SELECT 
+                C.CONTACTBDEB, 
+                C.CONTACTBCRED, 
+                G.NATURLCTOCTB, 
+                SUM(G.VALORLCTOGER) as TOTAL
+            FROM LCTOGER G
+            JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+            WHERE G.CODIGOEMPRESA = ? AND C.DATALCTOCTB < CAST(? AS DATE)
+            AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+            AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+            GROUP BY 1, 2, 3
+        """, (empresa_id, data_inicio_mes_atual))
+        
+        for (c_deb, c_cred, nat, val) in cur_q.fetchall():
+            v = float(val or 0)
+            if nat == 1 and c_deb:
+                c_deb_str = str(c_deb).strip()
+                if c_deb_str not in contas_imposto_recolher:
+                    saldo_anterior_por_conta[c_deb] = saldo_anterior_por_conta.get(c_deb, 0.0) + v
+            elif nat == -1 and c_cred:
+                saldo_anterior_por_conta[c_cred] = saldo_anterior_por_conta.get(c_cred, 0.0) - v
+        
+        # --- MOVIMENTO DO MÊS GLOBAL (Empresa-wide) ---
+        cur_q.execute("""
+            SELECT 
+                C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER
+            FROM LCTOGER G
+            JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+            WHERE G.CODIGOEMPRESA = ? 
+            AND C.DATALCTOCTB >= CAST(? AS DATE) AND C.DATALCTOCTB < CAST(? AS DATE)
+            AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+            AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+            ORDER BY C.DATALCTOCTB ASC
+        """, (empresa_id, data_inicio_mes_atual, data_fim_mes_atual))
+        
+        for (chave, dt, cdeb, ccred, hist_val, nat, val) in cur_q.fetchall():
+            if isinstance(hist_val, (bytes, bytearray)):
+                hist = hist_val.decode('cp1252', 'ignore')
+            else:
+                hist = str(hist_val) if hist_val else ""
+                
+            v = float(val or 0)
+            conta = cdeb if nat == 1 else ccred
+            if not conta: continue
+            
+            conta_str = str(conta).strip()
+            if nat == 1 and conta_str in contas_imposto_recolher:
+                continue
+            
+            if conta not in contas_fisicas_empresa:
+                contas_fisicas_empresa[conta] = {
+                    "conta": conta,
+                    "nome": plano.get(conta, {}).get("nome", "Desconhecida"),
+                    "classif": plano.get(conta, {}).get("classif", ""),
+                    "saldo_anterior": saldo_anterior_por_conta.get(conta, 0.0),
+                    "movimento_debito": 0.0,
+                    "movimento_credito": 0.0,
+                    "movimento_liquido": 0.0,
+                    "saldo_final": 0.0,
+                    "detalhes": []
+                }
+                saldo_anterior_por_conta.pop(conta, None)
+                
+            if nat == 1:
+                contas_fisicas_empresa[conta]["movimento_debito"] += v
+                contas_fisicas_empresa[conta]["movimento_liquido"] += v
+            else:
+                contas_fisicas_empresa[conta]["movimento_credito"] += v
+                contas_fisicas_empresa[conta]["movimento_liquido"] -= v
+                
+            contas_fisicas_empresa[conta]["detalhes"].append({
+                "chave": chave,
+                "data": str(dt),
+                "historico": hist,
+                "natureza": "D" if nat == 1 else "C",
+                "valor": v
+            })
+
+        for conta_id, saldo in saldo_anterior_por_conta.items():
+            if abs(saldo) > 0.01 and conta_id not in contas_fisicas_empresa:
+                contas_fisicas_empresa[conta_id] = {
+                    "conta": conta_id,
+                    "nome": plano.get(conta_id, {}).get("nome", "Desconhecida"),
+                    "classif": plano.get(conta_id, {}).get("classif", ""),
+                    "saldo_anterior": saldo,
+                    "movimento_debito": 0.0,
+                    "movimento_credito": 0.0,
+                    "movimento_liquido": 0.0,
+                    "saldo_final": 0.0,
+                    "detalhes": []
+                }
+
+        total_anterior_fisico = 0.0
+        total_movimento_fisico = 0.0
+        total_final_fisico = 0.0
+            
+        for c, data in contas_fisicas_empresa.items():
+            data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
+            total_anterior_fisico += data["saldo_anterior"]
+            total_movimento_fisico += data["movimento_liquido"]
+            total_final_fisico += data["saldo_final"]
+
         resultados = []
         for emp in empreendimentos:
             cc = emp["cc"]
             
-            # --- SALDO ANTERIOR (Aprovado: LCTOCTB + LCTOGER retrospectivo ou SALDOCTB. Nós implementamos a soma do LCTOGER histórico antes do mês atual para garantir perfeição analítica com o Centro de Custo) ---
-            cur_q.execute("""
-                SELECT 
-                    C.CONTACTBDEB, 
-                    C.CONTACTBCRED, 
-                    G.NATURLCTOCTB, 
-                    SUM(G.VALORLCTOGER) as TOTAL
-                FROM LCTOGER G
-                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
-                WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ? AND C.DATALCTOCTB < CAST(? AS DATE)
-                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1) -- Ignora encerramento patrimonial
-                GROUP BY 1, 2, 3
-            """, (empresa_id, cc, data_inicio_mes_atual))
-            
-            saldo_anterior_por_conta = {} 
-            for (c_deb, c_cred, nat, val) in cur_q.fetchall():
-                v = float(val or 0)
-                if nat == 1 and c_deb:
-                    saldo_anterior_por_conta[c_deb] = saldo_anterior_por_conta.get(c_deb, 0.0) + v
-                elif nat == -1 and c_cred:
-                    saldo_anterior_por_conta[c_cred] = saldo_anterior_por_conta.get(c_cred, 0.0) - v
-            
-            # --- MOVIMENTO DO MÊS ---
-            cur_q.execute("""
-                SELECT 
-                    C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER
-                FROM LCTOGER G
-                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
-                WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ? 
-                AND C.DATALCTOCTB >= CAST(? AS DATE) AND C.DATALCTOCTB < CAST(? AS DATE)
-                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                ORDER BY C.DATALCTOCTB ASC
-            """, (empresa_id, cc, data_inicio_mes_atual, data_fim_mes_atual))
-            
-            contas_fisicas = {}
-            for (chave, dt, cdeb, ccred, hist_val, nat, val) in cur_q.fetchall():
-                
-                # Tratamento de segurança contra sujeira de encode no Firebird (Evita exception no fetch da lib)
-                if isinstance(hist_val, (bytes, bytearray)):
-                    hist = hist_val.decode('cp1252', 'ignore')
-                elif hasattr(hist_val, 'read'):
-                    hist = hist_val.read().decode('cp1252', 'ignore')
-                else:
-                    hist = str(hist_val or "")
-                    
-                v = float(val or 0)
-                conta = cdeb if nat == 1 else ccred
-                if not conta: continue
-                
-                if conta not in contas_fisicas:
-                    contas_fisicas[conta] = {
-                        "conta": conta,
-                        "nome": plano.get(conta, {}).get("nome", "Desconhecida"),
-                        "classif": plano.get(conta, {}).get("classif", ""),
-                        "saldo_anterior": saldo_anterior_por_conta.get(conta, 0.0),
-                        "movimento_debito": 0.0,
-                        "movimento_credito": 0.0,
-                        "movimento_liquido": 0.0,
-                        "saldo_final": 0.0,
-                        "detalhes": []
-                    }
-                
-                if nat == 1:
-                    contas_fisicas[conta]["movimento_debito"] += v
-                    contas_fisicas[conta]["movimento_liquido"] += v
-                else:
-                    contas_fisicas[conta]["movimento_credito"] += v
-                    contas_fisicas[conta]["movimento_liquido"] -= v
-                    
-                contas_fisicas[conta]["detalhes"].append({
-                    "chave": chave,
-                    "data": str(dt),
-                    "historico": hist,
-                    "natureza": "D" if nat == 1 else "C",
-                    "valor": v
-                })
-                
             # --- INJEÇÃO VIRTUAL EXTRACONTÁBIL (VULCANO) ---
             contas_virtuais = {}
             def inject_virtual_entry(conta_id, valor, natureza, historico, logica="", saldo_ant=0.0):
@@ -1129,16 +1185,55 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     "logica": logica
                 })
 
+            # Força a criação das contas parametrizadas para a Auditoria ERP enxergá-las mesmo sem movimento
+            for c_key in ["conta_custo", "conta_cli", "conta_adicli", "conta_caixa", "conta_estand", "conta_estcon", "conta_rec"]:
+                cid_raw = emp.get(c_key)
+                if cid_raw and str(cid_raw).strip() and str(cid_raw).strip() != '99999':
+                    try:
+                        cid = int(cid_raw)
+                        # Apenas cria o dict vazio se não existir
+                        if cid not in contas_virtuais:
+                            contas_virtuais[cid] = {
+                                "conta": cid,
+                                "nome": plano.get(cid, {}).get("nome", "Desconhecida"),
+                                "classif": plano.get(cid, {}).get("classif", ""),
+                                "saldo_anterior": 0.0,
+                                "movimento_debito": 0.0,
+                                "movimento_credito": 0.0,
+                                "movimento_liquido": 0.0,
+                                "saldo_final": 0.0,
+                                "detalhes": []
+                            }
+                    except ValueError:
+                        pass
+
 
             nome_emp = emp["nome"]
             
             # 1. OBTER CUSTO GASTO GLOBAL NA CONTABILIDADE FÍSICA (QUESTOR)
-            custo_gasto_vigente = 0.0
-            custo_gasto_anterior = 0.0
-            for conta, dt_contabil in contas_fisicas.items():
-                # O saldo das contas de Custo no Questor reflete o total gasto.
-                custo_gasto_anterior += dt_contabil["saldo_anterior"]
-                custo_gasto_vigente += dt_contabil["saldo_final"]
+            cur_q.execute("""
+                SELECT SUM(G.VALORLCTOGER * G.NATURLCTOCTB)
+                FROM LCTOGER G
+                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                AND C.DATALCTOCTB < CAST(? AS DATE)
+                AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+            """, (empresa_id, emp["cc"], data_inicio_mes_atual))
+            row = cur_q.fetchone()
+            custo_gasto_anterior = float(row[0] or 0.0)
+            
+            cur_q.execute("""
+                SELECT SUM(G.VALORLCTOGER * G.NATURLCTOCTB)
+                FROM LCTOGER G
+                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                AND C.DATALCTOCTB < CAST(? AS DATE)
+                AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+            """, (empresa_id, emp["cc"], data_fim_mes_atual))
+            row = cur_q.fetchone()
+            custo_gasto_vigente = float(row[0] or 0.0)
 
             # 2. POC NATIVO (Reaproveitando Último Fechamento se não houver no mês)
             poc_acumulado_vigente = 0.0
@@ -1282,95 +1377,336 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     mov_ant = t_ant_atual - t_ant_ant
                     
                     trib_det_mes = uni_data.get("trib_detalhe_caixa_mes", {})
+                    trib_det_acum = uni_data.get("trib_detalhe_caixa_acumulado", {})
                     
                     for cfg in valid_confs:
                         desc = cfg.get("DESCRICAO", "")
+                        cta = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999
                         
-                        # Pegamos o valor exato no mês (financeiro base caixa) para esse imposto específico
-                        if desc == 'RET': bVal = trib_det_mes.get("ret", 0)
-                        elif desc == 'PIS': bVal = trib_det_mes.get("pis", 0)
-                        elif desc == 'COFINS': bVal = trib_det_mes.get("cofins", 0)
-                        elif desc == 'CSLL': bVal = trib_det_mes.get("csll", 0)
-                        elif desc == 'IRPJ': bVal = trib_det_mes.get("irpj", 0)
-                        elif desc == 'IRPJ Adicional': bVal = trib_det_mes.get("irpj_adicional", 0)
-                        else: bVal = 0
-
+                        bVal = 0.0
+                        bVal_acum = 0.0
+                        if desc == 'RET': 
+                            bVal = trib_det_mes.get("ret", 0)
+                            bVal_acum = trib_det_acum.get("ret", 0)
+                        elif 'PIS' in desc: 
+                            bVal = trib_det_mes.get("pis", 0)
+                            bVal_acum = trib_det_acum.get("pis", 0)
+                        elif 'COFINS' in desc: 
+                            bVal = trib_det_mes.get("cofins", 0)
+                            bVal_acum = trib_det_acum.get("cofins", 0)
+                        elif 'CSLL' in desc: 
+                            bVal = trib_det_mes.get("csll", 0)
+                            bVal_acum = trib_det_acum.get("csll", 0)
+                        elif 'IRPJ ADIC' in desc.upper(): 
+                            bVal = trib_det_mes.get("irpj_adicional", 0)
+                            bVal_acum = trib_det_acum.get("irpj_adicional", 0)
+                        elif 'IRPJ' in desc: 
+                            bVal = trib_det_mes.get("irpj", 0)
+                            bVal_acum = trib_det_acum.get("irpj", 0)
+                        
+                        is_quarter_end = int(mes) in [3, 6, 9, 12]
+                        is_trimestral = 'IRPJ' in desc or 'CSLL' in desc
+                        
+                        # Variáveis locais garantem que PIS/COFINS mensais não sejam infectados pela apuração trimestral
+                        _trib_soc_atual = trib_soc_atual
+                        _trib_soc_ant = trib_soc_ant
+                        _trib_caixa_atual = trib_caixa_atual
+                        _trib_caixa_ant = trib_caixa_ant
+                        
+                        if is_trimestral:
+                            meta_pq = receitas_meta_pq.get(nome_emp, {})
+                            uni_data_pq = next((u for u in meta_pq.get("unidades", []) if u["unidade"] == uni_nome), {})
+                            saldo_soc_pq = uni_data_pq.get("tributos_soc_acumulado", 0.0)
+                            saldo_caixa_pq = uni_data_pq.get("tributos_caixa_acumulado", 0.0)
+                            
+                            if is_quarter_end:
+                                _trib_soc_ant = saldo_soc_pq
+                                _trib_caixa_ant = saldo_caixa_pq
+                            else:
+                                _trib_soc_atual = saldo_soc_pq
+                                _trib_soc_ant = saldo_soc_pq
+                                _trib_caixa_atual = saldo_caixa_pq
+                                _trib_caixa_ant = saldo_caixa_pq
+                                
+                        _t_dif_atual = max(0, _trib_soc_atual - _trib_caixa_atual)
+                        _t_dif_ant = max(0, _trib_soc_ant - _trib_caixa_ant)
+                        _mov_dif = _t_dif_atual - _t_dif_ant
+                        
+                        _t_ant_atual = max(0, _trib_caixa_atual - _trib_soc_atual)
+                        _t_ant_ant = max(0, _trib_caixa_ant - _trib_soc_ant)
+                        _mov_ant = _t_ant_atual - _t_ant_ant
+                        
+                        # Se é trimestral mas não é mês de balanço (virada de tri), provisiona DRE vazia
+                        if is_trimestral and not is_quarter_end:
+                            # A provisão passa em branco para PNL e injetamos o saldo_anterior do trimestre passado 
+                            # para a tabela de reconciliação não colapsar
+                            VirtualInjection.append({
+                                "empreendimento": nome_emp,
+                                "unidade": unidade_nome,
+                                "conta": cta,
+                                "nome": desc,
+                                "saldo_anterior": _t_dif_ant if _mov_dif > 0 else _t_ant_ant, # Approximate last saldo
+                                "movimento_debito": 0.0,
+                                "movimento_credito": 0.0,
+                                "movimento_liquido": 0.0,
+                                "saldo_final": _t_dif_ant if _mov_dif > 0 else _t_ant_ant,    # Approximate last saldo
+                                "historico": f"{desc} | Provisão Zero (Mês {mes} não é fechamento Trimestral)",
+                                "natureza": "D",
+                                "logica": f"Regra Trimestral. Trib Acum: {_trib_soc_atual:,.2f}"
+                            })
+                            continue
+                        
                         # Qual peso desse imposto na carga tributária toda da unidade?
-                        peso_imp = bVal / uni_data["tributos_caixa_mes"] if uni_data["tributos_caixa_mes"] > 0 else (1.0 / len(valid_confs) if valid_confs else 1.0)
-                        if bVal <= 0 and mov_dif <= 0 and mov_ant <= 0: continue
+                        peso_imp = 0.0
+                        if uni_data["tributos_caixa_mes"] > 0:
+                            peso_imp = bVal / uni_data["tributos_caixa_mes"]
+                        elif uni_data["tributos_caixa_acumulado"] > 0:
+                            peso_imp = bVal_acum / uni_data["tributos_caixa_acumulado"]
+                        else:
+                            peso_imp = 1.0 / len(valid_confs) if valid_confs else 1.0
+                            
+                        if bVal <= 0 and _mov_dif <= 0 and (_trib_soc_atual - _trib_soc_ant) <= 0: continue
                         
-                        logica_imp = f"Unid {uni_nome}: Trib Caixa ({trib_caixa_atual:,.2f}) vs Trib DRE ({trib_soc_atual:,.2f}). Peso {desc}: {peso_imp*100:.1f}%"
+                        logica_imp = f"Unid {uni_nome}: Trib Caixa ({_trib_caixa_atual:,.2f}) vs Trib DRE ({_trib_soc_atual:,.2f}). Peso {desc}: {peso_imp*100:.1f}%"
+                        if is_trimestral: logica_imp += f" [APURAÇÃO TRIMESTRAL]"
                         
-                        m_dif = mov_dif * peso_imp
-                        m_ant = mov_ant * peso_imp
+                        # 1. Base DARF (Fluxo de Caixa Puro que baseia o passivo físico exigível)
+                        if abs(bVal) > 0.01 or (is_trimestral and not is_quarter_end):
+                            c_deb = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999
+                            c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
+                            # Para manter a tabela estruturada nos meses vazios do Trimestre 
+                            v_base = abs(bVal) if not (is_trimestral and not is_quarter_end) else 0.0
+                            nat_d = 'D' if bVal >= 0 else 'C'
+                            nat_c = 'C' if bVal >= 0 else 'D'
+                            inject_virtual_entry(c_deb, v_base, nat_d, f"Despesa Tributária DRE (Base Faturamento) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_trib_caixa_ant * peso_imp))
+                            inject_virtual_entry(c_cred, v_base, nat_c, f"Passivo/DARF Exigível (Faturamento) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_trib_caixa_ant * peso_imp))
                         
-                        # Diferido (A pagar no futuro pq DRE andou mas não geramos caixa)
+                        # 2. Ajuste Diferido (DRE Avançou > Caixa recebido = Criar Passivo Extra)
                         if abs(m_dif) > 0.01:
                             c_deb = cfg.get("CONTA_DEB_IMP_REC_PASSIVO_SOC") or 99999
                             c_cred = cfg.get("CONTA_CRED_IMP_REC_PASSIVO_SOC") or 99999
                             nat_d = 'D' if m_dif > 0 else 'C'
                             nat_c = 'C' if m_dif > 0 else 'D'
-                            inject_virtual_entry(c_deb, abs(m_dif), nat_d, f"Provisão Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(t_dif_ant * peso_imp))
-                            inject_virtual_entry(c_cred, abs(m_dif), nat_c, f"Passivo Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(t_dif_ant * peso_imp))
+                            inject_virtual_entry(c_deb, abs(m_dif), nat_d, f"Provisão Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_dif_ant * peso_imp))
+                            inject_virtual_entry(c_cred, abs(m_dif), nat_c, f"Passivo Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_dif_ant * peso_imp))
                             
-                        # Antecipado (Pago hoje, mas DRE ainda não auferiu pq POC baixo)
+                        # 3. Ajuste Antecipado (Caixa recebido > DRE Avançou = Reduzir Despesa via Ativo)
                         if abs(m_ant) > 0.01:
                             c_deb = cfg.get("CONTA_DEB_IMP_APROP_ATIVO") or 99999 
-                            c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
+                            c_cred = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999 # <-- Correção vital! Creditar a DESPESA para anular o excesso, preservar o DARF físico!
                             nat_d = 'D' if m_ant > 0 else 'C'
                             nat_c = 'C' if m_ant > 0 else 'D'
-                            inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(t_ant_ant * peso_imp))
-                            inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Constituição Adiant Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(t_ant_ant * peso_imp))
-                            
-                        # Despesa Direta sobre a Receita Real Auferida Mês (A que vai pra DRE)
-                        despesa_dre_mes_imp = (trib_soc_atual - trib_soc_ant) * peso_imp
-                        if abs(despesa_dre_mes_imp) > 0.01:
-                            c_deb = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999
-                            c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
-                            nat_d = 'D' if despesa_dre_mes_imp > 0 else 'C'
-                            nat_c = 'C' if despesa_dre_mes_imp > 0 else 'D'
-                            logica_dre = f"Unid {uni_nome}: Despesa DRE pelo Base POC [{desc}]. Peso % Aplicado: {peso_imp*100:.1f}%"
-                            inject_virtual_entry(c_deb, abs(despesa_dre_mes_imp), nat_d, f"Despesa Tributária DRE - {desc} Unid {uni_nome}", logica=logica_dre, saldo_ant=(trib_soc_ant * peso_imp))
-                            inject_virtual_entry(c_cred, abs(despesa_dre_mes_imp), nat_c, f"Passivo/DARF Exigível - {desc} Unid {uni_nome}", logica=logica_dre, saldo_ant=-(trib_soc_ant * peso_imp))
-            # --- GARANTIR QUE CONTAS COM SALDO ANTERIOR APAREÇAM (Não Zerem) ---
-            for conta_id, saldo in saldo_anterior_por_conta.items():
-                if abs(saldo) > 0.01 and conta_id not in contas_fisicas:
-                    contas_fisicas[conta_id] = {
-                        "conta": conta_id,
-                        "nome": plano.get(conta_id, {}).get("nome", "Desconhecida"),
-                        "classif": plano.get(conta_id, {}).get("classif", ""),
-                        "saldo_anterior": saldo,
-                        "movimento_debito": 0.0,
-                        "movimento_credito": 0.0,
-                        "movimento_liquido": 0.0,
-                        "saldo_final": 0.0,
-                        "detalhes": []
-                    }
-
-            # --- CONSOLIDAÇÃO ---
-            total_anterior_fisico = 0.0
-            total_movimento_fisico = 0.0
-            total_final_fisico = 0.0
-                
-            for c, data in contas_fisicas.items():
-                data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
-                total_anterior_fisico += data["saldo_anterior"]
-                total_movimento_fisico += data["movimento_liquido"]
-                total_final_fisico += data["saldo_final"]
-
+                            inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_ant_ant * peso_imp))
+                            inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Estorno Excesso Despesa Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_ant_ant * peso_imp))
             for c, data in contas_virtuais.items():
                 data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
                     
-            if contas_fisicas or contas_virtuais:
+            eh_primeiro = len(resultados) == 0
+            
+            if len(contas_fisicas_empresa) > 0 or len(contas_virtuais) > 0:
                 resultados.append({
                     "empreendimento_id": emp["id"],
                     "empreendimento_nome": emp["nome"],
-                    "total_anterior_fisico": total_anterior_fisico,
-                    "total_movimento_fisico": total_movimento_fisico,
-                    "total_final_fisico": total_final_fisico,
-                    "contas_fisicas": list(contas_fisicas.values()),
+                    "total_anterior_fisico": total_anterior_fisico if eh_primeiro else 0.0,
+                    "total_movimento_fisico": total_movimento_fisico if eh_primeiro else 0.0,
+                    "total_final_fisico": total_final_fisico if eh_primeiro else 0.0,
+                    "contas_fisicas": list(contas_fisicas_empresa.values()) if eh_primeiro else [],
                     "contas_virtuais": list(contas_virtuais.values())
                 })
+                
+        # --- RECEITAS GERAIS (LOCAÇÕES/ALUGUÉIS) P/ IRPJ e TRIBUTOS PRESUMIDOS ---
+        if not empreendimento_id:
+            try:
+                data_ini_mes = f"{ano}-{str(mes).zfill(2)}-01"
+                data_fim_mes = f"{ano+1}-01-01" if mes == 12 else f"{ano}-{str(mes+1).zfill(2)}-01"
+                
+                # Trimestre Scope setup
+                is_quarter_end = int(mes) in [3, 6, 9, 12]
+                trim_m = 1 if int(mes) in (1,2,3) else 4 if int(mes) in (4,5,6) else 7 if int(mes) in (7,8,9) else 10
+                data_ini_trim = f"{ano}-{str(trim_m).zfill(2)}-01"
+                
+                cur_q.execute('''
+                    SELECT C.CODIGOESTAB, SUM(C.VALORCONTABILIMPOSTO)
+                    FROM LCTOFISSAICFOP C
+                    JOIN LCTOFISSAI I ON C.CODIGOEMPRESA = I.CODIGOEMPRESA AND C.CODIGOESTAB = I.CODIGOESTAB AND C.CHAVELCTOFISSAI = I.CHAVELCTOFISSAI
+                    WHERE C.CODIGOEMPRESA = ?
+                    AND C.CODIGOCFOP IN (9000200, 9000201)
+                    AND I.DATALCTOFIS >= CAST(? AS DATE)
+                    AND I.DATALCTOFIS < CAST(? AS DATE)
+                    GROUP BY C.CODIGOESTAB
+                ''', (empresa_id, data_ini_mes, data_fim_mes))
+                loc_mes = {r[0]: float(r[1] or 0.0) for r in cur_q.fetchall()}
+                
+                cur_q.execute('''
+                    SELECT C.CODIGOESTAB, SUM(C.VALORCONTABILIMPOSTO)
+                    FROM LCTOFISSAICFOP C
+                    JOIN LCTOFISSAI I ON C.CODIGOEMPRESA = I.CODIGOEMPRESA AND C.CODIGOESTAB = I.CODIGOESTAB AND C.CHAVELCTOFISSAI = I.CHAVELCTOFISSAI
+                    WHERE C.CODIGOEMPRESA = ?
+                    AND C.CODIGOCFOP IN (9000200, 9000201)
+                    AND I.DATALCTOFIS >= CAST(? AS DATE)
+                    AND I.DATALCTOFIS < CAST(? AS DATE)
+                    GROUP BY C.CODIGOESTAB
+                ''', (empresa_id, data_ini_trim, data_fim_mes))
+                loc_trim = {r[0]: float(r[1] or 0.0) for r in cur_q.fetchall()}
+                
+                cur_q.execute('''
+                    SELECT C.CODIGOESTAB, SUM(C.VALORCONTABILIMPOSTO)
+                    FROM LCTOFISSAICFOP C
+                    JOIN LCTOFISSAI I ON C.CODIGOEMPRESA = I.CODIGOEMPRESA AND C.CODIGOESTAB = I.CODIGOESTAB AND C.CHAVELCTOFISSAI = I.CHAVELCTOFISSAI
+                    WHERE C.CODIGOEMPRESA = ?
+                    AND C.CODIGOCFOP IN (9000200, 9000201)
+                    AND I.DATALCTOFIS < CAST(? AS DATE)
+                    GROUP BY C.CODIGOESTAB
+                ''', (empresa_id, data_ini_mes))
+                loc_ant = {r[0]: float(r[1] or 0.0) for r in cur_q.fetchall()}
+
+                cur_q.execute('''
+                    SELECT C.CODIGOESTAB, SUM(C.VALORCONTABILIMPOSTO)
+                    FROM LCTOFISSAICFOP C
+                    JOIN LCTOFISSAI I ON C.CODIGOEMPRESA = I.CODIGOEMPRESA AND C.CODIGOESTAB = I.CODIGOESTAB AND C.CHAVELCTOFISSAI = I.CHAVELCTOFISSAI
+                    WHERE C.CODIGOEMPRESA = ?
+                    AND C.CODIGOCFOP IN (9000200, 9000201)
+                    AND I.DATALCTOFIS < CAST(? AS DATE)
+                    GROUP BY C.CODIGOESTAB
+                ''', (empresa_id, data_ini_trim))
+                loc_ant_trim = {r[0]: float(r[1] or 0.0) for r in cur_q.fetchall()}
+
+                todos_estabs = set(list(loc_mes.keys()) + list(loc_ant.keys()) + list(loc_trim.keys()) + list(loc_ant_trim.keys()))
+
+                if todos_estabs:
+                    contas_virtuais_loc = {}
+                    
+                    def get_cv_loc(cid):
+                        cid = int(cid)
+                        if cid not in contas_virtuais_loc:
+                            contas_virtuais_loc[cid] = {
+                                "conta": cid,
+                                "nome": plano.get(cid, {}).get("nome", "Desconhecida"),
+                                "classif": plano.get(cid, {}).get("classif", ""),
+                                "saldo_anterior": 0.0,
+                                "movimento_debito": 0.0,
+                                "movimento_credito": 0.0,
+                                "movimento_liquido": 0.0,
+                                "saldo_final": 0.0,
+                                "detalhes": []
+                            }
+                        return contas_virtuais_loc[cid]
+
+                    def inject_loc_entry(cid, valor_mes, nat, historico, saldo_ant=0.0, logica_str=""):
+                        if not cid or cid == 99999 or (valor_mes < 0.01 and abs(saldo_ant) < 0.01):
+                            if cid and cid != 99999:
+                                cv = get_cv_loc(cid)
+                                cv["saldo_anterior"] += float(saldo_ant)
+                            return
+                        cv = get_cv_loc(cid)
+                        cv["saldo_anterior"] += float(saldo_ant)
+                        cv["detalhes"].append({
+                            "chave": "LOC_VIRTUAL", "data": f"{str(mes).zfill(2)}/{ano} (Serviços/Locação)", "historico": historico,
+                            "natureza": nat, "valor": float(valor_mes), "virtual": True,
+                            "logica": logica_str
+                        })
+                        if nat == 'D':
+                            cv["movimento_debito"] += float(valor_mes)
+                            cv["movimento_liquido"] += float(valor_mes)
+                        else:
+                            cv["movimento_credito"] += float(valor_mes)
+                            cv["movimento_liquido"] -= float(valor_mes)
+
+                    confs = [c for c in impostos_config if c.get("RET") == "N"]
+                    
+                    for estab in todos_estabs:
+                        v_loc = loc_mes.get(estab, 0.0)
+                        v_loc_trim = loc_trim.get(estab, 0.0)
+                        
+                        v_loc_ant = loc_ant.get(estab, 0.0)
+                        v_loc_ant_trim = loc_ant_trim.get(estab, 0.0)
+                        
+                        nome_filial = f"Estab {estab} (SCP/Filial)" if estab > 1 else "Matriz"
+                        
+                        for cfg in confs:
+                            desc = cfg.get("DESCRICAO", "").upper()
+                            rate = 0.0
+                            is_adic = False
+                            
+                            if 'PIS' in desc: rate = 0.0065
+                            elif 'COFINS' in desc: rate = 0.03
+                            elif 'IRPJ ADIC' in desc:
+                                is_adic = True
+                            elif 'IRPJ' in desc: rate = 0.32 * 0.15
+                            elif 'CSLL' in desc: rate = 0.32 * 0.09
+                            
+                            is_trimestral = 'IRPJ' in desc or 'CSLL' in desc
+                            
+                            tax_atual = 0.0
+                            tax_ant = 0.0
+                            logica = ""
+                            
+                            # Determine calculation base
+                            if is_trimestral:
+                                _v_calc = v_loc_trim if is_quarter_end else 0.0
+                                logica = f"Receita TRIMESTRAL {nome_filial}: R$ {v_loc_trim:,.2f}"
+                                _v_ant_calc = v_loc_ant_trim
+                            else:
+                                _v_calc = v_loc
+                                logica = f"Receita MENSA {nome_filial}: R$ {v_loc:,.2f}"
+                                _v_ant_calc = v_loc_ant
+                                
+                            if is_adic:
+                                if _v_calc > 0:
+                                    # Calcular qb_vendas (Caixa do Trimestre) cruzando as metas
+                                    qb_vendas = 0.0
+                                    for e_name, e_meta in receitas_meta.items():
+                                        for u in e_meta.get("unidades", []):
+                                            qb_vendas += u.get("caixa_acumulado", 0.0)
+                                            
+                                    for e_name, e_meta in receitas_meta_pq.items():
+                                        for u in e_meta.get("unidades", []):
+                                            qb_vendas -= u.get("caixa_acumulado", 0.0)
+                                            
+                                    qb_vendas = max(0.0, qb_vendas)
+                                    
+                                    lucro_presumido_misto = (qb_vendas * 0.08) + (_v_calc * 0.32)
+                                    quarter_adicional_global = max(0.0, lucro_presumido_misto - 60000.0) * 0.10
+                                    
+                                    fracao_locacoes = (_v_calc * 0.32) / lucro_presumido_misto if lucro_presumido_misto > 0 else 0.0
+                                    tax_atual = quarter_adicional_global * fracao_locacoes
+                                    
+                                    logica += f" | Base Mista(Loc: {_v_calc*0.32:,.2f} Ven: {qb_vendas*0.08:,.2f}). Excesso sobre 60k rateado em {fracao_locacoes*100:.1f}%"
+                            else:
+                                tax_atual = _v_calc * rate
+                                tax_ant = _v_ant_calc * rate
+                                
+                            # Se trimestral, forçar lançamento mesmo se 0 na base mensal para transpor saldo_ant na UI
+                            do_entry = tax_atual > 0.01 or abs(tax_ant) > 0.01 or is_trimestral
+                            
+                            if do_entry:
+                                c_deb = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999
+                                c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
+                                inject_loc_entry(c_deb, tax_atual, 'D', f"Locação {nome_filial} - {desc}", saldo_ant=tax_ant, logica_str=logica)
+                                inject_loc_entry(c_cred, tax_atual, 'C', f"Locação {nome_filial} - {desc}", saldo_ant=-tax_ant, logica_str=logica)
+                                
+                    # Garante inicialização vazia para exibir a conta se ratear zero no mês
+                    for cfg in confs:
+                        c_deb = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999
+                        c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
+                        if c_deb != 99999: get_cv_loc(c_deb)
+                        if c_cred != 99999: get_cv_loc(c_cred)
+                    
+                    for c, data in contas_virtuais_loc.items():
+                        data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
+
+                    if contas_virtuais_loc:
+                        resultados.append({
+                            "empreendimento_id": "GLOBAL_LOC",
+                            "empreendimento_nome": "Geral - Locações e Serviços",
+                            "total_anterior_fisico": 0.0,
+                            "total_movimento_fisico": 0.0,
+                            "total_final_fisico": 0.0,
+                            "contas_fisicas": [],
+                            "contas_virtuais": list(contas_virtuais_loc.values())
+                        })
+            except Exception as e:
+                print("Aviso processando Locações Virtuais:", e)
             
         return {"data": resultados}
     except Exception as e:
@@ -1429,42 +1765,82 @@ def api_saldo_contas(
             if row and row[0]:
                 cc_filtro = int(row[0])
 
+        # Identificar contas de Imposto a Recolher para considerar apenas Apropriações (Créditos) no confronto de movimento
+        cur_v.execute("SELECT CONTA_CRED_IMP_REC_DARF FROM IMPOSTO")
+        contas_imposto_recolher = {int(r[0]) for r in cur_v.fetchall() if r[0] and str(r[0]).strip().isdigit()}
+
         resultado = {}
 
         for conta_id in lista_contas:
-            # Query principal: LCTOCTB direto por DEB ou CRED
-            placeholders = "?"
-
+            is_imposto_recolher = conta_id in contas_imposto_recolher
+            
+            cond_contabil = "(C.CONTACTBCRED = ?)" if is_imposto_recolher else "(C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)"
+            params_conta = (conta_id,) if is_imposto_recolher else (conta_id, conta_id)
+            
             if data_ini and data_fim:
-                query = """
-                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
-                    FROM LCTOCTB C
-                    WHERE C.CODIGOEMPRESA = ?
-                      AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
-                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                      AND C.DATALCTOCTB >= CAST(? AS DATE)
-                      AND C.DATALCTOCTB < CAST(? AS DATE)
-                    ORDER BY C.DATALCTOCTB ASC
-                """
-                cur_q.execute(query, (empresa_id, conta_id, conta_id, data_ini, data_fim))
+                if cc_filtro:
+                    query = f"""
+                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB
+                        FROM LCTOGER G
+                        JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                        WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                          AND {cond_contabil}
+                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                          AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                          AND C.DATALCTOCTB >= CAST(? AS DATE)
+                          AND C.DATALCTOCTB < CAST(? AS DATE)
+                        ORDER BY C.DATALCTOCTB ASC
+                    """
+                    cur_q.execute(query, (empresa_id, cc_filtro, *params_conta, data_ini, data_fim))
+                else:
+                    query = f"""
+                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                        FROM LCTOCTB C
+                        WHERE C.CODIGOEMPRESA = ?
+                          AND {cond_contabil}
+                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                          AND NOT (C.CODIGOHISTCTB = 370)
+                          AND C.DATALCTOCTB >= CAST(? AS DATE)
+                          AND C.DATALCTOCTB < CAST(? AS DATE)
+                        ORDER BY C.DATALCTOCTB ASC
+                    """
+                    cur_q.execute(query, (empresa_id, *params_conta, data_ini, data_fim))
             else:
-                cur_q.execute("""
-                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
-                    FROM LCTOCTB C
-                    WHERE C.CODIGOEMPRESA = ?
-                      AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
-                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                    ORDER BY C.DATALCTOCTB ASC
-                """, (empresa_id, conta_id, conta_id))
+                if cc_filtro:
+                    cur_q.execute(f"""
+                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB
+                        FROM LCTOGER G
+                        JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                        WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                          AND {cond_contabil}
+                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                          AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                        ORDER BY C.DATALCTOCTB ASC
+                    """, (empresa_id, cc_filtro, *params_conta))
+                else:
+                    cur_q.execute(f"""
+                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                        FROM LCTOCTB C
+                        WHERE C.CODIGOEMPRESA = ?
+                          AND {cond_contabil}
+                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                          AND NOT (C.CODIGOHISTCTB = 370)
+                        ORDER BY C.DATALCTOCTB ASC
+                    """, (empresa_id, *params_conta))
 
             rows = cur_q.fetchall()
             mov_deb = 0.0
             mov_cred = 0.0
             detalhes = []
 
-            for (chave, dt, cdeb, ccred, hist_raw, valor) in rows:
+            for row_tuple in rows:
+                chave, dt, cdeb, ccred, hist_raw, valor = row_tuple[:6]
+                opt_nat = row_tuple[6] if len(row_tuple) > 6 else None
+                
                 if isinstance(hist_raw, (bytes, bytearray)):
                     hist = hist_raw.decode("cp1252", "ignore")
                 elif hasattr(hist_raw, "read"):
@@ -1473,21 +1849,28 @@ def api_saldo_contas(
                     hist = str(hist_raw or "")
 
                 v = float(valor or 0)
-                # Natureza em relação a esta conta
-                if cdeb == conta_id:
-                    nat = "D"
-                    mov_deb += v
+                
+                # Para evitar duplicidade de lançamentos no CC:
+                if opt_nat is not None:
+                    # opt_nat = G.NATURLCTOCTB (1 para Debito, -1 para Credito do LCTOCTB)
+                    if opt_nat == 1 and cdeb == conta_id:
+                        nat = "D"
+                        mov_deb += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
+                    elif opt_nat == -1 and ccred == conta_id:
+                        nat = "C"
+                        mov_cred += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
                 else:
-                    nat = "C"
-                    mov_cred += v
-
-                detalhes.append({
-                    "chave": chave,
-                    "data": str(dt),
-                    "historico": hist.strip(),
-                    "natureza": nat,
-                    "valor": v
-                })
+                    # Fallback standard do LCTOCTB (nível de Lote/Partida)
+                    if cdeb == conta_id:
+                        nat = "D"
+                        mov_deb += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
+                    elif ccred == conta_id:
+                        nat = "C"
+                        mov_cred += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
 
             mov_liq = mov_deb - mov_cred
 
@@ -1495,14 +1878,34 @@ def api_saldo_contas(
             saldo_anterior = 0.0
             if data_ini:
                 try:
-                    cur_q.execute("""
-                        SELECT SUM(CASE WHEN CONTACTBDEB = ? THEN VALORLCTOCTB ELSE -VALORLCTOCTB END)
-                        FROM LCTOCTB
-                        WHERE CODIGOEMPRESA = ?
-                          AND (CONTACTBDEB = ? OR CONTACTBCRED = ?)
-                          AND DATALCTOCTB < CAST(? AS DATE)
-                          AND (CODIGOORIGLCTOCTB IS NULL OR CODIGOORIGLCTOCTB <> 'ZZ')
-                    """, (conta_id, empresa_id, conta_id, conta_id, data_ini))
+                    if cc_filtro:
+                        base_sum = "WHEN C.CONTACTBCRED = ? AND G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER" if is_imposto_recolher else "WHEN C.CONTACTBDEB = ? AND G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER WHEN C.CONTACTBCRED = ? AND G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER"
+                        cur_q.execute(f"""
+                            SELECT SUM(
+                                CASE 
+                                    {base_sum} 
+                                    ELSE 0 
+                                END
+                            )
+                            FROM LCTOGER G
+                            JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                            WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                              AND {cond_contabil}
+                              AND C.DATALCTOCTB < CAST(? AS DATE)
+                              AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                              AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                        """, (*params_conta, empresa_id, cc_filtro, *params_conta, data_ini))
+                    else:
+                        base_sum = "WHEN CONTACTBCRED = ? THEN -VALORLCTOCTB" if is_imposto_recolher else "WHEN CONTACTBDEB = ? THEN VALORLCTOCTB ELSE -VALORLCTOCTB"
+                        cur_q.execute(f"""
+                            SELECT SUM(CASE {base_sum} ELSE 0 END)
+                            FROM LCTOCTB
+                            WHERE CODIGOEMPRESA = ?
+                              AND {cond_contabil}
+                              AND DATALCTOCTB < CAST(? AS DATE)
+                              AND (CODIGOORIGLCTOCTB IS NULL OR CODIGOORIGLCTOCTB <> 'ZZ')
+                              AND NOT (CODIGOHISTCTB = 370)
+                        """, (*params_conta, empresa_id, *params_conta, data_ini))
                     r = cur_q.fetchone()
                     saldo_anterior = float(r[0] or 0) if r and r[0] is not None else 0.0
                 except Exception:
@@ -1514,8 +1917,8 @@ def api_saldo_contas(
                 "saldo_anterior": saldo_anterior,
                 "movimento_debito": mov_deb,
                 "movimento_credito": mov_cred,
-                "movimento_liquido": mov_liq,
-                "saldo_final": saldo_anterior + mov_liq,
+                "movimento_liquido": mov_deb - mov_cred,
+                "saldo_final": saldo_anterior + (mov_deb - mov_cred),
                 "detalhes": detalhes
             }
 
@@ -1587,18 +1990,30 @@ async def generate_pdf_parser(file: UploadFile = File(...)):
         # Read the PDF into memory
         pdf_bytes = await file.read()
         
-        # Extract text from the first 5 pages using pdfplumber
-        extracted_text = ""
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            pages_to_process = min(5, len(pdf.pages))
-            for i in range(pages_to_process):
-                extracted_text += pdf.pages[i].extract_text(layout=True) + "\n"
+        # Extract text from the first 5 pages usando Async/Thread conforme AGENTS.md
+        def _extract_pages(raw: bytes) -> str:
+            result = []
+            with pdfplumber.open(io.BytesIO(raw)) as pdf:
+                for i, page in enumerate(pdf.pages):
+                    if i >= 5: break
+                    extracted = page.extract_text() or page.extract_text(layout=True) or ""
+                    if extracted.strip():
+                        result.append(f"--- Página {i + 1} ---\n{extracted[:4500]}")
+            return "\n".join(result)
+            
+        extracted_text = await asyncio.to_thread(_extract_pages, pdf_bytes)
         
         if not extracted_text.strip():
             raise HTTPException(status_code=400, detail="Cannot extract text from this PDF (it might be an image/scanned).")
             
         # Prompt Gemini to generate the python script
-        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        gen_cfg = {
+            "max_output_tokens": 8192,
+        }
+        if HAS_VERTEXAI:
+            gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         prompt_instructions = f"""Você é um Engenheiro de Software Python Sênior especialista em ETL e processamento de finanças usando Pandas.
 Abaixo está o texto extraído da amostra do layout do relatório em PDF do sistema ERP (limite de 5 páginas).
 
@@ -2081,18 +2496,46 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
             
         monthly_totals_native = { (p.year, p.month): v for p, v in monthly_groups.items() }
 
+        # Fetch Locações History from Questor to compute PROPORTIONAL Adicional Mixed Base
+        monthly_locacoes = {}
+        try:
+            conn_q = get_conn("questor")
+            cur_q = conn_q.cursor()
+            cur_q.execute("""
+                SELECT EXTRACT(YEAR FROM I.DATALCTOFIS), EXTRACT(MONTH FROM I.DATALCTOFIS), SUM(C.VALORCONTABILIMPOSTO)
+                FROM LCTOFISSAICFOP C
+                JOIN LCTOFISSAI I ON C.CODIGOEMPRESA = I.CODIGOEMPRESA AND C.CODIGOESTAB = I.CODIGOESTAB AND C.CHAVELCTOFISSAI = I.CHAVELCTOFISSAI
+                WHERE C.CODIGOEMPRESA = ? AND C.CODIGOCFOP IN (9000200, 9000201)
+                GROUP BY 1, 2
+            """, (int(empresa_id) if empresa_id else 0,))
+            monthly_locacoes = {(int(r[0]), int(r[1])): float(r[2] or 0.0) for r in cur_q.fetchall()}
+            conn_q.close()
+        except Exception as e:
+            print("Erro ao buscar historico de locacoes:", e)
+
         month_adicional = {}
         for yq, months in quarters_data.items():
             month3 = (yq[0], yq[1] * 3)
             month1 = (yq[0], yq[1] * 3 - 2)
             month2 = (yq[0], yq[1] * 3 - 1)
             
-            quarter_base = monthly_totals_native.get(month1, 0) + monthly_totals_native.get(month2, 0) + monthly_totals_native.get(month3, 0)
-            quarter_adicional = max(0, (quarter_base * 0.08) - 60000) * 0.10
+            qb_vendas = monthly_totals_native.get(month1, 0) + monthly_totals_native.get(month2, 0) + monthly_totals_native.get(month3, 0)
+            qb_locacoes = monthly_locacoes.get(month1, 0) + monthly_locacoes.get(month2, 0) + monthly_locacoes.get(month3, 0)
             
-            m1_adicional = max(0, (monthly_totals_native.get(month1, 0) * 0.08) - 20000) * 0.10
-            m2_adicional = max(0, (monthly_totals_native.get(month2, 0) * 0.08) - 20000) * 0.10
-            m3_adicional = quarter_adicional - m1_adicional - m2_adicional
+            # Cálculo de Adicional Misto (Vendas a 8% + Locações a 32%) - Rateado pelo Peso do Eixo
+            lucro_presumido_misto = (qb_vendas * 0.08) + (qb_locacoes * 0.32)
+            quarter_adicional_global = max(0.0, lucro_presumido_misto - 60000.0) * 0.10
+            
+            fracao_vendas = (qb_vendas * 0.08) / lucro_presumido_misto if lucro_presumido_misto > 0 else 0
+            adicional_vendas_trimestre = quarter_adicional_global * fracao_vendas
+            
+            # Distribui do trimestre proporcional à base de cada mês nativo (para não distorcer UI)
+            m1_vendas = monthly_totals_native.get(month1, 0) * 0.08
+            m2_vendas = monthly_totals_native.get(month2, 0) * 0.08
+            
+            m1_adicional = adicional_vendas_trimestre * (m1_vendas / (qb_vendas * 0.08)) if qb_vendas > 0 else 0
+            m2_adicional = adicional_vendas_trimestre * (m2_vendas / (qb_vendas * 0.08)) if qb_vendas > 0 else 0
+            m3_adicional = adicional_vendas_trimestre - m1_adicional - m2_adicional
             
             month_adicional[month1] = m1_adicional
             month_adicional[month2] = m2_adicional
@@ -3971,7 +4414,10 @@ def _gemini_generate_python_plain(prompt: str) -> str:
     """Fallback quando JSON com python_code fica grande ou inválido."""
     _require_gemini_key()
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        gen_cfg = {"max_output_tokens": 8192}
+        if HAS_VERTEXAI: gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         resp = model.generate_content(
             prompt
             + "\n\nResponda APENAS com o código-fonte Python completo. Sem markdown, sem explicação."

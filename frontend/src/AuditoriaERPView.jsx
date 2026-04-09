@@ -171,18 +171,20 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
                 {porComp.flatMap(c => c.detalhesFisico).length === 0 ? (
                   <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos físicos</p>
                 ) : (
-                  <table className="w-full text-[10px]">
-                    <tbody>
-                      {porComp.flatMap((c, ci) => c.detalhesFisico.map((d, i) => (
-                        <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                          <td className="px-4 py-1 font-mono text-[#444] w-24">{d.data}</td>
-                          <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico}>{d.historico}</td>
-                          <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
-                          <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
-                        </tr>
-                      )))}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto pb-2">
+                    <table className="w-auto text-[9px] table-auto whitespace-nowrap ml-2 mt-1">
+                      <tbody>
+                        {porComp.flatMap((c, ci) => c.detalhesFisico.map((d, i) => (
+                          <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+                            <td className="px-2 py-1 font-mono text-[#444]">{d.data}</td>
+                            <td className="px-2 py-1 text-[#555]" title={d.historico}>{d.historico}</td>
+                            <td className="px-2 py-1 text-center font-bold" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
+                            <td className="px-2 py-1 text-right font-mono text-[#888]">{fmt(d.valor)}</td>
+                          </tr>
+                        )))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
               {/* Vulcano */}
@@ -193,18 +195,20 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
                 {porComp.flatMap(c => c.detalhesVirtual).length === 0 ? (
                   <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos societários</p>
                 ) : (
-                  <table className="w-full text-[10px]">
-                    <tbody>
-                      {porComp.flatMap((c, ci) => c.detalhesVirtual.map((d, i) => (
-                        <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                          <td className="px-4 py-1 font-mono text-[#444] w-24">{d.data}</td>
-                          <td className="px-2 py-1 text-[#555] truncate max-w-[260px]" title={d.historico || d.logica}>{d.historico}</td>
-                          <td className="px-2 py-1 text-center font-bold w-6" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
-                          <td className="px-4 py-1 text-right font-mono text-[#888] w-28">{fmt(d.valor)}</td>
-                        </tr>
-                      )))}
-                    </tbody>
-                  </table>
+                  <div className="overflow-x-auto pb-2">
+                    <table className="w-auto text-[9px] table-auto whitespace-nowrap ml-2 mt-1">
+                      <tbody>
+                        {porComp.flatMap((c, ci) => c.detalhesVirtual.map((d, i) => (
+                          <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+                            <td className="px-2 py-1 font-mono text-[#444]">{d.data}</td>
+                            <td className="px-2 py-1 text-[#555]" title={d.historico || d.logica}>{d.historico}</td>
+                            <td className="px-2 py-1 text-center font-bold" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
+                            <td className="px-2 py-1 text-right font-mono text-[#888]">{fmt(d.valor)}</td>
+                          </tr>
+                        )))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
