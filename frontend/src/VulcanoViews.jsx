@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     Download, RefreshCw, Upload, Play, CheckCircle2, CheckCircle, ChevronDown, Layers, Activity,
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
@@ -1219,7 +1219,9 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
   const [viewMode, setViewMode] = useState('raw'); // 'raw', 'preview'
   const [expandedRowIndex, setExpandedRowIndex] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [useSplinkMatch, setUseSplinkMatch] = useState(false); // ⚡ Splink probabilístico
   
+
   const [rawPdfLines, setRawPdfLines] = useState([]);
   const [selectedRawLines, setSelectedRawLines] = useState([]);
   const [chatTab, setChatTab] = useState('chat'); // 'chat', 'pdf_samples'
@@ -1571,7 +1573,8 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           empresa_id: parseInt(selectedEmpresa, 10),
-          extracted_data: extractedData
+          extracted_data: extractedData,
+          use_splink: useSplinkMatch,
         })
       });
       const data = await res.json();
@@ -1869,6 +1872,20 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* Toggle Splink */}
+                      <button
+                        id="btn-toggle-splink"
+                        onClick={() => setUseSplinkMatch(v => !v)}
+                        title={useSplinkMatch ? 'Modo: Splink Probabilístico (clique para voltar ao Heurístico)' : 'Modo: Heurístico (clique para usar Splink)'}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${
+                          useSplinkMatch
+                            ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[#a259ff] shadow-[0_0_10px_rgba(162,89,255,0.3)]'
+                            : 'bg-[#1a1a1c] border-[#333] text-[#555] hover:text-[#a259ff] hover:border-[#a259ff]/40'
+                        }`}
+                      >
+                        <Zap size={12} className={useSplinkMatch ? 'text-[#a259ff]' : 'text-[#555]'}/>
+                        {useSplinkMatch ? 'Splink ON' : 'Splink OFF'}
+                      </button>
                       <button
                         onClick={() => setIsFullscreen(!isFullscreen)}
                         className="bg-[#1a1a1c] border border-[#333] hover:border-[#a259ff] text-[#888] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
@@ -1957,6 +1974,14 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                         <div className="font-bold text-[#34c759] flex items-center gap-1"><CheckCircle2 size={12}/> ID: {d.id_receber} - Encontrado</div>
                                         <div className="text-[10px] text-[#888] mt-1">Vencimento: {d.db_estado_atual.vencimento} (Parc {d.db_estado_atual.parcela})</div>
                                         <div className="text-[10px] text-[#888]">Status Banco: {d.db_estado_atual.pago_hoje > 0 ? `Pago ${formatCurrency(d.db_estado_atual.pago_hoje)}` : 'Aberto'}</div>
+                                        {d.match_engine && (
+                                          <div className="mt-1.5 flex items-center gap-1.5">
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${d.match_engine === 'splink' ? 'bg-[#a259ff]/20 text-[#a259ff] border border-[#a259ff]/30' : 'bg-[#222] text-[#555] border border-[#333]'}`}>
+                                              {d.match_engine === 'splink' ? 'Splink' : 'Heuristico'}
+                                            </span>
+                                            {d.match_probability != null && <span className="text-[9px] font-mono text-[#555]">P={Math.round(d.match_probability*100)}%</span>}
+                                          </div>
+                                        )}
                                       </>
                                     ) : isProjetada ? (
                                       <>

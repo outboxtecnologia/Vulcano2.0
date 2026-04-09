@@ -45,6 +45,7 @@ function corDiff(diff) {
 // ── Linha de conta na tabela de confronto ────────────────────────────────────
 function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const [open, setOpen] = useState(false);
+  const [racionalOpen, setRacionalOpen] = useState(false);
 
   // Para cada competência: soma fisico e virtual desta conta
   const porComp = competencias.map(comp => {
@@ -79,6 +80,11 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual);
   if (!temQualquerDado) return null;
 
+  // Todos os lançamentos virtuais com logica (para o Racional)
+  const todosVirtualLogica = porComp.flatMap(({ comp, detalhesVirtual }) =>
+    detalhesVirtual.filter(d => d.logica).map(d => ({ ...d, comp }))
+  );
+
   return (
     <>
       <tr
@@ -89,9 +95,9 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
         <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px]">
           <div className="flex items-center gap-2">
             <Status diff={totalDiffSaldo}/>
-            <span className="font-mono text-[11px] font-bold text-[#ff4d00] shrink-0">{contaId}</span>
-            <span className="text-[10px] text-[#666] truncate" title={contaNome}>{contaNome}</span>
-            <ChevronDown size={9} className={`text-[#444] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
+            <span className="font-mono text-[13px] font-black text-[#ff4d00] shrink-0">{contaId}</span>
+            <span className="text-[12px] font-bold text-[#666] truncate" title={contaNome}>{contaNome}</span>
+            <ChevronDown size={10} className={`text-[#444] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
           </div>
         </td>
 
@@ -101,36 +107,36 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
             <div className="flex gap-0 h-full">
               {/* Questor */}
               <div className="flex-1 px-2 py-2.5 text-right border-r border-[#1a1a1a] flex flex-col justify-center">
-                <div className="font-mono text-[10px] font-bold">
+                <div className="font-mono text-[12px] font-black">
                   {temFisico || abs(movFisico) > 0.01 ? (
-                    <span className={movFisico == 0 ? 'text-[#888]' : movFisico >= 0 ? 'text-[#34c759]/70' : 'text-[#ff4d00]/70'}>
+                    <span className={movFisico == 0 ? 'text-[#888]' : movFisico >= 0 ? 'text-[#34c759]/80' : 'text-[#ff4d00]/80'}>
                       {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
                     </span>
                   ) : <span className="text-[#252525]">—</span>}
                 </div>
                 {abs(saldoFisico) > 0.01 && (
-                  <div className="text-[8px] font-mono text-[#555] mt-0.5" title="Saldo Final no Mês">
+                  <div className="text-[10px] font-bold font-mono text-[#555] mt-0.5" title="Saldo Final no Mês">
                     S: {fmt(saldoFisico)}
                   </div>
                 )}
               </div>
               {/* Vulcano */}
               <div className="flex-1 px-2 py-2.5 text-right border-r border-[#1a1a1a] flex flex-col justify-center">
-                <div className="font-mono text-[10px] font-bold">
+                <div className="font-mono text-[12px] font-black">
                   {abs(movVirtual) > 0.01 ? (
-                    <span className={movVirtual >= 0 ? 'text-[#a259ff]/80' : 'text-[#ff9f0a]/80'}>
+                    <span className={movVirtual >= 0 ? 'text-[#a259ff]' : 'text-[#ff9f0a]'}>
                       {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
                     </span>
                   ) : <span className="text-[#252525]">—</span>}
                 </div>
                 {abs(saldoVirtual) > 0.01 && (
-                  <div className="text-[8px] font-mono text-[#555] mt-0.5" title="Saldo Final no Mês (Virtual)">
+                  <div className="text-[10px] font-bold font-mono text-[#555] mt-0.5" title="Saldo Final no Mês (Virtual)">
                     S: {fmt(saldoVirtual)}
                   </div>
                 )}
               </div>
               {/* Delta */}
-              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[11px] font-bold">
+              <div className="flex-1 px-2 py-2.5 text-right font-mono text-[13px] font-black">
                 {abs(diffMov) < DIVERGENCIA_CORTE ? (
                   <span className="text-[#333]">✓</span>
                 ) : (
@@ -146,13 +152,13 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
         {/* Saldo final total diff */}
         <td className="px-3 py-2.5 text-right min-w-[130px]">
           {abs(totalDiffSaldo) < DIVERGENCIA_CORTE ? (
-            <span className="text-[10px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
+            <span className="text-[12px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
           ) : (
             <div>
-              <span className="font-mono text-sm font-black" style={{ color: corDiff(totalDiffSaldo) }}>
+              <span className="font-mono text-[14px] font-black" style={{ color: corDiff(totalDiffSaldo) }}>
                 {totalDiffSaldo > 0 ? '+' : ''}{fmt(totalDiffSaldo)}
               </span>
-              <p className="text-[8px] font-bold uppercase tracking-widest text-[#555] mt-0.5">divergência saldo</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#555] mt-0.5">divergência saldo</p>
             </div>
           )}
         </td>
@@ -162,24 +168,36 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
       {open && (
         <tr>
           <td colSpan={porComp.length + 2} className="p-0 bg-[#070707]">
+            {/* Botão Racional */}
+            {todosVirtualLogica.length > 0 && (
+              <div className="px-4 py-2 border-b border-[#111] flex items-center gap-2">
+                <button
+                  onClick={e => { e.stopPropagation(); setRacionalOpen(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-[11px] font-black uppercase tracking-widest text-[#a259ff] hover:bg-[#a259ff]/25 transition-all"
+                >
+                  <Zap size={11}/> Racional do Cálculo
+                </button>
+                <span className="text-[10px] text-[#444] font-bold">{todosVirtualLogica.length} etapa{todosVirtualLogica.length !== 1 ? 's' : ''} de cálculo</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 divide-x divide-[#111]">
               {/* Questor */}
               <div>
                 <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-[#ff4d00]">Questor — Físico</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#ff4d00]">Questor — Físico</span>
                 </div>
                 {porComp.flatMap(c => c.detalhesFisico).length === 0 ? (
-                  <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos físicos</p>
+                  <p className="px-5 py-3 text-[11px] font-bold text-[#333] uppercase italic">Sem lançamentos físicos</p>
                 ) : (
                   <div className="overflow-x-auto pb-2">
-                    <table className="w-auto text-[9px] table-auto whitespace-nowrap ml-2 mt-1">
+                    <table className="w-auto text-[11px] table-auto whitespace-nowrap ml-2 mt-1">
                       <tbody>
                         {porComp.flatMap((c, ci) => c.detalhesFisico.map((d, i) => (
                           <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                            <td className="px-2 py-1 font-mono text-[#444]">{d.data}</td>
-                            <td className="px-2 py-1 text-[#555]" title={d.historico}>{d.historico}</td>
-                            <td className="px-2 py-1 text-center font-bold" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[#888]">{fmt(d.valor)}</td>
+                            <td className="px-2 py-1 font-mono font-bold text-[#555]">{d.data}</td>
+                            <td className="px-2 py-1 font-bold text-[#666]" title={d.historico}>{d.historico}</td>
+                            <td className="px-2 py-1 text-center font-black text-[13px]" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
+                            <td className="px-2 py-1 text-right font-mono font-black text-[#999]">{fmt(d.valor)}</td>
                           </tr>
                         )))}
                       </tbody>
@@ -190,26 +208,77 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
               {/* Vulcano */}
               <div>
                 <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano — Societário</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano — Societário</span>
                 </div>
                 {porComp.flatMap(c => c.detalhesVirtual).length === 0 ? (
-                  <p className="px-5 py-3 text-[9px] text-[#333] uppercase font-bold italic">Sem lançamentos societários</p>
+                  <p className="px-5 py-3 text-[11px] font-bold text-[#333] uppercase italic">Sem lançamentos societários</p>
                 ) : (
                   <div className="overflow-x-auto pb-2">
-                    <table className="w-auto text-[9px] table-auto whitespace-nowrap ml-2 mt-1">
+                    <table className="w-auto text-[11px] table-auto whitespace-nowrap ml-2 mt-1">
                       <tbody>
                         {porComp.flatMap((c, ci) => c.detalhesVirtual.map((d, i) => (
                           <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                            <td className="px-2 py-1 font-mono text-[#444]">{d.data}</td>
-                            <td className="px-2 py-1 text-[#555]" title={d.historico || d.logica}>{d.historico}</td>
-                            <td className="px-2 py-1 text-center font-bold" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[#888]">{fmt(d.valor)}</td>
+                            <td className="px-2 py-1 font-mono font-bold text-[#555]">{d.data}</td>
+                            <td className="px-2 py-1 font-bold text-[#666]" title={d.historico || d.logica}>{d.historico}</td>
+                            <td className="px-2 py-1 text-center font-black text-[13px]" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
+                            <td className="px-2 py-1 text-right font-mono font-black text-[#999]">{fmt(d.valor)}</td>
                           </tr>
                         )))}
                       </tbody>
                     </table>
                   </div>
                 )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+
+      {/* ── Modal Racional ── */}
+      {racionalOpen && (
+        <tr>
+          <td colSpan={porComp.length + 2} className="p-0">
+            <div
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+              onClick={() => setRacionalOpen(false)}
+            >
+              <div
+                className="bg-[#0d0d0d] border border-[#a259ff]/30 rounded-lg w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl shadow-[#a259ff]/10"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[#1a1a1a]">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-0.5">Racional de Cálculo — Vulcano Motor Societário</p>
+                    <p className="text-white font-black text-[15px]">
+                      <span className="text-[#ff4d00] font-mono mr-2">{contaId}</span>{contaNome}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setRacionalOpen(false)}
+                    className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#222] text-[#666] hover:text-white font-black text-[18px] flex items-center justify-center transition-all"
+                  >×</button>
+                </div>
+                <div className="overflow-y-auto flex-1 px-6 py-4 flex flex-col gap-3">
+                  {todosVirtualLogica.map((d, i) => (
+                    <div key={i} className="border border-[#1e1e1e] rounded p-4 bg-[#0a0a0a] hover:border-[#a259ff]/20 transition-colors">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#555]">{d.comp} · {d.data}</span>
+                        <span
+                          className="text-[10px] font-black px-2 py-0.5 rounded"
+                          style={{ background: d.natureza === 'D' ? '#a259ff22' : '#ff9f0a22', color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}
+                        >
+                          {d.natureza === 'D' ? 'DÉBITO' : 'CRÉDITO'} {fmt(d.valor)}
+                        </span>
+                      </div>
+                      <p className="text-[12px] font-bold text-[#888] mb-1">{d.historico}</p>
+                      {d.logica && (
+                        <p className="text-[11px] font-mono text-[#a259ff]/70 bg-[#a259ff]/5 rounded px-3 py-2 border-l-2 border-[#a259ff]/30">
+                          {d.logica}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </td>
@@ -233,6 +302,11 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const [dadosPorMes, setDadosPorMes] = useState({});
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
+
+  // ── Diagnóstico IA (PyOD + DuckDB + KMeans + LevelShift) ──────────────────
+  const [diagData,    setDiagData]    = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [showDiag,    setShowDiag]    = useState(false);
 
   // ── Carrega empreendimentos na montagem ──────────────────────────────────
   useEffect(() => {
@@ -331,6 +405,60 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     setLoading(false);
   }, [selectedEmpresa, competencias, filtroEmpId]);
 
+  const fetchDiagnostico = async () => {
+    if (!selectedEmpresa) return;
+
+    // Converte os dados carregados na auditoria para a lista de DiagnosticoRow
+    const linhasMap = {};
+    Object.entries(dadosPorMes).forEach(([comp, data]) => {
+      // 1. Processa virtuais
+      (data.virtual || []).forEach(v => {
+        const key = `${v.conta}_${comp}`;
+        if (!linhasMap[key]) {
+          linhasMap[key] = { conta_id: parseInt(v.conta), competencia: comp, saldo_q: 0, saldo_v: 0, n_lanc_q: 0, n_lanc_v: 0 };
+        }
+        linhasMap[key].saldo_v += (v.movimento_liquido || 0);
+        linhasMap[key].n_lanc_v += 1;
+      });
+      // 2. Processa físicos
+      (data.fisico || []).forEach(f => {
+        const key = `${f.conta}_${comp}`;
+        if (!linhasMap[key]) {
+          linhasMap[key] = { conta_id: parseInt(f.conta), competencia: comp, saldo_q: 0, saldo_v: 0, n_lanc_q: 0, n_lanc_v: 0 };
+        }
+        linhasMap[key].saldo_q += (f.movimento_liquido || 0);
+        linhasMap[key].n_lanc_q += 1;
+      });
+    });
+
+    const linhas = Object.values(linhasMap).filter(r => r.conta_id > 0);
+
+    if (linhas.length === 0) {
+      setDiagData({ error: 'Nenhum dado carregado. Clique em "Auditar" primeiro.' });
+      setShowDiag(true);
+      return;
+    }
+
+    setDiagLoading(true);
+    setShowDiag(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/auditoria/diagnostico`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empresa_id: parseInt(selectedEmpresa),
+          linhas: linhas,
+          top_n: 20
+        })
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || 'Erro no diagnóstico');
+      setDiagData(j);
+    } catch (e) {
+      setDiagData({ error: String(e) });
+    }
+    setDiagLoading(false);
+  };
 
   // ── Apenas contas que o Vulcano calculou para injeção (contas_virtuais) ──
   const contasMap = useMemo(() => {
@@ -424,6 +552,14 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
           {loading ? `Auditando ${competencias.length} meses...` : 'Auditar'}
         </button>
+        <button onClick={fetchDiagnostico} disabled={diagLoading || !selectedEmpresa}
+          title="Analisa Questor ↔ Vulcano com PyOD + DuckDB + KMeans (24 meses)"
+          className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
+            showDiag ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[#a259ff]' : 'bg-[#111] border-[#333] text-[#555] hover:text-[#a259ff] hover:border-[#a259ff]/40'
+          }`}>
+          {diagLoading ? <Zap className="animate-spin" size={12}/> : <Zap size={12}/>}
+          {diagLoading ? 'Analisando...' : '🧠 Diagnóstico IA'}
+        </button>
       </div>
 
       {error && (
@@ -439,6 +575,118 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           <span className="text-xs font-black uppercase tracking-widest text-[#555]">
             Confrontando {competencias.length} competência{competencias.length > 1 ? 's' : ''}...
           </span>
+        </div>
+      )}
+
+      {/* ── Painel Diagnóstico IA ── */}
+      {showDiag && (
+        <div className="bg-[#0a0a0a] border border-[#a259ff]/30 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-[#a259ff]/20 bg-[#a259ff]/5">
+            <div className="flex items-center gap-3">
+              <span className="text-[#a259ff] text-lg">🧠</span>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#a259ff]">Diagnóstico IA — Causa Raiz Questor ↔ Vulcano</p>
+                <p className="text-[9px] text-[#555] mt-0.5">PyOD IsolationForest · DuckDB · KMeans · LevelShift (24 meses)</p>
+              </div>
+            </div>
+            <button onClick={() => setShowDiag(false)} className="text-[#555] hover:text-white text-xs px-2 py-1">✕ Fechar</button>
+          </div>
+
+          {diagLoading && (
+            <div className="flex items-center justify-center gap-3 py-10">
+              <span className="text-[#a259ff] animate-spin text-xl">⚡</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#555]">Rodando PyOD + DuckDB + KMeans...</span>
+            </div>
+          )}
+
+          {diagData?.error && (
+            <div className="p-4 text-[#ff4d00] text-xs font-mono">{diagData.error}</div>
+          )}
+
+          {diagData && !diagData.error && !diagLoading && (
+            <div className="p-4 space-y-4">
+              {/* Summary banner */}
+              <div className="bg-[#111] border border-[#222] rounded p-3 text-[10px] text-[#888] font-mono">
+                {diagData.summary}
+              </div>
+
+              {/* Tabela de contas */}
+              <div className="overflow-auto max-h-[500px] custom-scrollbar">
+                <table className="w-full text-left border-collapse text-[10px]">
+                  <thead className="sticky top-0 bg-[#0d0d0d] border-b border-[#222]">
+                    <tr>
+                      <th className="p-2 text-[#555] font-black uppercase tracking-widest">Conta</th>
+                      <th className="p-2 text-[#555] font-black uppercase tracking-widest w-32">Score IA</th>
+                      <th className="p-2 text-[#555] font-black uppercase tracking-widest">Padrão</th>
+                      <th className="p-2 text-right text-[#555] font-black uppercase tracking-widest">Δ Médio</th>
+                      <th className="p-2 text-right text-[#555] font-black uppercase tracking-widest">Δ Máx</th>
+                      <th className="p-2 text-center text-[#555] font-black uppercase tracking-widest">Meses Div.</th>
+                      <th className="p-2 text-[#555] font-black uppercase tracking-widest">Mudança de Nível</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(diagData.contas || []).map((c, i) => {
+                      const score = c.anomaly_score ?? 0;
+                      const isAnomalia = c.anomaly_label === 'ANOMALIA';
+                      const scoreColor = score > 0.7 ? '#ff4d00' : score > 0.4 ? '#ffcc00' : '#34c759';
+                      const padraoColors = {
+                        'Exato': 'bg-[#34c759]/10 text-[#34c759] border-[#34c759]/30',
+                        'Lag Temporal': 'bg-[#007aff]/10 text-[#007aff] border-[#007aff]/30',
+                        'Percentual Fixo': 'bg-[#ffcc00]/10 text-[#ffcc00] border-[#ffcc00]/30',
+                        'Caótico': 'bg-[#ff4d00]/10 text-[#ff4d00] border-[#ff4d00]/30',
+                      };
+                      const padraoClass = padraoColors[c.padrao] || 'bg-[#222] text-[#555] border-[#333]';
+                      return (
+                        <tr key={i} className={`border-b border-[#111] ${isAnomalia ? 'bg-[#ff4d00]/5' : ''} hover:bg-[#111]/60`}>
+                          <td className="p-2">
+                            <div className="font-black text-white text-[10px]">{c.conta_nome}</div>
+                            <div className="text-[#555] font-mono text-[9px]">#{c.conta_id}</div>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-[#1a1a1a] rounded-full h-1.5">
+                                <div className="h-1.5 rounded-full transition-all" style={{width:`${score*100}%`, background: scoreColor}}/>
+                              </div>
+                              <span className="font-black text-[9px] font-mono" style={{color: scoreColor}}>{Math.round(score*100)}%</span>
+                            </div>
+                            {isAnomalia && <span className="text-[8px] text-[#ff4d00] font-black uppercase">⚠ Anômalo</span>}
+                          </td>
+                          <td className="p-2">
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-widest ${padraoClass}`}>
+                              {c.padrao}
+                            </span>
+                          </td>
+                          <td className="p-2 text-right font-mono text-[#ccc]">
+                            {c.media_delta >= 0 ? '+' : ''}{c.media_delta?.toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0})}
+                          </td>
+                          <td className="p-2 text-right font-mono text-[#ff4d00]">
+                            {c.max_delta_abs?.toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0})}
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className={`font-black text-[9px] ${c.pct_meses_divergentes > 80 ? 'text-[#ff4d00]' : c.pct_meses_divergentes > 40 ? 'text-[#ffcc00]' : 'text-[#34c759]'}`}>
+                              {c.pct_meses_divergentes?.toFixed(0)}%
+                            </span>
+                          </td>
+                          <td className="p-2">
+                            {c.level_shift ? (
+                              <div>
+                                <span className="text-[#ffcc00] font-black text-[9px]">⬆ {c.level_shift.competencia}</span>
+                                <div className="text-[8px] text-[#555] mt-0.5 font-mono">
+                                  {c.level_shift.delta_antes?.toFixed(0)} → {c.level_shift.delta_depois?.toFixed(0)}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[#333] text-[8px]">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -500,7 +748,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
             <table
               className="w-full border-collapse"
               style={{ minWidth: `${220 + competencias.length * 270 + 140}px` }}
@@ -508,12 +756,12 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
               <thead>
                 <tr className="bg-[#111]">
                   {/* Conta */}
-                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 z-20 bg-[#111] min-w-[220px]">
+                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 top-0 z-30 bg-[#111] min-w-[220px]">
                     Conta
                   </th>
                   {/* Grupos de colunas por mês */}
                   {competencias.map(comp => (
-                    <th key={comp} colSpan={1} className="p-0 border-b border-[#1a1a1a] border-l border-[#111]"
+                    <th key={comp} colSpan={1} className="p-0 border-b border-[#1a1a1a] border-l border-[#111] sticky top-0 z-20 bg-[#111]"
                         style={{ minWidth: '270px' }}>
                       <div className="px-2 py-1.5 text-center text-[9px] font-black uppercase tracking-widest text-[#666] border-b border-[#222]">
                         {labelMes(comp)}
@@ -525,7 +773,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                       </div>
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-white border-b border-[#1a1a1a] min-w-[130px]">
+                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-white border-b border-[#1a1a1a] sticky top-0 z-20 bg-[#111] min-w-[130px]">
                     Status Final
                   </th>
                 </tr>
