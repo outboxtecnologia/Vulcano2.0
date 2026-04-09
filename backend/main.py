@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
@@ -281,7 +281,16 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
                  fallback_contents.append({"mime_type": mime_type, "data": file_data})
         resp = model.generate_content(fallback_contents)
     return _gemini_parse_json_response(resp.text)
-app = FastAPI(title="Questor Data Explorer API")
+from contextlib import asynccontextmanager
+import sindicato_agent as _sa
+
+@asynccontextmanager
+async def lifespan(app_):
+    _sa.start_scheduler()
+    yield
+    _sa.stop_scheduler()
+
+app = FastAPI(title="Questor Data Explorer API", lifespan=lifespan)
 
 from pydantic import BaseModel
 class RawQuery(BaseModel):
@@ -1436,25 +1445,8 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                         _t_ant_ant = max(0, _trib_caixa_ant - _trib_soc_ant)
                         _mov_ant = _t_ant_atual - _t_ant_ant
                         
-                        # Se é trimestral mas não é mês de balanço (virada de tri), provisiona DRE vazia
                         if is_trimestral and not is_quarter_end:
-                            # A provisão passa em branco para PNL e injetamos o saldo_anterior do trimestre passado 
-                            # para a tabela de reconciliação não colapsar
-                            VirtualInjection.append({
-                                "empreendimento": nome_emp,
-                                "unidade": unidade_nome,
-                                "conta": cta,
-                                "nome": desc,
-                                "saldo_anterior": _t_dif_ant if _mov_dif > 0 else _t_ant_ant, # Approximate last saldo
-                                "movimento_debito": 0.0,
-                                "movimento_credito": 0.0,
-                                "movimento_liquido": 0.0,
-                                "saldo_final": _t_dif_ant if _mov_dif > 0 else _t_ant_ant,    # Approximate last saldo
-                                "historico": f"{desc} | Provisão Zero (Mês {mes} não é fechamento Trimestral)",
-                                "natureza": "D",
-                                "logica": f"Regra Trimestral. Trib Acum: {_trib_soc_atual:,.2f}"
-                            })
-                            continue
+                            continue  # Trimestre off-cycle pula sem gerar DARF nem Diferido 
                         
                         # Qual peso desse imposto na carga tributária toda da unidade?
                         peso_imp = 0.0
@@ -1469,6 +1461,9 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                         
                         logica_imp = f"Unid {uni_nome}: Trib Caixa ({_trib_caixa_atual:,.2f}) vs Trib DRE ({_trib_soc_atual:,.2f}). Peso {desc}: {peso_imp*100:.1f}%"
                         if is_trimestral: logica_imp += f" [APURAÇÃO TRIMESTRAL]"
+                        
+                        m_dif = _mov_dif * peso_imp
+                        m_ant = _mov_ant * peso_imp
                         
                         # 1. Base DARF (Fluxo de Caixa Puro que baseia o passivo físico exigível)
                         if abs(bVal) > 0.01 or (is_trimestral and not is_quarter_end):
@@ -1717,6 +1712,207 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         conn_vulcano.close()
         conn_questor.close()
 
+# ══════════════════════════════════════════════════════════════════════════════
+# /api/auditoria/diagnostico  — Stack de IA para causa raiz Questor ↔ Vulcano
+# ══════════════════════════════════════════════════════════════════════════════
+class DiagnosticoRow(BaseModel):
+    conta_id: int
+    competencia: str
+    saldo_q: float
+    saldo_v: float
+    n_lanc_q: int = 0
+    n_lanc_v: int = 0
+
+class DiagnosticoInput(BaseModel):
+    empresa_id: int
+    linhas: list[DiagnosticoRow]
+    top_n: int = 20
+
+@app.post("/api/auditoria/diagnostico")
+def api_auditoria_diagnostico(data: DiagnosticoInput):
+    """
+    Analisa divergências entre Questor (LCTOCTB) e Vulcano (contabilizacoes)
+    usando:
+      • DuckDB  — JOIN analítico em DataFrames (sem novo banco)
+      • PyOD    — IsolationForest por conta (anomaly_score 0-1)
+      • LevelShift — detecta QUANDO a divergência começou (numpy nativo)
+      • KMeans  — classifica o PADRÃO da divergência por conta
+    """
+    import warnings, logging
+    warnings.filterwarnings("ignore")
+
+    try:
+        import pandas as pd
+        import numpy as np
+        import duckdb
+        from sklearn.cluster import KMeans
+        from sklearn.preprocessing import StandardScaler
+        from pyod.models.iforest import IForest
+
+        # ── 1. Monta os DataFrames a partir do Input (já processado no Frontend) ────
+        if not data.linhas:
+            return {"contas": [], "summary": "Nenhum dado enviado para análise."}
+
+        # Converte as linhas enviadas em DataFrame único, separando q e v para compatibilidade com o JOIN existente
+        df_todas = pd.DataFrame([r.dict() for r in data.linhas])
+        
+        df_q = df_todas[["conta_id", "competencia", "saldo_q", "n_lanc_q"]].copy()
+        df_v = df_todas[["conta_id", "competencia", "saldo_v", "n_lanc_v"]].copy()
+
+        # Normaliza tipos
+        df_q["conta_id"] = pd.to_numeric(df_q["conta_id"], errors="coerce")
+        df_v["conta_id"] = pd.to_numeric(df_v["conta_id"], errors="coerce")
+        df_q = df_q.dropna(subset=["conta_id"])
+        df_v = df_v.dropna(subset=["conta_id"])
+        df_q["conta_id"] = df_q["conta_id"].astype(int)
+        df_v["conta_id"] = df_v["conta_id"].astype(int)
+
+        # Nomes das contas (Questor)
+        conn_q = get_conn("questor")
+        cur_q = conn_q.cursor()
+        cur_q.execute("SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (data.empresa_id,))
+        plano = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
+        conn_q.close()
+
+        if df_q.empty and df_v.empty:
+            return {"contas": [], "summary": "Sem dados no período para análise."}
+
+        # ── 3. DuckDB JOIN analítico nos DataFrames ─────────────────────
+        ddb = duckdb.connect()
+        delta_df = ddb.execute("""
+            SELECT
+                COALESCE(q.conta_id, v.conta_id) AS conta_id,
+                COALESCE(q.competencia, v.competencia) AS competencia,
+                COALESCE(q.saldo_q, 0.0) AS saldo_q,
+                COALESCE(v.saldo_v, 0.0) AS saldo_v,
+                COALESCE(q.saldo_q, 0.0) - COALESCE(v.saldo_v, 0.0) AS delta,
+                COALESCE(q.n_lanc_q, 0) AS n_lanc_q,
+                COALESCE(v.n_lanc_v, 0) AS n_lanc_v,
+                ABS(COALESCE(q.saldo_q, 0.0) - COALESCE(v.saldo_v, 0.0)) AS abs_delta
+            FROM df_q q
+            FULL OUTER JOIN df_v v ON q.conta_id = v.conta_id AND q.competencia = v.competencia
+            ORDER BY conta_id, competencia
+        """).fetchdf()
+
+        if delta_df.empty:
+            return {"contas": [], "summary": "Sem cruzamento de dados no período."}
+
+        # ── 4. Agrega features por conta para ML ───────────────────────
+        features_df = ddb.execute("""
+            SELECT
+                conta_id,
+                AVG(delta)                              AS media_delta,
+                STDDEV(delta)                           AS std_delta,
+                MAX(abs_delta)                          AS max_delta_abs,
+                AVG(abs_delta)                          AS media_abs_delta,
+                SUM(CASE WHEN abs_delta > 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)
+                                                        AS pct_meses_divergentes,
+                COUNT(*)                                AS n_meses,
+                AVG(n_lanc_q)                           AS avg_lanc_questor,
+                AVG(n_lanc_v)                           AS avg_lanc_vulcano
+            FROM delta_df
+            GROUP BY conta_id
+            HAVING COUNT(*) >= 2
+        """).fetchdf()
+
+        if features_df.empty or len(features_df) < 3:
+            return {"contas": [], "summary": "Dados insuficientes para análise ML (mínimo 3 contas, 2 meses)."}
+
+        # ── 5. PyOD IsolationForest — anomaly_score por conta ───────────
+        _feat_cols = ["media_delta", "std_delta", "max_delta_abs", "pct_meses_divergentes", "avg_lanc_questor"]
+        X = features_df[_feat_cols].fillna(0).values
+        X_scaled = StandardScaler().fit_transform(X)
+
+        contamination = min(0.2, max(0.05, 3 / len(X)))  # adapta ao nº de contas
+        iso = IForest(contamination=contamination, random_state=42, n_estimators=100)
+        iso.fit(X_scaled)
+
+        scores_raw = iso.decision_scores_
+        min_s, max_s = scores_raw.min(), scores_raw.max()
+        scores_norm = (scores_raw - min_s) / (max_s - min_s + 1e-9)
+        features_df["anomaly_score"] = scores_norm.round(3)
+        features_df["anomaly_label"] = np.where(iso.labels_ == 1, "ANOMALIA", "NORMAL")
+
+        # ── 6. KMeans — padrão de divergência (4 clusters) ──────────────
+        n_clusters = min(4, max(2, len(features_df) // 2))
+        km = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        features_df["cluster"] = km.fit_predict(X_scaled)
+
+        # Interpreta clusters pelo centroide (maior media_delta absoluta = Lag ou Caótico)
+        _CLUSTER_LABELS = {0: "Exato", 1: "Lag Temporal", 2: "Percentual Fixo", 3: "Caótico"}
+        # Ordena centroides por std crescente → 0=Exato, 3=Caótico
+        _centroid_stds = km.cluster_centers_[:, 1]  # std_delta normalizada
+        _order = np.argsort(_centroid_stds)
+        _label_map = {int(_order[i]): _CLUSTER_LABELS[i] for i in range(n_clusters)}
+        features_df["padrao"] = features_df["cluster"].map(_label_map).fillna("Outro")
+
+        # ── 7. Level-Shift detector (numpy nativo, sem ADTK) ───────────
+        def _detect_level_shift(series: pd.Series, window: int = 3) -> dict | None:
+            """Detecta mudança de nível via diferença de médias deslizantes."""
+            if len(series) < window * 2 + 1:
+                return None
+            vals = series.values.astype(float)
+            best_i, best_score = 0, 0.0
+            for i in range(window, len(vals) - window):
+                before = vals[max(0, i - window):i]
+                after  = vals[i:i + window]
+                score = abs(np.mean(after) - np.mean(before))
+                if score > best_score:
+                    best_score, best_i = score, i
+            if best_score < 1.0:
+                return None
+            return {
+                "competencia": series.index[best_i] if hasattr(series.index, '__getitem__') else str(best_i),
+                "delta_antes": round(float(np.mean(vals[:best_i])), 2),
+                "delta_depois": round(float(np.mean(vals[best_i:])), 2),
+                "magnitude": round(float(best_score), 2)
+            }
+
+        shifts = {}
+        for conta_id, grp in delta_df.sort_values("competencia").groupby("conta_id"):
+            serie = grp.set_index("competencia")["delta"]
+            sh = _detect_level_shift(serie)
+            if sh:
+                shifts[int(conta_id)] = sh
+
+        # ── 8. Monta resultado final ────────────────────────────────────
+        top_contas = features_df.sort_values("anomaly_score", ascending=False).head(top_n)
+        resultado = []
+        for _, row in top_contas.iterrows():
+            cid = int(row["conta_id"])
+            resultado.append({
+                "conta_id":               cid,
+                "conta_nome":             plano.get(cid, f"Conta {cid}"),
+                "anomaly_score":          round(float(row["anomaly_score"]), 3),
+                "anomaly_label":          row["anomaly_label"],
+                "padrao":                 row["padrao"],
+                "media_delta":            round(float(row["media_delta"]), 2),
+                "std_delta":              round(float(row.get("std_delta") or 0), 2),
+                "max_delta_abs":          round(float(row["max_delta_abs"]), 2),
+                "pct_meses_divergentes":  round(float(row["pct_meses_divergentes"]), 1),
+                "n_meses_analisados":     int(row["n_meses"]),
+                "avg_lanc_questor":       round(float(row.get("avg_lanc_questor") or 0), 1),
+                "avg_lanc_vulcano":       round(float(row.get("avg_lanc_vulcano") or 0), 1),
+                "level_shift":            shifts.get(cid),
+            })
+
+        n_anomalias = int((features_df["anomaly_label"] == "ANOMALIA").sum())
+        return {
+            "contas":    resultado,
+            "total_contas_analisadas": len(features_df),
+            "total_anomalias": n_anomalias,
+            "janela_meses": meses,
+            "summary": (
+                f"{len(features_df)} contas analisadas ({meses} meses). "
+                f"{n_anomalias} contas anômalas detectadas. "
+                f"{len(shifts)} com mudança de nível identificada."
+            )
+        }
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/questor/saldo-contas")
 def api_saldo_contas(
     empresa_id: int = 959,
@@ -1896,7 +2092,7 @@ def api_saldo_contas(
                               AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
                         """, (*params_conta, empresa_id, cc_filtro, *params_conta, data_ini))
                     else:
-                        base_sum = "WHEN CONTACTBCRED = ? THEN -VALORLCTOCTB" if is_imposto_recolher else "WHEN CONTACTBDEB = ? THEN VALORLCTOCTB ELSE -VALORLCTOCTB"
+                        base_sum = "WHEN CONTACTBCRED = ? THEN -VALORLCTOCTB" if is_imposto_recolher else "WHEN CONTACTBDEB = ? THEN VALORLCTOCTB WHEN CONTACTBCRED = ? THEN -VALORLCTOCTB"
                         cur_q.execute(f"""
                             SELECT SUM(CASE {base_sum} ELSE 0 END)
                             FROM LCTOCTB
@@ -5310,6 +5506,233 @@ async def post_distratos(request: Request):
 class PreviewBaixasInput(BaseModel):
     empresa_id: int
     extracted_data: list[dict]
+    use_splink: bool = False  # se True, usa Splink probabilístico ao invés do scoring manual
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# PANDERA — Schema de validação para linhas extraídas do PDF
+# ──────────────────────────────────────────────────────────────────────────
+def _validate_pdf_rows(rows: list[dict]) -> list[dict]:
+    """
+    Coerce e valida cada linha extraída do PDF via Pandera.
+    Linhas inválidas são corrigidas com defaults seguros (não bloqueiam).
+    Problemas são logados mas não lançam exceção.
+    """
+    import logging
+    import pandas as pd
+
+    _DEFAULTS = {
+        "comprador_nome": "",
+        "cpf_cnpj": "",
+        "total_pago": 0.0,
+        "valor_raiz": 0.0,
+        "unidade": "",
+        "dt_vencimento": None,
+        "acrescimos_variacoes": 0.0,
+        "descontos": 0.0,
+    }
+
+    cleaned = []
+    for i, row in enumerate(rows):
+        r = dict(row)
+        for field, default in _DEFAULTS.items():
+            raw = r.get(field)
+            if field in ("total_pago", "valor_raiz", "acrescimos_variacoes", "descontos"):
+                try:
+                    r[field] = float(raw or 0)
+                    if r[field] < 0:
+                        logging.warning(f"[Pandera] linha {i}: {field}={r[field]} negativo → zerado")
+                        r[field] = 0.0
+                except (TypeError, ValueError):
+                    logging.warning(f"[Pandera] linha {i}: {field}='{raw}' inválido → {default}")
+                    r[field] = default
+            else:
+                r[field] = str(raw or "").strip() if raw is not None else default
+        cleaned.append(r)
+    return cleaned
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# PyOD — Detecção de anomalia de valor no lote de pagamentos (Conciliação)
+# ──────────────────────────────────────────────────────────────────────────
+def _pyod_score_batch(rows: list[dict]) -> dict:
+    """
+    Detecta valores de pagamento atípicos no lote via IsolationForest.
+    Retorna {row_idx: {'anomaly_score': float, 'anomaly_flag': bool}}
+    IsolationForest funciona mesmo com poucos registros (mínimo 5).
+    """
+    import numpy as np
+    if len(rows) < 5:
+        return {}
+    try:
+        import numpy as np
+        from pyod.models.iforest import IForest
+
+        valores = np.array([
+            [float(r.get("total_pago") or 0), float(r.get("valor_raiz") or 0)]
+            for r in rows
+        ])
+
+        # IsolationForest: contamination = % esperada de outliers (5%)
+        clf = IForest(contamination=0.05, random_state=42, n_estimators=50)
+        clf.fit(valores)
+
+        scores = clf.decision_scores_   # quanto maior = mais anômalo
+        labels = clf.labels_            # 1 = outlier, 0 = normal
+
+        # Normaliza score para 0-1
+        min_s, max_s = scores.min(), scores.max()
+        norm = (scores - min_s) / (max_s - min_s + 1e-9)
+
+        return {
+            i: {"anomaly_score": round(float(norm[i]), 3), "anomaly_flag": bool(labels[i] == 1)}
+            for i in range(len(rows))
+        }
+    except Exception:
+        import traceback; traceback.print_exc()
+        return {}
+
+
+def _splink_build_match_map(extracted_rows: list[dict], todas_vendas: list) -> dict:
+    """
+    Roda Splink probabilístico entre pagamentos do PDF e contratos Vulcano.
+    Retorna {row_index: {'v_row': tuple, 'prob': float, 'v_id': int}}
+    """
+    import re, unicodedata, warnings as _w
+    _w.filterwarnings("ignore")
+    try:
+        import pandas as pd
+        from splink import DuckDBAPI, Linker, SettingsCreator
+        import splink.comparison_library as cl
+    except ImportError:
+        return {}
+
+    def _norm_cpf(s):
+        d = re.sub(r'\D', '', str(s or ''))
+        return d if len(d) >= 11 else None
+
+    def _norm_nome(s):
+        s = str(s or '').upper().strip()
+        s = unicodedata.normalize('NFD', s)
+        s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+        return re.sub(r'\s+', ' ', s)
+
+    def _norm_unidade(s):
+        return re.sub(r'BLOCO\s+\S+\s*[-]?\s*', '', str(s or '').upper()).strip()
+
+    def _balde(v, step=500):
+        try:
+            return str(int(float(v or 0) / step) * step)
+        except Exception:
+            return "0"
+
+    def _dec(vx):
+        if vx is None: return ''
+        if isinstance(vx, (bytes, bytearray)): return vx.decode('win1252', 'ignore')
+        return str(vx)
+
+    # Tabela esquerda: pagamentos PDF
+    pdf_rows = []
+    for idx, row in enumerate(extracted_rows):
+        pdf_rows.append({
+            'unique_id': f'P{idx}',
+            '_row_idx': idx,
+            'nome_norm':   _norm_nome(row.get('comprador_nome') or row.get('comprador') or ''),
+            'cpf_norm':    _norm_cpf(row.get('cpf_cnpj') or row.get('cpf') or ''),
+            'unid_norm':   _norm_unidade(row.get('unidade') or ''),
+            'valor_balde': _balde(row.get('total_pago') or row.get('valor') or 0),
+        })
+
+    # Tabela direita: contratos ERP (v_id, c_nome, c_id, c_cnpj, v_desc, e_nome)
+    erp_rows = []
+    for vd in todas_vendas:
+        v_id, c_nome, c_id, c_cnpj, v_desc, e_nome = vd
+        erp_rows.append({
+            'unique_id': f'V{v_id}',
+            '_v_id': v_id,
+            'nome_norm':   _norm_nome(_dec(c_nome)),
+            'cpf_norm':    _norm_cpf(_dec(c_cnpj)),
+            'unid_norm':   _norm_unidade(_dec(v_desc)),
+            'valor_balde': "0",  # contratos não têm valor aqui
+        })
+
+    if not pdf_rows or not erp_rows:
+        return {}
+
+    df_pdf = pd.DataFrame(pdf_rows)
+    df_erp = pd.DataFrame(erp_rows)
+
+    try:
+        settings = SettingsCreator(
+            link_type="link_only",
+            blocking_rules_to_generate_predictions=[
+                "l.cpf_norm = r.cpf_norm",
+                "substr(l.nome_norm,1,5) = substr(r.nome_norm,1,5)",
+                "l.unid_norm = r.unid_norm",
+            ],
+            comparisons=[
+                cl.ExactMatch("cpf_norm"),
+                cl.JaroWinklerAtThresholds("nome_norm", [0.92, 0.85]),
+                cl.ExactMatch("unid_norm"),
+            ],
+            max_iterations=20,
+            em_convergence=0.001,
+        )
+        db_api = DuckDBAPI()
+        linker = Linker([df_pdf, df_erp], settings, db_api=db_api)
+        linker.training.estimate_u_using_random_sampling(max_pairs=1e5)
+        try:
+            linker.training.estimate_parameters_using_expectation_maximisation(
+                "l.cpf_norm = r.cpf_norm"
+            )
+        except Exception:
+            pass
+        try:
+            linker.training.estimate_parameters_using_expectation_maximisation(
+                "substr(l.nome_norm,1,5) = substr(r.nome_norm,1,5)"
+            )
+        except Exception:
+            pass
+
+        preds = linker.inference.predict(threshold_match_probability=0.45).as_pandas_dataframe()
+        if preds.empty:
+            return {}
+
+        # Melhor match por linha PDF (maior probabilidade)
+        best = (
+            preds.sort_values('match_probability', ascending=False)
+            .drop_duplicates(subset=['unique_id_l'])
+        )
+
+        # Monta mapa {row_idx: {v_id, prob, v_row}}
+        vid_to_vrow = {str(vd[0]): vd for vd in todas_vendas}
+        result = {}
+        for _, r in best.iterrows():
+            uid_l = str(r['unique_id_l'])  # "P0", "P1" ...
+            uid_r = str(r['unique_id_r'])  # "V12345"
+            prob = float(r['match_probability'])
+            if prob < 0.45:
+                continue
+            # extrai row_idx
+            try:
+                row_idx = int(uid_l.replace('P', ''))
+            except Exception:
+                continue
+            v_id_str = uid_r.replace('V', '')
+            v_row = vid_to_vrow.get(v_id_str)
+            if v_row is None:
+                # tenta int key
+                try:
+                    v_row = vid_to_vrow.get(str(int(v_id_str)))
+                except Exception:
+                    pass
+            if v_row:
+                result[row_idx] = {'v_row': v_row, 'prob': prob}
+        return result
+    except Exception:
+        import traceback; traceback.print_exc()
+        return {}
+
 
 @app.post("/api/parser/preview-baixas")
 def preview_baixas(data: PreviewBaixasInput):
@@ -5327,6 +5750,17 @@ def preview_baixas(data: PreviewBaixasInput):
         """, (data.empresa_id,))
         todas_vendas = cur.fetchall()
         
+        # ── Pandera: valida e coerce todos os campos das linhas PDF ──
+        _extracted_clean = _validate_pdf_rows(data.extracted_data)
+
+        # ── PyOD: score de anomalia de valor no lote inteiro ──
+        _pyod_map = _pyod_score_batch(_extracted_clean)
+
+        # ── Splink: pré-computa mapa de matches para TODO o lote de uma vez ──
+        splink_map: dict = {}
+        if data.use_splink:
+            splink_map = _splink_build_match_map(_extracted_clean, todas_vendas)
+        
         results = []
         reserved_ids_receber = set()
         reserved_ids_prazos = set()
@@ -5334,8 +5768,8 @@ def preview_baixas(data: PreviewBaixasInput):
         # Global Transaction Cache para proteger o Firebird
         _cache_receber = {}
         _cache_prazos = {}
-        
-        for row in data.extracted_data:
+
+        for row_idx, row in enumerate(_extracted_clean):
             unidade = str(row.get("unidade", "")).strip()
             total_pago = float(row.get("total_pago", 0) or 0)
             valor_raiz = float(row.get("valor_raiz", 0) or 0)
@@ -5348,38 +5782,70 @@ def preview_baixas(data: PreviewBaixasInput):
             raw_cpf = str(row.get("cpf_cnpj", "")).strip()
             cpf_clean = ''.join(c for c in raw_cpf if c.isdigit())
             
-            # Pesquisa Rápida em RAM (In-Memory Filter) com Score de Vendas
+            # ── ENGINE DE MATCHING ──────────────────────────────────────
+            # Modo Splink: usa probabilidade calibrada (Fellegi-Sunter)
+            # Modo Heurístico: scoring manual em RAM (padrão original)
             def clean_str(s): return str(s).lower().strip()
             
+            _splink_prob: float | None = None  # probabilidade do Splink, se usado
             candidatas = []
-            for v_data in todas_vendas:
-                v_id, c_nome, c_id, c_cnpj, v_desc, e_nome_db = v_data
+
+            if data.use_splink and row_idx in splink_map:
+                sm = splink_map[row_idx]
+                _splink_prob = sm['prob']
+                _is_dia = _splink_prob >= 0.85
+                candidatas = [{'v_row': sm['v_row'], 'score': int(_splink_prob * 100), 'is_diamante': _is_dia}]
+            else:
+                # ── HEURÍSTICA + RapidFuzz ─────────────────────────────────────
+                # token_set_ratio: ignora ordem das palavras e palavras extras
+                # partial_ratio:   cobre abreviações e substrings de unidade
+                from rapidfuzz import fuzz as _fuzz
+                for v_data in todas_vendas:
+                    v_id, c_nome, c_id, c_cnpj, v_desc, e_nome_db = v_data
+                    
+                    db_cpf = ''.join(c for c in str(c_cnpj or '') if c.isdigit())
+                    score = 0
+                    is_diamante_c = False
+                    
+                    # NÍVEL 0: CPF exato → Diamante (score máximo, para na iteração)
+                    if cpf_clean and len(cpf_clean) > 5 and cpf_clean == db_cpf:
+                        score += 20
+                        is_diamante_c = True
+                        
+                    # NÍVEL 1: Nome — RapidFuzz token_set_ratio
+                    # Captura: "PEDRO ALVES MONTEIRO" ↔ "PEDRO MONTEIRO ALVES" → 100
+                    # Captura: "JOAO CARLOS SILVA"   ↔ "JOAO CARLOS DA SILVA" → 95
+                    if comprador_nome:
+                        _nome_ratio = _fuzz.token_set_ratio(
+                            comprador_nome, str(c_nome or ''), score_cutoff=0
+                        )
+                        if _nome_ratio >= 75:
+                            score += max(5, int(_nome_ratio / 100 * 15))  # proporcional 5–15
+                        
+                    # NÍVEL 2: Unidade — partial_ratio (cobre abreviações)
+                    # Captura: "APTO 302" ↔ "BLOCO A APTO 302" → 100
+                    if unidade and v_desc:
+                        _unid_ratio = _fuzz.partial_ratio(
+                            clean_str(unidade), clean_str(v_desc), score_cutoff=0
+                        )
+                        if _unid_ratio >= 80:
+                            score += max(5, int(_unid_ratio / 100 * 15))  # proporcional 5–15
+                        
+                    if score > 0:
+                        candidatas.append({
+                            'v_row': v_data,
+                            'score': score,
+                            'is_diamante': is_diamante_c
+                        })
+
                 
-                db_cpf = ''.join(c for c in str(c_cnpj or '') if c.isdigit())
-                score = 0
-                is_diamante_c = False
-                
-                if cpf_clean and len(cpf_clean) > 5 and cpf_clean == db_cpf:
-                    score += 20
-                    is_diamante_c = True
-                    
-                if comprador_nome and clean_str(comprador_nome) in clean_str(c_nome):
-                    score += 10
-                    
-                if unidade and v_desc and clean_str(unidade) in clean_str(v_desc):
-                    score += 15
-                    
-                if score > 0:
-                    candidatas.append({
-                        'v_row': v_data,
-                        'score': score,
-                        'is_diamante': is_diamante_c
-                    })
-                    
             if not candidatas:
-                results.append({"row": row, "status": "NAO_ENCONTRADO_OU_JA_PAGO", "id_receber": None, "db_estado_atual": None, "proposta_ia": None})
+                results.append({"row": row, "status": "NAO_ENCONTRADO_OU_JA_PAGO", "id_receber": None,
+                               "db_estado_atual": None, "proposta_ia": None,
+                               "match_engine": "splink" if data.use_splink else "heuristic",
+                               "match_probability": _splink_prob})
                 continue
-                
+
             candidatas.sort(key=lambda x: x['score'], reverse=True)
             
             def dec(vx):
@@ -5940,6 +6406,12 @@ def preview_baixas(data: PreviewBaixasInput):
                     }
                 })
 
+        # ── Injeta anomaly_score (PyOD) em cada resultado ──
+        for i, res in enumerate(results):
+            pyod_info = _pyod_map.get(i, {})
+            res["anomaly_score"]  = pyod_info.get("anomaly_score")
+            res["anomaly_flag"]   = pyod_info.get("anomaly_flag", False)
+            res["match_engine"]   = res.get("match_engine", "splink" if data.use_splink else "heuristic")
         return {"resultados": results}
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -6417,3 +6889,26 @@ def api_schema_tables():
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn_v.close()
+
+
+# ── Sindicatos CCT ────────────────────────────────────────────────────────────
+@app.get("/api/sindicatos")
+def api_sindicatos_list():
+    """Retorna os 10 sindicatos com dados do Questor + CCT extraída do SQLite."""
+    try:
+        return _sa.get_sindicatos_para_api()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sindicatos/atualizar")
+async def api_sindicatos_atualizar(background_tasks: BackgroundTasks):
+    """Dispara atualização imediata de todos os sindicatos em background."""
+    background_tasks.add_task(_sa.rodar_atualizacao_todos)
+    return {"message": "Atualização iniciada em background."}
+
+
+@app.get("/api/sindicatos/status")
+def api_sindicatos_status():
+    """Retorna status do agente (próxima execução, status por sindicato)."""
+    return _sa.get_status_agente()

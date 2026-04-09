@@ -10,6 +10,7 @@ import { RawExplorerView } from './RawExplorerView';
 import { CustosView } from './CustosView';
 import { ContabilizacoesView } from './ContabilizacoesView';
 import { AuditoriaERPView } from './AuditoriaERPView';
+import { SindicatosView } from './SindicatosView';
 import './index.css';
 import {
   Building2, Database, TableProperties, Fingerprint, PieChart, Construction,
@@ -256,6 +257,7 @@ export default function App() {
                     <NavItem icon={<Briefcase size={16}/>} label="Fiscal & SPED" active={currentView === 'fiscal'} onClick={() => setCurrentView('fiscal')} />
                     <NavItem icon={<HandCoins size={16}/>} label="Fechamento Custos" active={currentView === 'custos'} onClick={() => setCurrentView('custos')} />
                     <NavItem icon={<Activity size={16}/>} label="Sero INSS" active={currentView === 'sero'} onClick={() => setCurrentView('sero')} />
+                    <NavItem icon={<Users size={16}/>} label="Sindicatos CCT" active={currentView === 'sindicatos'} onClick={() => setCurrentView('sindicatos')} />
                     <NavItem icon={<Database size={16}/>} label="Raw Explorer" active={currentView === 'explorer'} onClick={() => setCurrentView('explorer')} />
                 </div>
             </nav>
@@ -334,6 +336,7 @@ export default function App() {
                       {currentView === 'tributos' && <TributosGlobaisView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'poc' && <EvolucaoPOCView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'sero' && <SeroView selectedEmpresa={selectedEmpresa} />}
+                      {currentView === 'sindicatos' && <SindicatosView />}
                       {currentView === 'explorer' && <RawExplorerView />}
                       
                       {currentView === 'compare' && <AuditoriaERPView selectedEmpresa={selectedEmpresa} />}
