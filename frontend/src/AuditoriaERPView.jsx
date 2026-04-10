@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import {
   ShieldCheck, Zap, AlertTriangle, CheckCircle2, XCircle,
-  RefreshCw, Building2, ChevronDown, ChevronUp, ArrowRight
+  RefreshCw, Building2, ChevronDown, ChevronUp, ArrowRight,
+  Download, GitCompare, List, Link2
 } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -28,6 +30,73 @@ const labelMes = (comp) => {
 const abs = (v) => Math.abs(v || 0);
 const DIVERGENCIA_CORTE = 0.5; // abaixo disso, considera ok
 
+// Contas que usam movimentação do período para conciliação (não delta de saldo)
+const CONTAS_USA_MOVIMENTO = new Set([
+  '1545','1552','1553','1556',
+  '2829','2830',
+  '4828','4829','4958','4995'
+]);
+
+// ── Matching de órfãos ────────────────────────────────────────────────────────
+// Retorna { fisicosOrfaos, virtuaisOrfaos } — lançamentos sem par no lado oposto.
+// Matching por natureza + valor (tolerância R$0,01).
+function calcularOrfaos(todosFisico, todosVirtual) {
+  const usados = new Set();
+  const fisicosOrfaos = [];
+
+  todosFisico.forEach((f, fi) => {
+    const idx = todosVirtual.findIndex((v, vi) =>
+      !usados.has(vi) &&
+      v.natureza === f.natureza &&
+      Math.abs((v.valor || 0) - (f.valor || 0)) < 0.01
+    );
+    if (idx === -1) {
+      fisicosOrfaos.push({ ...f, _side: 'Q' });
+    } else {
+      usados.add(idx);
+    }
+  });
+
+  const virtuaisOrfaos = todosVirtual
+    .filter((_, vi) => !usados.has(vi))
+    .map(v => ({ ...v, _side: 'V' }));
+
+  return { fisicosOrfaos, virtuaisOrfaos };
+}
+
+// ── Exportação XLSX ───────────────────────────────────────────────────────────
+function exportarRazaoXLSX({ contaId, contaNome, todosFisico, todosVirtual, fisicosOrfaos, virtuaisOrfaos }) {
+  const wb = XLSX.utils.book_new();
+
+  const toRow = (d, origem) => ({
+    Origem: origem,
+    Data: d.data || '',
+    Historico: d.historico || '',
+    Natureza: d.natureza || '',
+    Valor: d.valor || 0,
+  });
+
+  // Aba 1 — Órfãos
+  const orfaosRows = [
+    ...fisicosOrfaos.map(d => toRow(d, 'Questor (órfão)')),
+    ...virtuaisOrfaos.map(d => toRow(d, 'Vulcano (órfão)')),
+  ];
+  const wsOrfaos = XLSX.utils.json_to_sheet(
+    orfaosRows.length > 0 ? orfaosRows : [{ Origem: '', Data: '', Historico: 'Nenhum órfão encontrado', Natureza: '', Valor: 0 }]
+  );
+  XLSX.utils.book_append_sheet(wb, wsOrfaos, 'Orfaos');
+
+  // Aba 2 — Razão Completo (intercalado Q e V)
+  const razaoRows = [
+    ...todosFisico.map(d => toRow(d, 'Questor')),
+    ...todosVirtual.map(d => toRow(d, 'Vulcano')),
+  ];
+  const wsRazao = XLSX.utils.json_to_sheet(razaoRows.length > 0 ? razaoRows : [{ Origem: '' }]);
+  XLSX.utils.book_append_sheet(wb, wsRazao, 'Razao_Completo');
+
+  XLSX.writeFile(wb, `Razao_${contaId}_${contaNome.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}.xlsx`);
+}
+
 // Semáforo de status
 function Status({ diff }) {
   if (abs(diff) < DIVERGENCIA_CORTE) return <CheckCircle2 size={14} className="text-[#34c759] shrink-0"/>;
@@ -42,27 +111,178 @@ function corDiff(diff) {
   return '#ff4d00';
 }
 
+// ── Tabela de lançamentos interna ────────────────────────────────────────────
+function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel }) {
+  if (itens.length === 0)
+    return <p className="px-4 py-2 text-[11px] font-bold text-[#333] uppercase italic">{semLabel}</p>;
+  return (
+    <table className="w-full text-[11px] table-fixed" style={{ tableLayout: 'fixed' }}>
+      <colgroup>
+        <col style={{ width: '72px' }}/>
+        <col/>{/* historico — ocupa o restante */}
+        <col style={{ width: '24px' }}/>
+        <col style={{ width: '92px' }}/>
+      </colgroup>
+      <tbody>
+        {itens.map((d, i) => {
+          const hist = (d.historico || '').trim() || (d.logica || '').trim() || (d.chave ? `Lçto ${d.chave}` : '—');
+          return (
+            <tr key={i} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
+              <td className="px-2 py-1 font-mono font-bold text-[#555] whitespace-nowrap overflow-hidden">{d.data}</td>
+              <td className="px-2 py-1 overflow-hidden" title={hist}>
+                <div className="truncate font-bold text-[#555]">{hist}</div>
+              </td>
+              <td className="px-2 py-1 text-center font-black text-[12px] overflow-hidden" style={{ color: d.natureza === 'D' ? corNaturezaD : corNaturezaC }}>{d.natureza}</td>
+              <td className="px-2 py-1 text-right font-mono font-black text-[#888] whitespace-nowrap overflow-hidden">{fmt(d.valor)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// ── Painel de orfaos (expande ao clicar na linha da conta) ───────────────────
+function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRacional }) {
+  const [aba, setAba] = useState('orfaos');
+
+  const todosFisico  = porComp.flatMap(c => c.detalhesFisico);
+  const todosVirtual = porComp.flatMap(c => c.detalhesVirtual);
+
+  const { fisicosOrfaos, virtuaisOrfaos } = useMemo(
+    () => calcularOrfaos(todosFisico, todosVirtual),
+    [todosFisico.length, todosVirtual.length]
+  );
+
+  const totalOrfaos = fisicosOrfaos.length + virtuaisOrfaos.length;
+
+  const handleXLSX = (e) => {
+    e.stopPropagation();
+    exportarRazaoXLSX({ contaId, contaNome, todosFisico, todosVirtual, fisicosOrfaos, virtuaisOrfaos });
+  };
+
+  // O <td colSpan=999> herda a largura enorme da tabela de meses.
+  // O div interno com position sticky + left 0 + maxWidth gruda a esquerda
+  // e limita a largura a 820px, eliminando o espacamento excessivo.
+  return (
+    <tr>
+      <td colSpan={999} className="p-0 bg-[#060606]">
+        <div style={{ position: 'sticky', left: 0, maxWidth: '820px', minWidth: 0 }}>
+
+          {/* Barra de abas e acoes */}
+          <div className="px-3 py-1.5 border-b border-[#111] flex items-center gap-2 flex-wrap bg-[#060606]">
+            <button
+              onClick={e => { e.stopPropagation(); setAba('orfaos'); }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[#ff4d00]/20 border-[#ff4d00]/40 text-[#ff4d00]' : 'bg-transparent border-[#222] text-[#444] hover:text-[#ff4d00]/70'}`}
+            >
+              <GitCompare size={10}/> Orfaos
+              {totalOrfaos > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 bg-[#ff4d00] text-black rounded-full text-[8px] font-black">{totalOrfaos}</span>
+              )}
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); setAba('razao'); }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[#a259ff]/20 border-[#a259ff]/40 text-[#a259ff]' : 'bg-transparent border-[#222] text-[#444] hover:text-[#a259ff]/70'}`}
+            >
+              <List size={10}/> Razao
+              <span className="ml-1 text-[9px] font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
+            </button>
+            <div className="flex-1"/>
+            {todosVirtualLogica.length > 0 && (
+              <button
+                onClick={e => { e.stopPropagation(); onRacional(); }}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-[10px] font-black uppercase tracking-widest text-[#a259ff] hover:bg-[#a259ff]/25 transition-all"
+              >
+                <Zap size={10}/> Racional
+              </button>
+            )}
+            <button
+              onClick={handleXLSX}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-[10px] font-black uppercase tracking-widest text-[#34c759] hover:bg-[#34c759]/20 transition-all"
+            >
+              <Download size={10}/> XLSX
+            </button>
+          </div>
+
+          {/* Conteudo da aba */}
+          {aba === 'orfaos' && (
+            totalOrfaos === 0 ? (
+              <div className="flex items-center gap-2 px-4 py-3 text-[#34c759]">
+                <CheckCircle2 size={12}/>
+                <span className="text-[10px] font-black uppercase tracking-widest">Nenhum orfao encontrado</span>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 divide-x divide-[#111]">
+                <div>
+                  <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111] flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#ff4d00]">Questor s/ par no Vulcano</span>
+                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#ff4d00] text-black rounded text-[8px] font-black">{fisicosOrfaos.length}</span>}
+                  </div>
+                  <TabelaLancs itens={fisicosOrfaos} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="Nenhum orfao no Questor"/>
+                </div>
+                <div>
+                  <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111] flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano s/ par no Questor</span>
+                    {virtuaisOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#a259ff] text-black rounded text-[8px] font-black">{virtuaisOrfaos.length}</span>}
+                  </div>
+                  <TabelaLancs itens={virtuaisOrfaos} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Nenhum orfao no Vulcano"/>
+                </div>
+              </div>
+            )
+          )}
+
+          {aba === 'razao' && (
+            <div className="grid grid-cols-2 divide-x divide-[#111]">
+              <div>
+                <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111]">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[#ff4d00]">Questor ({todosFisico.length})</span>
+                </div>
+                <TabelaLancs itens={todosFisico} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="Sem lancamentos fisicos"/>
+              </div>
+              <div>
+                <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111]">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano ({todosVirtual.length})</span>
+                </div>
+                <TabelaLancs itens={todosVirtual} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Sem lancamentos societarios"/>
+              </div>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // ── Linha de conta na tabela de confronto ────────────────────────────────────
 function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const [open, setOpen] = useState(false);
   const [racionalOpen, setRacionalOpen] = useState(false);
+
+  // Contas especiais usam movimento do período (não delta de saldo) para conciliação
+  const usaMovimento = CONTAS_USA_MOVIMENTO.has(String(contaId));
 
   // Para cada competência: soma fisico e virtual desta conta
   const porComp = competencias.map(comp => {
     const lista = dadosPorMes[comp] || {};
     const fisico   = lista.fisico?.find(r => String(r.conta) === String(contaId));
     const virtual  = lista.virtual?.find(r => String(r.conta) === String(contaId));
+    // Para contas especiais, movimento físico = movimento_liquido do Questor
+    // Para demais contas, movimento físico = delta de saldo (saldo_final - saldo_anterior)
+    const movFisicoCalc = usaMovimento
+      ? (fisico?.movimento_liquido || 0)
+      : fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0;
     return {
       comp,
       temFisico:       !!fisico,
-      movFisico:       fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0,
+      usaMovimento,
+      movFisico:       movFisicoCalc,
       saldoFisico:     fisico?.saldo_final          || 0,
       movVirtual:      virtual?.movimento_liquido   || 0,
       movVirtualDeb:   virtual?.movimento_debito    || 0,
       movVirtualCred:  virtual?.movimento_credito   || 0,
       saldoVirtual:    virtual?.saldo_final         || 0,
-      diffMov:         (virtual?.movimento_liquido  || 0) - (fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0),
-      diffSaldo:       (virtual?.saldo_final        || 0) - (fisico?.saldo_final        || 0),
+      diffMov:         (virtual?.movimento_liquido  || 0) - movFisicoCalc,
+      diffSaldo:       (virtual?.saldo_final        || 0) - (fisico?.saldo_final || 0),
       detalhesFisico:  fisico?.detalhes  || [],
       detalhesVirtual: virtual?.detalhes || [],
     };
@@ -76,7 +296,10 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const ultimo           = porComp[porComp.length - 1] || {};
   const totalDiffSaldo   = ultimo.diffSaldo || 0;
 
-  const temDivergencia   = abs(totalDiffMov) >= DIVERGENCIA_CORTE || abs(totalDiffSaldo) >= DIVERGENCIA_CORTE;
+  // Para contas especiais: divergência calculada sobre movimento; para demais: sobre saldo
+  const diffParaStatus   = usaMovimento ? totalDiffMov : totalDiffSaldo;
+  const temDivergencia   = abs(diffParaStatus) >= DIVERGENCIA_CORTE ||
+    (!usaMovimento && abs(totalDiffMov) >= DIVERGENCIA_CORTE);
 
   // Só mostra contas que têm qualquer movimento em algum lado
   const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual);
@@ -96,9 +319,10 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
         {/* Conta + nome */}
         <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px]">
           <div className="flex items-center gap-2">
-            <Status diff={totalDiffSaldo}/>
+            <Status diff={diffParaStatus}/>
             <span className="font-mono text-[13px] font-black text-[#ff4d00] shrink-0">{contaId}</span>
             <span className="text-[12px] font-bold text-[#666] truncate" title={contaNome}>{contaNome}</span>
+            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[8px] font-black uppercase tracking-widest text-[#ffcc00] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
             <ChevronDown size={10} className={`text-[#444] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
           </div>
         </td>
@@ -158,89 +382,35 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
           </td>
         ))}
 
-        {/* Saldo final total diff */}
+        {/* Status Final: para contas especiais usa diffMov; para demais usa diffSaldo */}
         <td className="px-3 py-2.5 text-right min-w-[130px]">
-          {abs(totalDiffSaldo) < DIVERGENCIA_CORTE ? (
-            <span className="text-[12px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
+          {abs(diffParaStatus) < DIVERGENCIA_CORTE ? (
+            <div>
+              <span className="text-[12px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
+              {usaMovimento && <p className="text-[9px] font-black uppercase tracking-widest text-[#ffcc00]/60 mt-0.5">via movimento</p>}
+            </div>
           ) : (
             <div>
-              <span className="font-mono text-[14px] font-black" style={{ color: corDiff(totalDiffSaldo) }}>
-                {totalDiffSaldo > 0 ? '+' : ''}{fmt(totalDiffSaldo)}
+              <span className="font-mono text-[14px] font-black" style={{ color: corDiff(diffParaStatus) }}>
+                {diffParaStatus > 0 ? '+' : ''}{fmt(diffParaStatus)}
               </span>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#555] mt-0.5">divergência saldo</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#555] mt-0.5">
+                {usaMovimento ? 'divergência movement' : 'divergência saldo'}
+              </p>
             </div>
           )}
         </td>
       </tr>
 
-      {/* Detalhe expandido: lançamentos lado a lado */}
+      {/* Detalhe expandido — Órfãos + Razão Completo */}
       {open && (
-        <tr>
-          <td colSpan={porComp.length + 2} className="p-0 bg-[#070707]">
-            {/* Botão Racional */}
-            {todosVirtualLogica.length > 0 && (
-              <div className="px-4 py-2 border-b border-[#111] flex items-center gap-2">
-                <button
-                  onClick={e => { e.stopPropagation(); setRacionalOpen(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-[11px] font-black uppercase tracking-widest text-[#a259ff] hover:bg-[#a259ff]/25 transition-all"
-                >
-                  <Zap size={11}/> Racional do Cálculo
-                </button>
-                <span className="text-[10px] text-[#444] font-bold">{todosVirtualLogica.length} etapa{todosVirtualLogica.length !== 1 ? 's' : ''} de cálculo</span>
-              </div>
-            )}
-            <div className="grid grid-cols-2 divide-x divide-[#111]">
-              {/* Questor */}
-              <div>
-                <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-[#ff4d00]">Questor — Físico</span>
-                </div>
-                {porComp.flatMap(c => c.detalhesFisico).length === 0 ? (
-                  <p className="px-5 py-3 text-[11px] font-bold text-[#333] uppercase italic">Sem lançamentos físicos</p>
-                ) : (
-                  <div className="overflow-x-auto pb-2">
-                    <table className="w-auto text-[11px] table-auto whitespace-nowrap ml-2 mt-1">
-                      <tbody>
-                        {porComp.flatMap((c, ci) => c.detalhesFisico.map((d, i) => (
-                          <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                            <td className="px-2 py-1 font-mono font-bold text-[#555]">{d.data}</td>
-                            <td className="px-2 py-1 font-bold text-[#666]" title={d.historico}>{d.historico}</td>
-                            <td className="px-2 py-1 text-center font-black text-[13px]" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff4d00' }}>{d.natureza}</td>
-                            <td className="px-2 py-1 text-right font-mono font-black text-[#999]">{fmt(d.valor)}</td>
-                          </tr>
-                        )))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              {/* Vulcano */}
-              <div>
-                <div className="px-4 py-1.5 bg-[#0f0f0f] border-b border-[#111]">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano — Societário</span>
-                </div>
-                {porComp.flatMap(c => c.detalhesVirtual).length === 0 ? (
-                  <p className="px-5 py-3 text-[11px] font-bold text-[#333] uppercase italic">Sem lançamentos societários</p>
-                ) : (
-                  <div className="overflow-x-auto pb-2">
-                    <table className="w-auto text-[11px] table-auto whitespace-nowrap ml-2 mt-1">
-                      <tbody>
-                        {porComp.flatMap((c, ci) => c.detalhesVirtual.map((d, i) => (
-                          <tr key={`${ci}-${i}`} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                            <td className="px-2 py-1 font-mono font-bold text-[#555]">{d.data}</td>
-                            <td className="px-2 py-1 font-bold text-[#666]" title={d.historico || d.logica}>{d.historico}</td>
-                            <td className="px-2 py-1 text-center font-black text-[13px]" style={{ color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}>{d.natureza}</td>
-                            <td className="px-2 py-1 text-right font-mono font-black text-[#999]">{fmt(d.valor)}</td>
-                          </tr>
-                        )))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          </td>
-        </tr>
+        <DetalheOrfaos
+          porComp={porComp}
+          contaId={contaId}
+          contaNome={contaNome}
+          todosVirtualLogica={todosVirtualLogica}
+          onRacional={() => setRacionalOpen(true)}
+        />
       )}
 
       {/* ── Modal Racional ── */}
@@ -297,6 +467,121 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   );
 }
 
+// ── Painel de Conciliação Cross-Account ──────────────────────────────────────
+function CrossMatchPanel({ result, onClose }) {
+  if (!result) return null;
+
+  const corScore = (s) => {
+    if (s >= 0.85) return '#34c759';
+    if (s >= 0.65) return '#ffcc00';
+    if (s >= 0.45) return '#ff9f0a';
+    return '#ff4d00';
+  };
+
+  const labelScore = (s) => {
+    if (s >= 0.85) return 'ALTA';
+    if (s >= 0.65) return 'MÉDIA';
+    if (s >= 0.45) return 'BAIXA';
+    return 'RESIDUAL';
+  };
+
+  return (
+    <div className="bg-[#090909] border border-[#34c759]/25 rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#34c759]/15 bg-[#34c759]/5">
+        <div className="flex items-center gap-3">
+          <Link2 size={16} className="text-[#34c759]"/>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#34c759]">Conciliação Cross-Account — Órfãos</p>
+            <p className="text-[9px] text-[#555] mt-0.5">
+              {result.total_matches} par{result.total_matches !== 1 ? 'es' : ''} encontrado{result.total_matches !== 1 ? 's' : ''}
+              {' '}·{' '}{result.total_orfaos_questor}Q + {result.total_orfaos_vulcano}V órfãos analisados
+              {' '}· Scoring: Valor 50% + Histórico 25% + Data 15% + Conta 10%
+            </p>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-[#333] hover:text-white text-xs px-2 py-1 transition-colors">✕ Fechar</button>
+      </div>
+
+      {/* Matches */}
+      {result.error ? (
+        <p className="p-4 text-[#ff4d00] text-xs font-mono">{result.error}</p>
+      ) : result.matches?.length === 0 ? (
+        <div className="flex items-center gap-2 px-5 py-6 text-[#555]">
+          <CheckCircle2 size={14}/>
+          <span className="text-[10px] font-black uppercase tracking-widest">Nenhum par candidato encontrado acima do threshold (38%)</span>
+        </div>
+      ) : (
+        <div className="divide-y divide-[#111] max-h-[520px] overflow-y-auto">
+          {result.matches.map((m, i) => {
+            const cor = corScore(m.score);
+            const pct = Math.round(m.score * 100);
+            return (
+              <div key={i} className="px-4 py-3 hover:bg-[#0d0d0d] transition-colors">
+                {/* Top row: score bar + badges + sugestão */}
+                <div className="flex items-center gap-3 mb-2">
+                  {/* Score indicator */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="w-[60px] h-[6px] bg-[#111] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: cor }}/>
+                    </div>
+                    <span className="text-[10px] font-black font-mono" style={{ color: cor }}>{pct}%</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ color: cor, border: `1px solid ${cor}40`, background: `${cor}15` }}>{labelScore(m.score)}</span>
+                  </div>
+
+                  {/* Tipo badge */}
+                  {m.tipo === 'CROSS_ACCOUNT' && (
+                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#a259ff]/15 border border-[#a259ff]/40 text-[#a259ff] rounded">
+                      ⇄ Cross-Account
+                    </span>
+                  )}
+                  {!m.nat_match && (
+                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#ff9f0a]/15 border border-[#ff9f0a]/40 text-[#ff9f0a] rounded">
+                      ⚠ Nat. Invertida
+                    </span>
+                  )}
+
+                  {/* Score breakdown */}
+                  <span className="text-[9px] text-[#333] font-mono ml-auto shrink-0">
+                    V:{Math.round(m.score_valor*100)}% H:{Math.round(m.score_hist*100)}% D:{Math.round(m.score_data*100)}% C:{Math.round(m.score_conta*100)}%
+                  </span>
+                </div>
+
+                {/* Par lado a lado */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
+                    <div className="bg-[#0a0a0a] border border-[#ff4d00]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[#ff4d00] ml-1">Questor</p>
+                      {(m.questor_detalhe && m.questor_detalhe.length > 0 ? m.questor_detalhe : [m.questor]).map((q, idx) => (
+                          <div key={idx} className="bg-[#111] p-1.5 rounded border border-[#ff4d00]/10">
+                            <p className="font-mono font-bold text-[#666] text-[8px]">{q.data} | c/{q.conta}</p>
+                            <p className="font-bold text-[#aaa] truncate" title={q.historico || q.chave}>{(q.historico || q.chave || '?').slice(0,50)}</p>
+                            <p className="font-black text-[#34c759] mt-0.5">{fmt(q.valor)} <span className="text-[#444]">{q.natureza}</span></p>
+                          </div>
+                      ))}
+                    </div>
+                    <div className="bg-[#0a0a0a] border border-[#a259ff]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[#a259ff] ml-1">Vulcano</p>
+                      {(m.vulcano_detalhe && m.vulcano_detalhe.length > 0 ? m.vulcano_detalhe : [m.vulcano]).map((v, idx) => (
+                          <div key={idx} className="bg-[#111] p-1.5 rounded border border-[#a259ff]/10">
+                            <p className="font-mono font-bold text-[#666] text-[8px]">{v.data} | c/{v.conta}</p>
+                            <p className="font-bold text-[#aaa] truncate" title={v.historico || v.logica}>{(v.historico || v.logica || '?').slice(0,50)}</p>
+                            <p className="font-black text-[#a259ff] mt-0.5">{fmt(v.valor)} <span className="text-[#444]">{v.natureza}</span></p>
+                          </div>
+                      ))}
+                    </div>
+                  </div>
+
+                {/* Sugestão */}
+                <p className="text-[9px] font-bold text-[#555] italic px-1">{m.sugestao}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MAIN VIEW ────────────────────────────────────────────────────────────────
 export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const now = new Date();
@@ -316,6 +601,11 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const [diagData,    setDiagData]    = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDiag,    setShowDiag]    = useState(false);
+
+  // ── Conciliação Cross-Account (Fuzzy Orphan Matching) ────────────────────
+  const [crossData,    setCrossData]    = useState(null);
+  const [crossLoading, setCrossLoading] = useState(false);
+  const [showCross,    setShowCross]    = useState(false);
 
   // ── Carrega empreendimentos na montagem ──────────────────────────────────
   useEffect(() => {
@@ -469,6 +759,104 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     setDiagLoading(false);
   };
 
+  // ── Coleta TODOS os orfaos de TODAS as contas e chama o backend ────────────
+  const fetchCrossMatch = async () => {
+    if (!selectedEmpresa || Object.keys(dadosPorMes).length === 0) return;
+    setCrossLoading(true);
+    setShowCross(true);
+    setCrossData(null);
+
+    // Agrega detalhes por conta em todos os meses
+    const detFisicoPorConta  = {};
+    const detVirtualPorConta = {};
+
+    Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
+      (fisico || []).forEach(f => {
+        const n = parseInt(f.conta);
+        if (!n || isNaN(n)) return; // guarda: ignora contas inválidas
+        const cid = String(n);
+        if (!detFisicoPorConta[cid]) detFisicoPorConta[cid] = [];
+        (f.detalhes || []).forEach(d => detFisicoPorConta[cid].push({ ...d, conta: n }));
+      });
+      (virtual || []).forEach(v => {
+        const n = parseInt(v.conta);
+        if (!n || isNaN(n)) return;
+        const cid = String(n);
+        if (!detVirtualPorConta[cid]) detVirtualPorConta[cid] = [];
+        (v.detalhes || []).forEach(d => detVirtualPorConta[cid].push({ ...d, conta: n }));
+      });
+    });
+
+    // Calcula órfãos conta a conta e agrega
+    const orfaosQ = [];
+    const orfaosV = [];
+    const todasContas = new Set([
+      ...Object.keys(detFisicoPorConta),
+      ...Object.keys(detVirtualPorConta),
+    ]);
+
+    todasContas.forEach(cid => {
+      const n = parseInt(cid);
+      if (!n || isNaN(n)) return;
+      const fisLista = detFisicoPorConta[cid]  || [];
+      const virLista = detVirtualPorConta[cid] || [];
+      const { fisicosOrfaos, virtuaisOrfaos } = calcularOrfaos(fisLista, virLista);
+      // Mapeamento explícito: só campos que o backend OrfaoItem espera
+      fisicosOrfaos.forEach(o => orfaosQ.push({
+        conta:    n,
+        data:     String(o.data     || ''),
+        historico:String(o.historico|| ''),
+        natureza: String(o.natureza || ''),
+        valor:    Number(o.valor    || 0),
+        chave:    String(o.chave    || ''),
+        logica:   String(o.logica   || ''),
+      }));
+      virtuaisOrfaos.forEach(o => orfaosV.push({
+        conta:    n,
+        data:     String(o.data     || ''),
+        historico:String(o.historico|| ''),
+        natureza: String(o.natureza || ''),
+        valor:    Number(o.valor    || 0),
+        chave:    String(o.chave    || ''),
+        logica:   String(o.logica   || ''),
+      }));
+    });
+
+    if (orfaosQ.length === 0 && orfaosV.length === 0) {
+      setCrossData({ matches: [], total_matches: 0, total_orfaos_questor: 0, total_orfaos_vulcano: 0 });
+      setCrossLoading(false);
+      return;
+    }
+
+    try {
+      const r = await fetch(`${API_BASE}/api/auditoria/concilia-orfaos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empresa_id: parseInt(selectedEmpresa),
+          orfaos_questor: orfaosQ,
+          orfaos_vulcano: orfaosV,
+          threshold: 0.38,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        // j.detail pode ser string ou array de ValidationError Pydantic
+        const msg = typeof j.detail === 'string'
+          ? j.detail
+          : Array.isArray(j.detail)
+            ? j.detail.map(e => `${e.loc?.join('.')||''}: ${e.msg||''}`).join('; ')
+            : JSON.stringify(j.detail);
+        throw new Error(msg || 'Erro na conciliação cross-account');
+      }
+      setCrossData(j);
+    } catch (e) {
+      setCrossData({ error: String(e) });
+    }
+    setCrossLoading(false);
+  };
+
+
   // ── Apenas contas que o Vulcano calculou para injeção (contas_virtuais) ──
   const contasMap = useMemo(() => {
     const m = {};
@@ -494,11 +882,19 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     });
 
     Object.keys(contasMap).forEach(contaId => {
+      const usaMovimento = CONTAS_USA_MOVIMENTO.has(contaId);
       let diffTotal = 0;
       competencias.forEach(comp => {
         const f = dadosPorMes[comp]?.fisico?.find( r => String(r.conta) === contaId);
         const v = dadosPorMes[comp]?.virtual?.find(r => String(r.conta) === contaId);
-        diffTotal += ((v?.movimento_liquido || 0) - (f?.movimento_liquido || 0));
+        if (usaMovimento) {
+          // Contas especiais: compara movimento_liquido do Questor × Vulcano
+          diffTotal += ((v?.movimento_liquido || 0) - (f?.movimento_liquido || 0));
+        } else {
+          // Demais: compara delta de saldo (saldo_final - saldo_anterior) do Questor × Vulcano
+          const movF = f ? ((f.saldo_final || 0) - (f.saldo_anterior || 0)) : 0;
+          diffTotal += ((v?.movimento_liquido || 0) - movF);
+        }
       });
       if (abs(diffTotal) < DIVERGENCIA_CORTE) contasConciliadas++;
       else contasDivergentes++;
@@ -568,6 +964,14 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           }`}>
           {diagLoading ? <Zap className="animate-spin" size={12}/> : <Zap size={12}/>}
           {diagLoading ? 'Analisando...' : '🧠 Diagnóstico IA'}
+        </button>
+        <button onClick={fetchCrossMatch} disabled={crossLoading || !temDados}
+          title="Fuzzy matching cross-account: busca pares prováveis entre todos os lançamentos órfãos"
+          className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
+            showCross ? 'bg-[#34c759]/20 border-[#34c759]/60 text-[#34c759]' : 'bg-[#111] border-[#333] text-[#555] hover:text-[#34c759] hover:border-[#34c759]/40'
+          }`}>
+          {crossLoading ? <Link2 className="animate-spin" size={12}/> : <Link2 size={12}/>}
+          {crossLoading ? 'Conciliando...' : '🔗 Cross-Account'}
         </button>
       </div>
 
@@ -715,6 +1119,20 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Painel Cross-Account (Fuzzy Orphan Matching) ── */}
+      {showCross && (
+        crossLoading ? (
+          <div className="bg-[#090909] border border-[#34c759]/25 rounded-lg p-8 flex items-center justify-center gap-3">
+            <Link2 className="animate-spin text-[#34c759]" size={18}/>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[#555]">
+              Coletando órfãos e calculando fuzzy scores cross-account...
+            </span>
+          </div>
+        ) : (
+          <CrossMatchPanel result={crossData} onClose={() => setShowCross(false)}/>
+        )
       )}
 
       {/* ── Cards de resumo ── */}

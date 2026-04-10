@@ -177,12 +177,175 @@
   --v-magma-glow: rgba(50, 0, 0, 0.3);
 }
 
+/* ============================================================
+   THEME: NUMB — The Industrial Archive
+   Silver/grey industrial, Windows Classic aesthetic
+   Beveled surfaces, high-density, legacy ERP feel
+   ============================================================ */
+[data-theme="numb"] {
+  --v-bg: #bdbdbd;
+  --v-deep: #a8a8a8;
+  --v-card: #d4d0c8;
+  --v-hover: #e0ddd8;
+  --v-muted: #ababab;
+  --v-border: #808080;
+  --v-text: #1d1c17;
+  --v-text-bold: #000000;
+  --v-text-muted: #4a4a48;
+  --v-text-faint: #686866;
+  --v-text-inv: #ffffff;
+  --v-accent: #ff4500;
+  --v-accent-2: #c08000;
+  --v-accent-3: #287034;
+  --v-accent-4: #0055cc;
+  --v-accent-5: #660099;
+  --v-accent-6: #a07800;
+  --v-magma-glow: rgba(255, 69, 0, 0.2);
+  /* Material tokens */
+  --color-primary: 60 60 60;
+  --color-on-surface: 29 28 23;
+  --color-on-surface-variant: 72 72 70;
+  --color-surface: 212 208 200;
+  --color-surface-container-lowest: 228 224 218;
+  --color-surface-container-highest: 180 176 170;
+  --color-background: 189 189 189;
+  --color-on-background: 29 28 23;
+  --color-surface-container: 200 196 190;
+  --color-surface-bright: 240 237 232;
+}
+
+/* ============================================================
+   THEME: LIGHT — The Technical Manuscript
+   Paper white, clean minimal, editorial precision
+   ============================================================ */
+[data-theme="light"] {
+  --v-bg: #f9f9f9;
+  --v-deep: #f3f3f3;
+  --v-card: #ffffff;
+  --v-hover: #f0f0f0;
+  --v-muted: #e2e2e2;
+  --v-border: #e0e0e0;
+  --v-text: #323232;
+  --v-text-bold: #1a1a1a;
+  --v-text-muted: #5e5e5e;
+  --v-text-faint: #8a8a8a;
+  --v-text-inv: #ffffff;
+  --v-accent: #cc3300;
+  --v-accent-2: #994400;
+  --v-accent-3: #228c3a;
+  --v-accent-4: #005599;
+  --v-accent-5: #660099;
+  --v-accent-6: #885500;
+  --v-magma-glow: rgba(204, 51, 0, 0.08);
+  /* Material tokens */
+  --color-primary: 80 80 80;
+  --color-on-surface: 50 50 50;
+  --color-on-surface-variant: 90 90 90;
+  --color-surface: 249 249 249;
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-highest: 226 226 226;
+  --color-background: 249 249 249;
+  --color-on-background: 50 50 50;
+  --color-surface-container: 238 238 238;
+  --color-surface-bright: 255 255 255;
+}
+
+/* ============================================================
+   COLOR OVERRIDES — Remap hardcoded dark hex in view components
+   ============================================================ */
+
+/* --- NUMB: dark blacks/greys → industrial silver --- */
+[data-theme="numb"] .bg-\[\#050505\],[data-theme="numb"] .bg-\[\#0a0a0a\],
+[data-theme="numb"] .bg-\[\#0b0b0b\],[data-theme="numb"] .bg-\[\#111\] { background-color: #d4d0c8 !important; }
+[data-theme="numb"] .bg-\[\#131313\] { background-color: #d8d4cc !important; }
+[data-theme="numb"] .bg-\[\#1a1a1a\],[data-theme="numb"] .bg-\[\#1a1a1c\],[data-theme="numb"] .bg-\[\#181818\] { background-color: #cccac2 !important; }
+[data-theme="numb"] .bg-\[\#222\],[data-theme="numb"] .bg-\[\#2a2a2a\] { background-color: #c4c0b8 !important; }
+
+[data-theme="numb"] .border-\[\#222\] { border-color: #909090 !important; }
+[data-theme="numb"] .border-\[\#333\] { border-color: #888888 !important; }
+[data-theme="numb"] .border-\[\#444\] { border-color: #999999 !important; }
+
+[data-theme="numb"] .text-white        { color: #1d1c17 !important; }
+[data-theme="numb"] .text-\[\#e5e2e1\] { color: #1d1c17 !important; }
+[data-theme="numb"] .text-\[\#ccc\]    { color: #2a2a28 !important; }
+[data-theme="numb"] .text-\[\#aaa\]    { color: #3a3a38 !important; }
+[data-theme="numb"] .text-\[\#888\]    { color: #555555 !important; }
+[data-theme="numb"] .text-\[\#777\]    { color: #5a5a5a !important; }
+[data-theme="numb"] .text-\[\#666\]    { color: #606060 !important; }
+[data-theme="numb"] .text-\[\#555\]    { color: #686868 !important; }
+[data-theme="numb"] .text-\[\#444\]    { color: #707070 !important; }
+
+[data-theme="numb"] .hover\:bg-\[\#1a1a1a\]:hover,
+[data-theme="numb"] .hover\:bg-\[\#1a1a1c\]:hover,
+[data-theme="numb"] .hover\:bg-\[\#222\]:hover { background-color: #e8e4dc !important; }
+[data-theme="numb"] .hover\:text-white:hover { color: #000000 !important; }
+
+/* Numb bevel: raised buttons and recessed inputs */
+[data-theme="numb"] button:not([class*="bg-\[#34"]):not([class*="bg-\[#007"]):not([class*="bg-\[#a2"]) {
+  box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #ffffff;
+}
+[data-theme="numb"] input,[data-theme="numb"] select,[data-theme="numb"] textarea {
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #ffffff;
+}
+
+/* --- LIGHT: dark blacks → paper white --- */
+[data-theme="light"] .bg-\[\#050505\],[data-theme="light"] .bg-\[\#0a0a0a\],
+[data-theme="light"] .bg-\[\#0b0b0b\],[data-theme="light"] .bg-\[\#111\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#131313\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#1a1a1a\],[data-theme="light"] .bg-\[\#1a1a1c\],[data-theme="light"] .bg-\[\#181818\] { background-color: #f5f5f5 !important; }
+[data-theme="light"] .bg-\[\#222\],[data-theme="light"] .bg-\[\#2a2a2a\] { background-color: #eeeeee !important; }
+
+[data-theme="light"] .border-\[\#222\] { border-color: #ebebeb !important; }
+[data-theme="light"] .border-\[\#333\] { border-color: #e2e2e2 !important; }
+[data-theme="light"] .border-\[\#444\] { border-color: #d0d0d0 !important; }
+[data-theme="light"] .border-\[\#555\] { border-color: #c0c0c0 !important; }
+
+[data-theme="light"] .text-white        { color: #1a1a1a !important; }
+[data-theme="light"] .text-\[\#e5e2e1\] { color: #2a2a2a !important; }
+[data-theme="light"] .text-\[\#ccc\]    { color: #2a2a2a !important; }
+[data-theme="light"] .text-\[\#aaa\]    { color: #3a3a3a !important; }
+[data-theme="light"] .text-\[\#888\]    { color: #5e5e5e !important; }
+[data-theme="light"] .text-\[\#777\]    { color: #666666 !important; }
+[data-theme="light"] .text-\[\#666\]    { color: #6a6a6a !important; }
+[data-theme="light"] .text-\[\#555\]    { color: #7a7a7a !important; }
+[data-theme="light"] .text-\[\#444\]    { color: #8a8a8a !important; }
+
+[data-theme="light"] .hover\:bg-\[\#1a1a1a\]:hover,
+[data-theme="light"] .hover\:bg-\[\#1a1a1c\]:hover,
+[data-theme="light"] .hover\:bg-\[\#222\]:hover { background-color: #f0f0f0 !important; }
+[data-theme="light"] .hover\:text-white:hover { color: #000000 !important; }
+
+/* Light: accent adjustment (Magma Orange → slightly darker red-orange) */
+[data-theme="light"] .text-\[\#ff4d00\]           { color: #cc3300 !important; }
+[data-theme="light"] .hover\:text-\[\#ff4d00\]:hover { color: #cc3300 !important; }
+[data-theme="light"] .border-\[\#ff4d00\]          { border-color: #cc3300 !important; }
+[data-theme="light"] .hover\:border-\[\#ff4d00\]:hover { border-color: #cc3300 !important; }
+[data-theme="light"] .bg-\[\#ff4d00\]             { background-color: #cc3300 !important; }
+[data-theme="light"] .text-\[\#ff4d00\]\/\*       { color: rgba(204,51,0,var(--tw-text-opacity)) !important; }
+
+/* Light: table alternating rows */
+[data-theme="light"] table tr { background-color: transparent; }
+
+/* Light: global baseline */
+[data-theme="light"] { color: #323232; }
+
+/* ============================================================
+   THEMED SCROLLBAR
+   ============================================================ */
+[data-theme="numb"] .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+[data-theme="numb"] .custom-scrollbar::-webkit-scrollbar-thumb { background: #909090; border-radius: 10px; }
+[data-theme="numb"] .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #ff4500; }
+
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); }
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 10px; }
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cc3300; }
+
 body {
   background-color: var(--v-bg);
   color: var(--v-text);
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   margin: 0;
-  transition: background-color 0.8s ease-in-out, color 0.5s ease-in-out;
+  transition: background-color 0.4s ease-in-out, color 0.3s ease-in-out;
 }
 
 /* Animação de Borda Magma Viva */
@@ -252,10 +415,10 @@ body {
 }
 
 .bento-input, .bento-select {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #fff;
+  background: rgba(var(--color-surface-container-lowest), 0.08);
+  border: 1px solid rgba(var(--color-on-surface), 0.1);
+  border-radius: 0;
+  color: var(--v-text);
   padding: 10px 14px;
   font-size: 11px;
   font-family: 'Space Grotesk', monospace;
@@ -266,28 +429,28 @@ body {
 
 .bento-input:focus, .bento-select:focus {
   border-color: var(--v-accent);
-  background: rgba(255, 77, 0, 0.05);
-  box-shadow: 0 0 15px rgba(255, 77, 0, 0.1);
+  background: rgba(var(--color-surface-container-lowest), 0.04);
+  box-shadow: 0 0 15px var(--v-magma-glow);
 }
 
 .bento-button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #888;
+  background: rgba(var(--color-on-surface), 0.04);
+  border: 1px solid rgba(var(--color-on-surface), 0.1);
+  color: var(--v-text-muted);
   padding: 8px 16px;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  border-radius: 2px;
+  border-radius: 0;
   transition: all 0.3s ease;
   cursor: pointer;
 }
 
 .bento-button:hover:not(:disabled) {
   border-color: var(--v-accent);
-  color: #fff;
-  background: rgba(255, 77, 0, 0.1);
+  color: var(--v-text-bold);
+  background: rgba(var(--color-surface-container-lowest), 0.08);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -310,6 +473,12 @@ body {
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
+}
+[data-theme="numb"] .immersive-bg {
+    background-image: linear-gradient(to bottom, rgba(168, 168, 168, 0.7), rgba(149, 149, 149, 0.92)), url('https://images.unsplash.com/photo-1541746972996-4e0b0f43e01a?auto=format&fit=crop&q=80&w=2670');
+}
+[data-theme="light"] .immersive-bg {
+    background-image: linear-gradient(to bottom, rgba(249, 249, 249, 0.8), rgba(243, 243, 243, 0.96)), url('https://images.unsplash.com/photo-1541746972996-4e0b0f43e01a?auto=format&fit=crop&q=80&w=2670');
 }
 .ethereal-glass {
     background: rgba(255, 255, 255, 0.03);
