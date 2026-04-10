@@ -54,15 +54,17 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
     const virtual  = lista.virtual?.find(r => String(r.conta) === String(contaId));
     return {
       comp,
-      temFisico:    !!fisico,
-      movFisico:    fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0,
-      saldoFisico:  fisico?.saldo_final         || 0,
-      movVirtual:   virtual?.movimento_liquido  || 0,
-      saldoVirtual: virtual?.saldo_final        || 0,
-      diffMov:      (virtual?.movimento_liquido || 0) - (fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0),
-      diffSaldo:    (virtual?.saldo_final       || 0) - (fisico?.saldo_final       || 0),
-      detalhesFisico:   fisico?.detalhes  || [],
-      detalhesVirtual:  virtual?.detalhes || [],
+      temFisico:       !!fisico,
+      movFisico:       fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0,
+      saldoFisico:     fisico?.saldo_final          || 0,
+      movVirtual:      virtual?.movimento_liquido   || 0,
+      movVirtualDeb:   virtual?.movimento_debito    || 0,
+      movVirtualCred:  virtual?.movimento_credito   || 0,
+      saldoVirtual:    virtual?.saldo_final         || 0,
+      diffMov:         (virtual?.movimento_liquido  || 0) - (fisico ? ((fisico.saldo_final || 0) - (fisico.saldo_anterior || 0)) : 0),
+      diffSaldo:       (virtual?.saldo_final        || 0) - (fisico?.saldo_final        || 0),
+      detalhesFisico:  fisico?.detalhes  || [],
+      detalhesVirtual: virtual?.detalhes || [],
     };
   });
 
@@ -102,7 +104,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
         </td>
 
         {/* Por competência: mov fisico / mov virtual / diff */}
-        {porComp.map(({ comp, movFisico, movVirtual, diffMov, saldoFisico, saldoVirtual, temFisico }) => (
+        {porComp.map(({ comp, movFisico, movVirtual, movVirtualDeb, movVirtualCred, diffMov, saldoFisico, saldoVirtual, temFisico }) => (
           <td key={comp} className="px-1 py-0" style={{ minWidth: '270px' }}>
             <div className="flex gap-0 h-full">
               {/* Questor */}
@@ -126,6 +128,13 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
                   {abs(movVirtual) > 0.01 ? (
                     <span className={movVirtual >= 0 ? 'text-[#a259ff]' : 'text-[#ff9f0a]'}>
                       {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
+                    </span>
+                  ) : (abs(movVirtualDeb) > 0.01 || abs(movVirtualCred) > 0.01) ? (
+                    // Movimento bruto existe mas líquido = 0 (ex: reconhecimento + recebimento no mesmo mês)
+                    <span className="text-[#555] text-[10px] leading-tight">
+                      <span className="text-[#a259ff]/60">D:{fmt(movVirtualDeb)}</span>
+                      <br/>
+                      <span className="text-[#ff9f0a]/60">C:{fmt(movVirtualCred)}</span>
                     </span>
                   ) : <span className="text-[#252525]">—</span>}
                 </div>

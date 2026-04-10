@@ -4,7 +4,7 @@ import {
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
     Zap, Link as LinkIcon, Cpu, AlertCircle, FileText, CheckSquare, MessageSquare, Plus, PlusCircle, PenTool, Hash, Filter,
     LayoutGrid, History, ListFilter, ShoppingCart, Users, DollarSign, Building2, Loader2, ShieldAlert,
-    UploadCloud, Send, Save, Trash2, Code, FileSpreadsheet, Minimize, Maximize, Sparkles, ChevronUp
+    UploadCloud, Send, Save, Trash2, Code, FileSpreadsheet, Minimize, Maximize, Sparkles, ChevronUp, Lock
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar,
@@ -1952,11 +1952,12 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                          <tbody>
                            {previewData.map((d, i) => {
                              const isProjetada = d.status === 'PROJETADA_NOVA_LINHA';
-                             const isAcessorio = d.status !== 'MATCH_PERFEITO' && !isProjetada && (d.row.total_pago < 300 || d.row.valor_raiz === 0);
+                             const isJaPago = d.status === 'ALERTA_JA_PAGO';
+                             const isAcessorio = d.status !== 'MATCH_PERFEITO' && !isProjetada && !isJaPago && (d.row.total_pago < 300 || d.row.valor_raiz === 0);
                              const isExpanded = expandedRowIndex === i;
                              return (
                              <React.Fragment key={i}>
-                               <tr className={`border-b border-[#222] ${d.status === 'MATCH_PERFEITO' ? 'hover:bg-[#34c759]/5' : isProjetada ? 'hover:bg-[#007aff]/10 bg-[#007aff]/5' : isAcessorio ? 'hover:bg-[#333]/30 bg-[#111]' : 'hover:bg-[#ff4d00]/5 bg-[#ff4d00]/10'}`}>
+                               <tr className={`border-b border-[#222] ${d.status === 'MATCH_PERFEITO' ? 'hover:bg-[#34c759]/5' : isProjetada ? 'hover:bg-[#007aff]/10 bg-[#007aff]/5' : isJaPago ? 'hover:bg-[#ff9500]/5 bg-[#ff9500]/10' : isAcessorio ? 'hover:bg-[#333]/30 bg-[#111]' : 'hover:bg-[#ff4d00]/5 bg-[#ff4d00]/10'}`}>
                                  <td className="p-3 text-[#ccc] align-top max-w-[300px]">
                                     <div className="font-bold text-[#e5e2e1] mb-2">{d.row.comprador || d.row.cpf_cnpj || '---'}</div>
                                     <div className="flex flex-wrap gap-1.5">
@@ -1983,6 +1984,14 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                           </div>
                                         )}
                                       </>
+                                    ) : isJaPago ? (
+                                      <>
+                                        <div className="font-bold text-[#ff9500] flex items-center gap-1"><Lock size={12}/> ID: {d.id_receber || '—'} — JÁ QUITADA</div>
+                                        <div className="text-[10px] text-[#888] mt-1">Vencimento: {d.db_estado_atual?.vencimento} (Parc {d.db_estado_atual?.parcela})</div>
+                                        <div className="text-[10px] text-[#ff9500] mt-1 bg-[#ff9500]/10 px-1 inline-block border border-[#ff9500]/30 rounded">
+                                          Pago no ERP: {formatCurrency(d.db_estado_atual?.pago_hoje)}
+                                        </div>
+                                      </>
                                     ) : isProjetada ? (
                                       <>
                                         <div className="font-bold text-[#007aff] flex items-center gap-1"><Sparkles size={12}/> ⚡ FUTURA (SERÁ GERADA)</div>
@@ -2006,6 +2015,10 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                    {d.status === 'MATCH_PERFEITO' || isProjetada ? (
                                      <span className={`${isProjetada ? 'bg-[#007aff] hover:bg-[#005bb5]' : 'bg-[#34c759] hover:bg-[#2da94f]'} text-${isProjetada ? 'white' : 'black'} px-2 py-1 rounded-sm tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center transition-colors`}>
                                        {isProjetada ? 'PROJETAR + BAIXAR' : 'BAIXAR'}
+                                     </span>
+                                   ) : isJaPago ? (
+                                     <span className="bg-[#ff9500] text-black px-2 py-1 rounded-sm tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center flex items-center justify-center gap-1">
+                                       <Lock size={10}/> JÁ PAGO
                                      </span>
                                    ) : (
                                      <span className={`${isAcessorio ? 'bg-[#333] text-[#fff]' : 'bg-[#ff4d00] text-black'} px-2 py-1 rounded-sm tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center`}>

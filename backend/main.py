@@ -1316,15 +1316,25 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     uni_nome = uni_data["unidade"]
                     vgv_uni = uni_data["vgv"]
                     if vgv_uni <= 0: continue
-                    
+
+                    # --- IFRS 15: Detectar se a venda ocorreu NO mês-alvo ---
+                    # Se a DATA_VENDA cai no mesmo mês que estamos processando, a unidade
+                    # não existia como "vendida" no mês anterior — rec_ant e custo_ant devem ser 0.
+                    target_ym = f"{str(ano).zfill(4)}-{str(mes).zfill(2)}"
+                    data_venda_str = uni_data.get("data_venda") or ""
+                    venda_ym = data_venda_str[:7] if data_venda_str and len(data_venda_str) >= 7 else ""
+                    is_nova_venda_mes_alvo = bool(venda_ym) and (venda_ym == target_ym)
+
                     # CUSTO ECONÔMICO (Apenas unidades vendidas)
                     rateio_venda = vgv_uni / vgv_global
                     custo_u_atual = custo_gasto_vigente * rateio_venda * (poc_acumulado_vigente / 100.0)
-                    custo_u_ant = custo_gasto_anterior * rateio_venda * (poc_acumulado_anterior / 100.0)
+                    # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
+                    custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
+                                  custo_gasto_anterior * rateio_venda * (poc_acumulado_anterior / 100.0)
                     mov_custo_u = custo_u_atual - custo_u_ant
                     
                     if abs(mov_custo_u) > 0.01:
-                         logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Peso VGV ({rateio_venda*100:.2f}%) * POC ({poc_acumulado_vigente}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]"
+                         logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Peso VGV ({rateio_venda*100:.2f}%) * POC ({poc_acumulado_vigente}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}"
                          inject_virtual_entry(c_custo, mov_custo_u, 'D', f"Custo POC - Unid {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
                          inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"Contrapartida RecCusto POC - Unid {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
 
@@ -1338,12 +1348,14 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     caixa_ant = caixa_acum - caixa_m
                     
                     rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
-                    rec_auferida_ant = vgv_uni * (poc_acumulado_anterior / 100.0)
+                    # Se nova venda no mês: receita anterior = 0 (sem reconhecimento prévio desta unidade)
+                    rec_auferida_ant = 0.0 if is_nova_venda_mes_alvo else \
+                                      vgv_uni * (poc_acumulado_anterior / 100.0)
                     
                     # -----------------
                     # RECEITA DRE (Econômico)
                     mov_receita_auferida = rec_auferida_atual - rec_auferida_ant
-                    logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]"
+                    logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]{'  [NOVA VENDA MÊS — rec_ant forçado 0]' if is_nova_venda_mes_alvo else ''}"
                     if abs(mov_receita_auferida) > 0.01:
                          nat_rec = 'C' if mov_receita_auferida > 0 else 'D'
                          nat_cli_rec = 'D' if mov_receita_auferida > 0 else 'C'
@@ -1492,12 +1504,69 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                             nat_c = 'C' if m_ant > 0 else 'D'
                             inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_ant_ant * peso_imp))
                             inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Estorno Excesso Despesa Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_ant_ant * peso_imp))
+            # -----------------------------------------------------------------------
+            # IFRS 15 — Vendas do mês-alvo sem recebimentos (não estão em receitas_meta)
+            # Regra: se POC >= 100% na data_venda, a receita é integralmente reconhecida.
+            # Essas unidades não geram linhas no get_receitas_caixa (LEFT JOIN vazio),
+            # por isso precisam ser buscadas diretamente aqui.
+            # -----------------------------------------------------------------------
+            try:
+                data_ini_mes_ctb = f"{ano}-{str(mes).zfill(2)}-01"
+                data_fim_mes_ctb = f"{ano+1}-01-01" if int(mes) == 12 else f"{ano}-{str(int(mes)+1).zfill(2)}-01"
+
+                _cur_nv = conn_vulcano.cursor()  # cursor dedicado — não sobrescreve cur_v
+                # Busca vendas do mês que pertencem a este empreendimento
+                _cur_nv.execute("""
+                    SELECT v.ID, v.DESCUNIDIMOB, v.TOTALVENDA, v.DTOPER
+                    FROM VENDA v
+                    WHERE v.IDEMPREENDIMENTO = ?
+                      AND v.DTOPER >= CAST(? AS DATE)
+                      AND v.DTOPER <  CAST(? AS DATE)
+                      AND (v.DISTRATO IS NULL OR v.DISTRATO <> 'S')
+                """, (emp["id"], data_ini_mes_ctb, data_fim_mes_ctb))
+                vendas_mes = _cur_nv.fetchall()
+                _cur_nv.close()
+                print(f"[INFO nv_scan] {emp['nome'][:35]} ID={emp['id']} poc={poc_acumulado_vigente} vendas_mes={len(vendas_mes)}")
+
+                # contas com fallback seguro (meta_emp pode estar vazio)
+                _c_cli = emp.get("conta_cli") or 99999
+                _c_rec = emp.get("conta_rec") or 99999
+
+                # Unidades já processadas via receitas_meta (têm recebimentos)
+                unidades_ja_processadas = {u["unidade"] for u in meta_emp.get("unidades", [])}
+
+                for vrow in vendas_mes:
+                    vid, vuni_raw, vvgv, vdtoper = vrow
+                    vuni = (vuni_raw.decode('win1252', 'ignore').strip() if isinstance(vuni_raw, bytes) else str(vuni_raw or '').strip())
+                    vvgv = float(vvgv or 0.0)
+                    if vvgv <= 0: continue
+                    if vuni in unidades_ja_processadas: continue  # já reconhecida via pipeline normal
+
+                    if poc_acumulado_vigente < 100.0:
+                        print(f"[INFO nv_scan] {vuni} poc={poc_acumulado_vigente} < 100 → pulando")
+                        continue
+
+                    # Reconhecimento integral: D Clientes / C Receita = VGV
+                    logica_nv = (f"[VENDA NO MÊS SEM RECEBIMENTOS] Unid {vuni}: VGV={vvgv:,.2f} | "
+                                 f"POC={poc_acumulado_vigente}% → Reconhecimento integral IFRS 15")
+                    inject_virtual_entry(_c_cli, vvgv, 'D',
+                                         f"Faturamento Direito s/ Venda - Unid {vuni}",
+                                         logica=logica_nv, saldo_ant=0.0)
+                    inject_virtual_entry(_c_rec, vvgv, 'C',
+                                         f"Receita de Vendas POC 100% - Unid {vuni}",
+                                         logica=logica_nv, saldo_ant=0.0)
+                    print(f"[INFO nova_venda_sem_recb] {emp['nome'][:35]} | {vuni} | VGV={vvgv:,.0f} | INJETADO")
+            except Exception as _e_nv:
+                print(f"Erro ao buscar vendas do mês sem recebimentos: {_e_nv}")
+
+            # Fecha saldo_final de todas as contas virtuais APÓS todas as injeções (incluindo novas vendas)
             for c, data in contas_virtuais.items():
                 data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
-                    
+
             eh_primeiro = len(resultados) == 0
-            
+
             if len(contas_fisicas_empresa) > 0 or len(contas_virtuais) > 0:
+
                 resultados.append({
                     "empreendimento_id": emp["id"],
                     "empreendimento_nome": emp["nome"],
@@ -2624,7 +2693,8 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
         e.RET,
         v.DISTRATO,
         v.DATADISTRATO,
-        v.ID AS IDVENDA
+        v.ID AS IDVENDA,
+        v.DTOPER AS DATA_VENDA
     FROM VENDA v
     JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
     LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
@@ -2670,8 +2740,24 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
         query += " ORDER BY r.DATA DESC NULLS LAST"
         
         df = pd.read_sql_query(query, conn, params=tuple(join_params + params))
+        # Salvar DATA_VENDA ANTES do replace global (que converte NaT→0.0 e destrói datas)
+        _dv_backup = df['DATA_VENDA'].copy()
+
         # Global Sanitization
-        df = df.replace({np.nan: 0.0}) 
+        df = df.replace({np.nan: 0.0})
+
+        # Restaurar DATA_VENDA: converte para string 'YYYY-MM-DD' ou None de forma robusta
+        _invalidos = {'', '0', '0.0', 'nan', 'NaT', 'None', 'nat', 'none'}
+        def _safe_date(v):
+            if v is None: return None
+            s = str(v)
+            if s in _invalidos: return None
+            try:
+                return str(pd.Timestamp(v))[:10]  # 'YYYY-MM-DD'
+            except Exception:
+                return None
+        df['DATA_VENDA'] = _dv_backup.apply(_safe_date)
+
         
         # Saneamento Vetorizável
         df['EMPREENDIMENTO'] = df['EMPREENDIMENTO'].fillna('').astype(str).str.strip()
@@ -2852,6 +2938,7 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
         # Agrupamento no nível da Unidade Comercial
         unit_group = df.groupby(['EMPREENDIMENTO', 'UNIDADE', 'COMPRADOR', 'IDVENDA']).agg({
             'VGV': 'first',
+            'DATA_VENDA': 'first',
             'RECEITA_CAIXA': 'sum',
             'CAIXA_MES': 'sum',
             'ACRESCIMO': 'sum',
@@ -3003,8 +3090,18 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
             # Filtro Poda de UI (Zerar visual da UI para unidades ociosas que não tenham pendência fiscal considerável)
             is_idle = (row.CAIXA_MES == 0) and (soc_mes_uni == 0)
             pending_diff = abs(tributos_soc_acumulada_uni - row.TRIBUTOS_CAIXA_ACUMULADO)
-            
-            if is_idle and pending_diff < 5.0 and data_ini is not None:
+
+            # NUNCA pular unidades cuja venda ocorreu no mês alvo:
+            # mesmo sem recebimento ainda (boleto cai no mês seguinte), o motor
+            # de contabilizacoes precisa enxergá-la para gerar D Clientes / C Receita.
+            data_venda_row = str(row.DATA_VENDA)[:7] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else ''
+            target_ym_rcx = data_ini[:7] if data_ini else ''
+            is_nova_venda_no_mes = bool(data_venda_row) and bool(target_ym_rcx) and (data_venda_row == target_ym_rcx)
+
+            # DEBUG temporário
+            # (removido)
+
+            if is_idle and pending_diff < 5.0 and data_ini is not None and not is_nova_venda_no_mes:
                 continue # Pula unidade completamente
 
             # Aggregating into Dashboard Meta Empreendimento
@@ -3029,6 +3126,7 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
 
             meta_emp["unidades"].append({
                 "unidade": uni, "comprador": comp, "vgv": row.VGV,
+                "data_venda": str(row.DATA_VENDA)[:10] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else None,
                 "caixa_acumulado": row.RECEITA_CAIXA, "caixa_mes": row.CAIXA_MES,
                 "soc_acumulado": soc_acumulada_uni, "soc_mes": soc_mes_uni,
                 "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_caixa_mes": row.TRIBUTOS_CAIXA_MES,
