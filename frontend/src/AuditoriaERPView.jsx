@@ -480,8 +480,8 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
       // Questor: só as contas que o Vulcano calcula
       (fisico || []).filter(c => contasVirtualIds.includes(String(c.conta)))
-        .forEach(c => { totMovFisico += c.movimento_liquido || 0; });
-      (virtual || []).forEach(c => { totMovVirtual += c.movimento_liquido || 0; });
+        .forEach(c => { totMovFisico += Math.abs(c.movimento_liquido || 0); });
+      (virtual || []).forEach(c => { totMovVirtual += Math.abs(c.movimento_liquido || 0); });
     });
 
     Object.keys(contasMap).forEach(contaId => {
@@ -637,7 +637,8 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                       };
                       const padraoClass = padraoColors[c.padrao] || 'bg-[#222] text-[#555] border-[#333]';
                       return (
-                        <tr key={i} className={`border-b border-[#111] ${isAnomalia ? 'bg-[#ff4d00]/5' : ''} hover:bg-[#111]/60`}>
+                        <React.Fragment key={i}>
+                        <tr className={`border-b border-[#111] ${isAnomalia ? 'bg-[#ff4d00]/5' : ''} hover:bg-[#111]/60`}>
                           <td className="p-2">
                             <div className="font-black text-white text-[10px]">{c.conta_nome}</div>
                             <div className="text-[#555] font-mono text-[9px]">#{c.conta_id}</div>
@@ -680,6 +681,23 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                             )}
                           </td>
                         </tr>
+                        {c.causa_raiz && (
+                          <tr className="bg-[#a259ff]/10">
+                            <td colSpan={7} className="p-3 border-b border-[#a259ff]/20">
+                              <div className="flex items-start gap-2">
+                                <Zap className="text-[#a259ff] shrink-0 mt-0.5" size={12}/>
+                                <div className="max-w-2xl">
+                                  <div className="text-[10px] font-black text-[#a259ff] uppercase tracking-widest mb-1">Diagnóstico IA (Causa Raiz)</div>
+                                  <div className="text-[11px] text-[#ddd] leading-relaxed mb-1.5">{c.causa_raiz}</div>
+                                  {c.recomendacao && (
+                                    <div className="text-[10px] text-[#ffcc00]"><span className="font-bold">Recomendação:</span> {c.recomendacao}</div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
