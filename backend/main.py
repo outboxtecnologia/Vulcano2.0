@@ -1828,7 +1828,12 @@ async def api_auditoria_diagnostico(data: DiagnosticoInput):
             import duckdb
             from sklearn.cluster import KMeans
             from sklearn.preprocessing import StandardScaler
-            from pyod.models.iforest import IForest
+            try:
+                from pyod.models.iforest import IForest
+                has_pyod = True
+            except ImportError as e:
+                print(f"PyOD inativo/bloqueado: {e}")
+                has_pyod = False
 
             df_todas = pd.DataFrame([r.dict() for r in data.linhas])
             df_q = df_todas[["conta_id", "competencia", "saldo_q", "n_lanc_q"]].copy()
@@ -2037,7 +2042,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
     """
     import re
     import math
-    from itertools import combinations
+    from itertools import combinations, product
     from difflib import SequenceMatcher
     from collections import defaultdict
 
@@ -2060,6 +2065,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
     # Preparar itens com IDs únicos
     q_items = []
     for i, q in enumerate(data.orfaos_questor):
+        if str(q.conta) == "5": continue
         d = q.dict()
         d["_id"] = f"Q_{i}"
         d["_cluster"] = _extrair_clusters(d.get("historico", "") + " " + (d.get("logica", "") or ""))
@@ -2068,6 +2074,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
 
     v_items = []
     for i, v in enumerate(data.orfaos_vulcano):
+        if str(v.conta) == "5": continue
         d = v.dict()
         d["_id"] = f"V_{i}"
         d["_cluster"] = _extrair_clusters(d.get("historico", "") + " " + (d.get("logica", "") or ""))
@@ -2109,7 +2116,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
         for q in q_list: q["_usado"] = True
         for v in v_list: v["_usado"] = True
 
-    # 1. Matching por Cluster Fechado (Soma Global do Cluster N:M)
+    # 1. Matching por Repositório/Cluster (Splink Equivalente)
     for c_id, cv in clusters_map.items():
         if c_id == "OUTROS": continue
         qs_livres = [q for q in cv["q"] if not q["_usado"]]
@@ -2121,56 +2128,62 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
 
         if math.isclose(sum_q, sum_v, abs_tol=0.03):
             _adicionar_match(qs_livres, vs_livres, "CLUSTER_TEXTO", 
-                f"Cluster perfeito ({c_id}): Todos os lançamentos do grupo somam {sum_q:,.2f}")
+                f"Cluster perfeito ({c_id}): Todos os lançamentos engajados somam {sum_q:,.2f}")
+            continue
 
-    # 2. Matching Combinatório 1:N (dentro da mesma conta e natureza)
-    qs_restantes = sorted([q for q in q_items if not q["_usado"]], key=lambda x: x["valor"], reverse=True)
-    vs_restantes = [v for v in v_items if not v["_usado"]]
-    
-    for q in qs_restantes:
-        if q["_usado"]: continue
-        encontrou = False
-        # Para evitar explosão O(N^5) e falsos positivos, restringe V livres a mesma conta
-        v_livres = [v for v in vs_restantes if not v["_usado"] and v["conta"] == q["conta"] and v["natureza"] == q["natureza"]]
-        # Filtra valores impossíveis (maiores que o Q target)
-        v_livres = [v for v in v_livres if abs(v["valor"]) <= abs(q["valor"]) + 0.05]
-        
-        if len(v_livres) > 40: limit_r = 2
-        elif len(v_livres) > 15: limit_r = 3
-        else: limit_r = min(4, len(v_livres) + 1)
-        
-        for r in range(1, limit_r):
-            for comb in combinations(v_livres, r):
-                if math.isclose(sum(v["valor"] for v in comb), q["valor"], abs_tol=0.02):
-                    c_nomes = " + ".join(str(v["conta"]) for v in comb)
-                    _adicionar_match([q], list(comb), "SUBSET_SUM", 
-                        f"Soma exata intra-conta (1:N): Lançamento Questor eq. à soma de Vulcano [{c_nomes}]")
-                    encontrou = True
-                    break
-            if encontrou: break
+        # 1.1 Combinatória Isolada 1:N (Dentro do Repositório)
+        qs_restantes = sorted(qs_livres, key=lambda x: x["valor"], reverse=True)
+        for q in qs_restantes:
+            if q["_usado"]: continue
+            encontrou = False
+            # Sem restrição de conta para permitir impostos cruzados!
+            v_pool = [v for v in cv["v"] if not v["_usado"] and abs(v["valor"]) <= abs(q["valor"]) + 0.05]
+            
+            if len(v_pool) > 40: limit_r = 2
+            elif len(v_pool) > 15: limit_r = 3
+            else: limit_r = min(4, len(v_pool) + 1)
+            
+            for r in range(1, limit_r):
+                for comb in combinations(v_pool, r):
+                    for sinais in product([1, -1], repeat=r):
+                        v_eval = sum(s * x["valor"] for s, x in zip(sinais, comb))
+                        if math.isclose(v_eval, q["valor"], abs_tol=0.02):
+                            s_str = []
+                            for s, x in zip(sinais, comb):
+                                op = "+" if s > 0 else "-"
+                                s_str.append(f"{op} c/{x['conta']}")
+                            c_nomes = " ".join(s_str)
+                            _adicionar_match([q], list(comb), "SUBSET_SUM", 
+                                f"Operação Aritmética ({c_id} | 1:N): Lançamentos combinados [{c_nomes}] equivalem ao Questor")
+                            encontrou = True
+                            break
+                    if encontrou: break
+                if encontrou: break
 
-    # 3. Matching Combinatório N:1 (Inverso)
-    vs_restantes2 = sorted([v for v in v_items if not v["_usado"]], key=lambda x: x["valor"], reverse=True)
-    for v in vs_restantes2:
-        if v["_usado"]: continue
-        encontrou = False
-        q_livres = [q for q in q_items if not q["_usado"] and q["conta"] == v["conta"] and q["natureza"] == v["natureza"]]
-        q_livres = [q for q in q_livres if abs(q["valor"]) <= abs(v["valor"]) + 0.05]
-        
-        if len(q_livres) > 40: limit_rq = 2
-        elif len(q_livres) > 15: limit_rq = 3
-        else: limit_rq = min(4, len(q_livres) + 1)
+        # 1.2 Combinatória Isolada N:1 (Dentro do Repositório)
+        vs_restantes = sorted([v for v in cv["v"] if not v["_usado"]], key=lambda x: x["valor"], reverse=True)
+        for v in vs_restantes:
+            if v["_usado"]: continue
+            encontrou = False
+            q_pool = [q for q in cv["q"] if not q["_usado"] and abs(q["valor"]) <= abs(v["valor"]) + 0.05]
+            
+            if len(q_pool) > 40: limit_rq = 2
+            elif len(q_pool) > 15: limit_rq = 3
+            else: limit_rq = min(4, len(q_pool) + 1)
+            
+            for r in range(1, limit_rq):
+                for comb in combinations(q_pool, r):
+                    for sinais in product([1, -1], repeat=r):
+                        v_eval = sum(s * x["valor"] for s, x in zip(sinais, comb))
+                        if math.isclose(v_eval, v["valor"], abs_tol=0.02):
+                            _adicionar_match(list(comb), [v], "SUBSET_SUM_INV", 
+                                f"Operação Aritmética ({c_id} | N:1): Lançamentos Questor sofreram Adição/Subtração e batem com o Vulcano")
+                            encontrou = True
+                            break
+                    if encontrou: break
+                if encontrou: break
 
-        for r in range(1, limit_rq):
-            for comb in combinations(q_livres, r):
-                if math.isclose(sum(q["valor"] for q in comb), v["valor"], abs_tol=0.02):
-                    _adicionar_match(list(comb), [v], "SUBSET_SUM_INV", 
-                        f"Soma exata intra-conta (N:1): Múltiplos lançamentos Questor equivalem a este do Vulcano")
-                    encontrou = True
-                    break
-            if encontrou: break
-
-    # 4. Fallback Clássico 1:1 Fuzzy
+    # 2. Rescaldo Fuzzy Clássico 1:1 apenas para o que sobrou (inclui OUTROS)
     qs_finais = [q for q in q_items if not q["_usado"]]
     vs_finais = [v for v in v_items if not v["_usado"]]
     
@@ -2182,34 +2195,42 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
         if d < 0.02: return 1.0
         return max(0.0, 1.0 - d / max(a, b))
 
+    # Otimização O(N) agilizando a restrição primária de conta: 
+    # Dicionário de Vs por conta
+    vs_por_conta = defaultdict(list)
+    for v in vs_finais: vs_por_conta[v["conta"]].append(v)
+    
     for q in qs_finais:
+        if q["_usado"]: continue
         qh = (q.get("historico", "") or "").upper()
-        for v in vs_finais:
+        
+        # Filtra apenas a mesma conta (para não travar CPU em busca Cross-Account cega)
+        # Qualquer Cross-Account válida já foi resolvida pelos Repositórios no Passo 1!
+        vs_avaliar = vs_por_conta[q["conta"]]
+        
+        for v in vs_avaliar:
+            if v["_usado"]: continue
             sv = sf_valor(q["valor"], v["valor"])
             
-            # Pruning dinâmico pesado para evitar O(TxT) de SequenceMatcher super lento:
-            # Se for contábil Cross-Account, o valor DEVE SER muito semelhante (sv > 0.85) para valer a pena testar.
-            # Se for na mesma conta, toleramos diferença maior (sv > 0.60)
-            limiar_corte = 0.60 if q["conta"] == v["conta"] else 0.85
-            if sv < limiar_corte: 
+            # Como só avalia Mesma_Conta, limiar é 0.60
+            if sv < 0.60: 
                 continue
                 
             vh = (v.get("historico", "") or "").upper()
             sh = SequenceMatcher(None, qh, vh).ratio() if qh and vh else 0.5
-            sc = 1.0 if q["conta"] == v["conta"] else 0.6
+            sc = 1.0
             
             score = (sv * 0.50) + (sh * 0.25) + (sc * 0.25)
             if q["natureza"] != v["natureza"]: score *= 0.75
             
             if score >= data.threshold:
-                tipo = "CROSS_ACCOUNT" if q["conta"] != v["conta"] else "MESMA_CONTA"
                 raw_fuzzy.append({
                     "questor": q, "vulcano": v, "score": score,
                     "questor_detalhe": [q], "vulcano_detalhe": [v],
                     "score_valor": sv, "score_hist": sh, "score_data": 0.5, "score_conta": sc,
                     "nat_match": q["natureza"] == v["natureza"],
-                    "tipo": tipo,
-                    "sugestao": f"Fuzzy Residual: similaridade {score*100:.0f}% detectada."
+                    "tipo": "MESMA_CONTA",
+                    "sugestao": f"Fuzzy Residual 1:1: similaridade {score*100:.0f}% detectada."
                 })
 
     raw_fuzzy.sort(key=lambda x: x["score"], reverse=True)
