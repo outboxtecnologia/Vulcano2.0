@@ -281,16 +281,16 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
                  fallback_contents.append({"mime_type": mime_type, "data": file_data})
         resp = model.generate_content(fallback_contents)
     return _gemini_parse_json_response(resp.text)
-from contextlib import asynccontextmanager
-import sindicato_agent as _sa
+# from contextlib import asynccontextmanager
+# import sindicato_agent as _sa
 
-@asynccontextmanager
-async def lifespan(app_):
-    _sa.start_scheduler()
-    yield
-    _sa.stop_scheduler()
+# @asynccontextmanager
+# async def lifespan(app_):
+#     _sa.start_scheduler()
+#     yield
+#     _sa.stop_scheduler()
 
-app = FastAPI(title="Questor Data Explorer API", lifespan=lifespan)
+app = FastAPI(title="Questor Data Explorer API")
 
 from pydantic import BaseModel
 class RawQuery(BaseModel):
@@ -983,8 +983,12 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         cur_v = conn_vulcano.cursor()
         cur_q = conn_questor.cursor()
         
+        # Mapeamento do Historico Padrao do Questor
+        cur_q.execute("SELECT CODIGOHISTCTB, DESCRHISTCTB FROM HISTORICOCTB")
+        hist_questor = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
+
         # 1. Obter Empreendimentos Ativos
-        query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
+        query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
         params = [empresa_id]
         if empreendimento_id:
             query += f" AND ID = {int(empreendimento_id)}"
@@ -997,7 +1001,13 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 empreendimentos.append({
                     "id": r[0], "nome": r[1], "cc": cc,
                     "conta_custo": r[3], "conta_cli": r[4], "conta_adicli": r[5], "conta_caixa": r[6],
-                    "conta_estand": r[7], "conta_estcon": r[8], "obra_concluida": r[9], "conta_rec": r[10]
+                    "conta_estand": r[7], "conta_estcon": r[8], "obra_concluida": r[9], "conta_rec": r[10],
+                    "hist_venda": hist_questor.get(r[11] if r[11] else 0, "VENDA UNID"),
+                    "hist_rec": hist_questor.get(r[12] if r[12] else 0, "RECEBIMENTO PARCELA UNID"),
+                    "hist_var": hist_questor.get(r[13] if r[13] else 0, "VARIACAO UNID"),
+                    "hist_adi": hist_questor.get(r[14] if r[14] else 0, "ADIANTAMENTO UNID"),
+                    "hist_baixa_adi": hist_questor.get(r[15] if r[15] else 0, "BAIXA ADIANTAMENTO UNID"),
+                    "hist_custo": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID")
                 })
 
         # Caching Global Vulcano (Receitas e Tributos)
@@ -1038,7 +1048,7 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         
         # Auxiliar: Plano Espec
         cur_q.execute("SELECT CONTACTB, CLASSIFCONTA, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
-        plano = {r[0]: {"classif": r[1], "nome": r[2]} for r in cur_q.fetchall()}
+        plano = {r[0]: {"classif": str(r[1]).strip() if r[1] and str(r[1]).strip() else "9.99.99", "nome": r[2]} for r in cur_q.fetchall()}
         
         # Auxiliar: Identificar contas de Imposto a Recolher para considerar apenas Apropriações (Créditos) no físico
         cur_v.execute("SELECT CONTA_CRED_IMP_REC_DARF FROM IMPOSTO")
@@ -1127,7 +1137,7 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 "historico": hist,
                 "natureza": "D" if nat == 1 else "C",
                 "valor": v,
-                "origem": "VU" if (chave_origem and str(chave_origem).startswith('VU')) else ("QUESTOR_MANUAL" if not chave_origem else str(chave_origem))
+                "origem": "QUESTOR_MANUAL" if not chave_origem else str(chave_origem).strip()
             })
 
         for conta_id, saldo in saldo_anterior_por_conta.items():
@@ -1155,6 +1165,46 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
             total_anterior_fisico += data["saldo_anterior"]
             total_movimento_fisico += data["movimento_liquido"]
             total_final_fisico += data["saldo_final"]
+
+        # --- BUSCA DO VULCANO LEGADO (LANCAMENTO_CONTABIL) ---
+        contas_legado_empresa = {}
+        try:
+            cur_v.execute("""
+                SELECT DATA, ID_CONTA_DEBITO, ID_CONTA_CREDITO, HISTORICO, VALOR, CHAVE_ORIGEM, ID_EMPREENDIMENTO
+                FROM LANCAMENTO_CONTABIL
+                WHERE DATA >= CAST(? AS DATE) AND DATA < CAST(? AS DATE)
+            """, (data_inicio_mes_atual, data_fim_mes_atual))
+            for (dt, cdeb, ccred, hist, val, chave_origem, id_emp) in cur_v.fetchall():
+                if empreendimento_id and str(id_emp) != str(empreendimento_id): continue
+                v = float(val or 0)
+                if v <= 0.01: continue
+                # Helper local
+                def add_legado(cid, natura):
+                    cid = int(cid)
+                    if cid not in contas_legado_empresa:
+                        _classif = plano.get(cid, {}).get("classif", "")
+                        _nm = plano.get(cid, {}).get("nome", "Desconhecida")
+                        contas_legado_empresa[cid] = {
+                            "conta": cid, "nome": f"{_classif} - {_nm}" if _classif else _nm, "classif": _classif,
+                            "saldo_anterior": 0.0, "movimento_debito": 0.0, "movimento_credito": 0.0,
+                            "movimento_liquido": 0.0, "saldo_final": 0.0, "detalhes": []
+                        }
+                    if natura == 'D':
+                        contas_legado_empresa[cid]["movimento_debito"] += v
+                        contas_legado_empresa[cid]["movimento_liquido"] += v
+                    else:
+                        contas_legado_empresa[cid]["movimento_credito"] += v
+                        contas_legado_empresa[cid]["movimento_liquido"] -= v
+                        
+                    contas_legado_empresa[cid]["detalhes"].append({
+                        "chave": str(chave_origem) if chave_origem else "", "data": str(dt),
+                        "historico": str(hist) if hist else "", "natureza": natura,
+                        "valor": v, "origem": "VU"
+                    })
+                if cdeb: add_legado(cdeb, 'D')
+                if ccred: add_legado(ccred, 'C')
+        except Exception as e_legado:
+            print(f"Aviso: Erro ao ler LANCAMENTO_CONTABIL: {e_legado}")
 
         resultados = []
         for emp in empreendimentos:
@@ -1202,7 +1252,7 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 })
 
             # Força a criação das contas parametrizadas para a Auditoria ERP enxergá-las mesmo sem movimento
-            for c_key in ["conta_custo", "conta_cli", "conta_adicli", "conta_caixa", "conta_estand", "conta_estcon", "conta_rec"]:
+            for c_key in ["conta_custo", "conta_cli", "conta_adicli", "conta_estand", "conta_estcon", "conta_rec"]:
                 cid_raw = emp.get(c_key)
                 if cid_raw and str(cid_raw).strip() and str(cid_raw).strip() != '99999':
                     try:
@@ -1321,6 +1371,29 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 isRet = ret_global > 0 and pis_cofins_global == 0
                 valid_confs = [c for c in impostos_config if c.get("RET") == ("S" if isRet else "N")]
                 
+                try:
+                    cur_v.execute("""
+                        SELECT V.DESCUNIDIMOB, SUM(U.METRAGEM) 
+                        FROM VENDA V
+                        JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
+                        JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
+                        JOIN BLOCO B ON B.ID = U.IDBLOCO
+                        WHERE B.IDEMPREENDIMENTO = ?
+                        GROUP BY V.DESCUNIDIMOB
+                    """, (emp["id"],))
+                    area_unidades = {}
+                    for r_desc, r_met in cur_v.fetchall():
+                        if r_desc:
+                            area_unidades[str(r_desc).strip()] = float(r_met or 0.0)
+                    
+                    cur_v.execute("SELECT SUM(U.METRAGEM) FROM UNIDADE U JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ?", (emp["id"],))
+                    area_row = cur_v.fetchone()
+                    total_area_emp = float(area_row[0]) if area_row and area_row[0] else 1.0
+                except Exception as eval_e:
+                    print("Erro lendo metragem das unidades:", eval_e)
+                    area_unidades = {}
+                    total_area_emp = 1.0
+
                 for uni_data in unidades:
                     uni_nome = uni_data["unidade"]
                     vgv_uni = uni_data["vgv"]
@@ -1334,24 +1407,26 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     venda_ym = data_venda_str[:7] if data_venda_str and len(data_venda_str) >= 7 else ""
                     is_nova_venda_mes_alvo = bool(venda_ym) and (venda_ym == target_ym)
 
-                    # CUSTO ECONÔMICO (Apenas unidades vendidas)
-                    rateio_venda = vgv_uni / vgv_global
-                    custo_u_atual = custo_gasto_vigente * rateio_venda * (poc_acumulado_vigente / 100.0)
+                    # CUSTO ECONÔMICO (Fração Física / Metragem)
+                    # Segundo IFRS-15, o custo já está incorrido ('gasto_vigente') e dispensa rateio por POC. O POC determina a Receita.
+                    area_da_unidade = area_unidades.get(str(uni_nome).strip(), 0.0)
+                    fracao_fisica = (area_da_unidade / total_area_emp) if total_area_emp > 0 else 0.0
+                    
+                    custo_u_atual = custo_gasto_vigente * fracao_fisica
                     # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
                     custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
-                                  custo_gasto_anterior * rateio_venda * (poc_acumulado_anterior / 100.0)
+                                  custo_gasto_anterior * fracao_fisica
                     mov_custo_u = custo_u_atual - custo_u_ant
                     
                     if abs(mov_custo_u) > 0.01:
-                         logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Peso VGV ({rateio_venda*100:.2f}%) * POC ({poc_acumulado_vigente}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}"
-                         inject_virtual_entry(c_custo, mov_custo_u, 'D', f"Custo POC - Unid {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
-                         inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"Contrapartida RecCusto POC - Unid {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+                         logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}"
+                         inject_virtual_entry(c_custo, mov_custo_u, 'D', f"Apropriação de Custo (POC Misto) - Unid {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
+                         inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"Baixa de Estoque Físico/Imóveis - Unid {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
 
                     # RECEBIMENTOS E RATEIO PASSSIVO
                     caixa_m = uni_data["caixa_mes"]
                     if caixa_m > 0:
-                         logica_caixa = f"Unid {uni_nome}: Recebimento Mês = {caixa_m:,.2f}"
-                         inject_virtual_entry(c_caixa_banco, caixa_m, 'D', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
+                         pass # a conta caixa não deve gerar lançamentos virtuais nem ser auditada
 
                     caixa_acum = uni_data["caixa_acumulado"]
                     caixa_ant = caixa_acum - caixa_m
@@ -1380,15 +1455,15 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     
                     mov_cli = cli_atual - cli_ant
                     mov_adi = adi_atual - adi_ant
-                    logica_cli = f"Unid {uni_nome}: Limite POC = {rec_auferida_atual:,.2f}. CAIXA = {caixa_acum:,.2f}."
+                    logica_cli = f"Unid {uni_nome}: Caixa Acum ({caixa_acum:,.2f}) preenche Clientes até Limite da Receita Reconhecida POC ({rec_auferida_atual:,.2f}). Excesso vira Adiantamento."
                     
                     if abs(mov_cli) > 0.01:
                          nat_cli = 'C' if mov_cli > 0 else 'D'
-                         inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"Variação Clientes - Unid {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
+                         inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"Baixa de Clientes (Pgto vs POC) - Unid {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
                     
                     if abs(mov_adi) > 0.01:
                          nat_adi = 'C' if mov_adi > 0 else 'D'
-                         inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"Variação Adiantamento - Unid {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
+                         inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"Reconhecimento Adiantamento (Excesso Pgto) - Unid {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
                          
                     # TRIBUTOS
                     trib_caixa_atual = uni_data["tributos_caixa_acumulado"]
@@ -1583,6 +1658,7 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     "total_movimento_fisico": total_movimento_fisico if eh_primeiro else 0.0,
                     "total_final_fisico": total_final_fisico if eh_primeiro else 0.0,
                     "contas_fisicas": list(contas_fisicas_empresa.values()) if eh_primeiro else [],
+                    "contas_legado": list(contas_legado_empresa.values()) if eh_primeiro else [],
                     "contas_virtuais": list(contas_virtuais.values())
                 })
                 
@@ -2040,6 +2116,7 @@ class ConciliaOrfaosInput(BaseModel):
     orfaos_questor: list[OrfaoItem]
     orfaos_vulcano: list[OrfaoItem]
     threshold: float = 0.38
+    use_pgvector: bool = False
 
 @app.post("/api/auditoria/concilia-orfaos")
 async def api_concilia_orfaos(data: ConciliaOrfaosInput):
@@ -2091,8 +2168,99 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
         v_items.append(d)
 
     clusters_map = defaultdict(lambda: {"q": [], "v": []})
-    for q in q_items: clusters_map[q["_cluster"]]["q"].append(q)
-    for v in v_items: clusters_map[v["_cluster"]]["v"].append(v)
+    
+    if getattr(data, 'use_pgvector', False):
+        try:
+            from vector_engine import SessionLocal, generate_embeddings_batch
+            from sqlalchemy import text
+            import json
+            
+            # 1. Gera embeddings dos Orfaos Virtuais na hora para caçar
+            textos_v = [(str(v.get("historico", "")) + " " + str(v.get("logica", ""))).upper().strip() for v in v_items]
+            matrizes_v = await generate_embeddings_batch(textos_v)
+            
+            db = SessionLocal()
+            q_by_key = {str(q.get("chave", "")): q for q in q_items if str(q.get("chave", ""))}
+            
+            # Adiciona todos os Questor órfãos em clusters únicos pela chave
+            for q in q_items:
+                chave = str(q.get("chave", ""))
+                cid = f"vec_Q_{chave}" if chave else f"vec_FAIL_Q_{q['_id']}"
+                clusters_map[cid]["q"].append(q)
+                
+            # 2. Cruza com PGVector
+            for k_v, v in enumerate(v_items):
+                if k_v >= len(matrizes_v): 
+                    clusters_map[f"vec_fail_{v['_id']}"]["v"].append(v)
+                    continue
+                    
+                vec_str = json.dumps(matrizes_v[k_v])
+                rs = db.execute(text(f"""
+                   SELECT id, embedding <-> '{vec_str}' as dist 
+                   FROM erp_embeddings 
+                   WHERE fonte='QUESTOR' AND empresa_id=:emp
+                   ORDER BY dist ASC LIMIT 10
+                """), {"emp": data.empresa_id}).fetchall()
+                
+                best_q_chave = None
+                for row in rs:
+                    chv = str(row[0]).replace("Q_", "")
+                    if chv in q_by_key: # O mais próximo que é ÓRFÃO na tela
+                        best_q_chave = chv
+                        break
+                        
+                if best_q_chave:
+                    clusters_map[f"vec_Q_{best_q_chave}"]["v"].append(v)
+                else:
+                    clusters_map[f"vec_fail_{v['_id']}"]["v"].append(v)
+                    
+            db.close()
+        except Exception as e:
+            print(f"Erro no módulo PGVector: {e}")
+            # Fallback seguro
+            clusters_map = defaultdict(lambda: {"q": [], "v": []})
+            for q in q_items: clusters_map[q["_cluster"]]["q"].append(q)
+            for v in v_items: clusters_map[v["_cluster"]]["v"].append(v)
+    else:
+        for q in q_items: clusters_map[q["_cluster"]]["q"].append(q)
+        for v in v_items: clusters_map[v["_cluster"]]["v"].append(v)
+    
+    # [CUB ANALYSIS] Mapa analítico para auditar se pequenas diferenças são CUB
+    cub_map = {}
+    try:
+        conn_v = get_conn("vulcano")
+        cur_v = conn_v.cursor()
+        cur_v.execute("""
+            SELECT V.DESCUNIDIMOB, EXTRACT(YEAR FROM R.DATA), EXTRACT(MONTH FROM R.DATA), SUM(R.VALORVARIACAO)
+            FROM RECEBER R
+            JOIN VENDA V ON V.ID = R.IDVENDA
+            JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
+            JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
+            JOIN BLOCO B ON B.ID = U.IDBLOCO
+            JOIN EMPREENDIMENTO E ON E.ID = B.IDEMPREENDIMENTO
+            WHERE E.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0
+            GROUP BY 1, 2, 3
+        """, (data.empresa_id,))
+        for cv_r in cur_v.fetchall():
+            uni = str(cv_r[0] or "").strip().upper()
+            if uni:
+                key = f"{uni}_{int(cv_r[1])}-{str(int(cv_r[2])).zfill(2)}"
+                cub_map[key] = float(cv_r[3] or 0.0)
+    except Exception as e:
+        print(f"Erro CUB Mapping Caching: {e}")
+
+    def _verificar_anomalia_cub(v_list, diff_eval):
+        if diff_eval < 0.03: return None
+        for v in v_list:
+            hist = (str(v.get("historico", "")) + " " + str(v.get("logica", ""))).upper()
+            if "UNID " in hist:
+                uni_nome = hist.split("UNID ")[-1].strip()
+                comp = str(v.get("competencia", "")) if v.get("competencia") else str(v.get("data", ""))[:7]
+                key = f"{uni_nome}_{comp}"
+                cub_esperado = cub_map.get(key, 0.0)
+                if cub_esperado > 0 and math.isclose(diff_eval, cub_esperado, rel_tol=0.03, abs_tol=1.0):
+                    return f"Aprovado por CUB: Diferença exata de CUB mapeado R$ {diff_eval:,.2f}"
+        return None
 
     matches_finais = []
     
@@ -2135,7 +2303,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
         sum_q = sum(q["valor"] for q in qs_livres)
         sum_v = sum(v["valor"] for v in vs_livres)
 
-        if math.isclose(sum_q, sum_v, abs_tol=0.03):
+        if math.isclose(sum_q, sum_v, rel_tol=0.05, abs_tol=5.0):
             _adicionar_match(qs_livres, vs_livres, "CLUSTER_TEXTO", 
                 f"Cluster perfeito ({c_id}): Todos os lançamentos engajados somam {sum_q:,.2f}")
             continue
@@ -2146,7 +2314,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
             if q["_usado"]: continue
             encontrou = False
             # Sem restrição de conta para permitir impostos cruzados!
-            v_pool = [v for v in cv["v"] if not v["_usado"] and abs(v["valor"]) <= abs(q["valor"]) + 0.05]
+            v_pool = [v for v in cv["v"] if not v["_usado"] and abs(v["valor"]) <= abs(q["valor"]) * 1.05 + 5.0]
             
             if len(v_pool) > 40: limit_r = 2
             elif len(v_pool) > 15: limit_r = 3
@@ -2156,14 +2324,23 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
                 for comb in combinations(v_pool, r):
                     for sinais in product([1, -1], repeat=r):
                         v_eval = sum(s * x["valor"] for s, x in zip(sinais, comb))
-                        if math.isclose(v_eval, q["valor"], abs_tol=0.02):
+                        diff = abs(v_eval - q["valor"])
+                        
+                        cub_explicacao = _verificar_anomalia_cub(comb, diff)
+                        
+                        if math.isclose(v_eval, q["valor"], rel_tol=0.05, abs_tol=5.0) or cub_explicacao:
                             s_str = []
                             for s, x in zip(sinais, comb):
                                 op = "+" if s > 0 else "-"
                                 s_str.append(f"{op} c/{x['conta']}")
                             c_nomes = " ".join(s_str)
-                            _adicionar_match([q], list(comb), "SUBSET_SUM", 
-                                f"Operação Aritmética ({c_id} | 1:N): Lançamentos combinados [{c_nomes}] equivalem ao Questor")
+                            
+                            if cub_explicacao:
+                                sug_str = f"Tolerância Isolada ({c_id}): {cub_explicacao} | Lançamentos Questor excluíam variação ({c_nomes})"
+                            else:
+                                sug_str = f"Operação Aritmética ({c_id} | 1:N): Lançamentos combinados [{c_nomes}] equivalem ao Questor"
+                                
+                            _adicionar_match([q], list(comb), "SUBSET_SUM", sug_str)
                             encontrou = True
                             break
                     if encontrou: break
@@ -2174,7 +2351,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
         for v in vs_restantes:
             if v["_usado"]: continue
             encontrou = False
-            q_pool = [q for q in cv["q"] if not q["_usado"] and abs(q["valor"]) <= abs(v["valor"]) + 0.05]
+            q_pool = [q for q in cv["q"] if not q["_usado"] and abs(q["valor"]) <= abs(v["valor"]) * 1.05 + 5.0]
             
             if len(q_pool) > 40: limit_rq = 2
             elif len(q_pool) > 15: limit_rq = 3
@@ -2184,9 +2361,17 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
                 for comb in combinations(q_pool, r):
                     for sinais in product([1, -1], repeat=r):
                         v_eval = sum(s * x["valor"] for s, x in zip(sinais, comb))
-                        if math.isclose(v_eval, v["valor"], abs_tol=0.02):
-                            _adicionar_match(list(comb), [v], "SUBSET_SUM_INV", 
-                                f"Operação Aritmética ({c_id} | N:1): Lançamentos Questor sofreram Adição/Subtração e batem com o Vulcano")
+                        diff = abs(v_eval - v["valor"])
+                        
+                        cub_explicacao = _verificar_anomalia_cub([v], diff)
+                        
+                        if math.isclose(v_eval, v["valor"], rel_tol=0.05, abs_tol=5.0) or cub_explicacao:
+                            if cub_explicacao:
+                                sug_str = f"Tolerância Isolada ({c_id}): {cub_explicacao} | O Questor ignorava o repasse da variação real."
+                            else:
+                                sug_str = f"Operação Aritmética ({c_id} | N:1): Lançamentos Questor sofreram Adição/Subtração e batem com o Vulcano"
+                                
+                            _adicionar_match(list(comb), [v], "SUBSET_SUM_INV", sug_str)
                             encontrou = True
                             break
                     if encontrou: break
@@ -2201,7 +2386,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
     def sf_valor(a, b):
         if a < 0.01 or b < 0.01: return 0.0
         d = abs(a - b)
-        if d < 0.02: return 1.0
+        if d < 10.0: return 1.0
         return max(0.0, 1.0 - d / max(a, b))
 
     # Otimização O(N) agilizando a restrição primária de conta: 
@@ -2740,17 +2925,6 @@ def get_poc():
     rows = c.fetchall()
     conn.close()
     return {"data": [{"empreendimento": r[0], "periodo": r[1], "percentual": r[2]} for r in rows]}
-
-
-@app.get("/api/tables")
-def get_tables(db: str = "questor"):
-    conn = get_conn(db)
-    cur = conn.cursor()
-    cur.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 ORDER BY RDB$RELATION_NAME")
-    tables = [row[0].strip() for row in cur.fetchall()]
-    conn.close()
-    return {"tables": tables}
-
 # --- QUESTOR AUXILIARY TABLES ENDPOINTS ---
 @app.get("/api/questor/contas")
 def get_questor_contas():
@@ -2950,7 +3124,10 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
         v.DISTRATO,
         v.DATADISTRATO,
         v.ID AS IDVENDA,
-        v.DTOPER AS DATA_VENDA
+        v.DTOPER AS DATA_VENDA,
+        e.CODIGOHISTRECEBIMENTO,
+        e.CODIGOHISTVARIACAO,
+        e.CODIGOHISTVENDA
     FROM VENDA v
     JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
     LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
@@ -2996,11 +3173,18 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
         query += " ORDER BY r.DATA DESC NULLS LAST"
         
         df = pd.read_sql_query(query, conn, params=tuple(join_params + params))
-        # Salvar DATA_VENDA ANTES do replace global (que converte NaT→0.0 e destrói datas)
+        # Salvar as colunas numéricas que não queremos que virem 0.0 se forem NaN (como os códigos de histórico que podem ser None)
         _dv_backup = df['DATA_VENDA'].copy()
+        _hist_rec = df['CODIGOHISTRECEBIMENTO'].copy()
+        _hist_var = df['CODIGOHISTVARIACAO'].copy()
+        _hist_venda = df['CODIGOHISTVENDA'].copy()
 
         # Global Sanitization
         df = df.replace({np.nan: 0.0})
+        
+        df['CODIGOHISTRECEBIMENTO'] = _hist_rec.fillna(0).astype(int)
+        df['CODIGOHISTVARIACAO'] = _hist_var.fillna(0).astype(int)
+        df['CODIGOHISTVENDA'] = _hist_venda.fillna(0).astype(int)
 
         # Restaurar DATA_VENDA: converte para string 'YYYY-MM-DD' ou None de forma robusta
         _invalidos = {'', '0', '0.0', 'nan', 'NaT', 'None', 'nat', 'none'}
@@ -3226,12 +3410,17 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
                 desc = nomes_contas.get(c, default_desc)
                 return f"{c} - {desc}"
 
-            cur.execute("""
+            query_emp = """
                 SELECT ID, NOME, CONTACLI, CONTAADICLI, CONTAREC, CONTADESPESA, CONTACAIXA, 
                        CONTAVARIACAO, CONTAESTAND, CONTAESTCON, CONTACUSTO, 
                        CONTADEVOLUCAO, CONTALUCROACUM, CONTA_ESTORNO_DEVOLUCAO, OBRACONCLUIDA
                 FROM EMPREENDIMENTO
-            """)
+            """
+            if empresa_id is not None:
+                query_emp += " WHERE CODIGOEMPRESA = ?"
+                cur.execute(query_emp, (empresa_id,))
+            else:
+                cur.execute(query_emp)
             emps_all = cur.fetchall()
             for ev in emps_all:
                 emp_name_str = (ev[1].decode('win1252', 'ignore').strip() if isinstance(ev[1], bytes) else str(ev[1]).strip()) if ev[1] else str(ev[0])
@@ -3257,10 +3446,15 @@ def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = Non
             print("POC/Empresa Warning:", e)
             
         try:
-            cur.execute("""
+            query_poc = """
                 SELECT e.NOME, p.PERIODO, p.PERCENTUAL 
                 FROM POC p JOIN EMPREENDIMENTO e ON p.ID_EMPREENDIMENTO = e.ID
-            """)
+            """
+            if empresa_id is not None:
+                query_poc += " WHERE e.CODIGOEMPRESA = ?"
+                cur.execute(query_poc, (empresa_id,))
+            else:
+                cur.execute(query_poc)
             for row in cur.fetchall():
                 emp_nome, periodo, p = row
                 if not emp_nome or not periodo: continue

@@ -156,6 +156,10 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
     () => calcularOrfaos(todosFisico, todosVirtual),
     [todosFisico.length, todosVirtual.length]
   );
+  
+  const questorManual = todosFisico;
+  const vulcano1 = porComp.flatMap(c => c.legadoDetalhes);
+  const vulcano2 = todosVirtual;
 
   const totalOrfaos = fisicosOrfaos.length + virtuaisOrfaos.length;
 
@@ -189,6 +193,12 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
             >
               <List size={10}/> Razao
               <span className="ml-1 text-[9px] font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); setAba('mapa'); }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'mapa' ? 'bg-[#34c759]/20 border-[#34c759]/40 text-[#34c759]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#34c759]/70'}`}
+            >
+              <CheckCircle2 size={10}/> Mapa Tabular
             </button>
             <button
               onClick={e => { e.stopPropagation(); setAba('arbitro'); }}
@@ -257,6 +267,29 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
             </div>
           )}
 
+          {aba === 'mapa' && (
+            <div className="grid grid-cols-3 divide-x divide-[#111]">
+              <div>
+                <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor Legado ({questorManual.length})</span>
+                </div>
+                <TabelaLancs itens={questorManual} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="—"/>
+              </div>
+              <div>
+                <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano 1.0 (VU) ({vulcano1.length})</span>
+                </div>
+                <TabelaLancs itens={vulcano1} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="—"/>
+              </div>
+              <div>
+                <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[#34c759]">Vulcano 2.0 (IFRS 15) ({vulcano2.length})</span>
+                </div>
+                <TabelaLancs itens={vulcano2} corNaturezaD="#34c759" corNaturezaC="#a259ff" semLabel="—"/>
+              </div>
+            </div>
+          )}
+
           {aba === 'arbitro' && (
             <div className="p-5 flex flex-col gap-4 max-w-4xl">
                <div className="bg-[#ffcc00]/10 border border-[#ffcc00]/30 p-4 rounded flex gap-4 items-start">
@@ -312,6 +345,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const porComp = competencias.map(comp => {
     const lista = dadosPorMes[comp] || {};
     const fisico   = lista.fisico?.find(r => String(r.conta) === String(contaId));
+    const legado   = lista.legado?.find(r => String(r.conta) === String(contaId));
     const virtual  = lista.virtual?.find(r => String(r.conta) === String(contaId));
     // Para contas especiais, movimento físico = movimento_liquido do Questor
     // Para demais contas, movimento físico = delta de saldo (saldo_final - saldo_anterior)
@@ -332,6 +366,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
       diffSaldo:       (virtual?.saldo_final        || 0) - (fisico?.saldo_final || 0),
       detalhesFisico:  fisico?.detalhes  || [],
       detalhesVirtual: virtual?.detalhes || [],
+      legadoDetalhes:  legado?.detalhes || [],
     };
   });
 
@@ -352,10 +387,76 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual);
   if (!temQualquerDado) return null;
 
-  // Todos os lançamentos virtuais com logica (para o Racional)
-  const todosVirtualLogica = porComp.flatMap(({ comp, detalhesVirtual }) =>
-    detalhesVirtual.filter(d => d.logica).map(d => ({ ...d, comp }))
-  );
+  // Lançamentos virtuais com logica agrupados para o Racional Global
+  const racionaisAgrupados = useMemo(() => {
+    const grupos = {};
+    const regexVGV = /VGV \((.*?)\) \* POC \((.*?)\%\) = (.*?) - Ant \[(.*?)\]/;
+    const regexCusto = /Custo Acum CC \((.*?)\) \* Fração Área \((.*?)\%\) = (.*?) - Ant \[(.*?)\]/;
+    // Para simplificar, consideramos o formato US (1,000.00) fixo do backend Python.
+    const pFloat = (v) => parseFloat(v.replace(/,/g, ''));
+    const fmtN = (v) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    porComp.forEach(({ comp, detalhesVirtual }) => {
+      detalhesVirtual.filter(d => d.logica).forEach(d => {
+        let tipoLogica = (d.historico || '').replace(/- Unid .*$/, '').trim();
+        tipoLogica = tipoLogica.replace(/\[.*?\]/g, '').trim();
+        const tagNova = d.historico?.includes('[NOVA VENDA MÊS]') ? '  [NOVAS VENDAS MÊS]' : '';
+        const key = `${comp}_${d.natureza}_${tipoLogica}${tagNova}`;
+
+        if (!grupos[key]) {
+          grupos[key] = {
+            comp,
+            natureza: d.natureza,
+            historicoBase: tipoLogica,
+            tag: tagNova,
+            valorTotal: 0,
+            qtd: 0,
+            sumVgv: 0, pocFix: 0, sumRecAtual: 0, sumRecAnt: 0,
+            costoAcumFix: 0, sumFracao: 0, sumCustoAtual: 0, sumCustoAnt: 0,
+            isPOC: false, isCusto: false, fallbackLogica: ''
+          };
+        }
+
+        const g = grupos[key];
+        g.valorTotal += d.valor;
+        g.qtd += 1;
+        if (!g.fallbackLogica) g.fallbackLogica = d.logica.replace(/Unid .*?:/, `Exemplo Unidade:`).trim();
+
+        if (d.logica.includes('VGV (')) {
+          g.isPOC = true;
+          const m = d.logica.match(regexVGV);
+          if (m) {
+            g.sumVgv += pFloat(m[1]);
+            g.pocFix = pFloat(m[2]);
+            g.sumRecAtual += pFloat(m[3]);
+            g.sumRecAnt += pFloat(m[4]);
+          }
+        } else if (d.logica.includes('Custo Acum CC (')) {
+          g.isCusto = true;
+          const m = d.logica.match(regexCusto);
+          if (m) {
+            g.costoAcumFix = pFloat(m[1]);
+            g.sumFracao += pFloat(m[2]);
+            g.sumCustoAtual += pFloat(m[3]);
+            g.sumCustoAnt += pFloat(m[4]);
+          }
+        }
+      });
+    });
+
+    // Formata logika agregada
+    return Object.values(grupos).map(g => {
+      let logicaGlobal = '';
+      if (g.isPOC && g.sumVgv > 0) {
+        logicaGlobal = `Global: VGV (${fmtN(g.sumVgv)}) * POC (${g.pocFix}%) = ${fmtN(g.sumRecAtual)} - Ant [${fmtN(g.sumRecAnt)}]${g.tag}`;
+      } else if (g.isCusto && g.sumFracao > 0) {
+        logicaGlobal = `Global: Custo Acum CC (${fmtN(g.costoAcumFix)}) * Fração Área (${fmtN(g.sumFracao)}%) = ${fmtN(g.sumCustoAtual)} - Ant [${fmtN(g.sumCustoAnt)}]${g.tag}`;
+      } else {
+        logicaGlobal = `Global (Soma de ${g.qtd} Lançamentos): Lógica equivalente vista abaixo.`;
+      }
+      return { ...g, logicaGlobal };
+    });
+  }, [porComp]);
 
   return (
     <>
@@ -455,7 +556,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
           porComp={porComp}
           contaId={contaId}
           contaNome={contaNome}
-          todosVirtualLogica={todosVirtualLogica}
+          todosVirtualLogica={racionaisAgrupados}
           onRacional={() => setRacionalOpen(true)}
         />
       )}
@@ -485,25 +586,39 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
                   >×</button>
                 </div>
                 <div className="overflow-y-auto flex-1 px-6 py-4 flex flex-col gap-3">
-                  {todosVirtualLogica.map((d, i) => (
+                  {racionaisAgrupados.map((d, i) => (
                     <div key={i} className="border border-[var(--v-border)] rounded p-4 bg-[var(--v-deep)] hover:border-[#a259ff]/20 transition-colors">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">{d.comp} · {d.data}</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#a259ff]">{d.comp}</span>
+                        <span className="text-[10px] font-bold text-[var(--v-text-faint)]">Agregado global de {d.qtd} unidades</span>
                         <span
-                          className="text-[10px] font-black px-2 py-0.5 rounded"
+                          className="ml-auto text-[10px] font-black px-2 py-0.5 rounded"
                           style={{ background: d.natureza === 'D' ? '#a259ff22' : '#ff9f0a22', color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}
                         >
-                          {d.natureza === 'D' ? 'DÉBITO' : 'CRÉDITO'} {fmt(d.valor)}
+                          TOTAL {d.natureza === 'D' ? 'DÉBITO' : 'CRÉDITO'}: {fmt(d.valorTotal)}
                         </span>
                       </div>
-                      <p className="text-[12px] font-bold text-[var(--v-text-muted)] mb-1">{d.historico}</p>
-                      {d.logica && (
-                        <p className="text-[11px] font-mono text-[var(--v-accent-5)]/70 bg-[#a259ff]/5 rounded px-3 py-2 border-l-2 border-[#a259ff]/30">
-                          {d.logica}
+                      <p className="text-[14px] font-black text-[var(--v-text-muted)] mb-2 mt-2">{d.historicoBase}</p>
+                      
+                      {d.logicaGlobal && (
+                        <p className="text-[12px] font-mono text-[var(--v-accent-5)] bg-[#a259ff]/10 rounded px-3 py-2.5 border-l-2 border-[#a259ff] mb-2 leading-relaxed">
+                          {d.logicaGlobal}
                         </p>
+                      )}
+                      
+                      {!d.isPOC && !d.isCusto && d.fallbackLogica && (
+                         <p className="text-[10px] font-mono text-[var(--v-text-faint)] bg-black/20 rounded px-3 py-2 border-l-2 border-[#555] opacity-70">
+                           {d.fallbackLogica}
+                         </p>
                       )}
                     </div>
                   ))}
+                  
+                  {racionaisAgrupados.length === 0 && (
+                    <div className="text-center py-10 text-[var(--v-text-faint)] text-[11px] font-bold uppercase tracking-widest">
+                      Nenhum racional matemático complexo para esta conta.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -652,6 +767,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   // ── Conciliação Cross-Account (Fuzzy Orphan Matching) ────────────────────
   const [crossData,    setCrossData]    = useState(null);
   const [crossLoading, setCrossLoading] = useState(false);
+  const [usePgVector, setUsePgVector] = useState(true);
   const [showCross,    setShowCross]    = useState(false);
 
   // ── Carrega empreendimentos na montagem ──────────────────────────────────
@@ -679,6 +795,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     const novos = {};
     try {
       const virtuaisPorMes = {};
+      const legadosPorMes = {};
       const contasGlobais = new Set();
 
       // PASS 1: Busca Virtual para todos os meses (SEQUENCIAL PARA EVITAR LOCK DO FIREBIRD)
@@ -692,6 +809,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         const jsonV = await respV.json();
 
         const accVirtual = {};
+        const accLegado = {};
         const mergeConta = (source, acc) => {
           (source || []).forEach(c => {
             const k = String(c.conta);
@@ -707,11 +825,19 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
             }
           });
         };
-        (jsonV.data || []).forEach(emp => mergeConta(emp.contas_virtuais, accVirtual));
+        (jsonV.data || []).forEach(emp => {
+          mergeConta(emp.contas_virtuais, accVirtual);
+          mergeConta(emp.contas_legado, accLegado);
+          
+          (emp.contas_virtuais || []).forEach(c => contasGlobais.add(c.conta));
+          (emp.contas_legado || []).forEach(c => contasGlobais.add(c.conta));
+        });
         const virtualList = Object.values(accVirtual);
+        const legadoList = Object.values(accLegado);
         
         virtualList.forEach(c => contasGlobais.add(c.conta));
         virtuaisPorMes[comp] = virtualList;
+        legadosPorMes[comp] = legadoList;
       }
 
       // PASS 2: Busca Físico (Questor) para todos os meses usando a união de todas as contas
@@ -736,11 +862,12 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           novos[comp] = {
             fisico:  fisicoList,
             virtual: virtuaisPorMes[comp],
+            legado:  legadosPorMes[comp],
           };
         }
       } else {
         competencias.forEach(comp => {
-          novos[comp] = { fisico: [], virtual: [] };
+          novos[comp] = { fisico: [], virtual: [], legado: [] };
         });
       }
 
@@ -884,6 +1011,8 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           orfaos_questor: orfaosQ,
           orfaos_vulcano: orfaosV,
           threshold: 0.38,
+          use_pgvector: usePgVector,
+          use_pgvector: usePgVector,
         }),
       });
       const j = await r.json();
@@ -904,26 +1033,30 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   };
 
 
-  // ── Apenas contas que o Vulcano calculou para injeção (contas_virtuais) ──
+  // ── Contas a exibir: contas com cálculo Vulcano + contas Legado ──
   const contasMap = useMemo(() => {
     const m = {};
-    Object.values(dadosPorMes).forEach(({ virtual }) => {
+    Object.values(dadosPorMes).forEach(({ virtual, legado }) => {
+      // 1. Contas Virtuais
       (virtual || []).forEach(c => {
-        if (!m[c.conta]) m[c.conta] = c.nome || `Conta ${c.conta}`;
+        if (!m[c.conta]) m[c.conta] = { nome: c.nome || `Conta ${c.conta}`, classif: c.classif || '9.99.99' };
+      });
+      // 2. Contas Legado
+      (legado || []).forEach(c => {
+        if (!m[c.conta]) m[c.conta] = { nome: c.nome ? `${c.nome} (Vulcano 1.0)` : `Conta ${c.conta} (Vulcano 1.0)`, classif: c.classif || '9.99.99' };
       });
     });
-    return m; // { contaId → nome } — apenas contas com lançamento societário
+    return m; // { contaId → nome }
   }, [dadosPorMes]);
 
-  // ── Métricas globais — filtra fisico apenas nas contas que geramos ────────
+  // ── Métricas globais — filtra fisico apenas nas contas visíveis (mapeadas + órfãs VU) ────────
   const metrics = useMemo(() => {
     let totMovFisico = 0, totMovVirtual = 0;
     let contasConciliadas = 0, contasDivergentes = 0;
-    const contasVirtualIds = Object.keys(contasMap);
+    const contasVisiveisIds = Object.keys(contasMap);
 
     Object.values(dadosPorMes).forEach(({ fisico, virtual }) => {
-      // Questor: só as contas que o Vulcano calcula
-      (fisico || []).filter(c => contasVirtualIds.includes(String(c.conta)))
+      (fisico || []).filter(c => contasVisiveisIds.includes(String(c.conta)))
         .forEach(c => { totMovFisico += Math.abs(c.movimento_liquido || 0); });
       (virtual || []).forEach(c => { totMovVirtual += Math.abs(c.movimento_liquido || 0); });
     });
@@ -1019,6 +1152,13 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           }`}>
           {crossLoading ? <Link2 className="animate-spin" size={12}/> : <Link2 size={12}/>}
           {crossLoading ? 'Conciliando...' : '🔗 Cross-Account'}
+        </button>
+        <button onClick={() => setUsePgVector(!usePgVector)}
+          title="Aceleração Vetorial via PostgreSQL (Embeddings Semânticos)"
+          className={`px-4 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
+            usePgVector ? 'bg-[#ffcc00]/20 border-[#ffcc00]/60 text-[#ffcc00]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#ffcc00] hover:border-[#ffcc00]/40'
+          }`}>
+          <Zap size={12}/> {usePgVector ? 'PGVector Ligado' : 'PGVector Desligado'}
         </button>
       </div>
 
@@ -1271,11 +1411,18 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(contasMap).map(([contaId, contaNome]) => (
+                {Object.entries(contasMap)
+                  .sort((a, b) => {
+                    const classA = a[1].classif;
+                    const classB = b[1].classif;
+                    if (classA !== classB) return classA.localeCompare(classB);
+                    return a[1].nome.localeCompare(b[1].nome);
+                  })
+                  .map(([contaId, contaObj]) => (
                   <ContaConfronto
                     key={contaId}
                     contaId={contaId}
-                    contaNome={contaNome}
+                    contaNome={contaObj.nome}
                     competencias={competencias}
                     dadosPorMes={dadosPorMes}
                   />

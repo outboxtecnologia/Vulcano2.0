@@ -147,3 +147,9 @@ cd backend && .venv\Scripts\python.exe -c "import main; print('syntax OK')"
 Este projeto é o **original** do qual `C:\Projetos\Vulcano2.0` foi derivado.
 Ambos compartilham a mesma arquitetura de backend (FastAPI + Firebird) e as mesmas regras de IA acima.
 Mudanças de performance ou correções aplicadas em um devem ser avaliadas para o outro.
+
+
+### OBRIGATÒRIO DE PORTAS E TESTES LOCAIS
+- TÍMEIGO:SEMPRE que você executar um teste da API ou subir o backend (FastAPI/Uvicorn) em Background no seu console para testes, LEMBRE-SE DE MATAr O PROCESSO ao final do teste (terminar a task). Deixar a porta 8000 bloqueada em background impede que o usuário suba o projeto.
+- Se a port 8000 parar com "Erro de conexão", providencie a finalização do processo background que você esqueceu pendurado.
+
