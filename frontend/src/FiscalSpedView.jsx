@@ -146,7 +146,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                 </div>
             </div>
 
-            <div className="magma-card border border-[var(--v-border)] rounded-sm p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
+            <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
                 <div className="w-32">
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Ano Competência</label>
                     <select value={ano} onChange={e => setAno(e.target.value)} className="bento-select w-full">
@@ -170,7 +170,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             </div>
 
             {error && (
-                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-sm flex items-center gap-3">
+                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
                     <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
                 </div>
             )}
@@ -180,7 +180,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                 <button onClick={() => setActiveTab('F200')} className={`pb-3 px-4 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'F200' ? 'text-[var(--v-accent-4)] border-b-2 border-[var(--v-accent-4)]' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text-muted)]'}`}>Operações F200 (EFD)</button>
             </div>
 
-            <div className="flex-1 overflow-auto custom-scrollbar magma-card border border-[var(--v-border)] rounded-sm">
+            <div className="flex-1 overflow-auto custom-scrollbar magma-card border border-[var(--v-border)] rounded-[var(--v-radius)]">
                                 {activeTab === 'RET' && retData && (
                     <div className="flex flex-col h-full">
                         <table className="w-full text-left text-xs border-collapse">
@@ -207,16 +207,16 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                         <td className="p-4 font-mono text-right font-black text-[var(--v-error)]">{formatCurrency(r.total_ret)}</td>
                                     </tr>
                                 ))}
-                                {retData.length === 0 && <tr><td colSpan="7" className="p-10 text-center text-[#555] opacity-50 uppercase text-[10px] tracking-widest">Sem base de cálculo para o período.</td></tr>}
+                                {retData.length === 0 && <tr><td colSpan="7" className="p-10 text-center text-[var(--v-text-faint)] opacity-50 uppercase text-[10px] tracking-widest">Sem base de cálculo para o período.</td></tr>}
                             </tbody>
                         </table>
                         
                         {retData.length > 0 && (
-                            <div className="bg-[#111] p-4 border-t border-[var(--v-border)] flex justify-end">
+                            <div className="bg-[var(--v-deep)] p-4 border-t border-[var(--v-border)] flex justify-end">
                                 <button 
                                     onClick={commitRet} 
                                     disabled={retCommitting} 
-                                    className="bg-[var(--v-accent-3)] text-black hover:bg-[var(--v-accent-3)]/80 py-2.5 px-6 font-black uppercase text-[10px] tracking-widest rounded-sm transition-colors flex items-center gap-2"
+                                    className="bg-[var(--v-accent-3)] text-black hover:bg-[var(--v-accent-3)]/80 py-2.5 px-6 font-black uppercase text-[10px] tracking-widest rounded-[var(--v-radius)] transition-colors flex items-center gap-2"
                                 >
                                     {retCommitting ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />} 
                                     {retCommitting ? "Processando..." : "Confirmar e Injetar Lote RET no Questor"}
@@ -232,7 +232,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             <thead className="bg-[var(--v-surface-container)] sticky top-0 border-b border-[var(--v-border)]">
                                 <tr>
                                     <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-right" colSpan="5">
-                                        <button onClick={() => setVisaoTecnica(!visaoTecnica)} className="hover:text-white transition-colors text-[var(--v-accent-4)]">
+                                        <button onClick={() => setVisaoTecnica(!visaoTecnica)} className="hover:text-[var(--v-text-bold)] transition-colors text-[var(--v-accent-4)]">
                                             {visaoTecnica ? "Voltar para Visão Resumida" : "Modo Dicionário Técnico"}
                                         </button>
                                     </th>
@@ -260,26 +260,26 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                     ))
                                 ) : (
                                     (f200Data.data || []).filter(r => r.tabela === 'EFDUNIDIMOBVENDIDA').map((r, i) => (
-                                        <tr key={i} className="border-b border-[#222]">
+                                        <tr key={i} className="border-b border-[var(--v-border)]">
                                             <td colSpan="5" className="p-4 bg-[#0a0a0c] border-l-2 border-[var(--v-accent-4)]">
                                                 <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] mb-2 font-bold">{r.tabela} | {r.chaves}</p>
-                                                <pre className="text-[10px] text-[var(--v-accent-4)] font-mono bg-black p-4 rounded-sm border border-[#222] overflow-auto">
+                                                <pre className="text-[10px] text-[var(--v-accent-4)] font-mono bg-black p-4 rounded-[var(--v-radius)] border border-[var(--v-border)] overflow-auto">
                                                     {JSON.stringify(r.valores, null, 2)}
                                                 </pre>
                                             </td>
                                         </tr>
                                     ))
                                 )}
-                                {(f200Data.data || []).length === 0 && <tr><td colSpan="5" className="p-10 text-center text-[#555] opacity-50 uppercase text-[10px] tracking-widest">Sem alienações F200 para a competência.</td></tr>}
+                                {(f200Data.data || []).length === 0 && <tr><td colSpan="5" className="p-10 text-center text-[var(--v-text-faint)] opacity-50 uppercase text-[10px] tracking-widest">Sem alienações F200 para a competência.</td></tr>}
                             </tbody>
                         </table>
 
                         {(f200Data.data || []).length > 0 && (
-                            <div className="bg-[#111] p-4 border-t border-[var(--v-border)] flex justify-end">
+                            <div className="bg-[var(--v-deep)] p-4 border-t border-[var(--v-border)] flex justify-end">
                                 <button 
                                     onClick={commitF200} 
                                     disabled={f200Committing} 
-                                    className="bg-[var(--v-accent-4)] text-black hover:bg-[var(--v-accent-4)]/80 py-2.5 px-6 font-black uppercase text-[10px] tracking-widest rounded-sm transition-colors flex items-center gap-2"
+                                    className="bg-[var(--v-accent-4)] text-black hover:bg-[var(--v-accent-4)]/80 py-2.5 px-6 font-black uppercase text-[10px] tracking-widest rounded-[var(--v-radius)] transition-colors flex items-center gap-2"
                                 >
                                     {f200Committing ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />} 
                                     {f200Committing ? "Injetando..." : "Confirmar e Injetar Lote F200 no Questor"}
@@ -307,10 +307,10 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             Obrigação Acessória Anual - Geração de Arquivo PGD
                         </p>
                     </div>
-                    <div className="flex bg-[var(--v-surface-container)] p-3 border border-[var(--v-border)] rounded-sm gap-4 items-end shadow-lg">
+                    <div className="flex bg-[var(--v-surface-container)] p-3 border border-[var(--v-border)] rounded-[var(--v-radius)] gap-4 items-end shadow-lg">
                         <div className="w-32">
                             <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Ano Calendário</label>
-                            <select value={anoDimob} onChange={e => setAnoDimob(e.target.value)} className="bento-select w-full bg-[#111] text-white">
+                            <select value={anoDimob} onChange={e => setAnoDimob(e.target.value)} className="bento-select w-full bg-[var(--v-deep)] text-[var(--v-text-bold)]">
                                 {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
                         </div>
@@ -325,7 +325,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                         <button 
                             onClick={fetchDimob} 
                             disabled={loadingDimob} 
-                            className="bg-[var(--v-accent-5)] text-black hover:bg-[var(--v-accent-5)]/80 py-2.5 px-6 font-black uppercase text-[10px] tracking-widest rounded-sm transition-colors flex items-center gap-2"
+                            className="bg-[var(--v-accent-5)] text-black hover:bg-[var(--v-accent-5)]/80 py-2.5 px-6 font-black uppercase text-[10px] tracking-widest rounded-[var(--v-radius)] transition-colors flex items-center gap-2"
                         >
                             {loadingDimob ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />} 
                             {loadingDimob ? "Gerando..." : "Baixar PGD DIMOB (.txt)"}
@@ -340,8 +340,8 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             if (registros.length === 0) return null;
                             
                             return (
-                                <div key={tipo} className="magna-card border border-[var(--v-border)] rounded-sm overflow-auto custom-scrollbar bg-[var(--v-surface-container)]">
-                                    <div className="p-4 bg-[#111] border-b border-[var(--v-border)] flex justify-between items-center text-xs">
+                                <div key={tipo} className="magna-card border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-auto custom-scrollbar bg-[var(--v-surface-container)]">
+                                    <div className="p-4 bg-[var(--v-deep)] border-b border-[var(--v-border)] flex justify-between items-center text-xs">
                                         <div>
                                             <h3 className="text-[10px] text-[var(--v-accent-5)] tracking-widest font-black uppercase mb-1">
                                                 {tipo === 'venda' ? 'R03 - Alienação de Imóveis (Vendas da Incoporação)' : 'R02 - Rendimentos de Locações (Aluguéis)'}
@@ -362,19 +362,19 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                         </div>
                                     </div>
                                     <table className="w-full text-left text-xs border-collapse">
-                                        <thead className="bg-[#111] sticky top-0 border-b border-[var(--v-border)]">
+                                        <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
                                             <tr>
-                                                <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold">Cliente / CPF/CNPJ</th>
-                                                <th className="p-3 text-[10px] tracking-widest text-[#555] uppercase font-bold">Unidade / Num</th>
-                                                {tipo === 'venda' && <th className="p-3 text-[10px] tracking-widest text-[#777] uppercase font-bold text-right">Valor Total da Venda</th>}
+                                                <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Cliente / CPF/CNPJ</th>
+                                                <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Unidade / Num</th>
+                                                {tipo === 'venda' && <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-right">Valor Total da Venda</th>}
                                                 <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent-5)] uppercase font-bold text-right">Rendimentos Pagos</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {registros.map((r, i) => (
-                                                <tr key={i} className="border-b border-[#222] hover:bg-[#1a1a1c] transition-colors">
-                                                    <td className="p-3 font-mono text-[#ddd]">{r.cliente_nome}<br/><span className="text-[#888] text-[10px]">{r.cliente_cpf}</span></td>
-                                                    <td className="p-3 font-mono text-[#aaa]">{r.unidade}</td>
+                                                <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
+                                                    <td className="p-3 font-mono text-[#ddd]">{r.cliente_nome}<br/><span className="text-[var(--v-text-muted)] text-[10px]">{r.cliente_cpf}</span></td>
+                                                    <td className="p-3 font-mono text-[var(--v-text-muted)]">{r.unidade}</td>
                                                     {tipo === 'venda' && <td className="p-3 font-mono text-right text-[var(--v-text-muted)]">{formatCurrency(r.valor_venda)}</td>}
                                                     <td className="p-3 font-mono text-right text-[var(--v-accent-5)] font-bold">{formatCurrency(r.valor_pago)}</td>
                                                 </tr>

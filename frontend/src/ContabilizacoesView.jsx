@@ -119,20 +119,20 @@ function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
   return (
     <>
       <tr
-        className="border-b border-[#1a1a1a] hover:bg-[#141414] cursor-pointer transition-colors"
+        className="border-b border-[var(--v-border)] hover:bg-[var(--v-card)] cursor-pointer transition-colors"
         onClick={() => setOpen(o => !o)}
       >
         {/* Conta */}
-        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[230px]">
+        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[var(--v-deep)] min-w-[230px]">
           <div className="flex items-center gap-2">
             <span className="font-mono text-[11px] font-black shrink-0" style={{ color: grupo.cor }}>{contaId}</span>
-            <span className="text-[10px] text-[#666] truncate" title={contaNome}>{contaNome}</span>
-            {detalhes.length > 0 && (open ? <ChevronUp size={9} className="text-[#444] shrink-0"/> : <ChevronDown size={9} className="text-[#444] shrink-0"/>)}
+            <span className="text-[10px] text-[var(--v-text-faint)] truncate" title={contaNome}>{contaNome}</span>
+            {detalhes.length > 0 && (open ? <ChevronUp size={9} className="text-[var(--v-text-faint)] shrink-0"/> : <ChevronDown size={9} className="text-[var(--v-text-faint)] shrink-0"/>)}
           </div>
         </td>
 
         {/* Saldo anterior */}
-        <td className="px-3 py-2.5 text-right font-mono text-[11px] text-[#555] whitespace-nowrap">{fmt(saldoAnt)}</td>
+        <td className="px-3 py-2.5 text-right font-mono text-[11px] text-[var(--v-text-faint)] whitespace-nowrap">{fmt(saldoAnt)}</td>
 
         {/* Movimento por mês */}
         {competencias.map(comp => {
@@ -149,24 +149,24 @@ function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
         })}
 
         {/* Saldo final */}
-        <td className="px-3 py-2.5 text-right font-mono text-sm font-black text-white whitespace-nowrap">{fmt(saldoFinal)}</td>
+        <td className="px-3 py-2.5 text-right font-mono text-sm font-black text-[var(--v-text-bold)] whitespace-nowrap">{fmt(saldoFinal)}</td>
       </tr>
 
       {/* Detalhes */}
       {open && detalhes.length > 0 && (
         <tr>
           <td colSpan={competencias.length + 3} className="p-0 bg-[#070707]">
-            <div className="px-4 py-1 text-[9px] font-black uppercase tracking-widest text-[#444] border-b border-[#111]">
+            <div className="px-4 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-bg)]">
               Lançamentos analíticos — {labelMes(ultimoMesComDado)}
             </div>
             <table className="w-full text-[10px] border-collapse">
               <tbody>
                 {detalhes.map((d, i) => (
-                  <tr key={i} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-                    <td className="px-5 py-1.5 font-mono text-[#444] whitespace-nowrap w-24">{d.data}</td>
-                    <td className="px-3 py-1.5 text-[#555] truncate max-w-[460px]" title={d.historico}>{d.historico}</td>
+                  <tr key={i} className="border-b border-[var(--v-bg)] hover:bg-[var(--v-deep)]">
+                    <td className="px-5 py-1.5 font-mono text-[var(--v-text-faint)] whitespace-nowrap w-24">{d.data}</td>
+                    <td className="px-3 py-1.5 text-[var(--v-text-faint)] truncate max-w-[460px]" title={d.historico}>{d.historico}</td>
                     <td className="px-3 py-1.5 text-center font-bold w-8" style={{ color: d.natureza === 'D' ? '#34c759' : '#ff9f0a' }}>{d.natureza}</td>
-                    <td className="px-5 py-1.5 text-right font-mono text-[#888] whitespace-nowrap w-32">{fmt(d.valor)}</td>
+                    <td className="px-5 py-1.5 text-right font-mono text-[var(--v-text-muted)] whitespace-nowrap w-32">{fmt(d.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -295,43 +295,43 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
   const temDados = Object.keys(dadosPorMes).length > 0;
 
   return (
-    <div className="flex flex-col gap-5 pb-10 text-[#e5e2e1] animate-in fade-in">
+    <div className="flex flex-col gap-5 pb-10 text-[var(--v-text)] animate-in fade-in">
       {/* ── Header ── */}
-      <div className="border-b border-[#222] pb-4">
-        <h2 className="text-4xl font-black tracking-tighter text-white flex items-center gap-3 mb-1">
-          <TrendingUp className="text-[#ff4d00]" size={36}/> Contabilizações
+      <div className="border-b border-[var(--v-border)] pb-4">
+        <h2 className="text-4xl font-black tracking-tighter text-[var(--v-text-bold)] flex items-center gap-3 mb-1">
+          <TrendingUp className="text-[var(--v-accent)]" size={36}/> Contabilizações
         </h2>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
           Visão Societária (IFRS 15) — Receita POC · Tributos · Clientes
         </p>
       </div>
 
       {/* ── Painel de filtros ── */}
-      <div className="flex flex-wrap gap-3 items-end bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
+      <div className="flex flex-wrap gap-3 items-end bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4">
 
         {/* Período De */}
         <div className="flex flex-col gap-1">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Período De</span>
+          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Período De</span>
           <input type="month" value={periodoInicio}
             onChange={e => { const v = e.target.value; setPeriodoInicio(v); if (v > periodoFim) setPeriodoFim(v); }}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
+            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
 
         {/* Período Até */}
         <div className="flex flex-col gap-1">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Até</span>
+          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Até</span>
           <input type="month" value={periodoFim}
             onChange={e => { const v = e.target.value; setPeriodoFim(v); if (v < periodoInicio) setPeriodoInicio(v); }}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
+            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
 
         {/* Empreendimento */}
         <div className="flex flex-col gap-1 min-w-[220px]">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
             Empreendimento {empsLoading ? '(carregando...)' : `(${empreendimentos.length})`}
           </span>
           <select value={filtroEmpId} onChange={e => setFiltroEmpId(e.target.value)}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-bold outline-none focus:border-[#ff4d00] transition-colors">
+            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-bold outline-none focus:border-[#ff4d00] transition-colors">
             <option value="">Todos os empreendimentos</option>
             {empreendimentos.map(e => (
               <option key={e.id} value={String(e.id)}>{e.nome}</option>
@@ -341,15 +341,15 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
 
         {/* Indicador de competências */}
         <div className="flex flex-col justify-end pb-0.5">
-          <span className="text-[9px] font-bold text-[#444] uppercase tracking-wider">
+          <span className="text-[9px] font-bold text-[var(--v-text-faint)] uppercase tracking-wider">
             {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
-            {!periodoValido && <span className="text-[#ff4d00] ml-2">⚠ máx. 18</span>}
+            {!periodoValido && <span className="text-[var(--v-accent)] ml-2">⚠ máx. 18</span>}
           </span>
         </div>
 
         {/* Botão */}
         <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
-          className="ml-auto px-6 py-2.5 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
           {loading ? `Consultando ${competencias.length} meses...` : 'Carregar'}
         </button>
@@ -357,17 +357,17 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
 
       {/* Erro */}
       {error && (
-        <div className="bg-[#ff4d00]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
-          <AlertTriangle size={14} className="text-[#ff4d00] shrink-0"/>
-          <p className="text-sm font-mono text-[#ff4d00]">{error}</p>
+        <div className="bg-[var(--v-accent)]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
+          <AlertTriangle size={14} className="text-[var(--v-accent)] shrink-0"/>
+          <p className="text-sm font-mono text-[var(--v-accent)]">{error}</p>
         </div>
       )}
 
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center gap-3 py-12">
-          <Zap className="animate-spin text-[#ff4d00]" size={28}/>
-          <span className="text-xs font-black uppercase tracking-widest text-[#555]">
+          <Zap className="animate-spin text-[var(--v-accent)]" size={28}/>
+          <span className="text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)]">
             Rodando motor POC para {competencias.length} competência{competencias.length > 1 ? 's' : ''}...
           </span>
         </div>
@@ -380,8 +380,8 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
             {competencias.map(comp => {
               const v = totaisPorMes[comp] || 0;
               return (
-                <div key={comp} className="flex-1 bg-[#0d0d0d] border border-[#1e1e1e] rounded p-3 text-center min-w-[110px]">
-                  <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-1">{labelMes(comp)}</p>
+                <div key={comp} className="flex-1 bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-3 text-center min-w-[110px]">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-1">{labelMes(comp)}</p>
                   <p className="font-mono text-xs font-bold" style={{ color: v > 0 ? '#34c759' : v < 0 ? '#ff4d00' : '#444' }}>
                     {v > 0 ? '+' : ''}{fmt(v)}
                   </p>
@@ -394,15 +394,15 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
 
       {/* ── Tabelas por grupo ── */}
       {!loading && grupos.map(({ grupo, contas }) => (
-        <div key={grupo.key} className="bg-[#0d0d0d] border border-[#1e1e1e] rounded-sm overflow-hidden">
+        <div key={grupo.key} className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
           {/* Cabeçalho do grupo */}
-          <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-start gap-3" style={{ borderLeft: `3px solid ${grupo.cor}` }}>
+          <div className="px-4 py-3 border-b border-[var(--v-border)] flex items-start gap-3" style={{ borderLeft: `3px solid ${grupo.cor}` }}>
             <Building2 size={13} style={{ color: grupo.cor }} className="mt-0.5 shrink-0"/>
             <div>
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white">{grupo.label}</h3>
-              <p className="text-[9px] text-[#444] mt-0.5">{grupo.descricao}</p>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-bold)]">{grupo.label}</h3>
+              <p className="text-[9px] text-[var(--v-text-faint)] mt-0.5">{grupo.descricao}</p>
             </div>
-            <span className="ml-auto text-[9px] text-[#444] font-bold shrink-0">{contas.length} conta{contas.length !== 1 ? 's' : ''}</span>
+            <span className="ml-auto text-[9px] text-[var(--v-text-faint)] font-bold shrink-0">{contas.length} conta{contas.length !== 1 ? 's' : ''}</span>
           </div>
 
           {/* Tabela horizontal */}
@@ -412,19 +412,19 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
               style={{ minWidth: `${240 + 120 + competencias.length * 120 + 140}px` }}
             >
               <thead>
-                <tr className="bg-[#111]">
-                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 z-20 bg-[#111] min-w-[230px]">
+                <tr className="bg-[var(--v-deep)]">
+                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] sticky left-0 z-20 bg-[var(--v-deep)] min-w-[230px]">
                     Conta
                   </th>
-                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] min-w-[110px]">
+                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] min-w-[110px]">
                     Saldo Ant.
                   </th>
                   {competencias.map(c => (
-                    <th key={c} className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[#666] border-b border-[#1a1a1a] min-w-[110px]">
+                    <th key={c} className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] min-w-[110px]">
                       {labelMes(c)}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-white border-b border-[#1a1a1a] min-w-[130px]">
+                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[var(--v-text-bold)] border-b border-[var(--v-border)] min-w-[130px]">
                     Saldo Final
                   </th>
                 </tr>
@@ -441,11 +441,11 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
                 ))}
 
                 {/* Linha totalizadora */}
-                <tr className="bg-[#111]" style={{ borderTop: `1px solid #222` }}>
-                  <td className="px-3 py-2 sticky left-0 z-10 bg-[#111] text-[9px] font-black uppercase tracking-widest" style={{ color: grupo.cor }}>
+                <tr className="bg-[var(--v-deep)]" style={{ borderTop: `1px solid #222` }}>
+                  <td className="px-3 py-2 sticky left-0 z-10 bg-[var(--v-deep)] text-[9px] font-black uppercase tracking-widest" style={{ color: grupo.cor }}>
                     ∑ Total {grupo.label}
                   </td>
-                  <td className="px-3 py-2 text-right font-mono text-xs text-[#777]">
+                  <td className="px-3 py-2 text-right font-mono text-xs text-[var(--v-text-faint)]">
                     {fmt(contas.reduce((s, c) => {
                       const primeiroDado = Object.values(dadosPorMes)[0]?.find(r => String(r.conta) === String(c.conta));
                       return s + (primeiroDado?.saldo_anterior || 0);
@@ -484,9 +484,9 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
 
       {/* Empty state após load */}
       {!loading && temDados && grupos.length === 0 && (
-        <div className="text-center py-12 text-[#555]">
+        <div className="text-center py-12 text-[var(--v-text-faint)]">
           <AlertTriangle size={36} className="mx-auto mb-3 opacity-20"/>
-          <p className="font-black uppercase tracking-widest text-sm text-[#444]">
+          <p className="font-black uppercase tracking-widest text-sm text-[var(--v-text-faint)]">
             Nenhum lançamento societário gerado para o período
           </p>
           <p className="text-[10px] text-[#333] mt-1 uppercase tracking-widest">
@@ -498,17 +498,17 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
       {/* Call-to-action inicial */}
       {!loading && !temDados && !error && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="w-16 h-16 bg-[#ff4d00]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
-            <TrendingUp className="text-[#ff4d00]" size={28}/>
+          <div className="w-16 h-16 bg-[var(--v-accent)]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
+            <TrendingUp className="text-[var(--v-accent)]" size={28}/>
           </div>
-          <p className="font-black uppercase tracking-widest text-white text-sm">
+          <p className="font-black uppercase tracking-widest text-[var(--v-text-bold)] text-sm">
             Selecione o período e clique em Carregar
           </p>
-          <p className="text-[10px] text-[#444] uppercase tracking-widest max-w-xs">
+          <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest max-w-xs">
             O motor societário calcula receita POC, tributos diferidos/antecipados e variações de clientes
           </p>
           <button onClick={fetchTudo} disabled={!selectedEmpresa}
-            className="mt-2 px-6 py-3 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
+            className="mt-2 px-6 py-3 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
             <Zap size={13}/> Carregar Dados
           </button>
         </div>

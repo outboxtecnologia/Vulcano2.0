@@ -68,7 +68,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                 </div>
             </div>
 
-            <div className="magma-card border border-[var(--v-border)] rounded-sm p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
+            <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Obra (CEI/CNO)</label>
                     <select value={selectedObraId} onChange={e => setSelectedObraId(e.target.value)} className="bento-select w-full">
@@ -94,7 +94,7 @@ export const SeroView = ({ selectedEmpresa }) => {
             </div>
 
             {error && !seroData && (
-                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-sm flex items-center gap-3">
+                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
                     <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
                 </div>
             )}
@@ -104,7 +104,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                     <div className="grid grid-cols-4 gap-6">
                         <div className="magma-card p-6 border-l-4 border-[var(--v-accent-2)]">
                             <span className="text-[10px] font-bold text-[var(--v-text-faint)] uppercase tracking-widest">Base de Mão de Obra Fiscal</span>
-                            <h3 className="text-2xl font-black text-white mt-2">{formatCurrency(seroData.resumo?.mao_de_obra || 0)}</h3>
+                            <h3 className="text-2xl font-black text-[var(--v-text-bold)] mt-2">{formatCurrency(seroData.resumo?.mao_de_obra || 0)}</h3>
                         </div>
                         <div className="magma-card p-6 border-l-4 border-[var(--v-accent-5)] bg-[var(--v-accent-5)]/10">
                             <span className="text-[10px] font-bold text-[var(--v-accent-5)] uppercase tracking-widest">Apuração INSS A Recolher</span>
@@ -112,7 +112,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                         </div>
                         <div className="magma-card p-6 border-l-4 border-white/20">
                             <span className="text-[10px] font-bold text-[var(--v-text-faint)] uppercase tracking-widest">CUB Padrão/Vigente</span>
-                            <h3 className="text-2xl font-black text-white mt-2">{formatCurrency(seroData.resumo?.cub_vigente || 0)}</h3>
+                            <h3 className="text-2xl font-black text-[var(--v-text-bold)] mt-2">{formatCurrency(seroData.resumo?.cub_vigente || 0)}</h3>
                         </div>
                         <div className="magma-card p-6 border-l-4 border-[#00ff88]">
                             <span className="text-[10px] font-bold text-[#00ff88] uppercase tracking-widest">Área Obra (m²) Acumulada</span>

@@ -235,13 +235,13 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
     const listId = `list-${name}`;
     return (
       <div className="space-y-1">
-        <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">{label}</label>
+        <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">{label}</label>
         <div className="relative group">
             <input
                 list={listId}
                 value={formData[name] || ''}
                 onChange={(e) => setFormData({ ...formData, [name]: e.target.value })}
-                className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50 transition-all font-mono"
+                className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50 transition-all font-mono"
                 placeholder={loadingQuestor ? "Carregando..." : "Digite ou selecione..."}
             />
             <datalist id={listId}>
@@ -250,10 +250,10 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                 ))}
             </datalist>
             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-20 group-hover:opacity-100 transition-opacity">
-                <Search size={12} className="text-[#ff4d00]" />
+                <Search size={12} className="text-[var(--v-accent)]" />
             </div>
         </div>
-        <p className="text-[9px] text-[#444] font-medium">Questor ID: {formData[name] || '0'}</p>
+        <p className="text-[9px] text-[var(--v-text-faint)] font-medium">Questor ID: {formData[name] || '0'}</p>
       </div>
     );
   };
@@ -261,8 +261,8 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
   if (loading && !empreendimentos.length) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 className="animate-spin text-[#ff4d00]" size={40} />
-        <span className="text-[10px] font-black uppercase tracking-widest text-[#555]">Mapeando Infraestruturas...</span>
+        <Loader2 className="animate-spin text-[var(--v-accent)]" size={40} />
+        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Mapeando Infraestruturas...</span>
       </div>
     );
   }
@@ -271,12 +271,12 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex justify-between items-end border-b border-white/5 pb-6">
         <div>
-          <h2 className="font-headline text-3xl font-black tracking-tight text-white uppercase italic">Central de Empreendimentos</h2>
-          <p className="text-[10px] text-[#ff4d00] font-black uppercase tracking-[0.4em] mt-1">Gestão de Nodes & Infraestrutura Vulcano</p>
+          <h2 className="font-headline text-3xl font-black tracking-tight text-[var(--v-text-bold)] uppercase italic">Central de Empreendimentos</h2>
+          <p className="text-[10px] text-[var(--v-accent)] font-black uppercase tracking-[0.4em] mt-1">Gestão de Nodes & Infraestrutura Vulcano</p>
         </div>
         <button 
           onClick={() => handleOpenModal()}
-          className="bg-[#ff4d00] text-black px-6 py-3 rounded-sm font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-white transition-all shadow-[0_0_20px_rgba(255,77,0,0.3)] group"
+          className="bg-[var(--v-accent)] text-black px-6 py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-white transition-all shadow-[0_0_20px_rgba(255,77,0,0.3)] group"
         >
           <Plus size={16} className="group-hover:rotate-90 transition-transform" /> Novo Empreendimento
         </button>
@@ -285,46 +285,46 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {empreendimentos.map(emp => (
           <div key={emp.id} className="group relative">
-            <div className="p-6 bg-black/40 backdrop-blur-md border border-white/5 rounded-sm hover:border-[#ff4d00]/30 transition-all duration-300 flex flex-col h-full gap-4">
+            <div className="p-6 bg-black/40 backdrop-blur-md border border-white/5 rounded-[var(--v-radius)] hover:border-[#ff4d00]/30 transition-all duration-300 flex flex-col h-full gap-4">
               <div className="flex justify-between items-start">
-                <div className="w-10 h-10 bg-white/5 flex items-center justify-center rounded-sm">
-                  <Building2 size={20} className={emp.ativo === 'N' ? "text-[#34c759]" : "text-[#ff4d00]"} />
+                <div className="w-10 h-10 bg-white/5 flex items-center justify-center rounded-[var(--v-radius)]">
+                  <Building2 size={20} className={emp.ativo === 'N' ? "text-[var(--v-accent-3)]" : "text-[var(--v-accent)]"} />
                 </div>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleOpenModal(emp)} className="p-2 bg-white/5 hover:bg-[#ff4d00]/10 hover:text-[#ff4d00] rounded-sm transition-colors"><Edit size={14}/></button>
-                  <button onClick={() => handleDelete(emp.id)} className="p-2 bg-white/5 hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] rounded-sm transition-colors"><Trash2 size={14}/></button>
+                  <button onClick={() => handleOpenModal(emp)} className="p-2 bg-white/5 hover:bg-[var(--v-accent)]/10 hover:text-[var(--v-accent)] rounded-[var(--v-radius)] transition-colors"><Edit size={14}/></button>
+                  <button onClick={() => handleDelete(emp.id)} className="p-2 bg-white/5 hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] rounded-[var(--v-radius)] transition-colors"><Trash2 size={14}/></button>
                 </div>
               </div>
               
               <div className="space-y-1">
-                <h3 className="font-headline font-black text-white uppercase tracking-wider text-sm">{emp.nome}</h3>
-                <p className="text-[10px] text-[#555] font-bold uppercase py-1 border-b border-white/5">CNO: {emp.cno || 'Não Informado'}</p>
+                <h3 className="font-headline font-black text-[var(--v-text-bold)] uppercase tracking-wider text-sm">{emp.nome}</h3>
+                <p className="text-[10px] text-[var(--v-text-faint)] font-bold uppercase py-1 border-b border-white/5">CNO: {emp.cno || 'Não Informado'}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-2">
                 <div className="space-y-1">
-                  <span className="text-[9px] text-[#444] font-black uppercase tracking-widest block">Metragem</span>
-                  <div className="flex items-center gap-1.5 text-white/80 font-mono text-[11px]">
-                    <Ruler size={12} className="text-[#ff4d00]" /> {emp.metragem || 0} m²
+                  <span className="text-[9px] text-[var(--v-text-faint)] font-black uppercase tracking-widest block">Metragem</span>
+                  <div className="flex items-center gap-1.5 text-[var(--v-text-bold)]/80 font-mono text-[11px]">
+                    <Ruler size={12} className="text-[var(--v-accent)]" /> {emp.metragem || 0} m²
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[9px] text-[#444] font-black uppercase tracking-widest block">Custo Orc.</span>
-                  <div className="flex items-center gap-1.5 text-white/80 font-mono text-[11px]">
-                    <Database size={12} className="text-[#34c759]" /> {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(emp.custo || 0)}
+                  <span className="text-[9px] text-[var(--v-text-faint)] font-black uppercase tracking-widest block">Custo Orc.</span>
+                  <div className="flex items-center gap-1.5 text-[var(--v-text-bold)]/80 font-mono text-[11px]">
+                    <Database size={12} className="text-[var(--v-accent-3)]" /> {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(emp.custo || 0)}
                   </div>
                 </div>
               </div>
 
               <div className="mt-auto pt-4 flex items-center justify-between">
                  <div className="flex gap-2">
-                    {emp.ret === 'S' && <span className="text-[8px] bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/20 px-1.5 py-0.5 rounded-sm font-black uppercase">RET</span>}
+                    {emp.ret === 'S' && <span className="text-[8px] bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[#ff4d00]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">RET</span>}
                     {emp.ativo === 'N' ? 
-                       <span className="text-[8px] bg-[#34c759]/10 text-[#34c759] border border-[#34c759]/20 px-1.5 py-0.5 rounded-sm font-black uppercase">Concluído</span> :
-                       <span className="text-[8px] bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/20 px-1.5 py-0.5 rounded-sm font-black uppercase">Em Obras</span>
+                       <span className="text-[8px] bg-[#34c759]/10 text-[var(--v-accent-3)] border border-[#34c759]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">Concluído</span> :
+                       <span className="text-[8px] bg-[#007aff]/10 text-[var(--v-accent-4)] border border-[#007aff]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">Em Obras</span>
                     }
                  </div>
-                 <div className="text-[9px] font-black text-[#555] uppercase tracking-widest">ID {emp.id}</div>
+                 <div className="text-[9px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">ID {emp.id}</div>
               </div>
             </div>
           </div>
@@ -334,22 +334,22 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative w-full max-w-4xl bg-[#0a0a0a] border border-white/10 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+          <div className="relative w-full max-w-4xl bg-[var(--v-deep)] border border-white/10 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
             
             {/* Header Modal */}
             <div className="p-6 border-b border-white/5 flex justify-between items-center bg-black/40">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-[#ff4d00] text-black flex items-center justify-center rounded-sm">
+                <div className="w-10 h-10 bg-[var(--v-accent)] text-black flex items-center justify-center rounded-[var(--v-radius)]">
                   <Building2 size={24} />
                 </div>
                 <div>
-                  <h3 className="font-headline text-xl font-black text-white uppercase tracking-tight">
+                  <h3 className="font-headline text-xl font-black text-[var(--v-text-bold)] uppercase tracking-tight">
                     {editingEmp ? 'Editar Empreendimento' : 'Novo Empreendimento'}
                   </h3>
-                  <p className="text-[10px] text-[#555] font-black uppercase tracking-widest">Configuração de Parâmetros e Mapeamento</p>
+                  <p className="text-[10px] text-[var(--v-text-faint)] font-black uppercase tracking-widest">Configuração de Parâmetros e Mapeamento</p>
                 </div>
               </div>
-              <button onClick={() => setShowModal(false)} className="text-[#555] hover:text-white transition-colors p-2">
+              <button onClick={() => setShowModal(false)} className="text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] transition-colors p-2">
                 <X size={24} />
               </button>
             </div>
@@ -367,8 +367,8 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                         disabled={tab.disabled}
                         className={`px-8 py-4 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 transition-all border-b-2 ${
                             activeTab === tab.id 
-                            ? 'text-[#ff4d00] border-[#ff4d00] bg-[#ff4d00]/5' 
-                            : 'text-[#444] border-transparent hover:text-[#888] disabled:opacity-30'
+                            ? 'text-[var(--v-accent)] border-[#ff4d00] bg-[var(--v-accent)]/5' 
+                            : 'text-[var(--v-text-faint)] border-transparent hover:text-[var(--v-text-muted)] disabled:opacity-30'
                         }`}
                     >
                         {tab.icon} {tab.label}
@@ -383,46 +383,46 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                 <div className="grid grid-cols-2 gap-6 animate-in slide-in-from-left-2 duration-500">
                     <div className="space-y-4">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Nome do Empreendimento</label>
-                            <input value={formData.nome} onChange={(e) => setFormData({...formData, nome: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                            <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Nome do Empreendimento</label>
+                            <input value={formData.nome} onChange={(e) => setFormData({...formData, nome: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">CNPJ</label>
-                                <input value={formData.cnpj} onChange={(e) => setFormData({...formData, cnpj: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">CNPJ</label>
+                                <input value={formData.cnpj} onChange={(e) => setFormData({...formData, cnpj: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">CNO</label>
-                                <input value={formData.cno} onChange={(e) => setFormData({...formData, cno: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">CNO</label>
+                                <input value={formData.cno} onChange={(e) => setFormData({...formData, cno: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Endereço Completo</label>
-                            <input value={formData.endereco} onChange={(e) => setFormData({...formData, endereco: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                            <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Endereço Completo</label>
+                            <input value={formData.endereco} onChange={(e) => setFormData({...formData, endereco: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                         </div>
                     </div>
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Metragem Total (m²)</label>
-                                <input type="number" value={formData.metragem} onChange={(e) => setFormData({...formData, metragem: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Metragem Total (m²)</label>
+                                <input type="number" value={formData.metragem} onChange={(e) => setFormData({...formData, metragem: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Custo Orçado</label>
-                                <input type="number" value={formData.custo} onChange={(e) => setFormData({...formData, custo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Custo Orçado</label>
+                                <input type="number" value={formData.custo} onChange={(e) => setFormData({...formData, custo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Adere ao RET?</label>
-                                <select value={formData.ret} onChange={(e) => setFormData({...formData, ret: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Adere ao RET?</label>
+                                <select value={formData.ret} onChange={(e) => setFormData({...formData, ret: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
                                     <option value="N">Não</option>
                                     <option value="S">Sim</option>
                                 </select>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Controle Status</label>
-                                <select value={formData.ativo} onChange={(e) => setFormData({...formData, ativo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Controle Status</label>
+                                <select value={formData.ativo} onChange={(e) => setFormData({...formData, ativo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
                                     <option value="S">Ativo (Em Obras)</option>
                                     <option value="N">Concluído</option>
                                     <option value="I">Inativo</option>
@@ -430,8 +430,8 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Data de Conclusão</label>
-                            <input type="date" value={formData.data_conclusao} onChange={(e) => setFormData({...formData, data_conclusao: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50" />
+                            <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Data de Conclusão</label>
+                            <input type="date" value={formData.data_conclusao} onChange={(e) => setFormData({...formData, data_conclusao: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
                         </div>
                     </div>
                 </div>
@@ -439,11 +439,11 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
 
               {activeTab === 'questor' && (
                 <div className="space-y-8 animate-in slide-in-from-right-2 duration-500">
-                    <div className="bg-[#ff4d00]/5 border border-[#ff4d00]/20 p-4 rounded-sm flex items-start gap-4">
-                        <AlertCircle className="text-[#ff4d00] shrink-0" size={18} />
+                    <div className="bg-[var(--v-accent)]/5 border border-[#ff4d00]/20 p-4 rounded-[var(--v-radius)] flex items-start gap-4">
+                        <AlertCircle className="text-[var(--v-accent)] shrink-0" size={18} />
                         <div>
-                            <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Mapeamento Contábil Especial</h4>
-                            <p className="text-[10px] text-[#888] leading-relaxed mt-1">Os campos abaixo definem o de-para automático entre os movimentos do Vulcano e o Plano de Contas Especial da empresa selecionada no Questor. Use o searchable select para localizar a conta analítica.</p>
+                            <h4 className="text-[10px] font-black text-[var(--v-text-bold)] uppercase tracking-widest">Mapeamento Contábil Especial</h4>
+                            <p className="text-[10px] text-[var(--v-text-muted)] leading-relaxed mt-1">Os campos abaixo definem o de-para automático entre os movimentos do Vulcano e o Plano de Contas Especial da empresa selecionada no Questor. Use o searchable select para localizar a conta analítica.</p>
                         </div>
                     </div>
 
@@ -463,23 +463,23 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
 
                     <div className="grid grid-cols-2 gap-6 pt-6 border-t border-white/5">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Centro de Custo Questor</label>
-                            <select value={formData.centro_custo} onChange={(e) => setFormData({...formData, centro_custo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50">
+                            <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Centro de Custo Questor</label>
+                            <select value={formData.centro_custo} onChange={(e) => setFormData({...formData, centro_custo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
                                 <option value="0">Sem mapeamento</option>
                                 {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.id} - {cc.descricao}</option>)}
                             </select>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Hist. Venda</label>
-                                <select value={formData.hist_venda} onChange={(e) => setFormData({...formData, hist_venda: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Venda</label>
+                                <select value={formData.hist_venda} onChange={(e) => setFormData({...formData, hist_venda: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
                                     <option value="0">Selecione...</option>
                                     {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
                                 </select>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[#555] uppercase tracking-widest">Hist. Receb.</label>
-                                <select value={formData.hist_recebimento} onChange={(e) => setFormData({...formData, hist_recebimento: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-white outline-none focus:border-[#ff4d00]/50">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Receb.</label>
+                                <select value={formData.hist_recebimento} onChange={(e) => setFormData({...formData, hist_recebimento: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
                                     <option value="0">Selecione...</option>
                                     {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
                                 </select>
@@ -494,7 +494,7 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                     <div className="grid grid-cols-12 gap-8">
                         {/* Blocos List */}
                         <div className="col-span-4 border-r border-white/5 pr-8 space-y-4">
-                            <h4 className="text-[10px] font-black text-[#ff4d00] uppercase tracking-widest flex items-center gap-2">
+                            <h4 className="text-[10px] font-black text-[var(--v-accent)] uppercase tracking-widest flex items-center gap-2">
                                 <Layers size={14}/> Blocos Estruturais
                             </h4>
                             
@@ -503,21 +503,21 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                                     value={newBlocoName} 
                                     onChange={(e) => setNewBlocoName(e.target.value)}
                                     placeholder="Ex: Bloco A"
-                                    className="flex-1 bg-black/40 border border-white/5 p-2 text-xs text-white outline-none focus:border-[#ff4d00]/50"
+                                    className="flex-1 bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50"
                                 />
-                                <button onClick={handleAddBloco} className="bg-white/5 p-2 text-[#ff4d00] border border-white/10 hover:bg-[#ff4d00] hover:text-black transition-all">
+                                <button onClick={handleAddBloco} className="bg-white/5 p-2 text-[var(--v-accent)] border border-white/10 hover:bg-[var(--v-accent)] hover:text-black transition-all">
                                     <Plus size={16}/>
                                 </button>
                             </div>
 
                             <div className="space-y-2">
                                 {loadingEstrutura ? (
-                                    <div className="py-10 text-center"><Loader2 className="animate-spin mx-auto text-[#555]"/></div>
+                                    <div className="py-10 text-center"><Loader2 className="animate-spin mx-auto text-[var(--v-text-faint)]"/></div>
                                 ) : blocos.map(b => (
                                     <div key={b.id} className="group p-3 bg-white/5 border border-white/5 flex justify-between items-center hover:border-[#ff4d00]/30 transition-all">
                                         <div className="flex items-center gap-3">
-                                            <span className="text-[10px] font-black text-[#555]">{b.id}</span>
-                                            <span className="text-[11px] font-bold text-white uppercase">{b.nome}</span>
+                                            <span className="text-[10px] font-black text-[var(--v-text-faint)]">{b.id}</span>
+                                            <span className="text-[11px] font-bold text-[var(--v-text-bold)] uppercase">{b.nome}</span>
                                         </div>
                                         <button onClick={() => handleDeleteEstrutura('bloco', b.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#ff3b30] transition-all"><Trash2 size={12}/></button>
                                     </div>
@@ -527,7 +527,7 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
 
                         {/* Unidades List */}
                         <div className="col-span-8 space-y-4">
-                            <h4 className="text-[10px] font-black text-[#ff4d00] uppercase tracking-widest flex items-center gap-2">
+                            <h4 className="text-[10px] font-black text-[var(--v-accent)] uppercase tracking-widest flex items-center gap-2">
                                 <Home size={14}/> Unidades Imobiliárias
                             </h4>
                             
@@ -535,7 +535,7 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                                 <select 
                                     value={newUnidade.id_bloco} 
                                     onChange={(e) => setNewUnidade({...newUnidade, id_bloco: e.target.value})}
-                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-white outline-none"
+                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-[var(--v-text-bold)] outline-none"
                                 >
                                     <option value="">Bloco...</option>
                                     {blocos.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}
@@ -544,27 +544,27 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                                     placeholder="Nº Unidade" 
                                     value={newUnidade.descricao}
                                     onChange={(e) => setNewUnidade({...newUnidade, descricao: e.target.value})}
-                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-white outline-none"
+                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-[var(--v-text-bold)] outline-none"
                                 />
                                 <input 
                                     placeholder="Metragem" 
                                     type="number"
                                     value={newUnidade.metragem}
                                     onChange={(e) => setNewUnidade({...newUnidade, metragem: e.target.value})}
-                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-white outline-none"
+                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-[var(--v-text-bold)] outline-none"
                                 />
                                 <input 
                                     placeholder="Insc. Imob" 
                                     value={newUnidade.inscricao}
                                     onChange={(e) => setNewUnidade({...newUnidade, inscricao: e.target.value})}
-                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-white outline-none"
+                                    className="bg-black/40 border border-white/5 p-2 text-[10px] text-[var(--v-text-bold)] outline-none"
                                 />
-                                <button onClick={handleAddUnidade} className="bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/30 py-2 text-[10px] font-black uppercase hover:bg-[#ff4d00] hover:text-black transition-all">Add</button>
+                                <button onClick={handleAddUnidade} className="bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[#ff4d00]/30 py-2 text-[10px] font-black uppercase hover:bg-[var(--v-accent)] hover:text-black transition-all">Add</button>
                             </div>
 
-                            <div className="bg-black/20 border border-white/5 rounded-sm overflow-hidden">
+                            <div className="bg-black/20 border border-white/5 rounded-[var(--v-radius)] overflow-hidden">
                                 <table className="w-full text-left text-[10px]">
-                                    <thead className="bg-white/5 text-[#555] font-black uppercase tracking-widest">
+                                    <thead className="bg-white/5 text-[var(--v-text-faint)] font-black uppercase tracking-widest">
                                         <tr>
                                             <th className="p-3">Bloco</th>
                                             <th className="p-3">Descrição/Nº</th>
@@ -576,18 +576,18 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                                     <tbody className="divide-y divide-white/5">
                                         {unidades.map(u => (
                                             <tr key={u.id} className="hover:bg-white/5 transition-colors">
-                                                <td className="p-3 font-bold text-[#888]">{blocos.find(b => b.id === u.id_bloco)?.nome || u.id_bloco}</td>
-                                                <td className="p-3 font-black text-white">{u.descricao}</td>
-                                                <td className="p-3 text-[#34c759] font-mono">{u.metragem} m²</td>
-                                                <td className="p-3 text-[#555] font-mono">{u.inscricao || '---'}</td>
+                                                <td className="p-3 font-bold text-[var(--v-text-muted)]">{blocos.find(b => b.id === u.id_bloco)?.nome || u.id_bloco}</td>
+                                                <td className="p-3 font-black text-[var(--v-text-bold)]">{u.descricao}</td>
+                                                <td className="p-3 text-[var(--v-accent-3)] font-mono">{u.metragem} m²</td>
+                                                <td className="p-3 text-[var(--v-text-faint)] font-mono">{u.inscricao || '---'}</td>
                                                 <td className="p-3 text-right">
-                                                    <button onClick={() => handleDeleteEstrutura('unidade', u.id)} className="text-[#555] hover:text-[#ff3b30] transition-colors"><Trash2 size={12}/></button>
+                                                    <button onClick={() => handleDeleteEstrutura('unidade', u.id)} className="text-[var(--v-text-faint)] hover:text-[#ff3b30] transition-colors"><Trash2 size={12}/></button>
                                                 </td>
                                             </tr>
                                         ))}
                                         {!unidades.length && !loadingEstrutura && (
                                             <tr>
-                                                <td colSpan="5" className="p-10 text-center text-[#444] font-black uppercase tracking-[0.3em]">Nenhuma unidade vinculada</td>
+                                                <td colSpan="5" className="p-10 text-center text-[var(--v-text-faint)] font-black uppercase tracking-[0.3em]">Nenhuma unidade vinculada</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -602,10 +602,10 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
 
             {/* Footer Modal */}
             <div className="p-6 border-t border-white/5 bg-black/40 flex justify-end gap-4">
-              <button onClick={() => setShowModal(false)} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#555] hover:text-white transition-colors">Cancelar</button>
+              <button onClick={() => setShowModal(false)} className="px-6 py-2.5 text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] transition-colors">Cancelar</button>
               <button 
                 onClick={handleSave}
-                className="px-8 py-2.5 bg-[#ff4d00] text-black font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(255,77,0,0.2)]"
+                className="px-8 py-2.5 bg-[var(--v-accent)] text-black font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(255,77,0,0.2)]"
               >
                 <Save size={16} /> Salvar Alterações
               </button>

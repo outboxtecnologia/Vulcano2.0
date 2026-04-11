@@ -99,9 +99,9 @@ function exportarRazaoXLSX({ contaId, contaNome, todosFisico, todosVirtual, fisi
 
 // Semáforo de status
 function Status({ diff }) {
-  if (abs(diff) < DIVERGENCIA_CORTE) return <CheckCircle2 size={14} className="text-[#34c759] shrink-0"/>;
-  if (abs(diff) < 5000)             return <AlertTriangle size={14} className="text-[#ffcc00] shrink-0"/>;
-  return <XCircle size={14} className="text-[#ff4d00] shrink-0"/>;
+  if (abs(diff) < DIVERGENCIA_CORTE) return <CheckCircle2 size={14} className="text-[var(--v-accent-3)] shrink-0"/>;
+  if (abs(diff) < 5000)             return <AlertTriangle size={14} className="text-[var(--v-accent-6)] shrink-0"/>;
+  return <XCircle size={14} className="text-[var(--v-accent)] shrink-0"/>;
 }
 
 // Cor da divergência
@@ -127,13 +127,13 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel }) {
         {itens.map((d, i) => {
           const hist = (d.historico || '').trim() || (d.logica || '').trim() || (d.chave ? `Lçto ${d.chave}` : '—');
           return (
-            <tr key={i} className="border-b border-[#0e0e0e] hover:bg-[#0a0a0a]">
-              <td className="px-2 py-1 font-mono font-bold text-[#555] whitespace-nowrap overflow-hidden">{d.data}</td>
+            <tr key={i} className="border-b border-[var(--v-bg)] hover:bg-[var(--v-deep)]">
+              <td className="px-2 py-1 font-mono font-bold text-[var(--v-text-faint)] whitespace-nowrap overflow-hidden">{d.data}</td>
               <td className="px-2 py-1 overflow-hidden" title={hist}>
-                <div className="truncate font-bold text-[#555]">{hist}</div>
+                <div className="truncate font-bold text-[var(--v-text-faint)]">{hist}</div>
               </td>
               <td className="px-2 py-1 text-center font-black text-[12px] overflow-hidden" style={{ color: d.natureza === 'D' ? corNaturezaD : corNaturezaC }}>{d.natureza}</td>
-              <td className="px-2 py-1 text-right font-mono font-black text-[#888] whitespace-nowrap overflow-hidden">{fmt(d.valor)}</td>
+              <td className="px-2 py-1 text-right font-mono font-black text-[var(--v-text-muted)] whitespace-nowrap overflow-hidden">{fmt(d.valor)}</td>
             </tr>
           );
         })}
@@ -166,23 +166,23 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
   // e limita a largura a 820px, eliminando o espacamento excessivo.
   return (
     <tr>
-      <td colSpan={999} className="p-0 bg-[#060606]">
+      <td colSpan={999} className="p-0 bg-[var(--v-bg)]">
         <div style={{ position: 'sticky', left: 0, maxWidth: '820px', minWidth: 0 }}>
 
           {/* Barra de abas e acoes */}
-          <div className="px-3 py-1.5 border-b border-[#111] flex items-center gap-2 flex-wrap bg-[#060606]">
+          <div className="px-3 py-1.5 border-b border-[var(--v-bg)] flex items-center gap-2 flex-wrap bg-[var(--v-bg)]">
             <button
               onClick={e => { e.stopPropagation(); setAba('orfaos'); }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[#ff4d00]/20 border-[#ff4d00]/40 text-[#ff4d00]' : 'bg-transparent border-[#222] text-[#444] hover:text-[#ff4d00]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[var(--v-accent)]/20 border-[#ff4d00]/40 text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent)]/70'}`}
             >
               <GitCompare size={10}/> Orfaos
               {totalOrfaos > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-[#ff4d00] text-black rounded-full text-[8px] font-black">{totalOrfaos}</span>
+                <span className="ml-1 px-1.5 py-0.5 bg-[var(--v-accent)] text-black rounded-[var(--v-radius)] text-[8px] font-black">{totalOrfaos}</span>
               )}
             </button>
             <button
               onClick={e => { e.stopPropagation(); setAba('razao'); }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[#a259ff]/20 border-[#a259ff]/40 text-[#a259ff]' : 'bg-transparent border-[#222] text-[#444] hover:text-[#a259ff]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[#a259ff]/20 border-[#a259ff]/40 text-[var(--v-accent-5)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)]/70'}`}
             >
               <List size={10}/> Razao
               <span className="ml-1 text-[9px] font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
@@ -191,14 +191,14 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
             {todosVirtualLogica.length > 0 && (
               <button
                 onClick={e => { e.stopPropagation(); onRacional(); }}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-[10px] font-black uppercase tracking-widest text-[#a259ff] hover:bg-[#a259ff]/25 transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-5)] hover:bg-[#a259ff]/25 transition-all"
               >
                 <Zap size={10}/> Racional
               </button>
             )}
             <button
               onClick={handleXLSX}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-[10px] font-black uppercase tracking-widest text-[#34c759] hover:bg-[#34c759]/20 transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-3)] hover:bg-[#34c759]/20 transition-all"
             >
               <Download size={10}/> XLSX
             </button>
@@ -207,22 +207,22 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
           {/* Conteudo da aba */}
           {aba === 'orfaos' && (
             totalOrfaos === 0 ? (
-              <div className="flex items-center gap-2 px-4 py-3 text-[#34c759]">
+              <div className="flex items-center gap-2 px-4 py-3 text-[var(--v-accent-3)]">
                 <CheckCircle2 size={12}/>
                 <span className="text-[10px] font-black uppercase tracking-widest">Nenhum orfao encontrado</span>
               </div>
             ) : (
               <div className="grid grid-cols-2 divide-x divide-[#111]">
                 <div>
-                  <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111] flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[#ff4d00]">Questor s/ par no Vulcano</span>
-                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#ff4d00] text-black rounded text-[8px] font-black">{fisicosOrfaos.length}</span>}
+                  <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor s/ par no Vulcano</span>
+                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[var(--v-accent)] text-black rounded text-[8px] font-black">{fisicosOrfaos.length}</span>}
                   </div>
                   <TabelaLancs itens={fisicosOrfaos} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="Nenhum orfao no Questor"/>
                 </div>
                 <div>
-                  <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111] flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano s/ par no Questor</span>
+                  <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano s/ par no Questor</span>
                     {virtuaisOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#a259ff] text-black rounded text-[8px] font-black">{virtuaisOrfaos.length}</span>}
                   </div>
                   <TabelaLancs itens={virtuaisOrfaos} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Nenhum orfao no Vulcano"/>
@@ -234,14 +234,14 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
           {aba === 'razao' && (
             <div className="grid grid-cols-2 divide-x divide-[#111]">
               <div>
-                <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111]">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-[#ff4d00]">Questor ({todosFisico.length})</span>
+                <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)]">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor ({todosFisico.length})</span>
                 </div>
                 <TabelaLancs itens={todosFisico} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="Sem lancamentos fisicos"/>
               </div>
               <div>
-                <div className="px-3 py-1 bg-[#0d0d0d] border-b border-[#111]">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano ({todosVirtual.length})</span>
+                <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)]">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano ({todosVirtual.length})</span>
                 </div>
                 <TabelaLancs itens={todosVirtual} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Sem lancamentos societarios"/>
               </div>
@@ -313,17 +313,17 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   return (
     <>
       <tr
-        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/10 hover:bg-[#1a0800]' : 'border-[#1a1a1a] hover:bg-[#141414]'}`}
+        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/10 hover:bg-[var(--v-magma-glow)]' : 'border-[var(--v-border)] hover:bg-[var(--v-card)]'}`}
         onClick={() => setOpen(o => !o)}
       >
         {/* Conta + nome */}
-        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px]">
+        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[var(--v-deep)] min-w-[220px]">
           <div className="flex items-center gap-2">
             <Status diff={diffParaStatus}/>
-            <span className="font-mono text-[13px] font-black text-[#ff4d00] shrink-0">{contaId}</span>
-            <span className="text-[12px] font-bold text-[#666] truncate" title={contaNome}>{contaNome}</span>
-            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[8px] font-black uppercase tracking-widest text-[#ffcc00] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
-            <ChevronDown size={10} className={`text-[#444] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
+            <span className="font-mono text-[13px] font-black text-[var(--v-accent)] shrink-0">{contaId}</span>
+            <span className="text-[12px] font-bold text-[var(--v-text-faint)] truncate" title={contaNome}>{contaNome}</span>
+            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-6)] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
+            <ChevronDown size={10} className={`text-[var(--v-text-faint)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
           </div>
         </td>
 
@@ -332,38 +332,38 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
           <td key={comp} className="px-1 py-0" style={{ minWidth: '270px' }}>
             <div className="flex gap-0 h-full">
               {/* Questor */}
-              <div className="flex-1 px-2 py-2.5 text-right border-r border-[#1a1a1a] flex flex-col justify-center">
+              <div className="flex-1 px-2 py-2.5 text-right border-r border-[var(--v-border)] flex flex-col justify-center">
                 <div className="font-mono text-[12px] font-black">
                   {temFisico || abs(movFisico) > 0.01 ? (
-                    <span className={movFisico == 0 ? 'text-[#888]' : movFisico >= 0 ? 'text-[#34c759]/80' : 'text-[#ff4d00]/80'}>
+                    <span className={movFisico == 0 ? 'text-[var(--v-text-muted)]' : movFisico >= 0 ? 'text-[var(--v-accent-3)]/80' : 'text-[var(--v-accent)]/80'}>
                       {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
                     </span>
                   ) : <span className="text-[#252525]">—</span>}
                 </div>
                 {abs(saldoFisico) > 0.01 && (
-                  <div className="text-[10px] font-bold font-mono text-[#555] mt-0.5" title="Saldo Final no Mês">
+                  <div className="text-[10px] font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês">
                     S: {fmt(saldoFisico)}
                   </div>
                 )}
               </div>
               {/* Vulcano */}
-              <div className="flex-1 px-2 py-2.5 text-right border-r border-[#1a1a1a] flex flex-col justify-center">
+              <div className="flex-1 px-2 py-2.5 text-right border-r border-[var(--v-border)] flex flex-col justify-center">
                 <div className="font-mono text-[12px] font-black">
                   {abs(movVirtual) > 0.01 ? (
-                    <span className={movVirtual >= 0 ? 'text-[#a259ff]' : 'text-[#ff9f0a]'}>
+                    <span className={movVirtual >= 0 ? 'text-[var(--v-accent-5)]' : 'text-[var(--v-accent-2)]'}>
                       {movVirtual > 0 ? '+' : ''}{fmt(movVirtual)}
                     </span>
                   ) : (abs(movVirtualDeb) > 0.01 || abs(movVirtualCred) > 0.01) ? (
                     // Movimento bruto existe mas líquido = 0 (ex: reconhecimento + recebimento no mesmo mês)
-                    <span className="text-[#555] text-[10px] leading-tight">
-                      <span className="text-[#a259ff]/60">D:{fmt(movVirtualDeb)}</span>
+                    <span className="text-[var(--v-text-faint)] text-[10px] leading-tight">
+                      <span className="text-[var(--v-accent-5)]/60">D:{fmt(movVirtualDeb)}</span>
                       <br/>
-                      <span className="text-[#ff9f0a]/60">C:{fmt(movVirtualCred)}</span>
+                      <span className="text-[var(--v-accent-2)]/60">C:{fmt(movVirtualCred)}</span>
                     </span>
                   ) : <span className="text-[#252525]">—</span>}
                 </div>
                 {abs(saldoVirtual) > 0.01 && (
-                  <div className="text-[10px] font-bold font-mono text-[#555] mt-0.5" title="Saldo Final no Mês (Virtual)">
+                  <div className="text-[10px] font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês (Virtual)">
                     S: {fmt(saldoVirtual)}
                   </div>
                 )}
@@ -386,15 +386,15 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
         <td className="px-3 py-2.5 text-right min-w-[130px]">
           {abs(diffParaStatus) < DIVERGENCIA_CORTE ? (
             <div>
-              <span className="text-[12px] font-black text-[#34c759] uppercase tracking-wider">Conciliado</span>
-              {usaMovimento && <p className="text-[9px] font-black uppercase tracking-widest text-[#ffcc00]/60 mt-0.5">via movimento</p>}
+              <span className="text-[12px] font-black text-[var(--v-accent-3)] uppercase tracking-wider">Conciliado</span>
+              {usaMovimento && <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-6)]/60 mt-0.5">via movimento</p>}
             </div>
           ) : (
             <div>
               <span className="font-mono text-[14px] font-black" style={{ color: corDiff(diffParaStatus) }}>
                 {diffParaStatus > 0 ? '+' : ''}{fmt(diffParaStatus)}
               </span>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#555] mt-0.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mt-0.5">
                 {usaMovimento ? 'divergência movement' : 'divergência saldo'}
               </p>
             </div>
@@ -422,26 +422,26 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
               onClick={() => setRacionalOpen(false)}
             >
               <div
-                className="bg-[#0d0d0d] border border-[#a259ff]/30 rounded-lg w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl shadow-[#a259ff]/10"
+                className="bg-[var(--v-deep)] border border-[#a259ff]/30 rounded-[var(--v-radius)] w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl shadow-[#a259ff]/10"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-[#1a1a1a]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--v-border)]">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-0.5">Racional de Cálculo — Vulcano Motor Societário</p>
-                    <p className="text-white font-black text-[15px]">
-                      <span className="text-[#ff4d00] font-mono mr-2">{contaId}</span>{contaNome}
+                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-0.5">Racional de Cálculo — Vulcano Motor Societário</p>
+                    <p className="text-[var(--v-text-bold)] font-black text-[15px]">
+                      <span className="text-[var(--v-accent)] font-mono mr-2">{contaId}</span>{contaNome}
                     </p>
                   </div>
                   <button
                     onClick={() => setRacionalOpen(false)}
-                    className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#222] text-[#666] hover:text-white font-black text-[18px] flex items-center justify-center transition-all"
+                    className="w-8 h-8 rounded bg-[var(--v-hover)] hover:bg-[var(--v-hover)] text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] font-black text-[18px] flex items-center justify-center transition-all"
                   >×</button>
                 </div>
                 <div className="overflow-y-auto flex-1 px-6 py-4 flex flex-col gap-3">
                   {todosVirtualLogica.map((d, i) => (
-                    <div key={i} className="border border-[#1e1e1e] rounded p-4 bg-[#0a0a0a] hover:border-[#a259ff]/20 transition-colors">
+                    <div key={i} className="border border-[var(--v-border)] rounded p-4 bg-[var(--v-deep)] hover:border-[#a259ff]/20 transition-colors">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-[#555]">{d.comp} · {d.data}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">{d.comp} · {d.data}</span>
                         <span
                           className="text-[10px] font-black px-2 py-0.5 rounded"
                           style={{ background: d.natureza === 'D' ? '#a259ff22' : '#ff9f0a22', color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}
@@ -449,9 +449,9 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
                           {d.natureza === 'D' ? 'DÉBITO' : 'CRÉDITO'} {fmt(d.valor)}
                         </span>
                       </div>
-                      <p className="text-[12px] font-bold text-[#888] mb-1">{d.historico}</p>
+                      <p className="text-[12px] font-bold text-[var(--v-text-muted)] mb-1">{d.historico}</p>
                       {d.logica && (
-                        <p className="text-[11px] font-mono text-[#a259ff]/70 bg-[#a259ff]/5 rounded px-3 py-2 border-l-2 border-[#a259ff]/30">
+                        <p className="text-[11px] font-mono text-[var(--v-accent-5)]/70 bg-[#a259ff]/5 rounded px-3 py-2 border-l-2 border-[#a259ff]/30">
                           {d.logica}
                         </p>
                       )}
@@ -486,28 +486,28 @@ function CrossMatchPanel({ result, onClose }) {
   };
 
   return (
-    <div className="bg-[#090909] border border-[#34c759]/25 rounded-lg overflow-hidden">
+    <div className="bg-[var(--v-bg)] border border-[#34c759]/25 rounded-[var(--v-radius)] overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#34c759]/15 bg-[#34c759]/5">
         <div className="flex items-center gap-3">
-          <Link2 size={16} className="text-[#34c759]"/>
+          <Link2 size={16} className="text-[var(--v-accent-3)]"/>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-[#34c759]">Conciliação Cross-Account — Órfãos</p>
-            <p className="text-[9px] text-[#555] mt-0.5">
+            <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-3)]">Conciliação Cross-Account — Órfãos</p>
+            <p className="text-[9px] text-[var(--v-text-faint)] mt-0.5">
               {result.total_matches} par{result.total_matches !== 1 ? 'es' : ''} encontrado{result.total_matches !== 1 ? 's' : ''}
               {' '}·{' '}{result.total_orfaos_questor}Q + {result.total_orfaos_vulcano}V órfãos analisados
               {' '}· Scoring: Valor 50% + Histórico 25% + Data 15% + Conta 10%
             </p>
           </div>
         </div>
-        <button onClick={onClose} className="text-[#333] hover:text-white text-xs px-2 py-1 transition-colors">✕ Fechar</button>
+        <button onClick={onClose} className="text-[#333] hover:text-[var(--v-text-bold)] text-xs px-2 py-1 transition-colors">✕ Fechar</button>
       </div>
 
       {/* Matches */}
       {result.error ? (
-        <p className="p-4 text-[#ff4d00] text-xs font-mono">{result.error}</p>
+        <p className="p-4 text-[var(--v-accent)] text-xs font-mono">{result.error}</p>
       ) : result.matches?.length === 0 ? (
-        <div className="flex items-center gap-2 px-5 py-6 text-[#555]">
+        <div className="flex items-center gap-2 px-5 py-6 text-[var(--v-text-faint)]">
           <CheckCircle2 size={14}/>
           <span className="text-[10px] font-black uppercase tracking-widest">Nenhum par candidato encontrado acima do threshold (38%)</span>
         </div>
@@ -517,13 +517,13 @@ function CrossMatchPanel({ result, onClose }) {
             const cor = corScore(m.score);
             const pct = Math.round(m.score * 100);
             return (
-              <div key={i} className="px-4 py-3 hover:bg-[#0d0d0d] transition-colors">
+              <div key={i} className="px-4 py-3 hover:bg-[var(--v-deep)] transition-colors">
                 {/* Top row: score bar + badges + sugestão */}
                 <div className="flex items-center gap-3 mb-2">
                   {/* Score indicator */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <div className="w-[60px] h-[6px] bg-[#111] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: cor }}/>
+                    <div className="w-[60px] h-[6px] bg-[var(--v-deep)] rounded-[var(--v-radius)] overflow-hidden">
+                      <div className="h-full rounded-[var(--v-radius)]" style={{ width: `${pct}%`, backgroundColor: cor }}/>
                     </div>
                     <span className="text-[10px] font-black font-mono" style={{ color: cor }}>{pct}%</span>
                     <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ color: cor, border: `1px solid ${cor}40`, background: `${cor}15` }}>{labelScore(m.score)}</span>
@@ -531,12 +531,12 @@ function CrossMatchPanel({ result, onClose }) {
 
                   {/* Tipo badge */}
                   {m.tipo === 'CROSS_ACCOUNT' && (
-                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#a259ff]/15 border border-[#a259ff]/40 text-[#a259ff] rounded">
+                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#a259ff]/15 border border-[#a259ff]/40 text-[var(--v-accent-5)] rounded">
                       ⇄ Cross-Account
                     </span>
                   )}
                   {!m.nat_match && (
-                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#ff9f0a]/15 border border-[#ff9f0a]/40 text-[#ff9f0a] rounded">
+                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#ff9f0a]/15 border border-[#ff9f0a]/40 text-[var(--v-accent-2)] rounded">
                       ⚠ Nat. Invertida
                     </span>
                   )}
@@ -549,30 +549,30 @@ function CrossMatchPanel({ result, onClose }) {
 
                 {/* Par lado a lado */}
                   <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
-                    <div className="bg-[#0a0a0a] border border-[#ff4d00]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[#ff4d00] ml-1">Questor</p>
+                    <div className="bg-[var(--v-deep)] border border-[#ff4d00]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent)] ml-1">Questor</p>
                       {(m.questor_detalhe && m.questor_detalhe.length > 0 ? m.questor_detalhe : [m.questor]).map((q, idx) => (
-                          <div key={idx} className="bg-[#111] p-1.5 rounded border border-[#ff4d00]/10">
-                            <p className="font-mono font-bold text-[#666] text-[8px]">{q.data} | c/{q.conta}</p>
-                            <p className="font-bold text-[#aaa] truncate" title={q.historico || q.chave}>{(q.historico || q.chave || '?').slice(0,50)}</p>
-                            <p className="font-black text-[#34c759] mt-0.5">{fmt(q.valor)} <span className="text-[#444]">{q.natureza}</span></p>
+                          <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#ff4d00]/10">
+                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">{q.data} | c/{q.conta}</p>
+                            <p className="font-bold text-[var(--v-text-muted)] truncate" title={q.historico || q.chave}>{(q.historico || q.chave || '?').slice(0,50)}</p>
+                            <p className="font-black text-[var(--v-accent-3)] mt-0.5">{fmt(q.valor)} <span className="text-[var(--v-text-faint)]">{q.natureza}</span></p>
                           </div>
                       ))}
                     </div>
-                    <div className="bg-[#0a0a0a] border border-[#a259ff]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[#a259ff] ml-1">Vulcano</p>
+                    <div className="bg-[var(--v-deep)] border border-[#a259ff]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-5)] ml-1">Vulcano</p>
                       {(m.vulcano_detalhe && m.vulcano_detalhe.length > 0 ? m.vulcano_detalhe : [m.vulcano]).map((v, idx) => (
-                          <div key={idx} className="bg-[#111] p-1.5 rounded border border-[#a259ff]/10">
-                            <p className="font-mono font-bold text-[#666] text-[8px]">{v.data} | c/{v.conta}</p>
-                            <p className="font-bold text-[#aaa] truncate" title={v.historico || v.logica}>{(v.historico || v.logica || '?').slice(0,50)}</p>
-                            <p className="font-black text-[#a259ff] mt-0.5">{fmt(v.valor)} <span className="text-[#444]">{v.natureza}</span></p>
+                          <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#a259ff]/10">
+                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">{v.data} | c/{v.conta}</p>
+                            <p className="font-bold text-[var(--v-text-muted)] truncate" title={v.historico || v.logica}>{(v.historico || v.logica || '?').slice(0,50)}</p>
+                            <p className="font-black text-[var(--v-accent-5)] mt-0.5">{fmt(v.valor)} <span className="text-[var(--v-text-faint)]">{v.natureza}</span></p>
                           </div>
                       ))}
                     </div>
                   </div>
 
                 {/* Sugestão */}
-                <p className="text-[9px] font-bold text-[#555] italic px-1">{m.sugestao}</p>
+                <p className="text-[9px] font-bold text-[var(--v-text-faint)] italic px-1">{m.sugestao}</p>
               </div>
             );
           })}
@@ -911,56 +911,56 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const temDados = Object.keys(dadosPorMes).length > 0;
 
   return (
-    <div className="flex flex-col gap-5 pb-10 text-[#e5e2e1] animate-in fade-in">
+    <div className="flex flex-col gap-5 pb-10 text-[var(--v-text)] animate-in fade-in">
       {/* Header */}
-      <div className="border-b border-[#222] pb-4">
-        <h2 className="text-4xl font-black tracking-tighter text-white flex items-center gap-3 mb-1">
-          <ShieldCheck className="text-[#ff4d00]" size={36}/> Auditoria ERP
+      <div className="border-b border-[var(--v-border)] pb-4">
+        <h2 className="text-4xl font-black tracking-tighter text-[var(--v-text-bold)] flex items-center gap-3 mb-1">
+          <ShieldCheck className="text-[var(--v-accent)]" size={36}/> Auditoria ERP
         </h2>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-[#555] font-black">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
           Contas a Injetar no Questor — Calculado (Vulcano) × Registrado (Questor)
         </p>
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-end bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
+      <div className="flex flex-wrap gap-3 items-end bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4">
         <div className="flex flex-col gap-1">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Período De</span>
+          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Período De</span>
           <input type="month" value={periodoInicio}
             onChange={e => { const v = e.target.value; setPeriodoInicio(v); if (v > periodoFim) setPeriodoFim(v); }}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
+            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">Até</span>
+          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Até</span>
           <input type="month" value={periodoFim}
             onChange={e => { const v = e.target.value; setPeriodoFim(v); if (v < periodoInicio) setPeriodoInicio(v); }}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
+            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
         <div className="flex flex-col gap-1 min-w-[220px]">
-          <span className="text-[8px] font-black uppercase tracking-widest text-[#555]">
+          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
             Empreendimento {empsLoading ? '(carregando...)' : `(${empreendimentos.length})`}
           </span>
           <select value={filtroEmpId} onChange={e => setFiltroEmpId(e.target.value)}
-            className="bg-[#111] border border-[#222] rounded px-3 py-2 text-[#ccc] text-xs font-bold outline-none focus:border-[#ff4d00] transition-colors">
+            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-bold outline-none focus:border-[#ff4d00] transition-colors">
             <option value="">Todos os empreendimentos</option>
             {empreendimentos.map(e => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
           </select>
         </div>
         <div className="flex flex-col justify-end pb-0.5">
-          <span className="text-[9px] font-bold text-[#444] uppercase tracking-wider">
+          <span className="text-[9px] font-bold text-[var(--v-text-faint)] uppercase tracking-wider">
             {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
-            {!periodoValido && <span className="text-[#ff4d00] ml-2">⚠ máx. 18</span>}
+            {!periodoValido && <span className="text-[var(--v-accent)] ml-2">⚠ máx. 18</span>}
           </span>
         </div>
         <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
-          className="ml-auto px-6 py-2.5 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
           {loading ? `Auditando ${competencias.length} meses...` : 'Auditar'}
         </button>
         <button onClick={fetchDiagnostico} disabled={diagLoading || !selectedEmpresa}
           title="Analisa Questor ↔ Vulcano com PyOD + DuckDB + KMeans (24 meses)"
           className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
-            showDiag ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[#a259ff]' : 'bg-[#111] border-[#333] text-[#555] hover:text-[#a259ff] hover:border-[#a259ff]/40'
+            showDiag ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[var(--v-accent-5)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#a259ff]/40'
           }`}>
           {diagLoading ? <Zap className="animate-spin" size={12}/> : <Zap size={12}/>}
           {diagLoading ? 'Analisando...' : '🧠 Diagnóstico IA'}
@@ -968,7 +968,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         <button onClick={fetchCrossMatch} disabled={crossLoading || !temDados}
           title="Fuzzy matching cross-account: busca pares prováveis entre todos os lançamentos órfãos"
           className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
-            showCross ? 'bg-[#34c759]/20 border-[#34c759]/60 text-[#34c759]' : 'bg-[#111] border-[#333] text-[#555] hover:text-[#34c759] hover:border-[#34c759]/40'
+            showCross ? 'bg-[#34c759]/20 border-[#34c759]/60 text-[var(--v-accent-3)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-3)] hover:border-[#34c759]/40'
           }`}>
           {crossLoading ? <Link2 className="animate-spin" size={12}/> : <Link2 size={12}/>}
           {crossLoading ? 'Conciliando...' : '🔗 Cross-Account'}
@@ -976,16 +976,16 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       </div>
 
       {error && (
-        <div className="bg-[#ff4d00]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
-          <AlertTriangle size={14} className="text-[#ff4d00] shrink-0"/>
-          <p className="text-sm font-mono text-[#ff4d00]">{error}</p>
+        <div className="bg-[var(--v-accent)]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
+          <AlertTriangle size={14} className="text-[var(--v-accent)] shrink-0"/>
+          <p className="text-sm font-mono text-[var(--v-accent)]">{error}</p>
         </div>
       )}
 
       {loading && (
         <div className="flex items-center justify-center gap-3 py-12">
-          <Zap className="animate-spin text-[#ff4d00]" size={28}/>
-          <span className="text-xs font-black uppercase tracking-widest text-[#555]">
+          <Zap className="animate-spin text-[var(--v-accent)]" size={28}/>
+          <span className="text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)]">
             Confrontando {competencias.length} competência{competencias.length > 1 ? 's' : ''}...
           </span>
         </div>
@@ -993,48 +993,48 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       {/* ── Painel Diagnóstico IA ── */}
       {showDiag && (
-        <div className="bg-[#0a0a0a] border border-[#a259ff]/30 rounded-lg overflow-hidden">
+        <div className="bg-[var(--v-deep)] border border-[#a259ff]/30 rounded-[var(--v-radius)] overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-[#a259ff]/20 bg-[#a259ff]/5">
             <div className="flex items-center gap-3">
-              <span className="text-[#a259ff] text-lg">🧠</span>
+              <span className="text-[var(--v-accent-5)] text-lg">🧠</span>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#a259ff]">Diagnóstico IA — Causa Raiz Questor ↔ Vulcano</p>
-                <p className="text-[9px] text-[#555] mt-0.5">PyOD IsolationForest · DuckDB · KMeans · LevelShift (24 meses)</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Diagnóstico IA — Causa Raiz Questor ↔ Vulcano</p>
+                <p className="text-[9px] text-[var(--v-text-faint)] mt-0.5">PyOD IsolationForest · DuckDB · KMeans · LevelShift (24 meses)</p>
               </div>
             </div>
-            <button onClick={() => setShowDiag(false)} className="text-[#555] hover:text-white text-xs px-2 py-1">✕ Fechar</button>
+            <button onClick={() => setShowDiag(false)} className="text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] text-xs px-2 py-1">✕ Fechar</button>
           </div>
 
           {diagLoading && (
             <div className="flex items-center justify-center gap-3 py-10">
-              <span className="text-[#a259ff] animate-spin text-xl">⚡</span>
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#555]">Rodando PyOD + DuckDB + KMeans...</span>
+              <span className="text-[var(--v-accent-5)] animate-spin text-xl">⚡</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Rodando PyOD + DuckDB + KMeans...</span>
             </div>
           )}
 
           {diagData?.error && (
-            <div className="p-4 text-[#ff4d00] text-xs font-mono">{diagData.error}</div>
+            <div className="p-4 text-[var(--v-accent)] text-xs font-mono">{diagData.error}</div>
           )}
 
           {diagData && !diagData.error && !diagLoading && (
             <div className="p-4 space-y-4">
               {/* Summary banner */}
-              <div className="bg-[#111] border border-[#222] rounded p-3 text-[10px] text-[#888] font-mono">
+              <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-3 text-[10px] text-[var(--v-text-muted)] font-mono">
                 {diagData.summary}
               </div>
 
               {/* Tabela de contas */}
               <div className="overflow-auto max-h-[500px] custom-scrollbar">
                 <table className="w-full text-left border-collapse text-[10px]">
-                  <thead className="sticky top-0 bg-[#0d0d0d] border-b border-[#222]">
+                  <thead className="sticky top-0 bg-[var(--v-deep)] border-b border-[var(--v-border)]">
                     <tr>
-                      <th className="p-2 text-[#555] font-black uppercase tracking-widest">Conta</th>
-                      <th className="p-2 text-[#555] font-black uppercase tracking-widest w-32">Score IA</th>
-                      <th className="p-2 text-[#555] font-black uppercase tracking-widest">Padrão</th>
-                      <th className="p-2 text-right text-[#555] font-black uppercase tracking-widest">Δ Médio</th>
-                      <th className="p-2 text-right text-[#555] font-black uppercase tracking-widest">Δ Máx</th>
-                      <th className="p-2 text-center text-[#555] font-black uppercase tracking-widest">Meses Div.</th>
-                      <th className="p-2 text-[#555] font-black uppercase tracking-widest">Mudança de Nível</th>
+                      <th className="p-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest">Conta</th>
+                      <th className="p-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest w-32">Score IA</th>
+                      <th className="p-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest">Padrão</th>
+                      <th className="p-2 text-right text-[var(--v-text-faint)] font-black uppercase tracking-widest">Δ Médio</th>
+                      <th className="p-2 text-right text-[var(--v-text-faint)] font-black uppercase tracking-widest">Δ Máx</th>
+                      <th className="p-2 text-center text-[var(--v-text-faint)] font-black uppercase tracking-widest">Meses Div.</th>
+                      <th className="p-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest">Mudança de Nível</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1043,49 +1043,49 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                       const isAnomalia = c.anomaly_label === 'ANOMALIA';
                       const scoreColor = score > 0.7 ? '#ff4d00' : score > 0.4 ? '#ffcc00' : '#34c759';
                       const padraoColors = {
-                        'Exato': 'bg-[#34c759]/10 text-[#34c759] border-[#34c759]/30',
-                        'Lag Temporal': 'bg-[#007aff]/10 text-[#007aff] border-[#007aff]/30',
-                        'Percentual Fixo': 'bg-[#ffcc00]/10 text-[#ffcc00] border-[#ffcc00]/30',
-                        'Caótico': 'bg-[#ff4d00]/10 text-[#ff4d00] border-[#ff4d00]/30',
+                        'Exato': 'bg-[#34c759]/10 text-[var(--v-accent-3)] border-[#34c759]/30',
+                        'Lag Temporal': 'bg-[#007aff]/10 text-[var(--v-accent-4)] border-[#007aff]/30',
+                        'Percentual Fixo': 'bg-[#ffcc00]/10 text-[var(--v-accent-6)] border-[#ffcc00]/30',
+                        'Caótico': 'bg-[var(--v-accent)]/10 text-[var(--v-accent)] border-[#ff4d00]/30',
                       };
-                      const padraoClass = padraoColors[c.padrao] || 'bg-[#222] text-[#555] border-[#333]';
+                      const padraoClass = padraoColors[c.padrao] || 'bg-[var(--v-hover)] text-[var(--v-text-faint)] border-[var(--v-border)]';
                       return (
                         <React.Fragment key={i}>
-                        <tr className={`border-b border-[#111] ${isAnomalia ? 'bg-[#ff4d00]/5' : ''} hover:bg-[#111]/60`}>
+                        <tr className={`border-b border-[var(--v-bg)] ${isAnomalia ? 'bg-[var(--v-accent)]/5' : ''} hover:bg-[var(--v-deep)]/60`}>
                           <td className="p-2">
-                            <div className="font-black text-white text-[10px]">{c.conta_nome}</div>
-                            <div className="text-[#555] font-mono text-[9px]">#{c.conta_id}</div>
+                            <div className="font-black text-[var(--v-text-bold)] text-[10px]">{c.conta_nome}</div>
+                            <div className="text-[var(--v-text-faint)] font-mono text-[9px]">#{c.conta_id}</div>
                           </td>
                           <td className="p-2">
                             <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-[#1a1a1a] rounded-full h-1.5">
-                                <div className="h-1.5 rounded-full transition-all" style={{width:`${score*100}%`, background: scoreColor}}/>
+                              <div className="flex-1 bg-[var(--v-hover)] rounded-[var(--v-radius)] h-1.5">
+                                <div className="h-1.5 rounded-[var(--v-radius)] transition-all" style={{width:`${score*100}%`, background: scoreColor}}/>
                               </div>
                               <span className="font-black text-[9px] font-mono" style={{color: scoreColor}}>{Math.round(score*100)}%</span>
                             </div>
-                            {isAnomalia && <span className="text-[8px] text-[#ff4d00] font-black uppercase">⚠ Anômalo</span>}
+                            {isAnomalia && <span className="text-[8px] text-[var(--v-accent)] font-black uppercase">⚠ Anômalo</span>}
                           </td>
                           <td className="p-2">
                             <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-widest ${padraoClass}`}>
                               {c.padrao}
                             </span>
                           </td>
-                          <td className="p-2 text-right font-mono text-[#ccc]">
+                          <td className="p-2 text-right font-mono text-[var(--v-text)]">
                             {c.media_delta >= 0 ? '+' : ''}{c.media_delta?.toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0})}
                           </td>
-                          <td className="p-2 text-right font-mono text-[#ff4d00]">
+                          <td className="p-2 text-right font-mono text-[var(--v-accent)]">
                             {c.max_delta_abs?.toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:0})}
                           </td>
                           <td className="p-2 text-center">
-                            <span className={`font-black text-[9px] ${c.pct_meses_divergentes > 80 ? 'text-[#ff4d00]' : c.pct_meses_divergentes > 40 ? 'text-[#ffcc00]' : 'text-[#34c759]'}`}>
+                            <span className={`font-black text-[9px] ${c.pct_meses_divergentes > 80 ? 'text-[var(--v-accent)]' : c.pct_meses_divergentes > 40 ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-accent-3)]'}`}>
                               {c.pct_meses_divergentes?.toFixed(0)}%
                             </span>
                           </td>
                           <td className="p-2">
                             {c.level_shift ? (
                               <div>
-                                <span className="text-[#ffcc00] font-black text-[9px]">⬆ {c.level_shift.competencia}</span>
-                                <div className="text-[8px] text-[#555] mt-0.5 font-mono">
+                                <span className="text-[var(--v-accent-6)] font-black text-[9px]">⬆ {c.level_shift.competencia}</span>
+                                <div className="text-[8px] text-[var(--v-text-faint)] mt-0.5 font-mono">
                                   {c.level_shift.delta_antes?.toFixed(0)} → {c.level_shift.delta_depois?.toFixed(0)}
                                 </div>
                               </div>
@@ -1098,12 +1098,12 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                           <tr className="bg-[#a259ff]/10">
                             <td colSpan={7} className="p-3 border-b border-[#a259ff]/20">
                               <div className="flex items-start gap-2">
-                                <Zap className="text-[#a259ff] shrink-0 mt-0.5" size={12}/>
+                                <Zap className="text-[var(--v-accent-5)] shrink-0 mt-0.5" size={12}/>
                                 <div className="max-w-2xl">
-                                  <div className="text-[10px] font-black text-[#a259ff] uppercase tracking-widest mb-1">Diagnóstico IA (Causa Raiz)</div>
+                                  <div className="text-[10px] font-black text-[var(--v-accent-5)] uppercase tracking-widest mb-1">Diagnóstico IA (Causa Raiz)</div>
                                   <div className="text-[11px] text-[#ddd] leading-relaxed mb-1.5">{c.causa_raiz}</div>
                                   {c.recomendacao && (
-                                    <div className="text-[10px] text-[#ffcc00]"><span className="font-bold">Recomendação:</span> {c.recomendacao}</div>
+                                    <div className="text-[10px] text-[var(--v-accent-6)]"><span className="font-bold">Recomendação:</span> {c.recomendacao}</div>
                                   )}
                                 </div>
                               </div>
@@ -1124,9 +1124,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       {/* ── Painel Cross-Account (Fuzzy Orphan Matching) ── */}
       {showCross && (
         crossLoading ? (
-          <div className="bg-[#090909] border border-[#34c759]/25 rounded-lg p-8 flex items-center justify-center gap-3">
-            <Link2 className="animate-spin text-[#34c759]" size={18}/>
-            <span className="text-[10px] font-black uppercase tracking-widest text-[#555]">
+          <div className="bg-[var(--v-bg)] border border-[#34c759]/25 rounded-[var(--v-radius)] p-8 flex items-center justify-center gap-3">
+            <Link2 className="animate-spin text-[var(--v-accent-3)]" size={18}/>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
               Coletando órfãos e calculando fuzzy scores cross-account...
             </span>
           </div>
@@ -1139,22 +1139,22 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       {!loading && temDados && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Gauge conciliação */}
-          <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4 col-span-1">
-            <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-2">Conciliação Global</p>
+          <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4 col-span-1">
+            <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2">Conciliação Global</p>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-black font-mono" style={{ color: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00' }}>
                 {metrics.pctAdh.toFixed(0)}%
               </span>
-              <span className="text-[10px] text-[#555] mb-0.5 font-bold">aderência</span>
+              <span className="text-[10px] text-[var(--v-text-faint)] mb-0.5 font-bold">aderência</span>
             </div>
-            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5 mt-2">
-              <div className="h-1.5 rounded-full transition-all" style={{
+            <div className="w-full bg-[var(--v-hover)] rounded-[var(--v-radius)] h-1.5 mt-2">
+              <div className="h-1.5 rounded-[var(--v-radius)] transition-all" style={{
                 width: `${metrics.pctAdh}%`,
                 background: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00'
               }}/>
             </div>
-            <p className="text-[9px] text-[#444] mt-2 font-bold">
-              <span className="text-[#34c759]">{metrics.contasConciliadas}</span> OK · <span className="text-[#ff4d00]">{metrics.contasDivergentes}</span> div.
+            <p className="text-[9px] text-[var(--v-text-faint)] mt-2 font-bold">
+              <span className="text-[var(--v-accent-3)]">{metrics.contasConciliadas}</span> OK · <span className="text-[var(--v-accent)]">{metrics.contasDivergentes}</span> div.
             </p>
           </div>
 
@@ -1163,8 +1163,8 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
             { label: 'Movimento Total Vulcano', val: metrics.totMovVirtual, cor: '#a259ff' },
             { label: 'Diferença de Movimento',  val: metrics.diffMov, cor: corDiff(metrics.diffMov) },
           ].map(m => (
-            <div key={m.label} className="bg-[#0d0d0d] border border-[#1e1e1e] rounded p-4">
-              <p className="text-[8px] font-black uppercase tracking-widest text-[#555] mb-2">{m.label}</p>
+            <div key={m.label} className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4">
+              <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2">{m.label}</p>
               <p className="text-xl font-black font-mono" style={{ color: m.cor }}>{fmt(m.val)}</p>
             </div>
           ))}
@@ -1173,22 +1173,22 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       {/* ── Tabela de confronto ── */}
       {!loading && Object.keys(contasMap).length > 0 && (
-        <div className="bg-[#0d0d0d] border border-[#1e1e1e] rounded-sm overflow-hidden">
+        <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
           {/* Cabeçalho da legenda de colunas */}
-          <div className="px-4 py-3 border-b border-[#1a1a1a] flex items-center gap-4 flex-wrap">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-white">Confronto por Conta</h3>
+          <div className="px-4 py-3 border-b border-[var(--v-border)] flex items-center gap-4 flex-wrap">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-bold)]">Confronto por Conta</h3>
             <div className="flex gap-4 ml-auto text-[9px] font-bold uppercase tracking-widest">
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#ff4d00] inline-block"/>
-                <span className="text-[#ff4d00]">Questor (Físico)</span>
+                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent)] inline-block"/>
+                <span className="text-[var(--v-accent)]">Questor (Físico)</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#a259ff] inline-block"/>
-                <span className="text-[#a259ff]">Vulcano (Societário)</span>
+                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[#a259ff] inline-block"/>
+                <span className="text-[var(--v-accent-5)]">Vulcano (Societário)</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#ffcc00] inline-block"/>
-                <span className="text-[#ffcc00]">Δ Divergência</span>
+                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[#ffcc00] inline-block"/>
+                <span className="text-[var(--v-accent-6)]">Δ Divergência</span>
               </span>
             </div>
           </div>
@@ -1199,26 +1199,26 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
               style={{ minWidth: `${220 + competencias.length * 270 + 140}px` }}
             >
               <thead>
-                <tr className="bg-[#111]">
+                <tr className="bg-[var(--v-deep)]">
                   {/* Conta */}
-                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[#444] border-b border-[#1a1a1a] sticky left-0 top-0 z-30 bg-[#111] min-w-[220px]">
+                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] sticky left-0 top-0 z-30 bg-[var(--v-deep)] min-w-[220px]">
                     Conta
                   </th>
                   {/* Grupos de colunas por mês */}
                   {competencias.map(comp => (
-                    <th key={comp} colSpan={1} className="p-0 border-b border-[#1a1a1a] border-l border-[#111] sticky top-0 z-20 bg-[#111]"
+                    <th key={comp} colSpan={1} className="p-0 border-b border-[var(--v-border)] border-l border-[var(--v-bg)] sticky top-0 z-20 bg-[var(--v-deep)]"
                         style={{ minWidth: '270px' }}>
-                      <div className="px-2 py-1.5 text-center text-[9px] font-black uppercase tracking-widest text-[#666] border-b border-[#222]">
+                      <div className="px-2 py-1.5 text-center text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
                         {labelMes(comp)}
                       </div>
                       <div className="flex text-[7px] font-black uppercase tracking-widest text-[#333]">
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[#111]">Questor</div>
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[#111]">Vulcano</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[var(--v-bg)]">Questor</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[var(--v-bg)]">Vulcano</div>
                         <div className="flex-1 px-2 py-1 text-right">Δ</div>
                       </div>
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-white border-b border-[#1a1a1a] sticky top-0 z-20 bg-[#111] min-w-[130px]">
+                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[var(--v-text-bold)] border-b border-[var(--v-border)] sticky top-0 z-20 bg-[var(--v-deep)] min-w-[130px]">
                     Status Final
                   </th>
                 </tr>
@@ -1242,17 +1242,17 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       {/* Empty state */}
       {!loading && !temDados && !error && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="w-16 h-16 bg-[#ff4d00]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
-            <ShieldCheck className="text-[#ff4d00]" size={28}/>
+          <div className="w-16 h-16 bg-[var(--v-accent)]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
+            <ShieldCheck className="text-[var(--v-accent)]" size={28}/>
           </div>
-          <p className="font-black uppercase tracking-widest text-white text-sm">
+          <p className="font-black uppercase tracking-widest text-[var(--v-text-bold)] text-sm">
             Selecione o período e clique em Auditar
           </p>
-          <p className="text-[10px] text-[#444] uppercase tracking-widest max-w-sm">
+          <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest max-w-sm">
             Confronta movimento e saldo do Questor (físico) com o motor societário Vulcano (POC + tributos) conta a conta
           </p>
           <button onClick={fetchTudo} disabled={!selectedEmpresa}
-            className="mt-2 px-6 py-3 bg-[#ff4d00] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
+            className="mt-2 px-6 py-3 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
             <Zap size={13}/> Iniciar Auditoria
           </button>
         </div>
