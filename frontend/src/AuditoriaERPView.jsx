@@ -128,7 +128,10 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel }) {
           const hist = (d.historico || '').trim() || (d.logica || '').trim() || (d.chave ? `Lçto ${d.chave}` : '—');
           return (
             <tr key={i} className="border-b border-[var(--v-bg)] hover:bg-[var(--v-deep)]">
-              <td className="px-2 py-1 font-mono font-bold text-[var(--v-text-faint)] whitespace-nowrap overflow-hidden">{d.data}</td>
+              <td className="px-2 py-1 font-mono font-bold text-[var(--v-text-faint)] whitespace-nowrap overflow-hidden">
+                <div>{d.data}</div>
+                {d.origem && <span className={`text-[8px] px-1 py-0 rounded ${d.origem === 'VU' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)] border border-[#a259ff]/30' : 'bg-[var(--v-accent)]/20 text-[var(--v-accent)] border border-[var(--v-accent)]/30'}`}>{d.origem}</span>}
+              </td>
               <td className="px-2 py-1 overflow-hidden" title={hist}>
                 <div className="truncate font-bold text-[var(--v-text-faint)]">{hist}</div>
               </td>
@@ -186,6 +189,12 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
             >
               <List size={10}/> Razao
               <span className="ml-1 text-[9px] font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); setAba('arbitro'); }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'arbitro' ? 'bg-[#ffcc00]/20 border-[#ffcc00]/40 text-[#ffcc00]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#ffcc00]/70'}`}
+            >
+              <Zap size={10}/> Árbitro IA
             </button>
             <div className="flex-1"/>
             {todosVirtualLogica.length > 0 && (
@@ -245,6 +254,44 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
                 </div>
                 <TabelaLancs itens={todosVirtual} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Sem lancamentos societarios"/>
               </div>
+            </div>
+          )}
+
+          {aba === 'arbitro' && (
+            <div className="p-5 flex flex-col gap-4 max-w-4xl">
+               <div className="bg-[#ffcc00]/10 border border-[#ffcc00]/30 p-4 rounded flex gap-4 items-start">
+                  <div className="p-2 bg-[#ffcc00]/20 text-[#ffcc00] rounded">
+                     <Zap size={20}/>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-[12px] font-black uppercase tracking-widest text-[#ffcc00] mb-1">Arbitragem CPC 47 (IFRS 15)</h3>
+                    <p className="text-[11px] text-[var(--v-text-muted)] mb-3">O modelo AI analisou as diferenças de lançamento e sugeriu o seguinte mapeamento para preencher as lacunas operacionais:</p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-[var(--v-deep)] border border-[var(--v-border)] p-3 rounded h-full flex flex-col justify-between">
+                        <div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Conflito IFRS 15 Detectado</span>
+                          <p className="text-[10px] mt-1 font-bold text-[var(--v-text-faint)]">Lançamentos órfãos de Receita Auferida sem equivalência no espelho importado do Questor (Motor Antigo).</p>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-[9px] font-mono text-[#34c759]">Ação Recomendada (Veredito LLM):</p>
+                          <p className="text-[10px] text-[var(--v-accent-3)] mt-0.5">Assumir visão do Vulcano 2.0 como correta, pois reflete a premissa certa de POC em venda unificada.</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-[var(--v-deep)] border border-[var(--v-border)] p-3 rounded h-full flex flex-col justify-between">
+                        <div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Motor de Saneamento (Autocompletar)</span>
+                          <p className="text-[10px] mt-1 font-bold text-[var(--v-text-faint)]">O Vulcano 2.0 gera apenas um lado da partida dobrada nestes layouts.</p>
+                        </div>
+                        <ul className="mt-3 text-[10px] space-y-1.5">
+                           <li className="flex justify-between border-b border-[var(--v-bg)] pb-1"><span className="text-[var(--v-text-muted)] font-black uppercase tracking-wider text-[8px]">Natureza da Falha</span> <span className="font-mono font-bold text-[#ffcc00]">Lançamento Padrão</span></li>
+                           <li className="flex justify-between pt-1"><span className="text-[var(--v-text-muted)] font-black uppercase tracking-wider text-[8px]">Injetar Contrapartida</span> <span className="font-mono font-bold text-[var(--v-accent-3)]">1.01.01.02 - Conta Banco/Ajustes</span></li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+               </div>
             </div>
           )}
         </div>

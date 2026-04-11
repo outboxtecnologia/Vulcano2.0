@@ -1074,7 +1074,7 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         # --- MOVIMENTO DO MÊS GLOBAL (Empresa-wide) ---
         cur_q.execute("""
             SELECT 
-                C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER
+                C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER, C.CHAVEORIGEM
             FROM LCTOGER G
             JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
             WHERE G.CODIGOEMPRESA = ? 
@@ -1084,7 +1084,7 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
             ORDER BY C.DATALCTOCTB ASC
         """, (empresa_id, data_inicio_mes_atual, data_fim_mes_atual))
         
-        for (chave, dt, cdeb, ccred, hist_val, nat, val) in cur_q.fetchall():
+        for (chave, dt, cdeb, ccred, hist_val, nat, val, chave_origem) in cur_q.fetchall():
             if isinstance(hist_val, (bytes, bytearray)):
                 hist = hist_val.decode('cp1252', 'ignore')
             else:
@@ -1099,10 +1099,12 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 continue
             
             if conta not in contas_fisicas_empresa:
+                _classif = plano.get(conta, {}).get("classif", "")
+                _nome = plano.get(conta, {}).get("nome", "Desconhecida")
                 contas_fisicas_empresa[conta] = {
                     "conta": conta,
-                    "nome": plano.get(conta, {}).get("nome", "Desconhecida"),
-                    "classif": plano.get(conta, {}).get("classif", ""),
+                    "nome": f"{_classif} - {_nome}" if _classif else _nome,
+                    "classif": _classif,
                     "saldo_anterior": saldo_anterior_por_conta.get(conta, 0.0),
                     "movimento_debito": 0.0,
                     "movimento_credito": 0.0,
@@ -1124,15 +1126,18 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 "data": str(dt),
                 "historico": hist,
                 "natureza": "D" if nat == 1 else "C",
-                "valor": v
+                "valor": v,
+                "origem": "VU" if (chave_origem and str(chave_origem).startswith('VU')) else ("QUESTOR_MANUAL" if not chave_origem else str(chave_origem))
             })
 
         for conta_id, saldo in saldo_anterior_por_conta.items():
             if abs(saldo) > 0.01 and conta_id not in contas_fisicas_empresa:
+                _classif = plano.get(conta_id, {}).get("classif", "")
+                _nome = plano.get(conta_id, {}).get("nome", "Desconhecida")
                 contas_fisicas_empresa[conta_id] = {
                     "conta": conta_id,
-                    "nome": plano.get(conta_id, {}).get("nome", "Desconhecida"),
-                    "classif": plano.get(conta_id, {}).get("classif", ""),
+                    "nome": f"{_classif} - {_nome}" if _classif else _nome,
+                    "classif": _classif,
                     "saldo_anterior": saldo,
                     "movimento_debito": 0.0,
                     "movimento_credito": 0.0,
@@ -1162,10 +1167,12 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                 if not conta_id or v_float <= 0.01: return
                 conta_id = int(conta_id)
                 if conta_id not in contas_virtuais:
+                    _classif = plano.get(conta_id, {}).get("classif", "")
+                    _nome = plano.get(conta_id, {}).get("nome", "Desconhecida")
                     contas_virtuais[conta_id] = {
                         "conta": conta_id,
-                        "nome": plano.get(conta_id, {}).get("nome", "Desconhecida"),
-                        "classif": plano.get(conta_id, {}).get("classif", ""),
+                        "nome": f"{_classif} - {_nome}" if _classif else _nome,
+                        "classif": _classif,
                         "saldo_anterior": 0.0,
                         "movimento_debito": 0.0,
                         "movimento_credito": 0.0,
@@ -1202,10 +1209,12 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                         cid = int(cid_raw)
                         # Apenas cria o dict vazio se não existir
                         if cid not in contas_virtuais:
+                            _classif = plano.get(cid, {}).get("classif", "")
+                            _nome = plano.get(cid, {}).get("nome", "Desconhecida")
                             contas_virtuais[cid] = {
                                 "conta": cid,
-                                "nome": plano.get(cid, {}).get("nome", "Desconhecida"),
-                                "classif": plano.get(cid, {}).get("classif", ""),
+                                "nome": f"{_classif} - {_nome}" if _classif else _nome,
+                                "classif": _classif,
                                 "saldo_anterior": 0.0,
                                 "movimento_debito": 0.0,
                                 "movimento_credito": 0.0,
