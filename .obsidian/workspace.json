@@ -179,6 +179,7 @@
   },
   "active": "846a8b0a7159aaa8",
   "lastOpenFiles": [
+    "scripts/auto-commit.log.tmp",
     "backend/core/services/__pycache__/combinatorial_analyzer.cpython-314.pyc",
     "ROADMAP_VULCANO_QUESTOR.md",
     "backend/API_GUIDELINES.md",
@@ -193,7 +194,6 @@
     "patcher15.py",
     "backend/core/services/heuristic_optimizer.py",
     "patcher14.py",
-    "patcher13.py",
     "frontend/node_modules/zod-validation-error/README.v3.md",
     "frontend/node_modules/xlsx/README.md",
     "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",

@@ -37,6 +37,22 @@ const CONTAS_USA_MOVIMENTO = new Set([
   '4828','4829','4958','4995'
 ]);
 
+// Contas do grupo APTO: só fazem cross-match entre si, indexadas por APTO+número.
+const CONTAS_GRUPO_APTO = new Set([5653, 5665, 5666]);
+
+/**
+ * Extrai 'APTO_<num>' do texto histórico usando a ÚLTIMA ocorrência.
+ * Históricos como "APTO 277 ... - APTO 302" têm dois APTOs:
+ *   - 1º = número do contrato (ignorar)
+ *   - 2º = número real do apartamento (usar como indexador)
+ * Retorna null se não encontrar nenhum.
+ */
+function extractAptoNum(texto) {
+  const matches = [...(texto || '').toUpperCase().matchAll(/\bAPT[O]?[\s\-]*(\d+)/g)];
+  if (matches.length === 0) return null;
+  return `APTO_${matches[matches.length - 1][1]}`; // sempre a última ocorrência
+}
+
 // ── Matching de órfãos ────────────────────────────────────────────────────────
 // Retorna { fisicosOrfaos, virtuaisOrfaos } — lançamentos sem par no lado oposto.
 // Matching por natureza + valor (tolerância R$0,01).
@@ -972,28 +988,39 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     todasContas.forEach(cid => {
       const n = parseInt(cid);
       if (!n || isNaN(n)) return;
+      const noGrupoApto = CONTAS_GRUPO_APTO.has(n);
       const fisLista = detFisicoPorConta[cid]  || [];
       const virLista = detVirtualPorConta[cid] || [];
       const { fisicosOrfaos, virtuaisOrfaos } = calcularOrfaos(fisLista, virLista);
-      // Mapeamento explícito: só campos que o backend OrfaoItem espera
-      fisicosOrfaos.forEach(o => orfaosQ.push({
-        conta:    n,
-        data:     String(o.data     || ''),
-        historico:String(o.historico|| ''),
-        natureza: String(o.natureza || ''),
-        valor:    Number(o.valor    || 0),
-        chave:    String(o.chave    || ''),
-        logica:   String(o.logica   || ''),
-      }));
-      virtuaisOrfaos.forEach(o => orfaosV.push({
-        conta:    n,
-        data:     String(o.data     || ''),
-        historico:String(o.historico|| ''),
-        natureza: String(o.natureza || ''),
-        valor:    Number(o.valor    || 0),
-        chave:    String(o.chave    || ''),
-        logica:   String(o.logica   || ''),
-      }));
+      // Mapeamento explícito: só campos que o backend OrfaoItem espera.
+      // Para contas do grupo APTO (5653/5665/5666): só incluir se tiver APTO+número no histórico,
+      // garantindo que o indexador primário existe antes de enviar ao motor de matching.
+      fisicosOrfaos.forEach(o => {
+        const textoOrfao = String(o.historico || '') + ' ' + String(o.chave || '');
+        if (noGrupoApto && !extractAptoNum(textoOrfao)) return; // sem APTO identificado → descarta
+        orfaosQ.push({
+          conta:    n,
+          data:     String(o.data     || ''),
+          historico:String(o.historico|| ''),
+          natureza: String(o.natureza || ''),
+          valor:    Number(o.valor    || 0),
+          chave:    String(o.chave    || ''),
+          logica:   String(o.logica   || ''),
+        });
+      });
+      virtuaisOrfaos.forEach(o => {
+        const textoOrfao = String(o.historico || '') + ' ' + String(o.logica || '');
+        if (noGrupoApto && !extractAptoNum(textoOrfao)) return; // sem APTO identificado → descarta
+        orfaosV.push({
+          conta:    n,
+          data:     String(o.data     || ''),
+          historico:String(o.historico|| ''),
+          natureza: String(o.natureza || ''),
+          valor:    Number(o.valor    || 0),
+          chave:    String(o.chave    || ''),
+          logica:   String(o.logica   || ''),
+        });
+      });
     });
 
     if (orfaosQ.length === 0 && orfaosV.length === 0) {

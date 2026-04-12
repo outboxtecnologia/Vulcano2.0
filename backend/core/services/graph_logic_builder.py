@@ -23,7 +23,7 @@ class AccountingGraphPipeline:
             hist_questor = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
     
             # 1. Obter Empreendimentos Ativos
-            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
+            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
             params = [empresa_id]
             if empreendimento_id:
                 query += f" AND ID = {int(empreendimento_id)}"
@@ -42,7 +42,8 @@ class AccountingGraphPipeline:
                         "hist_var": hist_questor.get(r[13] if r[13] else 0, "VARIACAO UNID"),
                         "hist_adi": hist_questor.get(r[14] if r[14] else 0, "ADIANTAMENTO UNID"),
                         "hist_baixa_adi": hist_questor.get(r[15] if r[15] else 0, "BAIXA ADIANTAMENTO UNID"),
-                        "hist_custo": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID")
+                        "hist_custo": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
+                        "conta_variacao": int(r[18]) if r[18] else 0,  # CONTAVARIACAO para acrescimos
                     })
     
             # Caching Global Vulcano (Receitas e Tributos)
@@ -115,8 +116,15 @@ class AccountingGraphPipeline:
                         saldo_anterior_por_conta[c_deb] = saldo_anterior_por_conta.get(c_deb, 0.0) + v
                 elif nat == -1 and c_cred:
                     saldo_anterior_por_conta[c_cred] = saldo_anterior_por_conta.get(c_cred, 0.0) - v
-            
-            # --- MOVIMENTO DO MÊS GLOBAL (Empresa-wide) ---
+
+            # Helper para identificar contas de resultado (4.x, 5.x etc.)
+            # Usado pelo bloco de movimento (ZZ de dezembro) — NÃO afeta saldo_anterior.
+            # O saldo_anterior das contas de resultado acumula SEM ZZ, mostrando o
+            # histórico completo do projeto (acumulado multiexercício) para auditoria.
+            def _e_conta_resultado(cod):
+                cl = plano.get(cod, {}).get("classif", "") or ""
+                return cl and not cl.startswith(("1.", "2.", "3."))
+
             cur_q.execute("""
                 SELECT 
                     C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER, C.CHAVEORIGEM, H.DESCRHISTCTB
@@ -194,7 +202,63 @@ class AccountingGraphPipeline:
                         "saldo_final": 0.0,
                         "detalhes": []
                     }
-    
+
+            # --- MOVIMENTO DO MÊS: incorpora ARE/ZZ para contas de RESULTADO ---
+            # Relevante especialmente em Dezembro: o lançamento ZZ representa o encerramento
+            # do exercício e deve aparecer no movimento para auditoria completa.
+            cur_q.execute("""
+                SELECT 
+                    C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                    CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER,
+                    C.CHAVEORIGEM, H.DESCRHISTCTB
+                FROM LCTOGER G
+                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                WHERE G.CODIGOEMPRESA = ? 
+                AND C.DATALCTOCTB >= CAST(? AS DATE) AND C.DATALCTOCTB < CAST(? AS DATE)
+                AND C.CODIGOORIGLCTOCTB = 'ZZ'
+                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                ORDER BY C.DATALCTOCTB ASC
+            """, (empresa_id, data_inicio_mes_atual, data_fim_mes_atual))
+            for (chave, dt, cdeb, ccred, hist_val, nat, val, chave_origem, descr_hist) in cur_q.fetchall():
+                v = float(val or 0)
+                conta = cdeb if nat == 1 else ccred
+                if not conta: continue
+                if not _e_conta_resultado(conta): continue  # Só processa contas de resultado
+                conta_str = str(conta).strip()
+                if nat == 1 and conta_str in contas_imposto_recolher: continue
+                if isinstance(hist_val, (bytes, bytearray)):
+                    compl_zz = hist_val.decode('cp1252', 'ignore')
+                else:
+                    compl_zz = str(hist_val) if hist_val else ""
+                descr_zz = str(descr_hist or "").strip()
+                hist_zz = f"{descr_zz} {compl_zz}".strip() or "APURAÇÃO RESULTADO EXERCÍCIO (ARE)"
+                if conta not in contas_fisicas_empresa:
+                    _classif = plano.get(conta, {}).get("classif", "")
+                    _nome = plano.get(conta, {}).get("nome", "Desconhecida")
+                    contas_fisicas_empresa[conta] = {
+                        "conta": conta,
+                        "nome": f"{_classif} - {_nome}" if _classif else _nome,
+                        "classif": _classif,
+                        "saldo_anterior": saldo_anterior_por_conta.pop(conta, 0.0),
+                        "movimento_debito": 0.0, "movimento_credito": 0.0,
+                        "movimento_liquido": 0.0, "saldo_final": 0.0, "detalhes": []
+                    }
+                if nat == 1:
+                    contas_fisicas_empresa[conta]["movimento_debito"] += v
+                    contas_fisicas_empresa[conta]["movimento_liquido"] += v
+                else:
+                    contas_fisicas_empresa[conta]["movimento_credito"] += v
+                    contas_fisicas_empresa[conta]["movimento_liquido"] -= v
+                contas_fisicas_empresa[conta]["detalhes"].append({
+                    "chave": chave,
+                    "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
+                    "historico": hist_zz,
+                    "natureza": "D" if nat == 1 else "C",
+                    "valor": v,
+                    "origem": "ZZ_ARE"  # marcador para distinguir na Auditoria
+                })
+
             total_anterior_fisico = 0.0
             total_movimento_fisico = 0.0
             total_final_fisico = 0.0
@@ -291,7 +355,7 @@ class AccountingGraphPipeline:
                     })
     
                 # Força a criação das contas parametrizadas para a Auditoria ERP enxergá-las mesmo sem movimento
-                for c_key in ["conta_custo", "conta_cli", "conta_adicli", "conta_estand", "conta_estcon", "conta_rec"]:
+                for c_key in ["conta_custo", "conta_cli", "conta_adicli", "conta_estand", "conta_estcon", "conta_rec", "conta_variacao"]:
                     cid_raw = emp.get(c_key)
                     if cid_raw and str(cid_raw).strip() and str(cid_raw).strip() != '99999':
                         try:
@@ -403,6 +467,7 @@ class AccountingGraphPipeline:
                     c_cli = emp.get("conta_cli") or 99999
                     c_adi = emp.get("conta_adicli") or 99999
                     c_rec = emp.get("conta_rec") or 99999
+                    c_variacao = emp.get("conta_variacao") or 0  # CONTAVARIACAO: conta de variação monetária
                     
                     # Identifica se é lucro presumido com RET
                     ret_global = meta_emp.get("ret", 0)
@@ -462,16 +527,11 @@ class AccountingGraphPipeline:
                              inject_virtual_entry(c_custo, mov_custo_u, 'D', f"{emp.get('hist_aprcusto', 'Apropriação Custo')} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
                              inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"BAIXA ESTOQUE UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
     
-                        # RECEBIMENTOS E RATEIO PASSSIVO
-                        caixa_m = uni_data["caixa_mes"]
-                        if caixa_m > 0:
-                             pass # a conta caixa não deve gerar lançamentos virtuais nem ser auditada
-    
+                        # ── RECEBIMENTOS: Split Principal vs Variação Monetária ─────────────────────────
                         caixa_acum = uni_data["caixa_acumulado"]
-                        caixa_ant = caixa_acum - caixa_m
+                        caixa_ant = caixa_acum - uni_data["caixa_mes"]
                         
                         rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
-                        # Se nova venda no mês: receita anterior = 0 (sem reconhecimento prévio desta unidade)
                         rec_auferida_ant = 0.0 if is_nova_venda_mes_alvo else \
                                           vgv_uni * (poc_acumulado_anterior / 100.0)
                         
@@ -486,16 +546,35 @@ class AccountingGraphPipeline:
                              inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"{emp.get('hist_venda', 'Faturamento')} UNID {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
                         # -----------------
                         
-                        cli_atual = min(caixa_acum, rec_auferida_atual)
-                        adi_atual = max(0, caixa_acum - rec_auferida_atual)
-                        
-                        cli_ant = min(caixa_ant, rec_auferida_ant)
-                        adi_ant = max(0, caixa_ant - rec_auferida_ant)
-                        
+                        acrescimo_acum = uni_data.get("acrescimo_acumulado", 0.0)
+                        acrescimo_mes  = uni_data.get("acrescimo_mes",  0.0)
+                        # Só faz o split quando c_variacao está de fato configurado.
+                        # Se não estiver, usa caixa_acum cheio para não criar lacuna de
+                        # Débito em Clientes sem a contrapartida de CONTAVARIACAO.
+                        variacao_configurada = bool(c_variacao and c_variacao not in (0, 99999))
+
+                        if variacao_configurada:
+                            caixa_principal_acum = max(0.0, caixa_acum - acrescimo_acum)
+                            caixa_principal_ant  = max(0.0, caixa_ant  - (acrescimo_acum - acrescimo_mes))
+                        else:
+                            caixa_principal_acum = caixa_acum
+                            caixa_principal_ant  = caixa_ant
+
+                        # --- Posição Clientes / Adiantamentos ---
+                        cli_atual = min(caixa_principal_acum, rec_auferida_atual)
+                        adi_atual = max(0.0, caixa_principal_acum - rec_auferida_atual)
+
+                        cli_ant = min(caixa_principal_ant, rec_auferida_ant)
+                        adi_ant = max(0.0, caixa_principal_ant - rec_auferida_ant)
+
                         mov_cli = cli_atual - cli_ant
                         mov_adi = adi_atual - adi_ant
-                        logica_cli = f"Unid {uni_nome}: Caixa Acum ({caixa_acum:,.2f}) preenche Clientes até Limite da Receita Reconhecida POC ({rec_auferida_atual:,.2f}). Excesso vira Adiantamento."
-                        
+                        _split_info = f" [Acréscimo excluído: {acrescimo_acum:,.2f}]" if variacao_configurada else ""
+                        logica_cli = (f"Unid {uni_nome}: Principal Acum ({caixa_principal_acum:,.2f}) preenche Clientes "
+                                      f"até Limite da Receita Reconhecida POC ({rec_auferida_atual:,.2f}). "
+                                      f"Excesso vira Adiantamento.{_split_info}")
+
+
                         if abs(mov_cli) > 0.01:
                              nat_cli = 'C' if mov_cli > 0 else 'D'
                              inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"{emp.get('hist_rec', 'Baixa Cliente')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
@@ -504,12 +583,19 @@ class AccountingGraphPipeline:
                              nat_adi = 'C' if mov_adi > 0 else 'D'
                              inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"{emp.get('hist_adi', 'Reconhecimento Adiantamento')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
                              
-                        # ACRÉSCIMOS / VARIAÇÃO (Receita Financeira do Mês)
-                        acresc_mes = uni_data.get("acrescimo_mes", 0.0)
-                        if acresc_mes > 0.01:
-                             logica_acres = f"Unid {uni_nome}: Acréscimo Recebido na Parcela no Mês ({acresc_mes:,.2f})"
-                             inject_virtual_entry(c_rec, acresc_mes, 'C', f"{emp.get('hist_var', 'Variação Acréscimo')} UNID {uni_nome}", logica=logica_acres, saldo_ant=0.0)
-                             inject_virtual_entry(c_cli, acresc_mes, 'D', f"{emp.get('hist_var', 'Variação Acréscimo')} UNID {uni_nome}", logica=logica_acres, saldo_ant=0.0)
+                        # --- Variação Monetária: D Clientes/Adi (par completo) + C CONTAVARIACAO ---
+                        # Ambas só são geradas JUNTAS (mesma condição) → garante par na Auditoria.
+                        if variacao_configurada and acrescimo_mes > 0.01:
+                             logica_var = (f"Unid {uni_nome}: Acréscimo/Variação Monetária recebida no mês "
+                                          f"({acrescimo_mes:,.2f}). Débito em Clientes se principal ≤ rec. auferida, "
+                                          f"senão Adiantamentos.")
+                             conta_deb_var = c_cli if caixa_principal_acum <= rec_auferida_atual + 0.01 else c_adi
+                             inject_virtual_entry(c_variacao, acrescimo_mes, 'C',
+                                 f"{emp.get('hist_var', 'Variação Monetária')} UNID {uni_nome}",
+                                 logica=logica_var, saldo_ant=0.0)
+                             inject_virtual_entry(conta_deb_var, acrescimo_mes, 'D',
+                                 f"{emp.get('hist_var', 'Variação Monetária')} UNID {uni_nome}",
+                                 logica=logica_var, saldo_ant=0.0)
                              
                         # TRIBUTOS
                         trib_caixa_atual = uni_data["tributos_caixa_acumulado"]

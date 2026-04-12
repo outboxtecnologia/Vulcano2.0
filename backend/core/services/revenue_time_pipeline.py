@@ -497,6 +497,11 @@ class RevenueTimePipeline:
                     "unidade": uni, "comprador": comp, "vgv": row.VGV,
                     "data_venda": str(row.DATA_VENDA)[:10] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else None,
                     "caixa_acumulado": row.RECEITA_CAIXA, "caixa_mes": row.CAIXA_MES,
+                    # Acréscimos (Variação Monetária) separados do principal
+                    # acrescimo_acumulado = soma de todos acréscimos recebidos até data_fim
+                    # acrescimo_mes      = acréscimos recebidos apenas no mês-alvo
+                    "acrescimo_acumulado": row.ACRESCIMO,
+                    "acrescimo_mes": row.ACRESCIMO_CAIXA_MES,
                     "soc_acumulado": soc_acumulada_uni, "soc_mes": soc_mes_uni,
                     "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_caixa_mes": row.TRIBUTOS_CAIXA_MES,
                     "tributos_soc_acumulado": tributos_soc_acumulada_uni, "tributos_soc_mes": tributos_soc_mes_uni,

@@ -5,6 +5,11 @@ import math
 from itertools import combinations
 from collections import defaultdict
 
+# Contas que pertencem ao mesmo grupo de reconciliação apartamento.
+# Lançamentos destas contas SÓ fazem cross-match entre elas mesmas.
+# O indexador primário é o número do APTO encontrado no histórico.
+CONTAS_GRUPO_APTO: set = {5653, 5665, 5666}
+
 class OrphansReconciliationService:
     class OrfaoItem(BaseModel):
         conta: int = 0
@@ -38,20 +43,39 @@ class OrphansReconciliationService:
         from difflib import SequenceMatcher
         from collections import defaultdict
 
+        def _extrair_apto_num(texto: str) -> str | None:
+            """Extrai número do APTO como indexador primário canônico.
+            Quando há dois APTO no histórico (ex: 'APTO 277 ... - APTO 302'),
+            o PRIMEIRO é o número do contrato e o SEGUNDO é o número real
+            do apartamento. Sempre usa o Último match como indexador.
+            Retorna 'APTO_<numero>' normalizado ou None se não encontrar."""
+            t = (texto or "").upper()
+            # findall retorna todas as ocorrências; pega a última (número real do apto)
+            matches = re.findall(r'\bAPT[O]?[\s\-]*(\d+)', t)
+            if matches:
+                return f"APTO_{matches[-1].strip()}"
+            return None
+
         def _extrair_clusters(texto: str) -> str:
             t = (texto or "").upper()
-            # Busca menção explícita a unidade, bloco, apto, vaga
-            m = re.search(r'(UNIDADE|UNID|APTO|APT|SALA|LOJA|CASA|BOX|VG|VAGA|TORRE)\s*([A-Z0-9\-]+)', t)
+
+            # --- Indexador primário: APTO + número ---
+            apto = _extrair_apto_num(t)
+            if apto:
+                return apto
+
+            # --- Outras unidades (UNID, SALA, LOJA, etc.) ---
+            m = re.search(r'(UNIDADE|UNID|SALA|LOJA|CASA|BOX|VG|VAGA|TORRE)\s*([A-Z0-9\-]+)', t)
             if m:
                 return f"{m.group(1).strip()}_{m.group(2).strip()}"
-            
-            # Fallback para palavras fortes (ex: PIS, COFINS, RET, IRPJ) - agrupa guias da mesma competência
+
+            # Fallback para palavras fortes (ex: PIS, COFINS, RET, IRPJ)
             impostos = []
             for imp in ["IRPJ", "CSLL", "PIS", "COFINS", "RET"]:
                 if imp in t: impostos.append(imp)
             if impostos:
                 return "_".join(sorted(impostos))
-                
+
             return "OUTROS"
 
         # Preparar itens com IDs únicos
@@ -60,7 +84,10 @@ class OrphansReconciliationService:
             if str(q.conta) == "5": continue
             d = q.dict()
             d["_id"] = f"Q_{i}"
-            d["_cluster"] = _extrair_clusters(d.get("historico", "") + " " + (d.get("logica", "") or ""))
+            texto_completo = d.get("historico", "") + " " + (d.get("logica", "") or "")
+            d["_cluster"] = _extrair_clusters(texto_completo)
+            d["_apto"] = _extrair_apto_num(texto_completo)
+            d["_no_grupo_apto"] = int(d.get("conta", 0)) in CONTAS_GRUPO_APTO
             d["_usado"] = False
             q_items.append(d)
 
@@ -69,7 +96,10 @@ class OrphansReconciliationService:
             if str(v.conta) == "5": continue
             d = v.dict()
             d["_id"] = f"V_{i}"
-            d["_cluster"] = _extrair_clusters(d.get("historico", "") + " " + (d.get("logica", "") or ""))
+            texto_completo = d.get("historico", "") + " " + (d.get("logica", "") or "")
+            d["_cluster"] = _extrair_clusters(texto_completo)
+            d["_apto"] = _extrair_apto_num(texto_completo)
+            d["_no_grupo_apto"] = int(d.get("conta", 0)) in CONTAS_GRUPO_APTO
             d["_usado"] = False
             v_items.append(d)
 
@@ -206,43 +236,83 @@ class OrphansReconciliationService:
             vs_livres = [v for v in cv["v"] if not v["_usado"]]
             if not qs_livres or not vs_livres: continue
 
-            sum_q = sum(q["valor"] for q in qs_livres)
-            sum_v = sum(v["valor"] for v in vs_livres)
-
-            if math.isclose(sum_q, sum_v, rel_tol=0.05, abs_tol=5.0):
-                _adicionar_match(qs_livres, vs_livres, "CLUSTER_TEXTO", 
-                    f"Cluster perfeito ({c_id}): Todos os lançamentos engajados somam {sum_q:,.2f}")
-                continue
+            # ── Regra de isolamento do grupo APTO (5653/5665/5666) ──────────────
+            # Lançamentos do grupo só cruzam entre si. Se o cluster APTO misturar
+            # contas fora do grupo com contas do grupo, separa os dois lados.
+            eh_cluster_apto = c_id.startswith("APTO_")
+            if eh_cluster_apto:
+                # Lado Q: apenas contas do grupo podem cruzar com V do grupo (e vice-versa)
+                qs_grupo = [q for q in qs_livres if q["_no_grupo_apto"]]
+                vs_grupo = [v for v in vs_livres if v["_no_grupo_apto"]]
+                qs_fora  = [q for q in qs_livres if not q["_no_grupo_apto"]]
+                vs_fora  = [v for v in vs_livres if not v["_no_grupo_apto"]]
+                # Redistribuir: dentro do grupo cruzam entre si; fora do grupo cruzam entre si
+                cluster_batches = []
+                if qs_grupo and vs_grupo:
+                    cluster_batches.append((c_id + "_GRP", qs_grupo, vs_grupo))
+                if qs_fora and vs_fora:
+                    cluster_batches.append((c_id + "_EXT", qs_fora, vs_fora))
+            else:
+                # Para clusters não-APTO, contas do grupo APTO ficam de fora do cross-account
+                # Elas só cruzam em clusters APTO.
+                qs_ok = [q for q in qs_livres if not q["_no_grupo_apto"]]
+                vs_ok = [v for v in vs_livres if not v["_no_grupo_apto"]]
+                cluster_batches = [(c_id, qs_ok, vs_ok)] if (qs_ok and vs_ok) else []
 
             from core.services.combinatorial_analyzer import CombinatorialAnalyzer
-            # 1.1 e 1.2 Combinatorias N:M isoladas em Motor dedicado
-            CombinatorialAnalyzer.run_1_to_n(c_id, qs_livres, cv['v'], _adicionar_match, _verificar_anomalia_cub)
-            CombinatorialAnalyzer.run_n_to_1(c_id, vs_livres, cv['q'], _adicionar_match, _verificar_anomalia_cub)
+            for batch_id, q_batch, v_batch in cluster_batches:
+                if not q_batch or not v_batch:
+                    continue
+                sum_q = sum(q["valor"] for q in q_batch)
+                sum_v = sum(v["valor"] for v in v_batch)
+
+                if math.isclose(sum_q, sum_v, rel_tol=0.05, abs_tol=5.0):
+                    _adicionar_match(q_batch, v_batch, "CLUSTER_TEXTO",
+                        f"Cluster perfeito ({batch_id}): Todos os lançamentos somam {sum_q:,.2f}")
+                    continue
+
+                # 1.1 e 1.2 Combinatorias N:M isoladas em Motor dedicado
+                CombinatorialAnalyzer.run_1_to_n(batch_id, q_batch, v_batch, _adicionar_match, _verificar_anomalia_cub)
+                CombinatorialAnalyzer.run_n_to_1(batch_id, v_batch, q_batch, _adicionar_match, _verificar_anomalia_cub)
 
         # 2. Rescaldo Fuzzy Clássico 1:1 apenas para o que sobrou (inclui OUTROS)
         qs_finais = [q for q in q_items if not q["_usado"]]
         vs_finais = [v for v in v_items if not v["_usado"]]
-        
+
         raw_fuzzy = []
-        
+
         def sf_valor(a, b):
             if a < 0.01 or b < 0.01: return 0.0
             d = abs(a - b)
             if d < 10.0: return 1.0
             return max(0.0, 1.0 - d / max(a, b))
 
-        # Otimização O(N) agilizando a restrição primária de conta: 
-        # Dicionário de Vs por conta
+        # Otimização O(N): dicionário de Vs por conta
+        # Contas do grupo APTO (5653/5665/5666) também cruzam entre si no fuzzy residual,
+        # usando o número do APTO como chave secundária de restrição.
         vs_por_conta = defaultdict(list)
-        for v in vs_finais: vs_por_conta[v["conta"]].append(v)
-        
+        vs_por_apto_grupo = defaultdict(list)  # chave: apto_num para o grupo APTO
+        for v in vs_finais:
+            vs_por_conta[v["conta"]].append(v)
+            if v["_no_grupo_apto"] and v["_apto"]:
+                vs_por_apto_grupo[v["_apto"]].append(v)
+
         for q in qs_finais:
             if q["_usado"]: continue
             qh = (q.get("historico", "") or "").upper()
-            
-            # Filtra apenas a mesma conta (para não travar CPU em busca Cross-Account cega)
-            # Qualquer Cross-Account válida já foi resolvida pelos Repositórios no Passo 1!
-            vs_avaliar = vs_por_conta[q["conta"]]
+
+            # Contas do grupo APTO: fuzzy residual restrito ao grupo + mesmo APTO
+            if q["_no_grupo_apto"]:
+                apto_q = q["_apto"]
+                if apto_q:
+                    vs_avaliar = [v for v in vs_por_apto_grupo.get(apto_q, []) if not v["_usado"]]
+                else:
+                    # sem número APTO identificado → sem cross residual
+                    continue
+            else:
+                # Filtra apenas a mesma conta (para não travar CPU em busca Cross-Account cega)
+                # Qualquer Cross-Account válida já foi resolvida pelos Repositórios no Passo 1!
+                vs_avaliar = [v for v in vs_por_conta[q["conta"]] if not v["_usado"]]
             
             for v in vs_avaliar:
                 if v["_usado"]: continue
