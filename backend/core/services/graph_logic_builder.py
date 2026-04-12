@@ -317,15 +317,20 @@ class AccountingGraphPipeline:
                 contas_virtuais = {}
                 def inject_virtual_entry(conta_id, valor, natureza, historico, logica="", saldo_ant=0.0):
                     v_float = float(valor or 0)
-                    if not conta_id or v_float <= 0.01: return
+                    s_ant = float(saldo_ant or 0)
+                    if not conta_id: return
+                    if abs(v_float) <= 0.01 and abs(s_ant) <= 0.01: return
+                    
                     conta_id = int(conta_id)
                     if conta_id not in contas_virtuais:
                         _classif = plano.get(conta_id, {}).get("classif", "")
                         _nome = plano.get(conta_id, {}).get("nome", "Desconhecida")
+                        _is_caixa = bool(conta_id == int(emp.get("conta_caixa") or 99999))
                         contas_virtuais[conta_id] = {
                             "conta": conta_id,
                             "nome": f"{_classif} - {_nome}" if _classif else _nome,
                             "classif": _classif,
+                            "is_caixa": _is_caixa,
                             "saldo_anterior": 0.0,
                             "movimento_debito": 0.0,
                             "movimento_credito": 0.0,
@@ -334,25 +339,27 @@ class AccountingGraphPipeline:
                             "detalhes": []
                         }
                     
-                    contas_virtuais[conta_id]["saldo_anterior"] += float(saldo_ant)
+                    contas_virtuais[conta_id]["saldo_anterior"] += s_ant
     
-                    mov = v_float if natureza == 'D' else -v_float
-                    if natureza == 'D':
-                        contas_virtuais[conta_id]["movimento_debito"] += v_float
-                    else:
-                        contas_virtuais[conta_id]["movimento_credito"] += v_float
+                    if abs(v_float) > 0.01:
+                        mov = v_float if natureza == 'D' else -v_float
+                        if natureza == 'D':
+                            contas_virtuais[conta_id]["movimento_debito"] += v_float
+                        else:
+                            contas_virtuais[conta_id]["movimento_credito"] += v_float
+                            
+                        contas_virtuais[conta_id]["movimento_liquido"] += mov
                         
-                    contas_virtuais[conta_id]["movimento_liquido"] += mov
-                    
-                    contas_virtuais[conta_id]["detalhes"].append({
-                        "chave": "VULCANO_SIM",
-                        "data": f"{str(mes).zfill(2)}/{ano} (Sim)",
-                        "historico": historico,
-                        "natureza": natureza,
-                        "valor": v_float,
-                        "virtual": True,
-                        "logica": logica
-                    })
+                        contas_virtuais[conta_id]["detalhes"].append({
+                            "chave": "VULCANO_SIM",
+                            "data": f"{str(mes).zfill(2)}/{ano} (Sim)",
+                            "historico": historico,
+                            "natureza": natureza,
+                            "valor": v_float,
+                            "virtual": True,
+                            "logica": logica
+                        })
+
     
                 # Força a criação das contas parametrizadas para a Auditoria ERP enxergá-las mesmo sem movimento
                 for c_key in ["conta_custo", "conta_cli", "conta_adicli", "conta_estand", "conta_estcon", "conta_rec", "conta_variacao"]:
@@ -463,6 +470,16 @@ class AccountingGraphPipeline:
                     c_estcon = emp.get("conta_estcon") if ob_concluida else emp.get("conta_estand")
                     c_estoque = c_estcon if c_estcon else 99999
                     
+                    # ── COMPOSIÇÃO DO ESTOQUE (INJEÇÃO DE GASTOS FÍSICOS) ──
+                    # Usamos os laçamentos mapeados da tela de "Custos" para formar a
+                    # perna de Débito do Estoque, refletindo o Ativo construído (Incorrido).
+                    # A baixa (Crédito) ocorrerá no split unitário mais abaixo.
+                    mov_gasto = custo_gasto_vigente - custo_gasto_anterior
+                    if abs(mov_gasto) > 0.01 or abs(custo_gasto_anterior) > 0.01:
+                        nat_gasto = 'D' if mov_gasto >= 0 else 'C'
+                        logica_gasto = f"Aporte Global Custo Físico Mapeado. Atual: {custo_gasto_vigente:,.2f} - Ant: {custo_gasto_anterior:,.2f}"
+                        inject_virtual_entry(c_estoque, abs(mov_gasto), nat_gasto, f"Gastos Incorridos {nome_emp} (CC {emp['cc']})", logica=logica_gasto, saldo_ant=custo_gasto_anterior)
+                    
                     c_caixa_banco = emp.get("conta_caixa") or 99999
                     c_cli = emp.get("conta_cli") or 99999
                     c_adi = emp.get("conta_adicli") or 99999
@@ -477,18 +494,24 @@ class AccountingGraphPipeline:
                     
                     try:
                         cur_v.execute("""
-                            SELECT V.DESCUNIDIMOB, SUM(U.METRAGEM) 
+                            SELECT V.DESCUNIDIMOB, U.ID, U.METRAGEM 
                             FROM VENDA V
                             JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
                             JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
                             JOIN BLOCO B ON B.ID = U.IDBLOCO
                             WHERE B.IDEMPREENDIMENTO = ?
-                            GROUP BY V.DESCUNIDIMOB
                         """, (emp["id"],))
                         area_unidades = {}
-                        for r_desc, r_met in cur_v.fetchall():
+                        seen_uids_per_desc = {}
+                        for r_desc, u_id, r_met in cur_v.fetchall():
                             if r_desc:
-                                area_unidades[str(r_desc).strip()] = float(r_met or 0.0)
+                                k = str(r_desc).strip()
+                                if k not in area_unidades:
+                                    area_unidades[k] = 0.0
+                                    seen_uids_per_desc[k] = set()
+                                if u_id not in seen_uids_per_desc[k]:
+                                    area_unidades[k] += float(r_met or 0.0)
+                                    seen_uids_per_desc[k].add(u_id)
                         
                         cur_v.execute("SELECT SUM(U.METRAGEM) FROM UNIDADE U JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ?", (emp["id"],))
                         area_row = cur_v.fetchone()
@@ -522,15 +545,20 @@ class AccountingGraphPipeline:
                                       custo_gasto_anterior * fracao_fisica
                         mov_custo_u = custo_u_atual - custo_u_ant
                         
-                        if abs(mov_custo_u) > 0.01:
+                        if abs(mov_custo_u) > 0.01 or abs(custo_u_ant) > 0.01:
                              logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}"
                              inject_virtual_entry(c_custo, mov_custo_u, 'D', f"{emp.get('hist_aprcusto', 'Apropriação Custo')} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
                              inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"BAIXA ESTOQUE UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
     
                         # ── RECEBIMENTOS: Split Principal vs Variação Monetária ─────────────────────────
                         caixa_acum = uni_data["caixa_acumulado"]
-                        caixa_ant = caixa_acum - uni_data["caixa_mes"]
+                        caixa_mes = uni_data.get("caixa_mes", 0.0)
+                        caixa_ant = caixa_acum - caixa_mes
                         
+                        if abs(caixa_mes) > 0.01:
+                             logica_caixa = f"Unid {uni_nome}: Integralização de Caixa/Banco no mês = {caixa_mes:,.2f}"
+                             inject_virtual_entry(c_caixa_banco, abs(caixa_mes), 'D' if caixa_mes > 0 else 'C', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
+
                         rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
                         rec_auferida_ant = 0.0 if is_nova_venda_mes_alvo else \
                                           vgv_uni * (poc_acumulado_anterior / 100.0)
@@ -539,7 +567,7 @@ class AccountingGraphPipeline:
                         # RECEITA DRE (Econômico)
                         mov_receita_auferida = rec_auferida_atual - rec_auferida_ant
                         logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]{'  [NOVA VENDA MÊS — rec_ant forçado 0]' if is_nova_venda_mes_alvo else ''}"
-                        if abs(mov_receita_auferida) > 0.01:
+                        if abs(mov_receita_auferida) > 0.01 or abs(rec_auferida_ant) > 0.01:
                              nat_rec = 'C' if mov_receita_auferida > 0 else 'D'
                              nat_cli_rec = 'D' if mov_receita_auferida > 0 else 'C'
                              inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"{emp.get('hist_venda', 'Receita POC')} UNID {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
@@ -575,11 +603,11 @@ class AccountingGraphPipeline:
                                       f"Excesso vira Adiantamento.{_split_info}")
 
 
-                        if abs(mov_cli) > 0.01:
+                        if abs(mov_cli) > 0.01 or abs(cli_ant) > 0.01:
                              nat_cli = 'C' if mov_cli > 0 else 'D'
                              inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"{emp.get('hist_rec', 'Baixa Cliente')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
                         
-                        if abs(mov_adi) > 0.01:
+                        if abs(mov_adi) > 0.01 or abs(adi_ant) > 0.01:
                              nat_adi = 'C' if mov_adi > 0 else 'D'
                              inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"{emp.get('hist_adi', 'Reconhecimento Adiantamento')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
                              

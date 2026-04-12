@@ -16,8 +16,63 @@
               "icon": "lucide-file",
               "title": "3D-Graph"
             }
+          },
+          {
+            "id": "18a550c37aa489fa",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "3D-Graph"
+            }
+          },
+          {
+            "id": "936ba13db990464b",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "3D-Graph"
+            }
+          },
+          {
+            "id": "f2a74701a112134c",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "3D-Graph"
+            }
+          },
+          {
+            "id": "647f0320fe7850b6",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "3D-Graph"
+            }
+          },
+          {
+            "id": "68cbe3b621a96a8e",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "AGENTS.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "AGENTS"
+            }
           }
-        ]
+        ],
+        "currentTab": 5
       }
     ],
     "direction": "vertical"
@@ -177,34 +232,44 @@
       "3d-graph:3D Graph": false
     }
   },
-  "active": "846a8b0a7159aaa8",
+  "active": "68cbe3b621a96a8e",
   "lastOpenFiles": [
+    "backend/test_stutt_frac.py",
+    "bench.md",
+    "stitch_export/screen.png",
+    "stitch_export/DESIGN.md",
+    "backend/scratchpad.md",
+    "backend/test.pdf",
+    "AGENTS.md",
+    "backend/debug_cno.md",
+    "backend/API_GUIDELINES.md",
+    "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",
+    "docs/superpowers/plans/2026-04-09-sindicatos-cct.md",
+    "docs/DOCUMENTACAO_VENDAS.md",
+    "docs/DOCUMENTACAO_RECEBIMENTOS.md",
+    "README.md",
+    "DOCUMENTACAO_SISTEMA.md",
+    "modelos_entrada/FICHA DE VENDA APTO 605 ED. UNIQUE PLACE .pdf",
+    "frontend/node_modules/ms/license.md",
+    "frontend/node_modules/sucrase/README.md",
+    "docs/DOCUMENTACAO_EMPREENDIMENTOS.md",
+    "Sem título.base",
+    "backend/test_feedback_kb.py",
+    "backend/test_sqlite.py",
+    "backend/test_conta5639b.py",
+    "backend/test_conta5639.py",
+    "backend/test_resultado_jan25.py",
     "scripts/auto-commit.log.tmp",
     "backend/core/services/__pycache__/combinatorial_analyzer.cpython-314.pyc",
     "ROADMAP_VULCANO_QUESTOR.md",
-    "backend/API_GUIDELINES.md",
-    "docs/DOCUMENTACAO_VENDAS.md",
-    "patcher_main.py",
-    "patcher_combinatorial.py",
-    "backend/core/services/combinatorial_analyzer.py",
-    "backend/core/services/__pycache__/heuristic_optimizer.cpython-314.pyc",
-    "patcher_phase2.py",
-    "patcher_master.py",
     "frontend/node_modules/yallist/README.md",
-    "patcher15.py",
-    "backend/core/services/heuristic_optimizer.py",
-    "patcher14.py",
     "frontend/node_modules/zod-validation-error/README.v3.md",
     "frontend/node_modules/xlsx/README.md",
-    "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",
-    "bench.md",
     "demos/server.md",
-    "frontend/node_modules/ms/license.md",
     "frontend/node_modules/fast-glob/README.md",
     "frontend/node_modules/thenify/History.md",
     "frontend/Numb.md",
     "frontend/Light.md",
-    "AGENTS.md",
     "SCHEMA_QUESTOR_MAP.md"
   ]
 }

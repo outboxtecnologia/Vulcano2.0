@@ -979,6 +979,20 @@ from core.services.graph_logic_builder import AccountingGraphPipeline
 @app.get("/api/questor/contabilizacoes")
 def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendimento_id: str = None):
     return AccountingGraphPipeline.api_contabilizacoes(ano, mes, empresa_id, empreendimento_id)
+
+class DiagnosticoRow(BaseModel):
+    conta_id: int
+    competencia: str
+    saldo_q: float = 0.0
+    saldo_v: float = 0.0
+    n_lanc_q: int = 0
+    n_lanc_v: int = 0
+
+class DiagnosticoInput(BaseModel):
+    empresa_id: int
+    linhas: list[DiagnosticoRow]
+    top_n: int = 20
+
 @app.post("/api/auditoria/diagnostico")
 async def api_auditoria_diagnostico(data: DiagnosticoInput):
     """
@@ -1204,7 +1218,436 @@ from core.services.heuristic_optimizer import OrphansReconciliationService
 
 @app.post("/api/auditoria/concilia-orfaos")
 async def api_concilia_orfaos(data: OrphansReconciliationService.ConciliaOrfaosInput):
-    return await OrphansReconciliationService.api_concilia_orfaos(data)
+    result = await OrphansReconciliationService.api_concilia_orfaos(data)
+
+    # ── Enriquece com nomes de conta + contrapartida para NAT.INVERTIDA ──────
+    try:
+        conn_q = get_conn("questor")
+        cur_q = conn_q.cursor()
+        cur_q.execute(
+            "SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?",
+            (data.empresa_id,)
+        )
+        plano = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
+
+        for m in result.get("matches", []):
+            # Nomes nos itens Questor
+            for item in (m.get("questor_detalhe") or [m.get("questor")] if m.get("questor") else []):
+                if item:
+                    c = int(item.get("conta") or 0)
+                    item["conta_nome"] = plano.get(c, "")
+            # Nomes nos itens Vulcano
+            for item in (m.get("vulcano_detalhe") or [m.get("vulcano")] if m.get("vulcano") else []):
+                if item:
+                    c = int(item.get("conta") or 0)
+                    item["conta_nome"] = plano.get(c, "")
+
+            # Contrapartida para NAT.INVERTIDA: busca o outro lado do lançamento no LCTOCTB
+            if not m.get("nat_match", True):
+                q_items = m.get("questor_detalhe") or ([m["questor"]] if m.get("questor") else [])
+                for q_item in q_items[:1]:  # pega o primeiro
+                    chave = q_item.get("chave")
+                    if not chave:
+                        continue
+                    try:
+                        cur_q.execute(
+                            "SELECT C.CONTACTBDEB, C.CONTACTBCRED, C.VALORLCTOCTB "
+                            "FROM LCTOCTB C "
+                            "WHERE C.CODIGOEMPRESA = ? AND C.CHAVELCTOCTB = ?",
+                            (data.empresa_id, chave)
+                        )
+                        row = cur_q.fetchone()
+                        if row:
+                            cdeb, ccred, val = int(row[0] or 0), int(row[1] or 0), float(row[2] or 0)
+                            q_conta = int(q_item.get("conta") or 0)
+                            contra_conta = ccred if cdeb == q_conta else cdeb
+                            nat_contra   = "C" if cdeb == q_conta else "D"
+                            m["questor_contrapartida"] = {
+                                "conta":      contra_conta,
+                                "conta_nome": plano.get(contra_conta, ""),
+                                "valor":      val,
+                                "natureza":   nat_contra,
+                            }
+                    except Exception:
+                        pass
+        conn_q.close()
+    except Exception:
+        pass
+
+    # ── Override de score baseado no feedback humano ──────────────────────────
+    try:
+        fb = _load_cross_match_feedback(data.empresa_id)
+        rules = _load_cross_match_rules(data.empresa_id)
+        if result.get("matches"):
+            for m in result["matches"]:
+                ov = _feedback_score_override(m, fb, rules)
+                if ov is not None:
+                    m["score"] = ov
+                    m["feedback_veredicto"] = "MATCH" if ov > 0.5 else "NO_MATCH"
+            result["matches"] = [m for m in result["matches"] if m.get("score", 0) > 0.01]
+            result["matches"].sort(key=lambda x: x["score"], reverse=True)
+            result["total_matches"] = len(result["matches"])
+    except Exception:
+        pass
+    return result
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cross-Match Feedback — Base de Conhecimento (SQLite)
+# ══════════════════════════════════════════════════════════════════════════════
+import json as _json
+
+class CrossMatchFeedbackInput(BaseModel):
+    empresa_id: int
+    veredicto: str          # 'MATCH' | 'NO_MATCH'
+    obs: str = ""
+    score_algoritmo: float = 0.0
+    q_conta: int = 0
+    q_historico: str = ""
+    q_valor: float = 0.0
+    q_data: str = ""
+    q_natureza: str = ""
+    v_conta: int = 0
+    v_historico: str = ""
+    v_valor: float = 0.0
+    v_data: str = ""
+    v_natureza: str = ""
+
+def _ensure_feedback_table():
+    import sqlite3
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cross_match_feedback (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at    TEXT    DEFAULT (datetime('now')),
+            empresa_id    INTEGER,
+            veredicto     TEXT,
+            obs           TEXT,
+            score_algoritmo REAL,
+            q_conta       INTEGER,
+            q_historico   TEXT,
+            q_valor       REAL,
+            q_data        TEXT,
+            q_natureza    TEXT,
+            v_conta       INTEGER,
+            v_historico   TEXT,
+            v_valor       REAL,
+            v_data        TEXT,
+            v_natureza    TEXT,
+            q_tokens      TEXT,
+            v_tokens      TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_ensure_feedback_table()
+
+def _tokenize_hist(text: str) -> set:
+    import re
+    return set(re.findall(r'\d+(?:[,\.]\d+)*|\b[A-ZÁÉÍÓÚ]{2,}\b', (text or "").upper()))
+
+def _load_cross_match_feedback(empresa_id: int) -> list:
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT veredicto, q_conta, q_historico, q_valor, v_conta, v_historico, v_valor, q_tokens, v_tokens "
+            "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
+        ).fetchall()
+        conn.close()
+        return [
+            {"veredicto": r[0], "q_conta": r[1], "q_historico": r[2], "q_valor": r[3],
+             "v_conta": r[4], "v_historico": r[5], "v_valor": r[6],
+             "q_tokens": set(_json.loads(r[7] or "[]")),
+             "v_tokens": set(_json.loads(r[8] or "[]"))}
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+def _feedback_score_override(match: dict, feedback: list, rules: list = None) -> float | None:
+    """Retorna 0.97 para MATCH confirmado, 0.0 para NO_MATCH. None = sem override.
+    Aplica também regras derivadas da análise de padrões (CONTA_PAIR)."""
+    from difflib import SequenceMatcher
+    q = match.get("questor") or {}
+    v = match.get("vulcano") or {}
+    q_val  = float(q.get("valor") or 0)
+    v_val  = float(v.get("valor") or 0)
+    q_hist = (q.get("historico") or "").upper()
+    v_hist = (v.get("historico") or "").upper()
+    q_cnt  = int(q.get("conta") or 0)
+    v_cnt  = int(v.get("conta") or 0)
+
+    # 1. Override exato: par já visto na KB
+    for fb in (feedback or []):
+        fb_qv = float(fb.get("q_valor") or 0)
+        fb_vv = float(fb.get("v_valor") or 0)
+        if fb_qv > 0 and abs(q_val - fb_qv) / fb_qv > 0.01: continue
+        if fb_vv > 0 and abs(v_val - fb_vv) / fb_vv > 0.01: continue
+        sim_q = SequenceMatcher(None, q_hist[:80], (fb.get("q_historico") or "").upper()[:80]).ratio()
+        sim_v = SequenceMatcher(None, v_hist[:80], (fb.get("v_historico") or "").upper()[:80]).ratio()
+        if sim_q >= 0.75 and sim_v >= 0.75:
+            return 0.97 if fb["veredicto"] == "MATCH" else 0.0
+
+    # 2. Regras derivadas: CONTA_PAIR com alta confiança
+    for rule in (rules or []):
+        if rule.get("rule_type") != "CONTA_PAIR": continue
+        if rule.get("q_conta") == q_cnt and rule.get("v_conta") == v_cnt:
+            conf = float(rule.get("confidence") or 0)
+            n    = int(rule.get("n_samples") or 0)
+            if n >= 3 and conf >= 0.90:
+                # confiança alta: boost para 0.93 (abaixo de exact-match 0.97)
+                return max(float(match.get("score") or 0), 0.93)
+            elif n >= 3 and conf <= 0.20:
+                # claramente rejeitado
+                return 0.0
+    return None
+
+# ── Pattern analysis pipeline ────────────────────────────────────────────────
+def _ensure_rules_table():
+    import sqlite3
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cross_match_rules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at  TEXT DEFAULT (datetime('now')),
+            empresa_id  INTEGER,
+            rule_type   TEXT,   -- 'CONTA_PAIR' | 'THRESHOLD' | 'LLM_RULE'
+            q_conta     INTEGER,
+            v_conta     INTEGER,
+            confidence  REAL,
+            n_samples   INTEGER,
+            payload     TEXT    -- JSON com dados adicionais (calibração, regras LLM)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_ensure_rules_table()
+
+def _load_cross_match_rules(empresa_id: int) -> list:
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT rule_type, q_conta, v_conta, confidence, n_samples, payload "
+            "FROM cross_match_rules WHERE empresa_id=? ORDER BY confidence DESC",
+            (empresa_id,)
+        ).fetchall()
+        conn.close()
+        return [{"rule_type": r[0], "q_conta": r[1], "v_conta": r[2],
+                 "confidence": r[3], "n_samples": r[4], "payload": r[5]} for r in rows]
+    except Exception:
+        return []
+
+def _run_pattern_analysis(empresa_id: int):
+    """Deriva regras estruturais da KB. Chamado em thread daemon."""
+    import sqlite3, threading
+    from collections import Counter
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT veredicto, q_conta, v_conta, q_historico, v_historico, score_algoritmo "
+            "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
+        ).fetchall()
+
+        if len(rows) < 50:
+            conn.close()
+            return
+
+        matches_rows = [r for r in rows if r[0] == 'MATCH']
+        reject_rows  = [r for r in rows if r[0] == 'NO_MATCH']
+
+        # 1. Conta-pair mapping
+        pair_match   = Counter((r[1], r[2]) for r in matches_rows)
+        pair_reject  = Counter((r[1], r[2]) for r in reject_rows)
+        all_pairs    = set(pair_match.keys()) | set(pair_reject.keys())
+
+        conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='CONTA_PAIR'", (empresa_id,))
+        for pair in all_pairs:
+            m_cnt = pair_match.get(pair, 0)
+            r_cnt = pair_reject.get(pair, 0)
+            total_pair = m_cnt + r_cnt
+            if total_pair < 2:
+                continue
+            conf = m_cnt / total_pair
+            conn.execute(
+                "INSERT INTO cross_match_rules (empresa_id, rule_type, q_conta, v_conta, confidence, n_samples) "
+                "VALUES (?, 'CONTA_PAIR', ?, ?, ?, ?)",
+                (empresa_id, pair[0], pair[1], round(conf, 3), total_pair)
+            )
+
+        # 2. Score calibration by bucket
+        buckets = {}
+        for r in rows:
+            sc  = float(r[5] or 0)
+            b   = round(int(sc * 10) / 10, 1)
+            if b not in buckets:
+                buckets[b] = {"total": 0, "match": 0}
+            buckets[b]["total"] += 1
+            if r[0] == 'MATCH':
+                buckets[b]["match"] += 1
+        calibracao = {str(k): round(v["match"] / v["total"], 3) for k, v in sorted(buckets.items()) if v["total"] >= 3}
+
+        conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='THRESHOLD'", (empresa_id,))
+        conn.execute(
+            "INSERT INTO cross_match_rules (empresa_id, rule_type, confidence, n_samples, payload) VALUES (?, 'THRESHOLD', 0, ?, ?)",
+            (empresa_id, len(rows), _json.dumps(calibracao))
+        )
+
+        conn.commit()
+        conn.close()
+        print(f"[KB] Análise de padrão OK — {len(matches_rows)} MATCH, {len(reject_rows)} NO_MATCH, {len(all_pairs)} pares conta derivados.")
+
+        # 3. LLM: deriva regras textuais com Gemini (apenas quando >= 100 feedbacks)
+        if len(rows) >= 100:
+            _run_llm_pattern_extraction(empresa_id, matches_rows[:30], reject_rows[:10])
+
+    except Exception as e:
+        print(f"[KB] Erro em _run_pattern_analysis: {e}")
+
+def _run_llm_pattern_extraction(empresa_id: int, matches, rejects):
+    """Usa Gemini para extrair regras contábeis textuais da KB. Síncrono, roda em thread."""
+    try:
+        schema = '{"regras":[{"descricao":"","q_conta":0,"v_conta":0,"confianca":0.0}]}'
+        exemplos_match  = "\n".join(
+            f"Q c/{r[1]}:{r[3][:60]} ↔ V c/{r[2]}:{r[4][:60]}" for r in matches[:20]
+        )
+        exemplos_reject = "\n".join(
+            f"REJEITADO: Q c/{r[1]}:{r[3][:50]} ↔ V c/{r[2]}:{r[4][:50]}" for r in rejects[:5]
+        )
+        prompt = (
+            "Você é um especialista em contabilidade imobiliária (POC/IFRS-15). Analisando os pares "
+            "MATCH confirmados pelo auditor, derive as REGRAS CONTÁBEIS implícitas que explicam por "
+            "que esses lançamentos Questor ↔ Vulcano são equivalentes.\n\n"
+            f"MATCHES CONFIRMADOS:\n{exemplos_match}\n\n"
+            f"REJEITADOS:\n{exemplos_reject}\n\n"
+            f"Retorne APENAS JSON com o schema: {schema}"
+        )
+        resp = _gemini_generate_json(prompt)  # síncrono — OK pq roda em thread
+        regras = resp.get("regras") or []
+
+        if regras:
+            import sqlite3
+            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='LLM_RULE'", (empresa_id,))
+            for reg in regras:
+                conn.execute(
+                    "INSERT INTO cross_match_rules (empresa_id, rule_type, q_conta, v_conta, confidence, payload) "
+                    "VALUES (?, 'LLM_RULE', ?, ?, ?, ?)",
+                    (empresa_id, reg.get("q_conta", 0), reg.get("v_conta", 0),
+                     float(reg.get("confianca") or 0), reg.get("descricao", ""))
+                )
+            conn.commit()
+            conn.close()
+            print(f"[KB] LLM derivou {len(regras)} regras contábeis.")
+    except Exception as e:
+        print(f"[KB LLM] Erro: {e}")
+
+@app.post("/api/auditoria/cross-match-feedback")
+def api_cross_match_feedback_post(data: CrossMatchFeedbackInput):
+    import sqlite3, threading
+    try:
+        q_tok = _json.dumps(list(_tokenize_hist(data.q_historico)))
+        v_tok = _json.dumps(list(_tokenize_hist(data.v_historico)))
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn.execute(
+            "INSERT INTO cross_match_feedback "
+            "(empresa_id, veredicto, obs, score_algoritmo, "
+            " q_conta, q_historico, q_valor, q_data, q_natureza, "
+            " v_conta, v_historico, v_valor, v_data, v_natureza, q_tokens, v_tokens) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (data.empresa_id, data.veredicto, data.obs, data.score_algoritmo,
+             data.q_conta, data.q_historico, data.q_valor, data.q_data, data.q_natureza,
+             data.v_conta, data.v_historico, data.v_valor, data.v_data, data.v_natureza,
+             q_tok, v_tok)
+        )
+        conn.commit()
+        total     = conn.execute("SELECT COUNT(*) FROM cross_match_feedback WHERE empresa_id=?", (data.empresa_id,)).fetchone()[0]
+        matches   = conn.execute("SELECT COUNT(*) FROM cross_match_feedback WHERE empresa_id=? AND veredicto='MATCH'", (data.empresa_id,)).fetchone()[0]
+        nomatches = conn.execute("SELECT COUNT(*) FROM cross_match_feedback WHERE empresa_id=? AND veredicto='NO_MATCH'", (data.empresa_id,)).fetchone()[0]
+        conn.close()
+
+        # Trigger análise de padrão: primeira vez ao atingir 50, depois a cada 10
+        if total >= 50 and (total == 50 or total % 10 == 0):
+            threading.Thread(target=_run_pattern_analysis, args=(data.empresa_id,), daemon=True).start()
+            analise_msg = " 🔬 Análise de padrão disparada!"
+        else:
+            falta = max(0, 50 - total)
+            analise_msg = f" ({falta} para análise de padrão)" if falta > 0 else ""
+
+        return {
+            "ok": True,
+            "total_feedback": total, "total_match": matches, "total_no_match": nomatches,
+            "mensagem": f"Feedback {'✓ MATCH' if data.veredicto == 'MATCH' else '✗ NÃO MATCH'} salvo.{analise_msg}"
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auditoria/cross-match-rules")
+def api_cross_match_rules_get(empresa_id: int = 959):
+    """Retorna regras derivadas da base de conhecimento."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conta_pairs = conn.execute(
+            "SELECT q_conta, v_conta, confidence, n_samples FROM cross_match_rules "
+            "WHERE empresa_id=? AND rule_type='CONTA_PAIR' ORDER BY confidence DESC",
+            (empresa_id,)
+        ).fetchall()
+        threshold_row = conn.execute(
+            "SELECT payload, n_samples FROM cross_match_rules "
+            "WHERE empresa_id=? AND rule_type='THRESHOLD' ORDER BY created_at DESC LIMIT 1",
+            (empresa_id,)
+        ).fetchone()
+        llm_rules = conn.execute(
+            "SELECT q_conta, v_conta, confidence, payload FROM cross_match_rules "
+            "WHERE empresa_id=? AND rule_type='LLM_RULE' ORDER BY confidence DESC",
+            (empresa_id,)
+        ).fetchall()
+        stats = conn.execute(
+            "SELECT veredicto, COUNT(*) FROM cross_match_feedback WHERE empresa_id=? GROUP BY veredicto",
+            (empresa_id,)
+        ).fetchall()
+        conn.close()
+        return {
+            "conta_pairs": [{"q_conta": r[0], "v_conta": r[1], "confidence": r[2], "n_samples": r[3]} for r in conta_pairs],
+            "calibracao":  _json.loads(threshold_row[0]) if threshold_row else {},
+            "n_total_feedback": (threshold_row[1] if threshold_row else 0),
+            "llm_rules":   [{"q_conta": r[0], "v_conta": r[1], "confidence": r[2], "descricao": r[3]} for r in llm_rules],
+            "feedback_stats": {r[0]: r[1] for r in stats},
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auditoria/cross-match-feedback")
+def api_cross_match_feedback_get(empresa_id: int = 959, limit: int = 300):
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT id, created_at, veredicto, obs, score_algoritmo, "
+            "       q_conta, q_historico, q_valor, q_data, "
+            "       v_conta, v_historico, v_valor, v_data "
+            "FROM cross_match_feedback WHERE empresa_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (empresa_id, limit)
+        ).fetchall()
+        stats = {r[0]: r[1] for r in conn.execute(
+            "SELECT veredicto, COUNT(*) FROM cross_match_feedback WHERE empresa_id=? GROUP BY veredicto",
+            (empresa_id,)
+        ).fetchall()}
+        conn.close()
+        return {
+            "data": [{"id": r[0], "created_at": r[1], "veredicto": r[2], "obs": r[3],
+                      "score_algoritmo": r[4], "q_conta": r[5], "q_historico": r[6],
+                      "q_valor": r[7], "q_data": r[8], "v_conta": r[9],
+                      "v_historico": r[10], "v_valor": r[11], "v_data": r[12]} for r in rows],
+            "stats": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/questor/saldo-contas")
 def api_saldo_contas(
     empresa_id: int = 959,
@@ -1291,7 +1734,6 @@ def api_saldo_contas(
                         WHERE C.CODIGOEMPRESA = ?
                           AND {cond_contabil}
                           AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                          AND NOT (C.CODIGOHISTCTB = 370)
                           AND C.DATALCTOCTB >= CAST(? AS DATE)
                           AND C.DATALCTOCTB < CAST(? AS DATE)
                         ORDER BY C.DATALCTOCTB ASC
@@ -1320,7 +1762,6 @@ def api_saldo_contas(
                         WHERE C.CODIGOEMPRESA = ?
                           AND {cond_contabil}
                           AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                          AND NOT (C.CODIGOHISTCTB = 370)
                         ORDER BY C.DATALCTOCTB ASC
                     """, (empresa_id, *params_conta))
 
@@ -1396,15 +1837,14 @@ def api_saldo_contas(
                               AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
                         """, (*params_conta, empresa_id, cc_filtro, *params_conta, data_ini))
                     else:
-                        base_sum = "WHEN CONTACTBCRED = ? THEN -VALORLCTOCTB" if is_imposto_recolher else "WHEN CONTACTBDEB = ? THEN VALORLCTOCTB WHEN CONTACTBCRED = ? THEN -VALORLCTOCTB"
+                        base_sum = "WHEN C.CONTACTBCRED = ? THEN -C.VALORLCTOCTB" if is_imposto_recolher else "WHEN C.CONTACTBDEB = ? THEN C.VALORLCTOCTB WHEN C.CONTACTBCRED = ? THEN -C.VALORLCTOCTB"
                         cur_q.execute(f"""
                             SELECT SUM(CASE {base_sum} ELSE 0 END)
-                            FROM LCTOCTB
-                            WHERE CODIGOEMPRESA = ?
+                            FROM LCTOCTB C
+                            WHERE C.CODIGOEMPRESA = ?
                               AND {cond_contabil}
-                              AND DATALCTOCTB < CAST(? AS DATE)
-                              AND (CODIGOORIGLCTOCTB IS NULL OR CODIGOORIGLCTOCTB <> 'ZZ')
-                              AND NOT (CODIGOHISTCTB = 370)
+                              AND C.DATALCTOCTB < CAST(? AS DATE)
+                              AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
                         """, (*params_conta, empresa_id, *params_conta, data_ini))
                     r = cur_q.fetchone()
                     saldo_anterior = float(r[0] or 0) if r and r[0] is not None else 0.0

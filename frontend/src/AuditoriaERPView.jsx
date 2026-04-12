@@ -646,8 +646,11 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
 }
 
 // ── Painel de Conciliação Cross-Account ──────────────────────────────────────
-function CrossMatchPanel({ result, onClose }) {
+function CrossMatchPanel({ result, onClose, empresaId }) {
   if (!result) return null;
+
+  const [fb, setFb] = React.useState({});  // { index: {veredicto, obs, saved, loading, showObs} }
+  const [kbStats, setKbStats] = React.useState(null);
 
   const corScore = (s) => {
     if (s >= 0.85) return '#34c759';
@@ -663,6 +666,57 @@ function CrossMatchPanel({ result, onClose }) {
     return 'RESIDUAL';
   };
 
+  const sendFeedback = async (i, match, veredicto, obs = '', useContrapartida = false) => {
+    setFb(prev => ({ ...prev, [i]: { ...prev[i], loading: true } }));
+    const baseQ = match.questor_detalhe?.[0] || match.questor || {};
+    const v = match.vulcano_detalhe?.[0]  || match.vulcano  || {};
+    const q_conta = useContrapartida ? (match.questor_contrapartida?.conta || baseQ.conta) : baseQ.conta;
+    const q_valor = useContrapartida ? (match.questor_contrapartida?.valor || baseQ.valor) : baseQ.valor;
+    const q_natureza = useContrapartida ? (match.questor_contrapartida?.natureza || baseQ.natureza) : baseQ.natureza;
+    
+    try {
+      const r = await fetch(`${API_BASE}/api/auditoria/cross-match-feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          empresa_id:      parseInt(empresaId) || 959,
+          veredicto,
+          obs,
+          score_algoritmo: match.score || 0,
+          q_conta:    parseInt(q_conta || 0),
+          q_historico: baseQ.historico || baseQ.chave || '',
+          q_valor:    parseFloat(q_valor || 0),
+          q_data:     baseQ.data || '',
+          q_natureza: q_natureza || '',
+          v_conta:    parseInt(v.conta || 0),
+          v_historico: v.historico || v.logica || '',
+          v_valor:    parseFloat(v.valor || 0),
+          v_data:     v.data || '',
+          v_natureza: v.natureza || '',
+        })
+      });
+      const j = await r.json();
+      setFb(prev => ({ ...prev, [i]: { veredicto, obs, saved: true, loading: false, showObs: false, obsFor: null } }));
+      setKbStats({ match: j.total_match, no_match: j.total_no_match, total: j.total_feedback });
+    } catch (e) {
+      setFb(prev => ({ ...prev, [i]: { ...prev[i], loading: false, error: String(e) } }));
+    }
+  };
+
+  const handleMatchClick = (i, match, useContrapartida = false) => {
+    const q = match.questor_detalhe?.[0] || match.questor || {};
+    const v = match.vulcano_detalhe?.[0]  || match.vulcano  || {};
+    const q_val = useContrapartida ? parseFloat(match.questor_contrapartida?.valor || 0) : parseFloat(q.valor || 0);
+    const v_val = parseFloat(v.valor || 0);
+    
+    // Se o valor difere, exige justificativa
+    if (Math.abs(q_val - v_val) > 0.01) {
+      setFb(prev => ({ ...prev, [i]: { ...prev[i], showObs: true, obsFor: 'MATCH', useContra: useContrapartida, obs: '' } }));
+    } else {
+      sendFeedback(i, match, 'MATCH', '', useContrapartida);
+    }
+  };
+
   return (
     <div className="bg-[var(--v-bg)] border border-[#34c759]/25 rounded-[var(--v-radius)] overflow-hidden">
       {/* Header */}
@@ -675,6 +729,7 @@ function CrossMatchPanel({ result, onClose }) {
               {result.total_matches} par{result.total_matches !== 1 ? 'es' : ''} encontrado{result.total_matches !== 1 ? 's' : ''}
               {' '}·{' '}{result.total_orfaos_questor}Q + {result.total_orfaos_vulcano}V órfãos analisados
               {' '}· Scoring: Valor 50% + Histórico 25% + Data 15% + Conta 10%
+              {kbStats && <span className="ml-2 text-[#34c759]">· KB: {kbStats.match}✓ {kbStats.no_match}✗</span>}
             </p>
           </div>
         </div>
@@ -690,12 +745,18 @@ function CrossMatchPanel({ result, onClose }) {
           <span className="text-[10px] font-black uppercase tracking-widest">Nenhum par candidato encontrado acima do threshold (38%)</span>
         </div>
       ) : (
-        <div className="divide-y divide-[#111] max-h-[520px] overflow-y-auto">
+        <div className="divide-y divide-[#111] max-h-[580px] overflow-y-auto">
           {result.matches.map((m, i) => {
             const cor = corScore(m.score);
             const pct = Math.round(m.score * 100);
+            const state = fb[i] || {};
+            const isSaved  = state.saved;
+            const isMatch  = isSaved && state.veredicto === 'MATCH';
+            const isNoMatch = isSaved && state.veredicto === 'NO_MATCH';
+            // se veio com override do backend
+            const fbVeredicto = m.feedback_veredicto;
             return (
-              <div key={i} className="px-4 py-3 hover:bg-[var(--v-deep)] transition-colors">
+              <div key={i} className={`px-4 py-3 hover:bg-[var(--v-deep)] transition-colors ${isMatch ? 'bg-[#34c759]/5' : isNoMatch ? 'bg-[#ff4d00]/5' : ''}`}>
                 {/* Top row: score bar + badges + sugestão */}
                 <div className="flex items-center gap-3 mb-2">
                   {/* Score indicator */}
@@ -718,6 +779,11 @@ function CrossMatchPanel({ result, onClose }) {
                       ⚠ Nat. Invertida
                     </span>
                   )}
+                  {fbVeredicto && (
+                    <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${fbVeredicto === 'MATCH' ? 'bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759]' : 'bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)]'}`}>
+                      {fbVeredicto === 'MATCH' ? '✓ Confirmado' : '✗ Rejeitado'}
+                    </span>
+                  )}
 
                   {/* Score breakdown */}
                   <span className="text-[9px] text-[#333] font-mono ml-auto shrink-0">
@@ -731,7 +797,10 @@ function CrossMatchPanel({ result, onClose }) {
                       <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent)] ml-1">Questor</p>
                       {(m.questor_detalhe && m.questor_detalhe.length > 0 ? m.questor_detalhe : [m.questor]).map((q, idx) => (
                           <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#ff4d00]/10">
-                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">{q.data} | c/{q.conta}</p>
+                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">
+                              {q.data} | c/<span className="text-[var(--v-accent)]">{q.conta}</span>
+                              {q.conta_nome && <span className="text-[var(--v-text-muted)] ml-1">— {q.conta_nome}</span>}
+                            </p>
                             <p className="font-bold text-[var(--v-text-muted)] truncate" title={q.historico || q.chave}>{(q.historico || q.chave || '?').slice(0,50)}</p>
                             <p className="font-black text-[var(--v-accent-3)] mt-0.5">{fmt(q.valor)} <span className="text-[var(--v-text-faint)]">{q.natureza}</span></p>
                           </div>
@@ -741,7 +810,10 @@ function CrossMatchPanel({ result, onClose }) {
                       <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-5)] ml-1">Vulcano</p>
                       {(m.vulcano_detalhe && m.vulcano_detalhe.length > 0 ? m.vulcano_detalhe : [m.vulcano]).map((v, idx) => (
                           <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#a259ff]/10">
-                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">{v.data} | c/{v.conta}</p>
+                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">
+                              {v.data} | c/<span className="text-[var(--v-accent-5)]">{v.conta}</span>
+                              {v.conta_nome && <span className="text-[var(--v-text-muted)] ml-1">— {v.conta_nome}</span>}
+                            </p>
                             <p className="font-bold text-[var(--v-text-muted)] truncate" title={v.historico || v.logica}>{(v.historico || v.logica || '?').slice(0,50)}</p>
                             <p className="font-black text-[var(--v-accent-5)] mt-0.5">{fmt(v.valor)} <span className="text-[var(--v-text-faint)]">{v.natureza}</span></p>
                           </div>
@@ -749,8 +821,93 @@ function CrossMatchPanel({ result, onClose }) {
                     </div>
                   </div>
 
+                {/* Contrapartida Questor para NAT.INVERTIDA */}
+                {!m.nat_match && m.questor_contrapartida && (
+                  <div className="mb-2 px-1">
+                    <div className="bg-[#ff9f0a]/5 border border-[#ff9f0a]/30 rounded p-2 flex justify-between items-center flex-wrap gap-2">
+                      <div>
+                        <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-2)] mb-1">
+                          ⇄ Contrapartida Questor (outro lado da partida dobrada)
+                        </p>
+                        <p className="text-[9px] font-mono text-[var(--v-text-muted)]">
+                          c/<span className="font-black text-[var(--v-accent-2)]">{m.questor_contrapartida.conta}</span>
+                          {m.questor_contrapartida.conta_nome && <span className="ml-1 text-[var(--v-text-faint)]">— {m.questor_contrapartida.conta_nome}</span>}
+                          <span className="ml-3 font-black text-[var(--v-accent-3)]">{fmt(m.questor_contrapartida.valor)}</span>
+                          <span className="ml-1 text-[var(--v-text-faint)]">{m.questor_contrapartida.natureza}</span>
+                        </p>
+                      </div>
+                      {!isSaved && !fbVeredicto && (
+                        <button
+                          onClick={() => handleMatchClick(i, m, true)}
+                          disabled={state.loading}
+                          className="shrink-0 px-2 py-1 text-[8px] font-black uppercase text-[#34c759] bg-[#34c759]/10 border border-[#34c759]/40 rounded hover:bg-[#34c759]/20 transition-all disabled:opacity-40"
+                        >✓ Match pela Contrapartida</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Sugestão */}
-                <p className="text-[9px] font-bold text-[var(--v-text-faint)] italic px-1">{m.sugestao}</p>
+                <p className="text-[9px] font-bold text-[var(--v-text-faint)] italic px-1 mb-2">{m.sugestao}</p>
+
+                {/* ── FEEDBACK BUTTONS ──────────────────────────────────── */}
+                {!isSaved && !fbVeredicto ? (
+                  <div className="flex flex-col gap-2 mt-1 w-full relative">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] shrink-0">Auditor:</span>
+                      <button
+                        onClick={() => handleMatchClick(i, m, false)}
+                        disabled={state.loading}
+                        className="flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759] hover:bg-[#34c759]/30 transition-all disabled:opacity-40"
+                      >
+                        {state.loading ? '...' : '✓ Match'}
+                      </button>
+                      <button
+                        onClick={() => setFb(prev => ({ ...prev, [i]: { ...prev[i], showObs: true, obsFor: 'NO_MATCH', useContra: false } }))}
+                        disabled={state.loading}
+                        className="flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)] hover:bg-[#ff4d00]/30 transition-all disabled:opacity-40"
+                      >
+                        ✗ Não Match
+                      </button>
+                    </div>
+
+                    {state.showObs && (
+                      <div className="flex items-center gap-2 w-full mt-1 bg-[var(--v-deep)] p-2 rounded border border-[#111]">
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder={state.obsFor === 'MATCH' ? "Justifique a diferença de valores..." : "Observação (opcional)..."}
+                          value={state.obs || ''}
+                          onChange={e => setFb(prev => ({ ...prev, [i]: { ...prev[i], obs: e.target.value } }))}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              if (state.obsFor === 'MATCH' && !(state.obs || '').trim()) return;
+                              sendFeedback(i, m, state.obsFor || 'NO_MATCH', state.obs || '', state.useContra);
+                            }
+                          }}
+                          className={`flex-1 bg-[var(--v-bg)] border rounded px-2 py-1 text-[10px] text-[var(--v-text-muted)] outline-none ${state.obsFor === 'MATCH' ? 'border-[#34c759]/40 focus:border-[#34c759]' : 'border-[#ff4d00]/30 focus:border-[#ff4d00]/60'}`}
+                        />
+                        <button
+                          disabled={state.obsFor === 'MATCH' && !(state.obs || '').trim()}
+                          onClick={() => sendFeedback(i, m, state.obsFor || 'NO_MATCH', state.obs || '', state.useContra)}
+                          className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded transition-all disabled:opacity-40 ${state.obsFor === 'MATCH' ? 'text-[#34c759] bg-[#34c759]/20 border border-[#34c759]/40 hover:bg-[#34c759]/40' : 'text-[var(--v-accent)] bg-[#ff4d00]/20 border border-[#ff4d00]/40 hover:bg-[#ff4d00]/40'}`}
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setFb(prev => ({ ...prev, [i]: { ...prev[i], showObs: false, obsFor: null } }))}
+                          className="px-1.5 py-1 text-[9px] text-[#333] hover:text-[var(--v-text-bold)] transition-colors"
+                        >✕</button>
+                      </div>
+                    )}
+                  </div>
+                ) : isSaved ? (
+                  <div className={`flex items-center gap-2 px-2 py-1 rounded text-[9px] font-black ${isMatch ? 'bg-[#34c759]/10 text-[#34c759]' : 'bg-[#ff4d00]/10 text-[var(--v-accent)]'}`}>
+                    {isMatch ? '✓ Salvo como MATCH' : '✗ Salvo como NÃO MATCH'}
+                    {state.obs && <span className="font-normal text-[var(--v-text-faint)] ml-1">— {state.obs}</span>}
+                    <span className="ml-auto text-[#333] font-normal">na base de conhecimento</span>
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -845,13 +1002,13 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           mergeConta(emp.contas_virtuais, accVirtual);
           mergeConta(emp.contas_legado, accLegado);
           
-          (emp.contas_virtuais || []).forEach(c => contasGlobais.add(c.conta));
+          (emp.contas_virtuais || []).forEach(c => { if (!c.is_caixa) contasGlobais.add(c.conta); });
           (emp.contas_legado || []).forEach(c => contasGlobais.add(c.conta));
         });
         const virtualList = Object.values(accVirtual);
         const legadoList = Object.values(accLegado);
         
-        virtualList.forEach(c => contasGlobais.add(c.conta));
+        virtualList.forEach(c => { if (!c.is_caixa) contasGlobais.add(c.conta); });
         virtuaisPorMes[comp] = virtualList;
         legadosPorMes[comp] = legadoList;
       }
@@ -865,7 +1022,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           
           let fisicoList = [];
           let urlF = `${API_BASE}/api/questor/saldo-contas?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}&contas=${contasCsv}`;
-          if (filtroEmpId) urlF += `&empreendimento_id=${filtroEmpId}`;
+          // NÃO passar empreendimento_id aqui: as contas em contasGlobais já são
+          // específicas do empreendimento (ex: 5665=RECEITA STUTTGART). Filtrar por CC no
+          // Questor LCTOGER causa perda de dados quando o Questor não taggeia por CC.
           
           try {
             const respF = await fetch(urlF);
@@ -1065,7 +1224,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
     Object.values(dadosPorMes).forEach(({ virtual, legado }) => {
       // 1. Contas Virtuais
       (virtual || []).forEach(c => {
-        if (!m[c.conta]) m[c.conta] = { nome: c.nome || `Conta ${c.conta}`, classif: c.classif || '9.99.99' };
+        if (!c.is_caixa) {
+          if (!m[c.conta]) m[c.conta] = { nome: c.nome || `Conta ${c.conta}`, classif: c.classif || '9.99.99' };
+        }
       });
       // 2. Contas Legado
       (legado || []).forEach(c => {
@@ -1344,7 +1505,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
             </span>
           </div>
         ) : (
-          <CrossMatchPanel result={crossData} onClose={() => setShowCross(false)}/>
+          <CrossMatchPanel result={crossData} onClose={() => setShowCross(false)} empresaId={selectedEmpresa}/>
         )
       )}
 

@@ -7,7 +7,7 @@
     "groups": [
       {
         "query": "path:documentacao_clientes",
-        "color": "#1496c2"
+        "color": "#11b3e8"
       },
       {
         "query": "path:backend",
@@ -18,8 +18,8 @@
         "color": "#e60a0a"
       },
       {
-        "query": "",
-        "color": "#aaaaaa"
+        "query": "file:Readme",
+        "color": "#0fc7f5"
       }
     ]
   },
