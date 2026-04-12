@@ -1084,9 +1084,10 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
         # --- MOVIMENTO DO MÊS GLOBAL (Empresa-wide) ---
         cur_q.execute("""
             SELECT 
-                C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER, C.CHAVEORIGEM
+                C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER, C.CHAVEORIGEM, H.DESCRHISTCTB
             FROM LCTOGER G
             JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+            LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
             WHERE G.CODIGOEMPRESA = ? 
             AND C.DATALCTOCTB >= CAST(? AS DATE) AND C.DATALCTOCTB < CAST(? AS DATE)
             AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
@@ -1094,11 +1095,14 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
             ORDER BY C.DATALCTOCTB ASC
         """, (empresa_id, data_inicio_mes_atual, data_fim_mes_atual))
         
-        for (chave, dt, cdeb, ccred, hist_val, nat, val, chave_origem) in cur_q.fetchall():
+        for (chave, dt, cdeb, ccred, hist_val, nat, val, chave_origem, descr_hist) in cur_q.fetchall():
             if isinstance(hist_val, (bytes, bytearray)):
-                hist = hist_val.decode('cp1252', 'ignore')
+                compl = hist_val.decode('cp1252', 'ignore')
             else:
-                hist = str(hist_val) if hist_val else ""
+                compl = str(hist_val) if hist_val else ""
+                
+            descr = str(descr_hist or "").strip()
+            hist = f"{descr} {compl}".strip()
                 
             v = float(val or 0)
             conta = cdeb if nat == 1 else ccred
@@ -1420,8 +1424,8 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     
                     if abs(mov_custo_u) > 0.01:
                          logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}"
-                         inject_virtual_entry(c_custo, mov_custo_u, 'D', f"Apropriação de Custo (POC Misto) - Unid {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
-                         inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"Baixa de Estoque Físico/Imóveis - Unid {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+                         inject_virtual_entry(c_custo, mov_custo_u, 'D', f"{emp.get('hist_aprcusto', 'Apropriação Custo')} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
+                         inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"BAIXA ESTOQUE UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
 
                     # RECEBIMENTOS E RATEIO PASSSIVO
                     caixa_m = uni_data["caixa_mes"]
@@ -1443,8 +1447,8 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     if abs(mov_receita_auferida) > 0.01:
                          nat_rec = 'C' if mov_receita_auferida > 0 else 'D'
                          nat_cli_rec = 'D' if mov_receita_auferida > 0 else 'C'
-                         inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"Receita Auferida (POC) - Unid {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
-                         inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"Faturamento Direito s/ Venda (POC) - Unid {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
+                         inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"{emp.get('hist_venda', 'Receita POC')} UNID {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
+                         inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"{emp.get('hist_venda', 'Faturamento')} UNID {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
                     # -----------------
                     
                     cli_atual = min(caixa_acum, rec_auferida_atual)
@@ -1459,11 +1463,18 @@ def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendiment
                     
                     if abs(mov_cli) > 0.01:
                          nat_cli = 'C' if mov_cli > 0 else 'D'
-                         inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"Baixa de Clientes (Pgto vs POC) - Unid {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
+                         inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"{emp.get('hist_rec', 'Baixa Cliente')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
                     
                     if abs(mov_adi) > 0.01:
                          nat_adi = 'C' if mov_adi > 0 else 'D'
-                         inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"Reconhecimento Adiantamento (Excesso Pgto) - Unid {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
+                         inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"{emp.get('hist_adi', 'Reconhecimento Adiantamento')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
+                         
+                    # ACRÉSCIMOS / VARIAÇÃO (Receita Financeira do Mês)
+                    acresc_mes = uni_data.get("acrescimo_mes", 0.0)
+                    if acresc_mes > 0.01:
+                         logica_acres = f"Unid {uni_nome}: Acréscimo Recebido na Parcela no Mês ({acresc_mes:,.2f})"
+                         inject_virtual_entry(c_rec, acresc_mes, 'C', f"{emp.get('hist_var', 'Variação Acréscimo')} UNID {uni_nome}", logica=logica_acres, saldo_ant=0.0)
+                         inject_virtual_entry(c_cli, acresc_mes, 'D', f"{emp.get('hist_var', 'Variação Acréscimo')} UNID {uni_nome}", logica=logica_acres, saldo_ant=0.0)
                          
                     # TRIBUTOS
                     trib_caixa_atual = uni_data["tributos_caixa_acumulado"]
@@ -2169,7 +2180,7 @@ async def api_concilia_orfaos(data: ConciliaOrfaosInput):
 
     clusters_map = defaultdict(lambda: {"q": [], "v": []})
     
-    if getattr(data, 'use_pgvector', False):
+    if data.use_pgvector is True:
         try:
             from vector_engine import SessionLocal, generate_embeddings_batch
             from sqlalchemy import text
@@ -2514,9 +2525,10 @@ def api_saldo_contas(
                 if cc_filtro:
                     query = f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
                         WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
                           AND {cond_contabil}
                           AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
@@ -2529,8 +2541,9 @@ def api_saldo_contas(
                 else:
                     query = f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
                         FROM LCTOCTB C
+                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
                         WHERE C.CODIGOEMPRESA = ?
                           AND {cond_contabil}
                           AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
@@ -2544,9 +2557,10 @@ def api_saldo_contas(
                 if cc_filtro:
                     cur_q.execute(f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
                         WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
                           AND {cond_contabil}
                           AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
@@ -2556,8 +2570,9 @@ def api_saldo_contas(
                 else:
                     cur_q.execute(f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
                         FROM LCTOCTB C
+                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
                         WHERE C.CODIGOEMPRESA = ?
                           AND {cond_contabil}
                           AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
@@ -2572,14 +2587,22 @@ def api_saldo_contas(
 
             for row_tuple in rows:
                 chave, dt, cdeb, ccred, hist_raw, valor = row_tuple[:6]
-                opt_nat = row_tuple[6] if len(row_tuple) > 6 else None
+                
+                if len(row_tuple) >= 8:
+                    opt_nat = row_tuple[6]
+                    descr_str = str(row_tuple[7] or "").strip()
+                else:
+                    opt_nat = None
+                    descr_str = str(row_tuple[6] or "").strip()
                 
                 if isinstance(hist_raw, (bytes, bytearray)):
-                    hist = hist_raw.decode("cp1252", "ignore")
+                    compl = hist_raw.decode("cp1252", "ignore")
                 elif hasattr(hist_raw, "read"):
-                    hist = hist_raw.read().decode("cp1252", "ignore")
+                    compl = hist_raw.read().decode("cp1252", "ignore")
                 else:
-                    hist = str(hist_raw or "")
+                    compl = str(hist_raw or "")
+                    
+                hist = f"{descr_str} {compl}".strip()
 
                 v = float(valor or 0)
                 

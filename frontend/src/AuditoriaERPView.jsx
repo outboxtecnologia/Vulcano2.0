@@ -1012,7 +1012,6 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           orfaos_vulcano: orfaosV,
           threshold: 0.38,
           use_pgvector: usePgVector,
-          use_pgvector: usePgVector,
         }),
       });
       const j = await r.json();

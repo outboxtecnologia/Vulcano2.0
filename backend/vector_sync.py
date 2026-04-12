@@ -7,6 +7,15 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from main import get_conn
 from vector_engine import init_db, generate_embeddings_batch, save_embeddings
 
+
+def _s_decode(val):
+    if not val:
+        return ""
+    if isinstance(val, (bytes, bytearray)):
+        return val.decode("cp1252", errors="replace")
+    return str(val)
+
+
 async def processar_lote(lote_raw, fonte):
     """
     Recebe dicionários com {'id', 'empresa_id', 'ano_mes', 'texto_original', 'meta'}
@@ -37,7 +46,7 @@ async def sync_questor_amostra(empresa_id: int):
     cur = cq.cursor()
     cur.execute("""
         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.VALORLCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, 
-           '' as desc,
+           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0),
            C.CODIGOORIGLCTOCTB,
            H.DESCRHISTCTB
     FROM LCTOCTB C
@@ -55,8 +64,9 @@ async def sync_questor_amostra(empresa_id: int):
         valor = float(r[2] or 0.0)
         deb = int(r[3] or 0)
         cred = int(r[4] or 0)
+        compl = _s_decode(r[5])
         desc_padrao = str(r[7] or "").strip() if len(r) > 7 else ""
-        texto_limpo = f"{desc_padrao}".strip().upper()
+        texto_limpo = f"{desc_padrao} {compl}".strip().upper()
         if not texto_limpo:
             texto_limpo = "LANCAMENTO SEM DESCRICAO"
             
