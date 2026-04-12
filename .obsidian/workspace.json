@@ -1,0 +1,210 @@
+{
+  "main": {
+    "id": "5bdee735b67e8ff3",
+    "type": "split",
+    "children": [
+      {
+        "id": "2a9bebd5110a9429",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "846a8b0a7159aaa8",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "3D-Graph"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c0ef8d6ffa0565dc",
+    "type": "split",
+    "children": [
+      {
+        "id": "1ad110c3e36a474f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8ccd7c7b7acb14fb",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de arquivos"
+            }
+          },
+          {
+            "id": "9904f553130876f4",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Procurar"
+            }
+          },
+          {
+            "id": "12d0ae7502065200",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "781359f654d7ba90",
+    "type": "split",
+    "children": [
+      {
+        "id": "0db630ebd0c448a6",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b45d89391e8acb4c",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Links inversos"
+            }
+          },
+          {
+            "id": "84a09d0b9fac8a7c",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Links de saída"
+            }
+          },
+          {
+            "id": "12826ef4d2ca7a64",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "dd06e13b64de6c19",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas as propriedades"
+            }
+          },
+          {
+            "id": "69e9986c79805eea",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Sumário"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir a troca rápida": false,
+      "graph:Abrir visualização em gráfico": false,
+      "canvas:Criar novo canvas": false,
+      "daily-notes:Abrir a nota de hoje": false,
+      "templates:Inserir modelo": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Criar nova base": false,
+      "3d-graph:3D Graph": false
+    }
+  },
+  "active": "846a8b0a7159aaa8",
+  "lastOpenFiles": [
+    "backend/core/services/__pycache__/combinatorial_analyzer.cpython-314.pyc",
+    "ROADMAP_VULCANO_QUESTOR.md",
+    "backend/API_GUIDELINES.md",
+    "docs/DOCUMENTACAO_VENDAS.md",
+    "patcher_main.py",
+    "patcher_combinatorial.py",
+    "backend/core/services/combinatorial_analyzer.py",
+    "backend/core/services/__pycache__/heuristic_optimizer.cpython-314.pyc",
+    "patcher_phase2.py",
+    "patcher_master.py",
+    "frontend/node_modules/yallist/README.md",
+    "patcher15.py",
+    "backend/core/services/heuristic_optimizer.py",
+    "patcher14.py",
+    "patcher13.py",
+    "frontend/node_modules/zod-validation-error/README.v3.md",
+    "frontend/node_modules/xlsx/README.md",
+    "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",
+    "bench.md",
+    "demos/server.md",
+    "frontend/node_modules/ms/license.md",
+    "frontend/node_modules/fast-glob/README.md",
+    "frontend/node_modules/thenify/History.md",
+    "frontend/Numb.md",
+    "frontend/Light.md",
+    "AGENTS.md",
+    "SCHEMA_QUESTOR_MAP.md"
+  ]
+}
