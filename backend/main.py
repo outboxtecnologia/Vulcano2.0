@@ -6136,3 +6136,62 @@ async def api_sindicatos_atualizar(background_tasks: BackgroundTasks):
 def api_sindicatos_status():
     """Retorna status do agente (próxima execução, status por sindicato)."""
     return _sa.get_status_agente()
+
+# ── API Agentes Autônomos (LangGraph) ────────────────────────────────────────────────────────────
+from core.agents.auditoria_graph import graph_app, AuditoriaGraphState
+from langgraph.types import Command
+import uuid
+
+class AuditStartReq(BaseModel):
+    conta_alvo: str
+
+@app.post("/api/agentes/iniciar_auditoria")
+def api_agentes_iniciar(req: AuditStartReq):
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+    
+    # Inicia a thread do grafo
+    initial_state = AuditoriaGraphState(
+        pergunta="Auditoria de rotina iniciada",
+        conta_alvo=req.conta_alvo,
+        passos_executados=[],
+        resultados_db=[],
+        historico_aprendizado=[],
+        sugestao_correcao={},
+        aprovado_pelo_usuario=False,
+        feedback_usuario=""
+    )
+    
+    # Invoke state until interruption
+    res = graph_app.invoke(initial_state, config=config)
+    state = graph_app.get_state(config)
+    
+    return {
+        "status": "PAUSED_FOR_HUMAN" if state.next else "FINISHED",
+        "thread_id": thread_id,
+        "state": res
+    }
+
+class AuditResumeReq(BaseModel):
+    thread_id: str
+    aprovado: bool
+    feedback_usuario: str
+
+@app.post("/api/agentes/resumir_auditoria")
+def api_agentes_resumir(req: AuditResumeReq):
+    config = {"configurable": {"thread_id": req.thread_id}}
+    state = graph_app.get_state(config)
+    if not state.next:
+        raise HTTPException(status_code=400, detail="A thread não está pausada.")
+    
+    graph_app.update_state(config, {
+        "aprovado_pelo_usuario": req.aprovado,
+        "feedback_usuario": req.feedback_usuario,
+        "passos_executados": [f"Human feedback received: Approved={req.aprovado}"]
+    })
+    
+    res = graph_app.invoke(None, config=config)
+    return {
+        "status": "FINISHED",
+        "state": res
+    }

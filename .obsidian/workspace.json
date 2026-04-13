@@ -91,21 +91,28 @@
             "id": "251d06a63fa21f9e",
             "type": "leaf",
             "state": {
-              "type": "canvas",
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "3D-Graph"
+            }
+          },
+          {
+            "id": "5757384ae114c044",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
               "state": {
-                "file": "Sem título.canvas",
-                "viewState": {
-                  "x": 1829,
-                  "y": -167,
-                  "zoom": 0
-                }
+                "file": "frontend/node_modules/xlsx/README.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "lucide-layout-dashboard",
-              "title": "Sem título"
+              "icon": "lucide-file",
+              "title": "README"
             }
           }
         ],
-        "currentTab": 8
+        "currentTab": 9
       }
     ],
     "direction": "vertical"
@@ -267,14 +274,22 @@
       "templater-obsidian:Templater": false
     }
   },
-  "active": "8ccd7c7b7acb14fb",
+  "active": "5757384ae114c044",
   "lastOpenFiles": [
-    "modelos_entrada/HSCONSTRUTORAEINCORPORADORALTDA_NOVEMBRO.xlsx",
-    "scripts/auto-commit.log.tmp",
-    "docs/MOCs/Deep_Dives/Roadmap_LangGraph.md",
-    "backend/test_permuta.py",
-    "docs/MOCs/Deep_Dives/LLM_Arbitrator.md",
+    "frontend/dist/assets/index-Doc6wVma.css",
+    "frontend/dist/assets/index-B6jbMQKz.js",
+    "backend/agente_checkpoints.sqlite",
+    "backend/core/agents/__pycache__/tools.cpython-314.pyc",
+    "backend/core/agents/llm_provider.py",
+    "backend/core/agents/__pycache__/llm_provider.cpython-314.pyc",
+    "backend/core/agents/__pycache__/state.cpython-314.pyc",
+    "backend/core/agents/__pycache__/auditoria_graph.cpython-314.pyc",
+    "backend/core/agents/__pycache__",
+    "backend/core/agents/auditoria_graph.py",
+    "backend/core/agents/state.py",
     "Sem título.canvas",
+    "docs/MOCs/Deep_Dives/Roadmap_LangGraph.md",
+    "docs/MOCs/Deep_Dives/LLM_Arbitrator.md",
     "docs/MOCs/Logica_e_LLM.md",
     "docs/MOCs/Linguagens_e_Stack.md",
     "docs/MOCs/Formulas_e_Calculos.md",
@@ -283,7 +298,6 @@
     "docs/MOCs/Deep_Dives/Conciliacao_Orfaos.md",
     "docs/MOCs/Deep_Dives/Bug_VGV_Retrospectivo.md",
     "docs/regras_negocios_tributarios.md",
-    "backend/test_stutt_dups.py",
     "docs/DOCUMENTACAO_CLIENTES.md",
     "DOCUMENTACAO_SISTEMA.md",
     "Dashboard_Visao_Geral.md",
@@ -291,21 +305,14 @@
     "docs/MOCs/Skills_e_Agentes.md",
     "docs/DOCUMENTACAO_VENDAS.md",
     "docs/DOCUMENTACAO_RECEBIMENTOS.md",
-    "docs/MOCs",
-    "backend/test_stutt_acc.py",
-    "backend/test_stutt_frac.py",
     "bench.md",
     "stitch_export/screen.png",
     "stitch_export/DESIGN.md",
     "backend/scratchpad.md",
-    "backend/test.pdf",
     "backend/debug_cno.md",
     "backend/API_GUIDELINES.md",
     "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",
     "docs/superpowers/plans/2026-04-09-sindicatos-cct.md",
-    "README.md",
-    "modelos_entrada/FICHA DE VENDA APTO 605 ED. UNIQUE PLACE .pdf",
-    "Sem título.base",
-    "backend/test_feedback_kb.py"
+    "README.md"
   ]
 }

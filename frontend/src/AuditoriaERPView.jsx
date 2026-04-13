@@ -169,7 +169,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel }) {
 }
 
 // ── Painel de orfaos (expande ao clicar na linha da conta) ───────────────────
-function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRacional }) {
+function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRacional, onAgent }) {
   const [aba, setAba] = useState('orfaos');
 
   const todosFisico  = porComp.flatMap(c => c.detalhesFisico);
@@ -224,10 +224,10 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
               <CheckCircle2 size={10}/> Mapa Tabular
             </button>
             <button
-              onClick={e => { e.stopPropagation(); setAba('arbitro'); }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'arbitro' ? 'bg-[#ffcc00]/20 border-[#ffcc00]/40 text-[#ffcc00]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#ffcc00]/70'}`}
+              onClick={e => { e.stopPropagation(); onAgent(); }}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/30 rounded text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[var(--v-accent)]/20 transition-all font-mono"
             >
-              <Zap size={10}/> Árbitro IA
+              <Zap size={10} className="animate-pulse"/> AGENTE IA
             </button>
             <div className="flex-1"/>
             {todosVirtualLogica.length > 0 && (
@@ -312,47 +312,164 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
               </div>
             </div>
           )}
-
-          {aba === 'arbitro' && (
-            <div className="p-5 flex flex-col gap-4 max-w-4xl">
-               <div className="bg-[#ffcc00]/10 border border-[#ffcc00]/30 p-4 rounded flex gap-4 items-start">
-                  <div className="p-2 bg-[#ffcc00]/20 text-[#ffcc00] rounded">
-                     <Zap size={20}/>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-[12px] font-black uppercase tracking-widest text-[#ffcc00] mb-1">Arbitragem CPC 47 (IFRS 15)</h3>
-                    <p className="text-[11px] text-[var(--v-text-muted)] mb-3">O modelo AI analisou as diferenças de lançamento e sugeriu o seguinte mapeamento para preencher as lacunas operacionais:</p>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-[var(--v-deep)] border border-[var(--v-border)] p-3 rounded h-full flex flex-col justify-between">
-                        <div>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Conflito IFRS 15 Detectado</span>
-                          <p className="text-[10px] mt-1 font-bold text-[var(--v-text-faint)]">Lançamentos órfãos de Receita Auferida sem equivalência no espelho importado do Questor (Motor Antigo).</p>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-[9px] font-mono text-[#34c759]">Ação Recomendada (Veredito LLM):</p>
-                          <p className="text-[10px] text-[var(--v-accent-3)] mt-0.5">Assumir visão do Vulcano 2.0 como correta, pois reflete a premissa certa de POC em venda unificada.</p>
-                        </div>
-                      </div>
-
-                      <div className="bg-[var(--v-deep)] border border-[var(--v-border)] p-3 rounded h-full flex flex-col justify-between">
-                        <div>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Motor de Saneamento (Autocompletar)</span>
-                          <p className="text-[10px] mt-1 font-bold text-[var(--v-text-faint)]">O Vulcano 2.0 gera apenas um lado da partida dobrada nestes layouts.</p>
-                        </div>
-                        <ul className="mt-3 text-[10px] space-y-1.5">
-                           <li className="flex justify-between border-b border-[var(--v-bg)] pb-1"><span className="text-[var(--v-text-muted)] font-black uppercase tracking-wider text-[8px]">Natureza da Falha</span> <span className="font-mono font-bold text-[#ffcc00]">Lançamento Padrão</span></li>
-                           <li className="flex justify-between pt-1"><span className="text-[var(--v-text-muted)] font-black uppercase tracking-wider text-[8px]">Injetar Contrapartida</span> <span className="font-mono font-bold text-[var(--v-accent-3)]">1.01.01.02 - Conta Banco/Ajustes</span></li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-               </div>
-            </div>
-          )}
         </div>
       </td>
     </tr>
+  );
+}
+
+// ── Modal Agente LangGraph ───────────────────────────────────────
+function AgentTerminalModal({ contaId, contaNome, onClose }) {
+  const [status, setStatus] = useState('IDLE'); // IDLE, RUNNING, PAUSED, FINISHED, ERROR
+  const [threadId, setThreadId] = useState(null);
+  const [agentState, setAgentState] = useState(null);
+  const [feedback, setFeedback] = useState('');
+
+  // Auto trigger
+  useEffect(() => {
+    iniciarAgente();
+  }, []);
+
+  const iniciarAgente = async () => {
+    setStatus('RUNNING');
+    try {
+        const res = await fetch(`${API_BASE}/api/agentes/iniciar_auditoria`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ conta_alvo: `Conta ${contaId} - ${contaNome}` })
+        });
+        const data = await res.json();
+        setThreadId(data.thread_id);
+        setAgentState(data.state);
+        setStatus(data.status === 'PAUSED_FOR_HUMAN' ? 'PAUSED' : 'FINISHED');
+    } catch (err) {
+        setStatus('ERROR');
+    }
+  };
+
+  const enviarFeedback = async (aprovado) => {
+    setStatus('RUNNING');
+    try {
+        const res = await fetch(`${API_BASE}/api/agentes/resumir_auditoria`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback })
+        });
+        const data = await res.json();
+        setAgentState(data.state);
+        setStatus('FINISHED');
+    } catch (err) {
+        setStatus('ERROR');
+    }
+  };
+
+  return (
+      <tr>
+        <td colSpan={999} className="p-0 border-0">
+          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col p-8 items-center justify-center animate-in fade-in duration-300" onClick={onClose}>
+            <div className="bg-[var(--v-deep)] border border-[var(--v-accent)]/50 shadow-[0_0_50px_rgba(255,77,0,0.15)] rounded-[var(--v-radius)] w-full max-w-5xl h-[85vh] flex flex-col pointer-events-auto" onClick={e => e.stopPropagation()}>
+               {/* HEADER */}
+               <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--v-accent)]/20 bg-[var(--v-accent)]/5">
+                 <div className="flex items-center gap-3">
+                   <Zap size={20} className="text-[var(--v-accent)] animate-pulse"/>
+                   <div>
+                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma — Cortex Agent</p>
+                     <p className="font-mono text-xs text-[var(--v-text-bold)] mt-0.5">{contaId} <span className="font-body text-[var(--v-text-faint)]">{contaNome}</span></p>
+                   </div>
+                 </div>
+                 <button onClick={onClose} className="text-[var(--v-accent)] hover:text-white font-black px-2 py-1 uppercase tracking-widest text-[10px] transition-colors border border-transparent hover:border-[var(--v-accent)]/40 rounded">✕ ENCERRAR</button>
+               </div>
+               
+               {/* BODY */}
+               <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6 custom-scrollbar">
+                  {status === 'RUNNING' && (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-6">
+                       <RefreshCw size={40} className="text-[var(--v-accent)] animate-spin"/>
+                       <div className="text-center">
+                           <p className="text-[var(--v-accent)] font-black uppercase tracking-widest text-[14px] animate-pulse mb-2">Agente Investigador Ativo</p>
+                           <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-[var(--v-text-faint)]">Inspecionando assinaturas no Firebird SQL...</p>
+                       </div>
+                    </div>
+                  )}
+
+                  {status === 'ERROR' && (
+                    <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[var(--v-accent)]/10 text-center font-bold">
+                       <p className="text-xs uppercase tracking-widest font-black">SYSTEM FAILURE: Connection Refused</p>
+                       <p className="text-[10px] mt-2 opacity-60">Ocorreu um erro ao comunicar com a malha de agentes.</p>
+                    </div>
+                  )}
+
+                  {(status === 'PAUSED' || status === 'FINISHED') && agentState && (
+                    <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-bottom-4 duration-500">
+                        {/* Status Message */}
+                        <div className="bg-[var(--v-bg)] border border-[var(--v-border)] p-5 rounded flex flex-col gap-3">
+                           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">Rastro de Execução (Trace Log)</h3>
+                           <ul className="text-[11px] font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5 opacity-80">
+                               {agentState.passos_executados?.map((p, i) => (
+                                 <li key={i} className="flex gap-2">
+                                     <span className="text-[var(--v-accent)]">›</span>
+                                     <span>{p}</span>
+                                 </li>
+                               ))}
+                           </ul>
+                        </div>
+
+                        {agentState.sugestao_correcao && Object.keys(agentState.sugestao_correcao).length > 0 && (
+                            <div className="bg-[var(--v-card)] border border-[var(--v-accent)]/30 p-6 rounded shadow-lg">
+                               <div className="flex items-center gap-2 mb-4">
+                                  <div className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-6)] animate-pulse"/>
+                                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-6)]">Veredito da IA (Human-in-the-Loop)</h3>
+                               </div>
+                               <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)]">{agentState.sugestao_correcao.descricao}</p>
+                               <div className="grid grid-cols-2 gap-4">
+                                  <div className="bg-[#34c759]/5 border border-[#34c759]/20 p-4 rounded">
+                                     <p className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
+                                     <p className="font-mono text-sm font-bold text-[#34c759]">{agentState.sugestao_correcao.acao}</p>
+                                  </div>
+                                  <div className="bg-[#a259ff]/5 border border-[#a259ff]/20 p-4 rounded">
+                                     <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-1.5">Contrapartida (Auto-Mapping)</p>
+                                     <p className="font-mono text-sm font-bold text-[var(--v-accent-5)]">{agentState.sugestao_correcao.conta_contrapartida}</p>
+                                  </div>
+                               </div>
+                            </div>
+                        )}
+                    </div>
+                  )}
+               </div>
+
+               {/* FOOTER (HITL Input) */}
+               {status === 'PAUSED' && (
+                 <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 rounded-b-[var(--v-radius)]">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-muted)]">Aguardando Avaliação Humana (HITL)</p>
+                    <input 
+                      autoFocus
+                      type="text" 
+                      placeholder="Algum feedback, correção ou contexto adicional para o aprendizado do agente? (Opcional)" 
+                      value={feedback} 
+                      onChange={e => setFeedback(e.target.value)}
+                      className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-4 py-3 text-xs font-bold font-mono text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent-6)] transition-all"
+                    />
+                    <div className="flex gap-4">
+                        <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#34c759]/10 hover:bg-[#34c759]/20 border border-[#34c759]/50 text-[#34c759] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#34c759]/5">
+                           ✓ APROVAR TRATATIVA
+                        </button>
+                        <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[#ff4d00]/10 hover:bg-[#ff4d00]/20 border border-[#ff4d00]/50 text-[#ff4d00] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#ff4d00]/5">
+                           ✗ REJEITAR / CORRIGIR
+                        </button>
+                    </div>
+                 </div>
+               )}
+               {status === 'FINISHED' && (
+                 <div className="border-t border-[#34c759]/20 bg-[#34c759]/5 p-6 text-center rounded-b-[var(--v-radius)]">
+                    <p className="text-[#34c759] font-black uppercase tracking-widest text-[13px] flex justify-center items-center gap-2">
+                       <CheckCircle2 size={18}/> Auditoria Deste Nodo Finalizada (Estado Persistido)
+                    </p>
+                 </div>
+               )}
+            </div>
+          </div>
+        </td>
+      </tr>
   );
 }
 
@@ -360,6 +477,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const [open, setOpen] = useState(false);
   const [racionalOpen, setRacionalOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
 
   // Contas especiais usam movimento do período (não delta de saldo) para conciliação
   const usaMovimento = CONTAS_USA_MOVIMENTO.has(String(contaId));
@@ -406,8 +524,8 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   const temDivergencia   = abs(diffParaStatus) >= DIVERGENCIA_CORTE ||
     (!usaMovimento && abs(totalDiffMov) >= DIVERGENCIA_CORTE);
 
-  // Só mostra contas que têm qualquer movimento em algum lado
-  const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual);
+  // Só mostra contas que têm qualquer movimento em algum lado, incluindo legado
+  const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual || c.legadoDetalhes?.length > 0);
   if (!temQualquerDado) return null;
 
   // Lançamentos virtuais com logica agrupados para o Racional Global
@@ -581,7 +699,17 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
           contaNome={contaNome}
           todosVirtualLogica={racionaisAgrupados}
           onRacional={() => setRacionalOpen(true)}
+          onAgent={() => setAgentOpen(true)}
         />
+      )}
+
+      {/* ── Modal Agente ── */}
+      {agentOpen && (
+         <AgentTerminalModal 
+            contaId={contaId}
+            contaNome={contaNome}
+            onClose={() => setAgentOpen(false)}
+         />
       )}
 
       {/* ── Modal Racional ── */}
