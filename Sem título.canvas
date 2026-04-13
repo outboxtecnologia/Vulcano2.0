@@ -1,0 +1,21 @@
+{
+	"nodes":[
+		{"id":"6e9519b5a2fc7afa","x":-367,"y":-980,"width":400,"height":400,"type":"file","file":"docs/superpowers/plans/2026-04-09-sindicatos-cct.md"},
+		{"id":"a3a1114907ff9839","x":78,"y":-980,"width":400,"height":400,"type":"file","file":"docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md"},
+		{"id":"427c3ebb7ce6a5f6","x":523,"y":-980,"width":400,"height":400,"type":"file","file":"docs/MOCs/Deep_Dives/Bug_VGV_Retrospectivo.md"},
+		{"id":"122a28cba72c8c81","x":968,"y":-980,"width":400,"height":400,"type":"file","file":"docs/MOCs/Deep_Dives/Conciliacao_Orfaos.md"},
+		{"id":"ff6425b5f6dffc05","x":1413,"y":-980,"width":400,"height":400,"type":"file","file":"docs/DOCUMENTACAO_CLIENTES.md"},
+		{"id":"12655069da676fbc","x":1858,"y":-980,"width":400,"height":400,"type":"file","file":"docs/DOCUMENTACAO_EMPREENDIMENTOS.md"},
+		{"id":"fb27c834db621fcd","x":2303,"y":-980,"width":400,"height":400,"type":"file","file":"docs/DOCUMENTACAO_RECEBIMENTOS.md"},
+		{"id":"88512ff480d6dd22","x":2748,"y":-980,"width":400,"height":400,"type":"file","file":"docs/DOCUMENTACAO_VENDAS.md"},
+		{"id":"8156b4e234db16c6","x":3193,"y":-980,"width":400,"height":400,"type":"file","file":"docs/MOCs/Fluxos_de_Dados.md"},
+		{"id":"6daa0c9a9c88f18a","x":3638,"y":-980,"width":400,"height":400,"type":"file","file":"docs/MOCs/Formulas_e_Calculos.md"},
+		{"id":"23eb37b8d6638048","x":-367,"y":-535,"width":400,"height":400,"type":"file","file":"docs/MOCs/Deep_Dives/Fuzzy_Matching.md"},
+		{"id":"70a059cacb81b67a","x":78,"y":-535,"width":400,"height":400,"type":"file","file":"docs/MOCs/Linguagens_e_Stack.md"},
+		{"id":"f5934d66d7008d9d","x":523,"y":-535,"width":400,"height":400,"type":"file","file":"docs/MOCs/Deep_Dives/LLM_Arbitrator.md"},
+		{"id":"31da690b67c1cbda","x":968,"y":-535,"width":400,"height":400,"type":"file","file":"docs/MOCs/Logica_e_LLM.md"},
+		{"id":"5231633f403963fd","x":1413,"y":-535,"width":400,"height":400,"type":"file","file":"docs/regras_negocios_tributarios.md"},
+		{"id":"405adeef6b74e9a8","x":1858,"y":-535,"width":400,"height":400,"type":"file","file":"docs/MOCs/Skills_e_Agentes.md"}
+	],
+	"edges":[]
+}

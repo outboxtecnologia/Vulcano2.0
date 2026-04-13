@@ -94,7 +94,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                     const pocInformado = pocMatch.percentual / 100.0;
                     
                     // CPC 47 / IFRS 15 Formula
-                    const suggestedAccumulated = totalGasto * fracaoVendida * pocInformado;
+                    const suggestedAccumulated = totalGasto * fracaoVendida;
                     const suggestedMonth = suggestedAccumulated - lastCost;
                     
                     if (suggestedMonth > 0) {
@@ -324,18 +324,12 @@ export const CustosView = ({ selectedEmpresa }) => {
                                         </span>
                                     </div>
                                     
-                                    <div className="flex justify-between items-center border-b border-[var(--v-border)] pb-2">
-                                        <span className="text-[var(--v-text-muted)]">C. Índice de Evolução Física (% POC Mês)</span>
-                                        <span className="text-[var(--v-text-bold)] font-bold">{(activeEmpData.poc_atual || 0).toFixed(4)} %</span>
-                                    </div>
-                                    
                                     <div className="flex justify-between items-center border-b border-[var(--v-border)] pb-2 mt-4">
-                                        <span className="text-[var(--v-accent-2)] font-bold">CUSTO TOTAL CALCULADO (A * B * C)</span>
+                                        <span className="text-[var(--v-accent-2)] font-bold">CUSTO TOTAL CALCULADO (A * B)</span>
                                         <span className="text-[var(--v-accent-2)] font-bold">
                                             {formatCurrency(
                                                 activeEmpData.custo_real_gasto * 
-                                                activeEmpData.fracao_vendida * 
-                                                ((activeEmpData.poc_atual || 0) / 100.0)
+                                                activeEmpData.fracao_vendida
                                             )}
                                         </span>
                                     </div>
@@ -358,8 +352,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                                                 {formatCurrency(
                                                     Math.max(0, (
                                                         activeEmpData.custo_real_gasto * 
-                                                        activeEmpData.fracao_vendida * 
-                                                        ((activeEmpData.poc_atual || 0) / 100.0)
+                                                        activeEmpData.fracao_vendida
                                                     ) - (activeEmpData.custo_reconhecido_anterior || 0))
                                                 )}
                                             </span>

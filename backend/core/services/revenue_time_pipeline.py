@@ -35,7 +35,10 @@ class RevenueTimePipeline:
             v.DESCUNIDIMOB AS UNIDADE,
             c.NOME AS COMPRADOR,
             r.DATA AS DATA_RECEBIMENTO,
-            r.TOTALPAGO AS RECEITA_CAIXA,
+            CASE 
+                WHEN UPPER(fp.DESCRICAO) LIKE '%PERMUTA%' AND r.TOTALPAGO = 0 THEN r.VALORPARCELA 
+                ELSE r.TOTALPAGO 
+            END AS RECEITA_CAIXA,
             r.VALORPARCELA,
             r.VALORVARIACAO,
             v.TOTALVENDA AS VGV_BASE,
@@ -50,7 +53,9 @@ class RevenueTimePipeline:
         FROM VENDA v
         JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
         LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
-        LEFT JOIN RECEBER r ON r.IDVENDA = v.ID AND r.TOTALPAGO > 0
+        LEFT JOIN RECEBER r ON r.IDVENDA = v.ID 
+        LEFT JOIN VENDAFORMAPAGTO fp ON r.IDVENDAFORMAPAGTO = fp.ID
+        WHERE (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%')
         """
         
         try:
@@ -84,10 +89,10 @@ class RevenueTimePipeline:
                 join_conditions += " AND r.DATA >= ?"
                 join_params.append(data_ini)
             
-            query = query.replace("AND r.TOTALPAGO > 0", "AND r.TOTALPAGO > 0" + join_conditions)
+            query = query.replace("WHERE (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%')", "WHERE (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%')" + join_conditions)
                 
             if conditions:
-                query += " WHERE " + " AND ".join(conditions)
+                query += " AND " + " AND ".join(conditions)
             
             query += " ORDER BY r.DATA DESC NULLS LAST"
             
@@ -261,10 +266,15 @@ class RevenueTimePipeline:
             # Para resgatar o Saldo Acumulado sem estourar 2 minutos travando no JOIN de nomes e strings velhos
             if data_ini:
                 cur.execute(f"""
-                    SELECT r.IDVENDA, SUM(r.TOTALPAGO), SUM(r.VALORVARIACAO)
+                    SELECT r.IDVENDA, 
+                           SUM(CASE WHEN UPPER(fp.DESCRICAO) LIKE '%PERMUTA%' AND r.TOTALPAGO = 0 THEN r.VALORPARCELA ELSE r.TOTALPAGO END), 
+                           SUM(r.VALORVARIACAO)
                     FROM RECEBER r
                     JOIN VENDA v ON r.IDVENDA = v.ID
-                    WHERE r.DATA < ? AND r.TOTALPAGO > 0 AND v.CODIGOEMPRESA = ?
+                    LEFT JOIN VENDAFORMAPAGTO fp ON r.IDVENDAFORMAPAGTO = fp.ID
+                    WHERE r.DATA < ? 
+                      AND (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%') 
+                      AND v.CODIGOEMPRESA = ?
                     GROUP BY r.IDVENDA
                 """, [data_ini, int(empresa_id) if empresa_id else 0])
                 hist_rows = cur.fetchall()

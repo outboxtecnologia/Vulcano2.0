@@ -13,8 +13,8 @@
             "state": {
               "type": "3d_graph_view",
               "state": {},
-              "icon": "lucide-file",
-              "title": "3D-Graph"
+              "icon": "lucide-ghost",
+              "title": "3d_graph_view"
             }
           },
           {
@@ -23,8 +23,8 @@
             "state": {
               "type": "3d_graph_view",
               "state": {},
-              "icon": "lucide-file",
-              "title": "3D-Graph"
+              "icon": "lucide-ghost",
+              "title": "3d_graph_view"
             }
           },
           {
@@ -33,8 +33,8 @@
             "state": {
               "type": "3d_graph_view",
               "state": {},
-              "icon": "lucide-file",
-              "title": "3D-Graph"
+              "icon": "lucide-ghost",
+              "title": "3d_graph_view"
             }
           },
           {
@@ -43,12 +43,32 @@
             "state": {
               "type": "3d_graph_view",
               "state": {},
-              "icon": "lucide-file",
-              "title": "3D-Graph"
+              "icon": "lucide-ghost",
+              "title": "3d_graph_view"
             }
           },
           {
             "id": "647f0320fe7850b6",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-ghost",
+              "title": "3d_graph_view"
+            }
+          },
+          {
+            "id": "68cbe3b621a96a8e",
+            "type": "leaf",
+            "state": {
+              "type": "3d_graph_view",
+              "state": {},
+              "icon": "lucide-ghost",
+              "title": "3d_graph_view"
+            }
+          },
+          {
+            "id": "91ea04c3d70a8cf1",
             "type": "leaf",
             "state": {
               "type": "3d_graph_view",
@@ -58,21 +78,34 @@
             }
           },
           {
-            "id": "68cbe3b621a96a8e",
+            "id": "9b2beca902677ff3",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "AGENTS.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "3d_graph_view",
+              "state": {},
               "icon": "lucide-file",
-              "title": "AGENTS"
+              "title": "3D-Graph"
+            }
+          },
+          {
+            "id": "251d06a63fa21f9e",
+            "type": "leaf",
+            "state": {
+              "type": "canvas",
+              "state": {
+                "file": "Sem título.canvas",
+                "viewState": {
+                  "x": 1829,
+                  "y": -167,
+                  "zoom": 0
+                }
+              },
+              "icon": "lucide-layout-dashboard",
+              "title": "Sem título"
             }
           }
         ],
-        "currentTab": 5
+        "currentTab": 8
       }
     ],
     "direction": "vertical"
@@ -229,47 +262,50 @@
       "templates:Inserir modelo": false,
       "command-palette:Abrir paleta de comandos": false,
       "bases:Criar nova base": false,
-      "3d-graph:3D Graph": false
+      "3d-graph:3D Graph": false,
+      "obsidian-excalidraw-plugin:New drawing": false,
+      "templater-obsidian:Templater": false
     }
   },
-  "active": "68cbe3b621a96a8e",
+  "active": "8ccd7c7b7acb14fb",
   "lastOpenFiles": [
+    "docs/MOCs/Deep_Dives/Roadmap_LangGraph.md",
+    "backend/test_permuta.py",
+    "docs/MOCs/Deep_Dives/LLM_Arbitrator.md",
+    "Sem título.canvas",
+    "docs/MOCs/Logica_e_LLM.md",
+    "docs/MOCs/Linguagens_e_Stack.md",
+    "docs/MOCs/Formulas_e_Calculos.md",
+    "docs/MOCs/Fluxos_de_Dados.md",
+    "docs/MOCs/Deep_Dives/Fuzzy_Matching.md",
+    "docs/MOCs/Deep_Dives/Conciliacao_Orfaos.md",
+    "docs/MOCs/Deep_Dives/Bug_VGV_Retrospectivo.md",
+    "docs/regras_negocios_tributarios.md",
+    "backend/test_stutt_dups.py",
+    "docs/DOCUMENTACAO_CLIENTES.md",
+    "DOCUMENTACAO_SISTEMA.md",
+    "Dashboard_Visao_Geral.md",
+    "AGENTS.md",
+    "docs/MOCs/Skills_e_Agentes.md",
+    "docs/DOCUMENTACAO_VENDAS.md",
+    "docs/DOCUMENTACAO_RECEBIMENTOS.md",
+    "docs/MOCs",
+    "backend/test_stutt_acc.py",
+    "scripts/auto-commit.log.tmp",
     "backend/test_stutt_frac.py",
     "bench.md",
     "stitch_export/screen.png",
     "stitch_export/DESIGN.md",
     "backend/scratchpad.md",
     "backend/test.pdf",
-    "AGENTS.md",
     "backend/debug_cno.md",
     "backend/API_GUIDELINES.md",
     "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",
     "docs/superpowers/plans/2026-04-09-sindicatos-cct.md",
-    "docs/DOCUMENTACAO_VENDAS.md",
-    "docs/DOCUMENTACAO_RECEBIMENTOS.md",
     "README.md",
-    "DOCUMENTACAO_SISTEMA.md",
     "modelos_entrada/FICHA DE VENDA APTO 605 ED. UNIQUE PLACE .pdf",
     "frontend/node_modules/ms/license.md",
-    "frontend/node_modules/sucrase/README.md",
-    "docs/DOCUMENTACAO_EMPREENDIMENTOS.md",
     "Sem título.base",
-    "backend/test_feedback_kb.py",
-    "backend/test_sqlite.py",
-    "backend/test_conta5639b.py",
-    "backend/test_conta5639.py",
-    "backend/test_resultado_jan25.py",
-    "scripts/auto-commit.log.tmp",
-    "backend/core/services/__pycache__/combinatorial_analyzer.cpython-314.pyc",
-    "ROADMAP_VULCANO_QUESTOR.md",
-    "frontend/node_modules/yallist/README.md",
-    "frontend/node_modules/zod-validation-error/README.v3.md",
-    "frontend/node_modules/xlsx/README.md",
-    "demos/server.md",
-    "frontend/node_modules/fast-glob/README.md",
-    "frontend/node_modules/thenify/History.md",
-    "frontend/Numb.md",
-    "frontend/Light.md",
-    "SCHEMA_QUESTOR_MAP.md"
+    "backend/test_feedback_kb.py"
   ]
 }

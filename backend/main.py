@@ -569,7 +569,7 @@ def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int 
             running_gasto += gasto_mes
             poc_m = get_poc_for_period(per)
             
-            custo_acumulado_req = running_gasto * fracao_vendida * (poc_m / 100.0)
+            custo_acumulado_req = running_gasto * fracao_vendida
             valor_mensal = custo_acumulado_req - prev_custo_acumulado
             
             if abs(valor_mensal) >= 0.01:

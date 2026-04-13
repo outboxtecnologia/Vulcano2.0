@@ -13,12 +13,19 @@ const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function gerarCompetencias(de, ate) {
+  if (!de || !ate || de.length !== 7 || ate.length !== 7) return [de || ""];
   const res = [];
   let [y, m] = de.split('-').map(Number);
   const [ey, em] = ate.split('-').map(Number);
-  while (y < ey || (y === ey && m <= em)) {
+  
+  if (isNaN(y) || isNaN(m) || isNaN(ey) || isNaN(em)) return [de || ""];
+  if (y > ey || (y === ey && m > em)) return [de || ""];
+  
+  let loops = 0;
+  while ((y < ey || (y === ey && m <= em)) && loops < 120) {
     res.push(`${y}-${String(m).padStart(2, '0')}`);
     m++; if (m > 12) { m = 1; y++; }
+    loops++;
   }
   return res;
 }

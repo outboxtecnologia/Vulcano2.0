@@ -535,11 +535,12 @@ class AccountingGraphPipeline:
                         is_nova_venda_mes_alvo = bool(venda_ym) and (venda_ym == target_ym)
     
                         # CUSTO ECONÔMICO (Fração Física / Metragem)
-                        # Segundo IFRS-15, o custo já está incorrido ('gasto_vigente') e dispensa rateio por POC. O POC determina a Receita.
+                        # O Custo já reflete a evolução física (foi gasto e medido). Deve-se aplicar apenas o Índice Comercial da unidade.
                         area_da_unidade = area_unidades.get(str(uni_nome).strip(), 0.0)
                         fracao_fisica = (area_da_unidade / total_area_emp) if total_area_emp > 0 else 0.0
                         
                         custo_u_atual = custo_gasto_vigente * fracao_fisica
+                        
                         # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
                         custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
                                       custo_gasto_anterior * fracao_fisica
