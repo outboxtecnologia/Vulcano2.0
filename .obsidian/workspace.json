@@ -269,6 +269,8 @@
   },
   "active": "8ccd7c7b7acb14fb",
   "lastOpenFiles": [
+    "modelos_entrada/HSCONSTRUTORAEINCORPORADORALTDA_NOVEMBRO.xlsx",
+    "scripts/auto-commit.log.tmp",
     "docs/MOCs/Deep_Dives/Roadmap_LangGraph.md",
     "backend/test_permuta.py",
     "docs/MOCs/Deep_Dives/LLM_Arbitrator.md",
@@ -291,7 +293,6 @@
     "docs/DOCUMENTACAO_RECEBIMENTOS.md",
     "docs/MOCs",
     "backend/test_stutt_acc.py",
-    "scripts/auto-commit.log.tmp",
     "backend/test_stutt_frac.py",
     "bench.md",
     "stitch_export/screen.png",
@@ -304,7 +305,6 @@
     "docs/superpowers/plans/2026-04-09-sindicatos-cct.md",
     "README.md",
     "modelos_entrada/FICHA DE VENDA APTO 605 ED. UNIQUE PLACE .pdf",
-    "frontend/node_modules/ms/license.md",
     "Sem título.base",
     "backend/test_feedback_kb.py"
   ]
