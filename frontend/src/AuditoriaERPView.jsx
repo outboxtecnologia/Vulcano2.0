@@ -474,7 +474,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 }
 
 // ── Linha de conta na tabela de confronto ────────────────────────────────────
-function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
+function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultarSemMovimento }) {
   const [open, setOpen] = useState(false);
   const [racionalOpen, setRacionalOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
@@ -527,6 +527,16 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes }) {
   // Só mostra contas que têm qualquer movimento em algum lado, incluindo legado
   const temQualquerDado = porComp.some(c => abs(c.movFisico) > 0 || abs(c.movVirtual) > 0 || c.saldoFisico || c.saldoVirtual || c.legadoDetalhes?.length > 0);
   if (!temQualquerDado) return null;
+
+  // Filtro de movimento no período: oculta contas cujo movimento é zero em AMBOS os lados
+  // para todos os meses selecionados. Contas com apenas saldo (sem movimento) são ocultadas.
+  if (ocultarSemMovimento) {
+    const temMovimentoNoPeriodo = porComp.some(
+      c => abs(c.movFisico) > 0.01 || abs(c.movVirtual) > 0.01 || c.legadoDetalhes?.length > 0
+    );
+    if (!temMovimentoNoPeriodo) return null;
+  }
+
 
   // Lançamentos virtuais com logica agrupados para o Racional Global
   const racionaisAgrupados = useMemo(() => {
@@ -1078,6 +1088,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const [usePgVector, setUsePgVector] = useState(true);
   const [showCross,    setShowCross]    = useState(false);
 
+  // ── Filtro: ocultar contas sem movimento no período ───────────────────────
+  const [ocultarSemMovimento, setOcultarSemMovimento] = useState(true);
+
   // ── Carrega empreendimentos na montagem ──────────────────────────────────
   useEffect(() => {
     if (!selectedEmpresa) return;
@@ -1482,6 +1495,16 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           }`}>
           <Zap size={12}/> {usePgVector ? 'PGVector Ligado' : 'PGVector Desligado'}
         </button>
+        <button
+          onClick={() => setOcultarSemMovimento(o => !o)}
+          title="Oculta contas que não tiveram movimento (débito ou crédito) em nenhum mês do período selecionado"
+          className={`px-4 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
+            ocultarSemMovimento
+              ? 'bg-[#007aff]/20 border-[#007aff]/60 text-[#007aff]'
+              : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#007aff] hover:border-[#007aff]/40'
+          }`}>
+          {ocultarSemMovimento ? '👁 Somente c/ Movimento' : '👁 Todos os Saldos'}
+        </button>
       </div>
 
       {error && (
@@ -1747,6 +1770,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                     contaNome={contaObj.nome}
                     competencias={competencias}
                     dadosPorMes={dadosPorMes}
+                    ocultarSemMovimento={ocultarSemMovimento}
                   />
                 ))}
               </tbody>

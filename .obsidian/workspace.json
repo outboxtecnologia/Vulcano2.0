@@ -272,6 +272,8 @@
   },
   "active": "5757384ae114c044",
   "lastOpenFiles": [
+    "backend/test_sqlite_cross.py",
+    "backend/core/agents/tools.py",
     "backend/agente_checkpoints.sqlite-shm",
     "backend/agente_checkpoints.sqlite-wal",
     "backend/check_order.py",
@@ -281,8 +283,6 @@
     "check_vulcano.py",
     "backend/check_fdb.py",
     "backend/check_vulcano_5653.py",
-    "frontend/dist/assets/index-DoIju7Pa.css",
-    "frontend/dist/assets/index-BnUaE_Ju.js",
     "frontend/node_modules/xlsx/README.md",
     "Sem título 1.canvas",
     "frontend/node_modules/object-assign/readme.md",

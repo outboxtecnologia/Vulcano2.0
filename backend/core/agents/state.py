@@ -1,4 +1,4 @@
-from typing import TypedDict, Annotated
+from typing import TypedDict, Annotated, Any
 import operator
 
 class AuditoriaGraphState(TypedDict):
@@ -10,3 +10,5 @@ class AuditoriaGraphState(TypedDict):
     sugestao_correcao: dict
     aprovado_pelo_usuario: bool
     feedback_usuario: str
+    # Histórico de mensagens LLM para o loop ReAct
+    messages: Annotated[list[Any], operator.add]
