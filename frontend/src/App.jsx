@@ -11,12 +11,13 @@ import { CustosView } from './CustosView';
 import { ContabilizacoesView } from './ContabilizacoesView';
 import { AuditoriaERPView } from './AuditoriaERPView';
 import { SindicatosView } from './SindicatosView';
+import { JanitorView } from './JanitorView';
 import './index.css';
 import {
   Building2, Database, TableProperties, Fingerprint, PieChart, Construction,
   Users, Activity, ActivityIcon, BookUser, Globe2, Briefcase, Zap, Search, Bell, Download, Sun, Moon,
   RefreshCw, AlertCircle, Plus, UploadCloud, FileSpreadsheet, HandCoins,
-  Terminal, ShieldCheck, ShoppingCart, DollarSign, LayoutDashboard, ShieldAlert, Landmark, Cpu, TrendingUp
+  Terminal, ShieldCheck, ShoppingCart, DollarSign, LayoutDashboard, ShieldAlert, Landmark, Cpu, TrendingUp, Trash2
 } from 'lucide-react';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 
@@ -269,6 +270,7 @@ return (
                     <NavItem icon={<Activity size={16}/>} label="Sero INSS" active={currentView === 'sero'} onClick={() => setCurrentView('sero')} />
                     <NavItem icon={<Users size={16}/>} label="Sindicatos CCT" active={currentView === 'sindicatos'} onClick={() => setCurrentView('sindicatos')} />
                     <NavItem icon={<Database size={16}/>} label="Raw Explorer" active={currentView === 'explorer'} onClick={() => setCurrentView('explorer')} />
+                    <NavItem icon={<Trash2 size={16}/>} label="🧹 Janitor SRE" active={currentView === 'janitor'} onClick={() => setCurrentView('janitor')} />
                 </div>
             </nav>
             <div className="px-4 mt-auto">
@@ -370,6 +372,7 @@ return (
                       
                       {currentView === 'compare' && <AuditoriaERPView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'contabilizacoes' && <ContabilizacoesView selectedEmpresa={selectedEmpresa} />}
+                      {currentView === 'janitor' && <JanitorView />}
 
                       {['clientes'].includes(currentView) && (
                           <div className="h-full flex flex-col items-center justify-center py-32 text-center relative z-10 w-full animate-in zoom-in-95 duration-500">

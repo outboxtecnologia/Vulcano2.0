@@ -136,9 +136,15 @@ function corDiff(diff) {
 }
 
 // ── Tabela de lançamentos interna ────────────────────────────────────────────
-function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel }) {
+function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = false }) {
   if (itens.length === 0)
     return <p className="px-4 py-2 text-[11px] font-bold text-[#333] uppercase italic">{semLabel}</p>;
+
+  // Calcula totais
+  const totalD = itens.filter(d => d.natureza === 'D').reduce((s, d) => s + (d.valor || 0), 0);
+  const totalC = itens.filter(d => d.natureza === 'C').reduce((s, d) => s + (d.valor || 0), 0);
+  const liquido = totalD - totalC;
+
   return (
     <table className="w-full text-[11px] table-fixed" style={{ tableLayout: 'fixed' }}>
       <colgroup>
@@ -165,9 +171,34 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel }) {
           );
         })}
       </tbody>
+      {showTotal && (
+        <tfoot>
+          <tr className="border-t-2 border-[var(--v-border)] bg-[var(--v-deep)]">
+            <td colSpan={2} className="px-2 py-1.5">
+              <div className="flex items-center gap-3">
+                <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Total</span>
+                <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaD }}>
+                  D {fmt(totalD)}
+                </span>
+                <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaC }}>
+                  C {fmt(totalC)}
+                </span>
+              </div>
+            </td>
+            <td className="px-2 py-1.5 text-center">
+              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Líq.</span>
+            </td>
+            <td className="px-2 py-1.5 text-right font-mono font-black text-[11px] whitespace-nowrap"
+                style={{ color: Math.abs(liquido) < 0.01 ? '#34c759' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
+              {fmt(liquido)}
+            </td>
+          </tr>
+        </tfoot>
+      )}
     </table>
   );
 }
+
 
 // ── Painel de orfaos (expande ao clicar na linha da conta) ───────────────────
 function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRacional, onAgent }) {
@@ -297,19 +328,19 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor Legado ({questorManual.length})</span>
                 </div>
-                <TabelaLancs itens={questorManual} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="—"/>
+                <TabelaLancs itens={questorManual} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="—" showTotal={true}/>
               </div>
               <div>
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano 1.0 (VU) ({vulcano1.length})</span>
                 </div>
-                <TabelaLancs itens={vulcano1} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="—"/>
+                <TabelaLancs itens={vulcano1} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="—" showTotal={true}/>
               </div>
               <div>
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[#34c759]">Vulcano 2.0 (IFRS 15) ({vulcano2.length})</span>
                 </div>
-                <TabelaLancs itens={vulcano2} corNaturezaD="#34c759" corNaturezaC="#a259ff" semLabel="—"/>
+                <TabelaLancs itens={vulcano2} corNaturezaD="#34c759" corNaturezaC="#a259ff" semLabel="—" showTotal={true}/>
               </div>
             </div>
           )}
@@ -325,42 +356,75 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
   const [threadId, setThreadId] = useState(null);
   const [agentState, setAgentState] = useState(null);
   const [feedback, setFeedback] = useState('');
+  const [erroMsg, setErroMsg] = useState('');
+  const [progressMsg, setProgressMsg] = useState('Iniciando investigação...');
 
-  // Auto trigger
+  // Auto trigger + mensagens de progresso animadas
   useEffect(() => {
     iniciarAgente();
   }, []);
 
+  useEffect(() => {
+    if (status !== 'RUNNING') return;
+    const msgs = [
+      'Buscando plano de contas no Questor...',
+      'Consultando lançamentos no Firebird (LCTOCTB)...',
+      'Solicitando análise ao Gemini...',
+      'Verificando POC e dados do SQLite...',
+      'Consolidando diagnóstico e sugestão...',
+    ];
+    let i = 0;
+    const t = setInterval(() => {
+      i = (i + 1) % msgs.length;
+      setProgressMsg(msgs[i]);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [status]);
+
   const iniciarAgente = async () => {
     setStatus('RUNNING');
+    setErroMsg('');
+    setProgressMsg('Iniciando investigação...');
     try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 90000); // 90s timeout
         const res = await fetch(`${API_BASE}/api/agentes/iniciar_auditoria`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ conta_alvo: `Conta ${contaId} - ${contaNome}` })
+            body: JSON.stringify({ conta_alvo: `Conta ${contaId} - ${contaNome}` }),
+            signal: ctrl.signal,
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        clearTimeout(timeout);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `HTTP ${res.status}`);
+        }
         const data = await res.json();
         setThreadId(data.thread_id);
         setAgentState(data.state);
         setStatus(data.status === 'PAUSED_FOR_HUMAN' ? 'PAUSED' : 'FINISHED');
     } catch (err) {
+        setErroMsg(err.name === 'AbortError'
+            ? 'Timeout (>90s): o Gemini demorou demais. Verifique GEMINI_API_KEY ou Vertex.'
+            : err.message || 'Erro de conexão com o backend.');
         setStatus('ERROR');
     }
   };
 
   const enviarFeedback = async (aprovado) => {
     setStatus('RUNNING');
+    setProgressMsg(aprovado ? 'Aplicando correção aprovada...' : 'Encerrando ciclo sem alteração...');
     try {
         const res = await fetch(`${API_BASE}/api/agentes/resumir_auditoria`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback })
+            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback }),
         });
         const data = await res.json();
         setAgentState(data.state);
         setStatus('FINISHED');
     } catch (err) {
+        setErroMsg(err.message);
         setStatus('ERROR');
     }
   };
@@ -373,7 +437,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
              <div className="flex items-center gap-3">
                <Zap size={20} className="text-[var(--v-accent)] animate-pulse"/>
                <div>
-                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma — Cortex Agent</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma — Cortex Agent (ReAct + HITL)</p>
                  <p className="font-mono text-xs text-[var(--v-text-bold)] mt-0.5">{contaId} <span className="font-body text-[var(--v-text-faint)]">{contaNome}</span></p>
                </div>
              </div>
@@ -384,43 +448,83 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
            <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6 custom-scrollbar">
               {status === 'RUNNING' && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                   <RefreshCw size={40} className="text-[var(--v-accent)] animate-spin"/>
-                   <div className="text-center">
-                       <p className="text-[var(--v-accent)] font-black uppercase tracking-widest text-[14px] animate-pulse mb-2">Agente Investigador Ativo</p>
-                       <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-[var(--v-text-faint)]">Inspecionando assinaturas no Firebird SQL...</p>
+                   <div className="relative">
+                     <RefreshCw size={48} className="text-[var(--v-accent)] animate-spin"/>
+                     <Zap size={18} className="text-[var(--v-accent-6)] absolute -bottom-1 -right-1 animate-pulse" />
+                   </div>
+                   <div className="text-center max-w-sm">
+                       <p className="text-[var(--v-accent)] font-black uppercase tracking-widest text-[14px] animate-pulse mb-3">Agente ReAct Investigando</p>
+                       <p className="text-[11px] font-bold tracking-[0.15em] text-[var(--v-text-faint)] animate-pulse">{progressMsg}</p>
+                       <p className="text-[9px] mt-4 text-[#333] font-bold uppercase tracking-widest">Pode levar 10–30s · Gemini + Firebird SQL</p>
                    </div>
                 </div>
               )}
 
               {status === 'ERROR' && (
-                <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[var(--v-accent)]/10 text-center font-bold">
-                   <p className="text-xs uppercase tracking-widest font-black">SYSTEM FAILURE: Connection Refused</p>
-                   <p className="text-[10px] mt-2 opacity-60">Ocorreu um erro ao comunicar com a malha de agentes.</p>
+                <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[var(--v-accent)]/10 text-center font-bold flex flex-col gap-3">
+                   <p className="text-xs uppercase tracking-widest font-black">⚠ Falha no Agente</p>
+                   <p className="text-[11px] font-mono opacity-80">{erroMsg}</p>
+                   <button onClick={iniciarAgente}
+                     className="mt-2 px-4 py-2 bg-[var(--v-accent)]/20 border border-[var(--v-accent)]/40 rounded text-[9px] font-black uppercase tracking-widest hover:bg-[var(--v-accent)]/30 transition-all">
+                     ↺ Tentar novamente
+                   </button>
                 </div>
               )}
 
               {(status === 'PAUSED' || status === 'FINISHED') && agentState && (
-                <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-bottom-4 duration-500">
-                    {/* Status Message */}
+                <div className="flex-1 flex flex-col gap-6 animate-in slide-in-from-bottom-4 duration-500">
+                    {/* Trace Log */}
                     <div className="bg-[var(--v-bg)] border border-[var(--v-border)] p-5 rounded flex flex-col gap-3">
-                       <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">Rastro de Execução (Trace Log)</h3>
-                       <ul className="text-[11px] font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5 opacity-80">
-                           {agentState.passos_executados?.map((p, i) => (
+                       <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">
+                         Rastro de Execução — {agentState.passos_executados?.length || 0} passos
+                       </h3>
+                       <ul className="text-[11px] font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5">
+                           {(agentState.passos_executados || []).map((p, i) => (
                              <li key={i} className="flex gap-2">
-                                 <span className="text-[var(--v-accent)]">›</span>
+                                 <span className="text-[var(--v-accent)] shrink-0">›</span>
                                  <span>{p}</span>
                              </li>
                            ))}
                        </ul>
                     </div>
 
+                    {/* Tool Outputs — resultados_db */}
+                    {(agentState.resultados_db || []).length > 0 && (
+                      <div className="bg-[var(--v-bg)] border border-[#007aff]/30 p-5 rounded flex flex-col gap-3">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#007aff]">
+                          Dados Coletados pelas Ferramentas SQL ({agentState.resultados_db.length} chamadas)
+                        </h3>
+                        {agentState.resultados_db.map((r, i) => {
+                          let parsed = null;
+                          try { parsed = JSON.parse(r.result || '{}'); } catch {}
+                          return (
+                            <div key={i} className="border border-[#007aff]/20 rounded p-3 bg-[#007aff]/5">
+                              <p className="text-[9px] font-black uppercase tracking-widest text-[#007aff] mb-2">
+                                🔧 {r.tool} — args: {JSON.stringify(r.args || {})}
+                              </p>
+                              {parsed ? (
+                                <pre className="text-[10px] font-mono text-[var(--v-text-faint)] whitespace-pre-wrap max-h-32 overflow-auto">
+                                  {JSON.stringify(parsed, null, 2)}
+                                </pre>
+                              ) : (
+                                <p className="text-[10px] font-mono text-[var(--v-text-faint)]">{String(r.result || '').slice(0, 300)}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Sugestão de Correção */}
                     {agentState.sugestao_correcao && Object.keys(agentState.sugestao_correcao).length > 0 && (
                         <div className="bg-[var(--v-card)] border border-[var(--v-accent)]/30 p-6 rounded shadow-lg">
                            <div className="flex items-center gap-2 mb-4">
                               <div className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-6)] animate-pulse"/>
                               <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-6)]">Veredito da IA (Human-in-the-Loop)</h3>
                            </div>
-                           <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)]">{agentState.sugestao_correcao.descricao}</p>
+                           <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)]">
+                             {agentState.sugestao_correcao.descricao}
+                           </p>
                            <div className="grid grid-cols-2 gap-4">
                               <div className="bg-[#34c759]/5 border border-[#34c759]/20 p-4 rounded">
                                  <p className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
@@ -433,6 +537,13 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
                            </div>
                         </div>
                     )}
+
+                    {/* Sem sugestão: aviso */}
+                    {(!agentState.sugestao_correcao || Object.keys(agentState.sugestao_correcao).length === 0) && status === 'PAUSED' && (
+                      <div className="border border-[#ffcc00]/30 bg-[#ffcc00]/5 rounded p-4 text-[11px] text-[#ffcc00] font-bold">
+                        ⚠ O agente ainda não gerou uma sugestão de correção. Clique em Aprovar para deixá-lo continuar ou Rejeitar para encerrar.
+                      </div>
+                    )}
                 </div>
               )}
            </div>
@@ -444,17 +555,17 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
                 <input 
                   autoFocus
                   type="text" 
-                  placeholder="Algum feedback, correção ou contexto adicional para o aprendizado do agente? (Opcional)" 
+                  placeholder="Feedback, correção ou contexto adicional (opcional)" 
                   value={feedback} 
                   onChange={e => setFeedback(e.target.value)}
                   onKeyDown={e => e.stopPropagation()}
                   className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-4 py-3 text-xs font-bold font-mono text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent-6)] transition-all"
                 />
                 <div className="flex gap-4">
-                    <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#34c759]/10 hover:bg-[#34c759]/20 border border-[#34c759]/50 text-[#34c759] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#34c759]/5">
+                    <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#34c759]/10 hover:bg-[#34c759]/20 border border-[#34c759]/50 text-[#34c759] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
                        ✓ APROVAR TRATATIVA
                     </button>
-                    <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[#ff4d00]/10 hover:bg-[#ff4d00]/20 border border-[#ff4d00]/50 text-[#ff4d00] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#ff4d00]/5">
+                    <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[#ff4d00]/10 hover:bg-[#ff4d00]/20 border border-[#ff4d00]/50 text-[#ff4d00] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
                        ✗ REJEITAR / CORRIGIR
                     </button>
                 </div>
@@ -463,7 +574,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
            {status === 'FINISHED' && (
              <div className="border-t border-[#34c759]/20 bg-[#34c759]/5 p-6 text-center shrink-0">
                 <p className="text-[#34c759] font-black uppercase tracking-widest text-[13px] flex justify-center items-center gap-2">
-                   <CheckCircle2 size={18}/> Auditoria Deste Nodo Finalizada (Estado Persistido)
+                   <CheckCircle2 size={18}/> Auditoria Deste Nodo Finalizada
                 </p>
              </div>
            )}

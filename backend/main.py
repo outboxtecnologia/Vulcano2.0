@@ -70,7 +70,7 @@ else:
 load_dotenv(dotenv_path=_DOTENV_PATH, override=True)
 
 _DEFAULT_DB_QUESTOR = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\QUESTOR_EMPRESA_959.FDB"
-_DEFAULT_DB_VULCANO = r"C:\Users\dirfe\OneDrive\Documentos\Vulcano\VULCANO.FDB"
+_DEFAULT_DB_VULCANO = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\Vulcano 2025\VULCANO 2025.fdb"
 DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", _DEFAULT_DB_QUESTOR)
 DB_PATH_VULCANO = os.environ.get("DB_PATH_VULCANO", _DEFAULT_DB_VULCANO)
 FIREBIRD_HOST = os.environ.get("FIREBIRD_HOST", "localhost")
@@ -291,6 +291,11 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
 #     _sa.stop_scheduler()
 
 app = FastAPI(title="Questor Data Explorer API")
+
+# ── Janitor SRE Agent imports ───────────────────────────────────────────────
+from core.janitor.profiler import JanitorTimingMiddleware, start_profiler, get_performance_report
+from core.janitor.cache    import get_cache_stats, invalidate_cache
+from core.janitor.disk_inspector import run_disk_scan, get_disk_report, move_to_quarantine
 
 from pydantic import BaseModel
 class RawQuery(BaseModel):
@@ -1911,6 +1916,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Janitor Timing Middleware (após CORS) ────────────────────────────────
+app.add_middleware(JanitorTimingMiddleware)
+
+@app.on_event("startup")
+async def _janitor_startup():
+    """Inicia tasks assíncronas do Janitor SRE na inicialização do servidor."""
+    await start_profiler()           # Writer daemon de métricas
+    asyncio.create_task(run_disk_scan())  # Scanner de disco (roda a cada 30 min)
+
 from fastapi import Request
 @app.middleware("http")
 async def add_no_cache_header(request: Request, call_next):
@@ -1920,6 +1934,37 @@ async def add_no_cache_header(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+# ── API Janitor SRE ────────────────────────────────────────────────────
+@app.get("/api/janitor/report")
+def api_janitor_report(janela_horas: int = 24, top_n: int = 20):
+    """Retorna métricas P50/P95/P99 de todos os endpoints nas últimas N horas."""
+    perf = get_performance_report(top_n=top_n, janela_horas=janela_horas)
+    cache = get_cache_stats()
+    return {
+        "performance": perf,
+        "cache":       cache,
+        "janitor_version": "1.0.0",
+    }
+
+@app.get("/api/janitor/disk")
+def api_janitor_disk():
+    """Retorna relatório de arquivos residuais identificados no disco."""
+    return get_disk_report()
+
+class QuarantineReq(BaseModel):
+    paths: list[str]
+
+@app.post("/api/janitor/quarantine")
+def api_janitor_quarantine(req: QuarantineReq):
+    """Move os arquivos especificados para .janitor_quarantine/ (reversível)."""
+    return move_to_quarantine(req.paths)
+
+@app.post("/api/janitor/cache/invalidate")
+def api_janitor_cache_invalidate(path: str = None):
+    """Invalida o cache de um endpoint específico ou todo o cache (path=None)."""
+    removed = invalidate_cache(path)
+    return {"removed": removed, "path": path or "*"}
 
 @app.post("/api/generate-pdf-parser")
 async def generate_pdf_parser(file: UploadFile = File(...)):
@@ -4584,10 +4629,13 @@ async def post_vendas(request: Request):
 
         # --- VENDAUNIDADE ---
         unidades_selecionadas = data.get("unidades_selecionadas", [])
-        for u_id in unidades_selecionadas:
+        if unidades_selecionadas:
+            # N+1 FIX: pré-busca o MAX(ID) uma vez, usa contador local
             cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAUNIDADE")
-            vu_id = cur.fetchone()[0]
-            cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)", (vu_id, new_id, int(u_id)))
+            vu_id_base = cur.fetchone()[0]
+            for idx_vu, u_id in enumerate(unidades_selecionadas):
+                vu_id = vu_id_base + idx_vu
+                cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)", (vu_id, new_id, int(u_id)))
 
         # Determinar última data mensal (para ancorar CHAVES/FINANCIAMENTO depois)
         import datetime as _dt
@@ -4616,9 +4664,21 @@ async def post_vendas(request: Request):
                 except Exception:
                     pass
 
+        # N+1 FIX: pré-busca todos os MAX(ID) necessários uma vez
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTO")
+        fp_id_base = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTOPRAZO")
+        prazo_id_base = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+        rec_id_base = cur.fetchone()[0]
+
+        _fp_counter    = fp_id_base
+        _prazo_counter = prazo_id_base
+        _rec_counter   = rec_id_base
+
         for cond in condicoes:
-            cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTO")
-            fp_id = cur.fetchone()[0]
+            fp_id = _fp_counter
+            _fp_counter += 1
 
             tipo = cond.get("tipo", "MENSAL")
             qtd = int(cond.get("quantidade", 1))
@@ -4669,15 +4729,16 @@ async def post_vendas(request: Request):
                     dt_prazo = calc_vencimento(venc_inicial, i, tipo, intervalo_meses)
                     dt_prazo_str = dt_prazo.strftime("%Y-%m-%d") if dt_prazo else venc_inicial
 
-                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTOPRAZO")
-                    prazo_id = cur.fetchone()[0]
+                    # N+1 FIX: usa contadores pré-calculados
+                    prazo_id = _prazo_counter
+                    _prazo_counter += 1
 
                     referencia = f"{i+1}/{qtd}"
                     q_prazo = "INSERT INTO VENDAFORMAPAGTOPRAZO (ID, IDVENDAFORMAPAGTO, DATA, REFERENCIA, VALOR, VALOR_PAGO) VALUES (?, ?, ?, ?, ?, ?)"
                     cur.execute(q_prazo, (prazo_id, fp_id, dt_prazo_str, referencia, valor_base, 0.0))
 
-                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
-                    rec_id = cur.fetchone()[0]
+                    rec_id = _rec_counter
+                    _rec_counter += 1
                     q_rec = """
                         INSERT INTO RECEBER (ID, IDVENDA, DATA, VALORPARCELA, PARCELA, OBS, IDVENDAFORMAPAGTO, IDVENDAFORMAPAGTOPRAZO, TOTALPAGO)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -6051,12 +6112,49 @@ import uuid
 class AuditStartReq(BaseModel):
     conta_alvo: str
 
+def _serialize_agent_state(res: dict) -> dict:
+    """
+    Converte o state do LangGraph para um dict JSON-safe.
+    O campo `messages` contém objetos AIMessage/HumanMessage/ToolMessage
+    que não são serializaveis pelo FastAPI diretamente.
+    """
+    import json
+    safe = {}
+    for k, v in (res or {}).items():
+        if k == "messages":
+            # Converte cada mensagem para dict simples
+            msgs = []
+            for m in (v or []):
+                try:
+                    if hasattr(m, "to_json"):
+                        msgs.append({"type": getattr(m, "type", "?"), "content": str(m.content or "")[:2000]})
+                    elif hasattr(m, "content"):
+                        msgs.append({"type": type(m).__name__, "content": str(m.content or "")[:2000]})
+                    else:
+                        msgs.append({"type": "unknown", "content": str(m)[:200]})
+                except Exception:
+                    pass
+            safe[k] = msgs
+        elif k == "resultados_db":
+            # Garante que os resultados_db sejam strings (podem ter objetos)
+            safe[k] = [
+                {kk: (vv if isinstance(vv, (str, int, float, bool, type(None))) else str(vv))
+                 for kk, vv in (item.items() if isinstance(item, dict) else {})}
+                for item in (v or [])
+            ]
+        else:
+            try:
+                json.dumps(v)  # Testa se é serializavel
+                safe[k] = v
+            except Exception:
+                safe[k] = str(v)
+    return safe
+
 @app.post("/api/agentes/iniciar_auditoria")
 def api_agentes_iniciar(req: AuditStartReq):
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
     
-    # Inicia a thread do grafo
     initial_state = AuditoriaGraphState(
         pergunta="Auditoria de rotina iniciada",
         conta_alvo=req.conta_alvo,
@@ -6065,18 +6163,38 @@ def api_agentes_iniciar(req: AuditStartReq):
         historico_aprendizado=[],
         sugestao_correcao={},
         aprovado_pelo_usuario=False,
-        feedback_usuario=""
+        feedback_usuario="",
+        messages=[],
     )
     
-    # Invoke state until interruption
-    res = graph_app.invoke(initial_state, config=config)
-    state = graph_app.get_state(config)
-    
-    return {
-        "status": "PAUSED_FOR_HUMAN" if state.next else "FINISHED",
-        "thread_id": thread_id,
-        "state": res
-    }
+    try:
+        res = graph_app.invoke(initial_state, config=config)
+        state = graph_app.get_state(config)
+        return {
+            "status": "PAUSED_FOR_HUMAN" if state.next else "FINISHED",
+            "thread_id": thread_id,
+            "state": _serialize_agent_state(res)
+        }
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        msg = str(e)
+        # Erros comuns do Vertex / Gemini: exibe a causa raiz
+        if "GOOGLE_APPLICATION_CREDENTIALS" in tb or "credential" in msg.lower():
+            detalhe = f"Vertex AI: credencial não encontrada ou inválida. Verifique GOOGLE_APPLICATION_CREDENTIALS no .env. Detalhe: {msg}"
+        elif "DefaultCredentialsError" in tb:
+            detalhe = f"Vertex AI: sem credencial padrão. Configure GOOGLE_APPLICATION_CREDENTIALS. Detalhe: {msg}"
+        elif "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            detalhe = f"Vertex AI: cota excedida ou rate limit atingido. Aguarde e tente novamente. Detalhe: {msg}"
+        elif "404" in msg or "not found" in msg.lower():
+            detalhe = f"Vertex AI: modelo não encontrado ou projeto incorreto (project_id no chavejson.json). Detalhe: {msg}"
+        elif "LangGraph" in tb or "StateSnapshot" in tb or "graph" in tb.lower():
+            detalhe = f"LangGraph: erro interno no grafo. Detalhe: {msg}"
+        elif "firebird" in tb.lower() or "fdb" in tb.lower() or "isql" in tb.lower():
+            detalhe = f"Firebird: falha ao conectar ao banco de dados. Verifique se o serviço Firebird está rodando. Detalhe: {msg}"
+        else:
+            detalhe = f"{type(e).__name__}: {msg}"
+        raise HTTPException(status_code=500, detail=detalhe)
 
 class AuditResumeReq(BaseModel):
     thread_id: str
@@ -6099,7 +6217,7 @@ def api_agentes_resumir(req: AuditResumeReq):
     res = graph_app.invoke(None, config=config)
     return {
         "status": "FINISHED",
-        "state": res
+        "state": _serialize_agent_state(res)
     }
 
 from fastapi.staticfiles import StaticFiles
