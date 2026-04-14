@@ -1,7 +1,9 @@
 import os
 from langchain_google_vertexai import ChatVertexAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from main import HAS_VERTEXAI, GEMINI_MODEL_ID
+
+HAS_VERTEXAI = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") is not None
+GEMINI_MODEL_ID = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 def get_agent_llm():
     if HAS_VERTEXAI:

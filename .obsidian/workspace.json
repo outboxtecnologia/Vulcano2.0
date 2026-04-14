@@ -101,14 +101,10 @@
             "id": "5757384ae114c044",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "frontend/node_modules/xlsx/README.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "3d_graph_view",
+              "state": {},
               "icon": "lucide-file",
-              "title": "README"
+              "title": "3D-Graph"
             }
           }
         ],
@@ -276,17 +272,20 @@
   },
   "active": "5757384ae114c044",
   "lastOpenFiles": [
-    "frontend/dist/assets/index-Doc6wVma.css",
-    "frontend/dist/assets/index-B6jbMQKz.js",
-    "backend/agente_checkpoints.sqlite",
-    "backend/core/agents/__pycache__/tools.cpython-314.pyc",
-    "backend/core/agents/llm_provider.py",
-    "backend/core/agents/__pycache__/llm_provider.cpython-314.pyc",
-    "backend/core/agents/__pycache__/state.cpython-314.pyc",
-    "backend/core/agents/__pycache__/auditoria_graph.cpython-314.pyc",
-    "backend/core/agents/__pycache__",
-    "backend/core/agents/auditoria_graph.py",
-    "backend/core/agents/state.py",
+    "backend/agente_checkpoints.sqlite-shm",
+    "backend/agente_checkpoints.sqlite-wal",
+    "backend/check_order.py",
+    "backend/test_routes.py",
+    "backend/test_openapi.py",
+    "backend/test_auditoria.py",
+    "check_vulcano.py",
+    "backend/check_fdb.py",
+    "backend/check_vulcano_5653.py",
+    "frontend/dist/assets/index-DoIju7Pa.css",
+    "frontend/dist/assets/index-BnUaE_Ju.js",
+    "frontend/node_modules/xlsx/README.md",
+    "Sem título 1.canvas",
+    "frontend/node_modules/object-assign/readme.md",
     "Sem título.canvas",
     "docs/MOCs/Deep_Dives/Roadmap_LangGraph.md",
     "docs/MOCs/Deep_Dives/LLM_Arbitrator.md",
@@ -311,8 +310,6 @@
     "backend/scratchpad.md",
     "backend/debug_cno.md",
     "backend/API_GUIDELINES.md",
-    "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md",
-    "docs/superpowers/plans/2026-04-09-sindicatos-cct.md",
-    "README.md"
+    "docs/superpowers/specs/2026-04-09-sindicatos-cct-design.md"
   ]
 }

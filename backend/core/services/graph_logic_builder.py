@@ -278,7 +278,6 @@ class AccountingGraphPipeline:
                     WHERE DATA >= CAST(? AS DATE) AND DATA < CAST(? AS DATE)
                 """, (data_inicio_mes_atual, data_fim_mes_atual))
                 for (dt, cdeb, ccred, hist, val, chave_origem, id_emp) in cur_v.fetchall():
-                    if empreendimento_id and str(id_emp) != str(empreendimento_id): continue
                     v = float(val or 0)
                     if v <= 0.01: continue
                     # Helper local
@@ -309,6 +308,9 @@ class AccountingGraphPipeline:
             except Exception as e_legado:
                 print(f"Aviso: Erro ao ler LANCAMENTO_CONTABIL: {e_legado}")
     
+            if not empreendimentos:
+                empreendimentos = [{"cc": empreendimento_id or "GERAL", "vendas": []}]
+
             resultados = []
             for emp in empreendimentos:
                 cc = emp["cc"]

@@ -5,6 +5,7 @@ import {
   RefreshCw, Building2, ChevronDown, ChevronUp, ArrowRight,
   Download, GitCompare, List, Link2
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 const API_BASE = "http://127.0.0.1:8000";
 const fmt = (v) =>
@@ -338,6 +339,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ conta_alvo: `Conta ${contaId} - ${contaNome}` })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         setThreadId(data.thread_id);
         setAgentState(data.state);
@@ -363,113 +365,111 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
     }
   };
 
-  return (
-      <tr>
-        <td colSpan={999} className="p-0 border-0">
-          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col p-8 items-center justify-center animate-in fade-in duration-300" onClick={onClose}>
-            <div className="bg-[var(--v-deep)] border border-[var(--v-accent)]/50 shadow-[0_0_50px_rgba(255,77,0,0.15)] rounded-[var(--v-radius)] w-full max-w-5xl h-[85vh] flex flex-col pointer-events-auto" onClick={e => e.stopPropagation()}>
-               {/* HEADER */}
-               <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--v-accent)]/20 bg-[var(--v-accent)]/5">
-                 <div className="flex items-center gap-3">
-                   <Zap size={20} className="text-[var(--v-accent)] animate-pulse"/>
-                   <div>
-                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma — Cortex Agent</p>
-                     <p className="font-mono text-xs text-[var(--v-text-bold)] mt-0.5">{contaId} <span className="font-body text-[var(--v-text-faint)]">{contaNome}</span></p>
+  return createPortal(
+      <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300" onClick={onClose}>
+        <div className="bg-[var(--v-deep)] border border-[var(--v-accent)]/50 shadow-[0_0_50px_rgba(255,77,0,0.15)] w-full h-full flex flex-col pointer-events-auto overflow-hidden" onClick={e => e.stopPropagation()}>
+           {/* HEADER */}
+           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--v-accent)]/20 bg-[var(--v-accent)]/5 shrink-0">
+             <div className="flex items-center gap-3">
+               <Zap size={20} className="text-[var(--v-accent)] animate-pulse"/>
+               <div>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma — Cortex Agent</p>
+                 <p className="font-mono text-xs text-[var(--v-text-bold)] mt-0.5">{contaId} <span className="font-body text-[var(--v-text-faint)]">{contaNome}</span></p>
+               </div>
+             </div>
+             <button onClick={onClose} className="text-[var(--v-accent)] hover:text-white font-black px-2 py-1 uppercase tracking-widest text-[10px] transition-colors border border-transparent hover:border-[var(--v-accent)]/40 rounded">✕ ENCERRAR</button>
+           </div>
+           
+           {/* BODY */}
+           <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6 custom-scrollbar">
+              {status === 'RUNNING' && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-6">
+                   <RefreshCw size={40} className="text-[var(--v-accent)] animate-spin"/>
+                   <div className="text-center">
+                       <p className="text-[var(--v-accent)] font-black uppercase tracking-widest text-[14px] animate-pulse mb-2">Agente Investigador Ativo</p>
+                       <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-[var(--v-text-faint)]">Inspecionando assinaturas no Firebird SQL...</p>
                    </div>
-                 </div>
-                 <button onClick={onClose} className="text-[var(--v-accent)] hover:text-white font-black px-2 py-1 uppercase tracking-widest text-[10px] transition-colors border border-transparent hover:border-[var(--v-accent)]/40 rounded">✕ ENCERRAR</button>
-               </div>
-               
-               {/* BODY */}
-               <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6 custom-scrollbar">
-                  {status === 'RUNNING' && (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                       <RefreshCw size={40} className="text-[var(--v-accent)] animate-spin"/>
-                       <div className="text-center">
-                           <p className="text-[var(--v-accent)] font-black uppercase tracking-widest text-[14px] animate-pulse mb-2">Agente Investigador Ativo</p>
-                           <p className="text-[10px] uppercase font-bold tracking-[0.2em] text-[var(--v-text-faint)]">Inspecionando assinaturas no Firebird SQL...</p>
-                       </div>
-                    </div>
-                  )}
+                </div>
+              )}
 
-                  {status === 'ERROR' && (
-                    <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[var(--v-accent)]/10 text-center font-bold">
-                       <p className="text-xs uppercase tracking-widest font-black">SYSTEM FAILURE: Connection Refused</p>
-                       <p className="text-[10px] mt-2 opacity-60">Ocorreu um erro ao comunicar com a malha de agentes.</p>
-                    </div>
-                  )}
+              {status === 'ERROR' && (
+                <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[var(--v-accent)]/10 text-center font-bold">
+                   <p className="text-xs uppercase tracking-widest font-black">SYSTEM FAILURE: Connection Refused</p>
+                   <p className="text-[10px] mt-2 opacity-60">Ocorreu um erro ao comunicar com a malha de agentes.</p>
+                </div>
+              )}
 
-                  {(status === 'PAUSED' || status === 'FINISHED') && agentState && (
-                    <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-bottom-4 duration-500">
-                        {/* Status Message */}
-                        <div className="bg-[var(--v-bg)] border border-[var(--v-border)] p-5 rounded flex flex-col gap-3">
-                           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">Rastro de Execução (Trace Log)</h3>
-                           <ul className="text-[11px] font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5 opacity-80">
-                               {agentState.passos_executados?.map((p, i) => (
-                                 <li key={i} className="flex gap-2">
-                                     <span className="text-[var(--v-accent)]">›</span>
-                                     <span>{p}</span>
-                                 </li>
-                               ))}
-                           </ul>
+              {(status === 'PAUSED' || status === 'FINISHED') && agentState && (
+                <div className="flex-1 flex flex-col gap-8 animate-in slide-in-from-bottom-4 duration-500">
+                    {/* Status Message */}
+                    <div className="bg-[var(--v-bg)] border border-[var(--v-border)] p-5 rounded flex flex-col gap-3">
+                       <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">Rastro de Execução (Trace Log)</h3>
+                       <ul className="text-[11px] font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5 opacity-80">
+                           {agentState.passos_executados?.map((p, i) => (
+                             <li key={i} className="flex gap-2">
+                                 <span className="text-[var(--v-accent)]">›</span>
+                                 <span>{p}</span>
+                             </li>
+                           ))}
+                       </ul>
+                    </div>
+
+                    {agentState.sugestao_correcao && Object.keys(agentState.sugestao_correcao).length > 0 && (
+                        <div className="bg-[var(--v-card)] border border-[var(--v-accent)]/30 p-6 rounded shadow-lg">
+                           <div className="flex items-center gap-2 mb-4">
+                              <div className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-6)] animate-pulse"/>
+                              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-6)]">Veredito da IA (Human-in-the-Loop)</h3>
+                           </div>
+                           <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)]">{agentState.sugestao_correcao.descricao}</p>
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-[#34c759]/5 border border-[#34c759]/20 p-4 rounded">
+                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
+                                 <p className="font-mono text-sm font-bold text-[#34c759]">{agentState.sugestao_correcao.acao}</p>
+                              </div>
+                              <div className="bg-[#a259ff]/5 border border-[#a259ff]/20 p-4 rounded">
+                                 <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-1.5">Contrapartida (Auto-Mapping)</p>
+                                 <p className="font-mono text-sm font-bold text-[var(--v-accent-5)]">{agentState.sugestao_correcao.conta_contrapartida}</p>
+                              </div>
+                           </div>
                         </div>
+                    )}
+                </div>
+              )}
+           </div>
 
-                        {agentState.sugestao_correcao && Object.keys(agentState.sugestao_correcao).length > 0 && (
-                            <div className="bg-[var(--v-card)] border border-[var(--v-accent)]/30 p-6 rounded shadow-lg">
-                               <div className="flex items-center gap-2 mb-4">
-                                  <div className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-6)] animate-pulse"/>
-                                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-6)]">Veredito da IA (Human-in-the-Loop)</h3>
-                               </div>
-                               <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)]">{agentState.sugestao_correcao.descricao}</p>
-                               <div className="grid grid-cols-2 gap-4">
-                                  <div className="bg-[#34c759]/5 border border-[#34c759]/20 p-4 rounded">
-                                     <p className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
-                                     <p className="font-mono text-sm font-bold text-[#34c759]">{agentState.sugestao_correcao.acao}</p>
-                                  </div>
-                                  <div className="bg-[#a259ff]/5 border border-[#a259ff]/20 p-4 rounded">
-                                     <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-1.5">Contrapartida (Auto-Mapping)</p>
-                                     <p className="font-mono text-sm font-bold text-[var(--v-accent-5)]">{agentState.sugestao_correcao.conta_contrapartida}</p>
-                                  </div>
-                               </div>
-                            </div>
-                        )}
-                    </div>
-                  )}
-               </div>
-
-               {/* FOOTER (HITL Input) */}
-               {status === 'PAUSED' && (
-                 <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 rounded-b-[var(--v-radius)]">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-muted)]">Aguardando Avaliação Humana (HITL)</p>
-                    <input 
-                      autoFocus
-                      type="text" 
-                      placeholder="Algum feedback, correção ou contexto adicional para o aprendizado do agente? (Opcional)" 
-                      value={feedback} 
-                      onChange={e => setFeedback(e.target.value)}
-                      className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-4 py-3 text-xs font-bold font-mono text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent-6)] transition-all"
-                    />
-                    <div className="flex gap-4">
-                        <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#34c759]/10 hover:bg-[#34c759]/20 border border-[#34c759]/50 text-[#34c759] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#34c759]/5">
-                           ✓ APROVAR TRATATIVA
-                        </button>
-                        <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[#ff4d00]/10 hover:bg-[#ff4d00]/20 border border-[#ff4d00]/50 text-[#ff4d00] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#ff4d00]/5">
-                           ✗ REJEITAR / CORRIGIR
-                        </button>
-                    </div>
-                 </div>
-               )}
-               {status === 'FINISHED' && (
-                 <div className="border-t border-[#34c759]/20 bg-[#34c759]/5 p-6 text-center rounded-b-[var(--v-radius)]">
-                    <p className="text-[#34c759] font-black uppercase tracking-widest text-[13px] flex justify-center items-center gap-2">
-                       <CheckCircle2 size={18}/> Auditoria Deste Nodo Finalizada (Estado Persistido)
-                    </p>
-                 </div>
-               )}
-            </div>
-          </div>
-        </td>
-      </tr>
+           {/* FOOTER (HITL Input) */}
+           {status === 'PAUSED' && (
+             <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 shrink-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-muted)]">Aguardando Avaliação Humana (HITL)</p>
+                <input 
+                  autoFocus
+                  type="text" 
+                  placeholder="Algum feedback, correção ou contexto adicional para o aprendizado do agente? (Opcional)" 
+                  value={feedback} 
+                  onChange={e => setFeedback(e.target.value)}
+                  onKeyDown={e => e.stopPropagation()}
+                  className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-4 py-3 text-xs font-bold font-mono text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent-6)] transition-all"
+                />
+                <div className="flex gap-4">
+                    <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#34c759]/10 hover:bg-[#34c759]/20 border border-[#34c759]/50 text-[#34c759] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#34c759]/5">
+                       ✓ APROVAR TRATATIVA
+                    </button>
+                    <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[#ff4d00]/10 hover:bg-[#ff4d00]/20 border border-[#ff4d00]/50 text-[#ff4d00] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-[#ff4d00]/5">
+                       ✗ REJEITAR / CORRIGIR
+                    </button>
+                </div>
+             </div>
+           )}
+           {status === 'FINISHED' && (
+             <div className="border-t border-[#34c759]/20 bg-[#34c759]/5 p-6 text-center shrink-0">
+                <p className="text-[#34c759] font-black uppercase tracking-widest text-[13px] flex justify-center items-center gap-2">
+                   <CheckCircle2 size={18}/> Auditoria Deste Nodo Finalizada (Estado Persistido)
+                </p>
+             </div>
+           )}
+        </div>
+      </div>,
+      document.body
   );
 }
 
