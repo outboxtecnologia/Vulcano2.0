@@ -2,8 +2,13 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import re
 import math
+import time
 from itertools import combinations
 from collections import defaultdict
+
+# ── Cache TTL do CUB Map (5 min por empresa) ──────────────────────────────────
+_CUB_CACHE: dict = {}   # { empresa_id: (timestamp, cub_map_dict) }
+_CUB_TTL = 300          # segundos
 
 # Contas que pertencem ao mesmo grupo de reconciliação apartamento.
 # Lançamentos destas contas SÓ fazem cross-match entre elas mesmas.
@@ -29,8 +34,17 @@ class OrphansReconciliationService:
 
     @staticmethod
     async def api_concilia_orfaos(data: "OrphansReconciliationService.ConciliaOrfaosInput"):
-        from main import get_conn
+        """Wrapper async: descarrega todo o processamento CPU-bound para um thread
+        via asyncio.to_thread para não bloquear o event loop do FastAPI."""
+        import asyncio
+        return await asyncio.to_thread(
+            OrphansReconciliationService._concilia_orfaos_sync, data
+        )
 
+    @staticmethod
+    def _concilia_orfaos_sync(data: "OrphansReconciliationService.ConciliaOrfaosInput"):
+
+        from main import get_conn
         """
         Conciliação Híbrida:
         1. Clustering baseado em texto (Unidades, Vagas, Docs).
@@ -112,8 +126,12 @@ class OrphansReconciliationService:
                 import json
                 
                 # 1. Gera embeddings dos Orfaos Virtuais na hora para caçar
+                # NOTA: _concilia_orfaos_sync roda em thread (via asyncio.to_thread),
+                # por isso não pode usar await diretamente. asyncio.run() cria um
+                # event loop local só para essa coroutine.
                 textos_v = [(str(v.get("historico", "")) + " " + str(v.get("logica", ""))).upper().strip() for v in v_items]
-                matrizes_v = await generate_embeddings_batch(textos_v)
+                import asyncio as _asyncio
+                matrizes_v = _asyncio.run(generate_embeddings_batch(textos_v))
                 
                 db = SessionLocal()
                 q_by_key = {str(q.get("chave", "")): q for q in q_items if str(q.get("chave", ""))}
@@ -161,27 +179,36 @@ class OrphansReconciliationService:
             for q in q_items: clusters_map[q["_cluster"]]["q"].append(q)
             for v in v_items: clusters_map[v["_cluster"]]["v"].append(v)
         
-        # [CUB ANALYSIS] Mapa analítico para auditar se pequenas diferenças são CUB
+        # [CUB ANALYSIS] Cache TTL de 5 min por empresa — evita o JOIN pesado a cada chamada
         cub_map = {}
         try:
-            conn_v = get_conn("vulcano")
-            cur_v = conn_v.cursor()
-            cur_v.execute("""
-                SELECT V.DESCUNIDIMOB, EXTRACT(YEAR FROM R.DATA), EXTRACT(MONTH FROM R.DATA), SUM(R.VALORVARIACAO)
-                FROM RECEBER R
-                JOIN VENDA V ON V.ID = R.IDVENDA
-                JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
-                JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
-                JOIN BLOCO B ON B.ID = U.IDBLOCO
-                JOIN EMPREENDIMENTO E ON E.ID = B.IDEMPREENDIMENTO
-                WHERE E.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0
-                GROUP BY 1, 2, 3
-            """, (data.empresa_id,))
-            for cv_r in cur_v.fetchall():
-                uni = str(cv_r[0] or "").strip().upper()
-                if uni:
-                    key = f"{uni}_{int(cv_r[1])}-{str(int(cv_r[2])).zfill(2)}"
-                    cub_map[key] = float(cv_r[3] or 0.0)
+            _now = time.monotonic()
+            _cached = _CUB_CACHE.get(data.empresa_id)
+            if _cached and (_now - _cached[0]) < _CUB_TTL:
+                cub_map = _cached[1]
+            else:
+                conn_v = get_conn("vulcano")
+                cur_v = conn_v.cursor()
+                cur_v.execute("""
+                    SELECT FIRST 2000
+                        V.DESCUNIDIMOB, EXTRACT(YEAR FROM R.DATA), EXTRACT(MONTH FROM R.DATA),
+                        SUM(R.VALORVARIACAO)
+                    FROM RECEBER R
+                    JOIN VENDA V ON V.ID = R.IDVENDA
+                    JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
+                    JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
+                    JOIN BLOCO B ON B.ID = U.IDBLOCO
+                    JOIN EMPREENDIMENTO E ON E.ID = B.IDEMPREENDIMENTO
+                    WHERE E.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0 AND R.VALORVARIACAO > 0
+                    GROUP BY 1, 2, 3
+                """, (data.empresa_id,))
+                for cv_r in cur_v.fetchall():
+                    uni = str(cv_r[0] or "").strip().upper()
+                    if uni:
+                        key = f"{uni}_{int(cv_r[1])}-{str(int(cv_r[2])).zfill(2)}"
+                        cub_map[key] = float(cv_r[3] or 0.0)
+                conn_v.close()
+                _CUB_CACHE[data.empresa_id] = (_now, cub_map)
         except Exception as e:
             print(f"Erro CUB Mapping Caching: {e}")
 

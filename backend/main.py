@@ -982,8 +982,11 @@ def api_gerar_dimob(ano: int = 2025, empresa_id: int = 959):
 from core.services.graph_logic_builder import AccountingGraphPipeline
 
 @app.get("/api/questor/contabilizacoes")
-def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendimento_id: str = None):
-    return AccountingGraphPipeline.api_contabilizacoes(ano, mes, empresa_id, empreendimento_id)
+async def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendimento_id: str = None):
+    import asyncio
+    return await asyncio.to_thread(
+        AccountingGraphPipeline.api_contabilizacoes, ano, mes, empresa_id, empreendimento_id
+    )
 
 class DiagnosticoRow(BaseModel):
     conta_id: int
@@ -6151,10 +6154,11 @@ def _serialize_agent_state(res: dict) -> dict:
     return safe
 
 @app.post("/api/agentes/iniciar_auditoria")
-def api_agentes_iniciar(req: AuditStartReq):
+async def api_agentes_iniciar(req: AuditStartReq):
+    import asyncio
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     initial_state = AuditoriaGraphState(
         pergunta="Auditoria de rotina iniciada",
         conta_alvo=req.conta_alvo,
@@ -6165,10 +6169,13 @@ def api_agentes_iniciar(req: AuditStartReq):
         aprovado_pelo_usuario=False,
         feedback_usuario="",
         messages=[],
+        tentativas_autocorrecao=0,   # reinicia o contador de autocorreção
     )
-    
+
     try:
-        res = graph_app.invoke(initial_state, config=config)
+        # PERF: graph_app.invoke é síncrono — asyncio.to_thread descarrega no ThreadPool
+        # sem bloquear o event loop enquanto o LLM e as tools do Firebird executam.
+        res = await asyncio.to_thread(graph_app.invoke, initial_state, config)
         state = graph_app.get_state(config)
         return {
             "status": "PAUSED_FOR_HUMAN" if state.next else "FINISHED",
@@ -6179,7 +6186,6 @@ def api_agentes_iniciar(req: AuditStartReq):
         import traceback
         tb = traceback.format_exc()
         msg = str(e)
-        # Erros comuns do Vertex / Gemini: exibe a causa raiz
         if "GOOGLE_APPLICATION_CREDENTIALS" in tb or "credential" in msg.lower():
             detalhe = f"Vertex AI: credencial não encontrada ou inválida. Verifique GOOGLE_APPLICATION_CREDENTIALS no .env. Detalhe: {msg}"
         elif "DefaultCredentialsError" in tb:

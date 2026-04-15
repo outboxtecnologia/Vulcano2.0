@@ -23,6 +23,8 @@ from core.agents.tools import (
     verificar_receitas_custos_poc,
     buscar_conta_no_plano,
     buscar_proximidade_passivos_fiscais,
+    analisar_estoque_lctoger,
+    agrupar_creditos_por_apto,
 )
 from langgraph.prebuilt import ToolNode
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -41,6 +43,8 @@ tools_list = [
     verificar_receitas_custos_poc,
     buscar_conta_no_plano,
     buscar_proximidade_passivos_fiscais,
+    analisar_estoque_lctoger,
+    agrupar_creditos_por_apto,
 ]
 tool_node = ToolNode(tools_list)
 
@@ -51,10 +55,27 @@ Você tem acesso a ferramentas SQL que consultam o banco Firebird (Questor/Vulca
 Missão:
 1. Receba a conta alvo e chame OBRIGATORIAMENTE pelo menos 2 ferramentas para coletar dados reais.
 2. A ferramenta `buscar_conta_no_plano` deve ser a primeira chamada para entender o grupo da conta.
-3. Use `analisar_lancamentos_questor` para ver o histórico físico de lançamentos.
-4. Se for conta de resultado/receita, use `verificar_receitas_custos_poc`.
-5. Se for passivo ou tributo, use `buscar_proximidade_passivos_fiscais`.
-6. Após coletar os dados, formule uma sugestão de correção concreta baseada nos fatos reais encontrados.
+3. Use `analisar_lancamentos_questor` para ver o histórico físico de lançamentos (amostra rápida).
+4. Se for conta de resultado/receita (classif 4.x ou 5.x), use `verificar_receitas_custos_poc`.
+5. Se for passivo ou tributo (classif 2.x), use `buscar_proximidade_passivos_fiscais`.
+
+REGRAS ESPECIAIS para contas de ESTOQUE DE OBRA (classif 1.x — ex: IMÓVEIS A CONCLUIR):
+6. PADRÃO DE OBRA: nos empreendimentos imobiliários em construção, os gastos de obra são
+   lançados DIRETAMENTE em LCTOGER pelo Centro de Custo (CC) do empreendimento,
+   INDEPENDENTEMENTE da conta contábil. O CC é o identificador-chave do empreendimento.
+   Exemplo: Res. Stuttgart = CC 35.
+   NUNCA filtre por conta ao analisar LCTOGER para contas 1.x. Filtre sempre por CC.
+7. Chame OBRIGATORIAMENTE `analisar_estoque_lctoger` com o parâmetro `cc_empreendimento`:
+   - Isto ativa o modo CC que retorna TODOS os lançamentos do empreendimento no LCTOGER.
+   - Exemplo: analisar_estoque_lctoger(conta_alvo='5639', cc_empreendimento=35)
+   - O retorno inclui `contas_mais_debitadas_no_cc` (top-15) para mapear a composição de custo.
+   - `conta_alvo_presente_nos_lancamentos` = True confirma que a conta 1.x aparece neste CC.
+   - Se False: conta ou CC incorretos, ou não há lançamentos no período consultado.
+8. Se a conta tem créditos com APTO no histórico, chame `agrupar_creditos_por_apto`:
+   - `coeficiente_variacao` < 0.30 = distribuição UNIFORME (fração física provavelmente correta)
+   - `coeficiente_variacao` > 0.60 = distribuição CONCENTRADA (investigar unidades de valor atípico)
+   - O % de cada APTO deve ser proporcional à sua fração de área sobre a área total do empreendimento.
+   - Um crédito em conta 1.x não representa fluxo financeiro mas estimativa de custo incorrido.
 
 Regras IFRS 15 / CPC 47:
 - Receita é reconhecida com base na POC (Percentual de Obra Concluída) × VGV por venda individual.
@@ -75,17 +96,19 @@ def supervisor_node(state: AuditoriaGraphState):
     llm = get_agent_llm().bind_tools(tools_list)
     conta = state.get("conta_alvo", "conta desconhecida")
 
-    # Monta o histórico de mensagens acumulado
+    # Monta as mensagens para enviar ao LLM
+    # IMPORTANTE: o LangGraph acumula via operator.add — não re-passamos o historico no retorno
     historico_msgs = state.get("messages", [])
 
     if not historico_msgs:
-        # Primeira chamada: inicializa
-        msgs = [
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=f"Investigue a divergência na conta: {conta}. Comece coletando dados com as ferramentas disponíveis.")
-        ]
+        # Primeira chamada: cria a mensagem humana inicial e envia junto
+        user_msg = HumanMessage(content=f"Investigue a divergência na conta: {conta}. Comece coletando dados com as ferramentas disponíveis.")
+        msgs = [SystemMessage(content=SYSTEM_PROMPT), user_msg]
+        # Retorna a HumanMessage inicial para o estado (delta)
+        msgs_delta_pre = [user_msg]
     else:
         msgs = [SystemMessage(content=SYSTEM_PROMPT)] + historico_msgs
+        msgs_delta_pre = []
 
     res = llm.invoke(msgs)
 
@@ -94,9 +117,10 @@ def supervisor_node(state: AuditoriaGraphState):
 
     passo = f"Supervisor: {'Chamando ' + ', '.join(tc['name'] for tc in tool_calls) if tool_calls else 'Formulando resposta final'}"
 
+    # Retorna APENAS as novas mensagens (delta) — operator.add faz a concatenação
     novo_state = {
         "passos_executados": [passo],
-        "messages": (historico_msgs or []) + [res],
+        "messages": msgs_delta_pre + [res],
     }
 
     # Se o LLM respondeu com texto final (sem mais tool calls), extrai a sugestão
@@ -147,7 +171,7 @@ def ferramentas_node(state: AuditoriaGraphState):
     if not last_msg or not getattr(last_msg, "tool_calls", None):
         return {"passos_executados": ["Ferramenta: nenhuma tool_call encontrada"]}
 
-    # Usa o ToolNode do LangGraph para executar
+    # Executa todas as tools e coleta apenas as ToolMessages (delta)
     result_msgs = []
     resultados_db = list(state.get("resultados_db", []))
     passos = []
@@ -171,8 +195,9 @@ def ferramentas_node(state: AuditoriaGraphState):
         resultados_db.append({"tool": tool_name, "args": tool_args, "result": output})
         passos.append(f"Tool '{tool_name}' executada → {len(str(output))} chars de resultado")
 
+    # Retorna APENAS as novas ToolMessages (delta) — operator.add faz a concatenação
     return {
-        "messages": historico + result_msgs,
+        "messages": result_msgs,
         "resultados_db": resultados_db,
         "passos_executados": passos,
     }
@@ -199,6 +224,83 @@ def finalizacao_node(state: AuditoriaGraphState):
     return {"passos_executados": [passo]}
 
 
+# ── Nodo de Autocorreção Reflexiva (Tarefa 3 do Roadmap) ──────────────────────
+MAX_AUTOCORRECOES = 2  # Máximo de tentativas antes de desistir e ir para Revisao
+
+def autocorrecao_node(state: AuditoriaGraphState):
+    """Detecta erros nas ToolMessages, classifica a causa e injeta uma mensagem
+    corretiva no loop ReAct para que o LLM tente novamente com parâmetros ajustados.
+    Limita a MAX_AUTOCORRECOES ciclos para evitar loop infinito."""
+
+    msgs = state.get("messages", [])
+    tentativas = state.get("tentativas_autocorrecao", 0)
+
+    # Coleta ToolMessages com erro na última rodada de ferramentas
+    # Procura do fim do histórico até a última AIMessage (que continha os tool_calls)
+    erros_encontrados = []
+    for msg in reversed(msgs):
+        from langchain_core.messages import ToolMessage, AIMessage
+        if isinstance(msg, AIMessage):
+            break  # Parou na AIMessage da rodada — saímos do loop
+        if isinstance(msg, ToolMessage):
+            try:
+                parsed = json.loads(msg.content)
+                if parsed.get("status") == "error":
+                    erros_encontrados.append(parsed.get("message", "erro desconhecido"))
+            except Exception:
+                # Conteúdo não é JSON — verifica texto livre
+                if "error" in msg.content.lower() or "traceback" in msg.content.lower():
+                    erros_encontrados.append(msg.content[:200])
+
+    # Classifica o tipo de erro e monta instrução de correção
+    instrucao_correcao = ""
+    for erro in erros_encontrados:
+        err_lower = erro.lower()
+        if "não encontrei número de conta" in err_lower or "número de conta não encontrado" in err_lower:
+            instrucao_correcao += (
+                "ERRO DE PARÂMETRO: o argumento `conta_alvo` deve conter apenas o número da conta (ex: '5639'). "
+                "Não inclua palavras como 'conta', 'classif', ou o nome da conta. Use apenas os dígitos.\n"
+            )
+        elif "connection" in err_lower or "firebird" in err_lower or "unavailable" in err_lower:
+            instrucao_correcao += (
+                "ERRO DE CONEXÃO: o banco Firebird está inacessível. "
+                "Tente novamente com a mesma ferramenta — pode ser uma falha temporária.\n"
+            )
+        elif "tool" in err_lower and "não encontrada" in err_lower:
+            instrucao_correcao += (
+                "ERRO DE FERRAMENTA: você chamou uma ferramenta que não existe. "
+                f"As ferramentas disponíveis são: {[t.name for t in tools_list]}. Escolha uma delas.\n"
+            )
+        else:
+            instrucao_correcao += (
+                f"ERRO GENÉRICO na ferramenta: {erro[:200]}. "
+                "Tente uma abordagem diferente ou use outra ferramenta para obter os dados necessários.\n"
+            )
+
+    if not instrucao_correcao:
+        instrucao_correcao = (
+            "Algumas ferramentas retornaram resultados inesperados. "
+            "Revise os parâmetros e tente novamente ou use ferramentas alternativas."
+        )
+
+    # Injeta mensagem corretiva como HumanMessage para guiar o próximo ciclo ReAct
+    msg_correcao = HumanMessage(
+        content=(
+            f"[AUTOCORREÇÃO — Ciclo {tentativas + 1}/{MAX_AUTOCORRECOES}]\n"
+            f"{instrucao_correcao.strip()}\n\n"
+            "Por favor, corrija os parâmetros e continue a investigação usando as ferramentas disponíveis."
+        )
+    )
+
+    passo = f"AutoCorreção #{tentativas + 1}: {len(erros_encontrados)} erro(s) detectado(s) → instrução corretiva injetada"
+
+    return {
+        "messages": [msg_correcao],
+        "passos_executados": [passo],
+        "tentativas_autocorrecao": tentativas + 1,
+    }
+
+
 # ── Roteamento condicional do Supervisor ────────────────────────────────────
 def _route_supervisor(state: AuditoriaGraphState):
     """Se o LLM ainda quer chamar tools, vai para FerraRegras. Senão, vai para Revisao."""
@@ -207,6 +309,36 @@ def _route_supervisor(state: AuditoriaGraphState):
     if last and getattr(last, "tool_calls", None):
         return "FerraRegras"
     return "Revisao"
+
+
+# ── Roteamento pós-FerraRegras: Autocorreção ou continua ReAct ────────────────
+def _route_ferramentas(state: AuditoriaGraphState):
+    """Após executar as tools:
+    - Se alguma retornou erro E ainda há budget de autocorreção → AutoCorrecao
+    - Caso contrário → Supervisor (continua o loop ReAct normalmente)
+    """
+    from langchain_core.messages import ToolMessage
+    msgs = state.get("messages", [])
+    tentativas = state.get("tentativas_autocorrecao", 0)
+
+    # Verifica se há erros nas ToolMessages da última rodada
+    tem_erro = False
+    for msg in reversed(msgs):
+        if not isinstance(msg, ToolMessage):
+            break  # Chegou fora das tool messages — para aqui
+        try:
+            parsed = json.loads(msg.content)
+            if parsed.get("status") == "error":
+                tem_erro = True
+                break
+        except Exception:
+            if "error" in msg.content.lower():
+                tem_erro = True
+                break
+
+    if tem_erro and tentativas < MAX_AUTOCORRECOES:
+        return "AutoCorrecao"
+    return "Supervisor"
 
 
 def _route_revisao(state: AuditoriaGraphState):
@@ -219,10 +351,11 @@ def _route_revisao(state: AuditoriaGraphState):
 # ── Construção do Grafo ───────────────────────────────────────────────────────
 workflow = StateGraph(AuditoriaGraphState)
 
-workflow.add_node("Supervisor",   supervisor_node)
-workflow.add_node("FerraRegras",  ferramentas_node)
-workflow.add_node("Revisao",      revisao_node)
-workflow.add_node("Finalizacao",  finalizacao_node)
+workflow.add_node("Supervisor",    supervisor_node)
+workflow.add_node("FerraRegras",   ferramentas_node)
+workflow.add_node("AutoCorrecao",  autocorrecao_node)   # ← Tarefa 3
+workflow.add_node("Revisao",       revisao_node)
+workflow.add_node("Finalizacao",   finalizacao_node)
 
 workflow.set_entry_point("Supervisor")
 
@@ -230,7 +363,16 @@ workflow.add_conditional_edges("Supervisor", _route_supervisor, {
     "FerraRegras": "FerraRegras",
     "Revisao":     "Revisao",
 })
-workflow.add_edge("FerraRegras", "Supervisor")   # Loop ReAct
+
+# Após executar as tools: verifica erros → autocorrect ou ReAct normal
+workflow.add_conditional_edges("FerraRegras", _route_ferramentas, {
+    "AutoCorrecao": "AutoCorrecao",
+    "Supervisor":   "Supervisor",
+})
+
+# Autocorreção injeta mensagem e volta para o Supervisor (ReAct continua)
+workflow.add_edge("AutoCorrecao", "Supervisor")
+
 workflow.add_conditional_edges("Revisao", _route_revisao, {
     "Finalizacao": "Finalizacao",
     END:           END,

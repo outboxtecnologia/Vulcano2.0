@@ -20,12 +20,15 @@ Ao iniciar a conciliação do mês de um empreendimento, instânciaremos um **Gr
 
 Marque `[x]` quando as etapas do LangGraph forem construídas e implementadas na arquitetura.
 
-- [ ] 1. **Transformar o "Árbitro de IA" em um Agente Investigativo**
+- [x] 1. **Transformar o "Árbitro de IA" em um Agente Investigativo**
   - O Agente acessa as `Tools` e roda SQL diretamente no Banco (Firebird/SQLite) para caçar notas em vez de adivinhar.
-- [ ] 2. **Fluxos com Human-in-the-Loop (Decisão de Risco)**
+  - ✅ Entregue: 6 tools (analisar_lancamentos_questor, verificar_receitas_custos_poc, buscar_conta_no_plano, buscar_proximidade_passivos_fiscais, analisar_estoque_lctoger, agrupar_creditos_por_apto)
+- [x] 2. **Fluxos com Human-in-the-Loop (Decisão de Risco)**
   - O grafo é pausado (`Interrupt`) em conciliações de alto impacto. O sistema só avança e grava no banco após você aprovar na interface do Explorer.
-- [ ] 3. **Ciclos de Autocorreção Reflexiva (Self-Correction)**
+  - ✅ Entregue: nodo Revisao com interrupt_before + frontend HITL modal com Aprovar/Rejeitar
+- [x] 3. **Ciclos de Autocorreção Reflexiva (Self-Correction)**
   - Retorno em Loop nas extrações quebra-cabeça que quebrarem a extração de Sienge PDF. O próprio sistema avista o JSON errado, diz "quebrei" e arruma sem a mão humana.
+  - ✅ Entregue: nodo AutoCorrecao + roteador _route_ferramentas + budget MAX_AUTOCORRECOES=2
 - [ ] 4. **Orquestração Multi-Agente Avançada**
   - Ramificação de Especialistas: Agente Fiscal (DARFs e Guias), Agente Imobiliário (Cálculos de POC/VGV) e Agente de Síntese (Montador de JSON).
 

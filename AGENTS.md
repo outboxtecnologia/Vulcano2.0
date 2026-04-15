@@ -108,6 +108,42 @@ prompt = f"Extraia recebimentos. Retorne apenas JSON:\n{schema}\n\n{chunk_text}"
 
 ---
 
+## Regras obrigatórias — LCTOGER e Imóveis em Construção
+
+### Padrão de Lançamento de Gastos de Obra (OBRIGATÓRIO saber)
+
+Nos empreendimentos imobiliários em construção, **todos os gastos de obra são lançados diretamente em `LCTOGER` pelo Centro de Custo (CC) do empreendimento**, independentemente da conta contábil envolvida.
+
+- O `CODIGOCENTROCUSTO` é o identificador-chave do empreendimento no `LCTOGER`.
+- Exemplos conhecidos: **Res. Stuttgart = CC 35**, conta de estoque `5639` (1.1.2.07.0001).
+- Os lançamentos que **NÃO** são de realização de custo para resultado estão em `LCTOGER` com esse CC.
+- Os que **SÃO** realização de custo para resultado passam pelo `LCTOCTB` padrão do Questor.
+
+### SEMPRE fazer ao investigar contas 1.x (Imóveis a Concluir)
+
+1. Usar `analisar_estoque_lctoger` com o parâmetro `cc_empreendimento`:
+   ```python
+   # CORRETO — modo CC: retorna TODOS os lançamentos do empreendimento
+   analisar_estoque_lctoger(conta_alvo='5639', cc_empreendimento=35)
+
+   # MODO LEGADO — só usa se não souber o CC (incompleto para análise de obra)
+   analisar_estoque_lctoger(conta_alvo='5639')
+   ```
+2. O retorno do modo CC inclui:
+   - `contas_mais_debitadas_no_cc`: top-15 contas debitadas, revela composição de custo
+   - `conta_alvo_presente_nos_lancamentos`: confirma se a conta 1.x aparece neste CC
+   - `lancamentos_recentes`: 50 últimos lançamentos com `conta_deb`, `conta_cred`, `cc`, `historico`
+
+### PROIBIDO para contas 1.x no LCTOGER
+- Filtrar `LCTOGER` por conta contábil (`CONTACTBDEB`/`CONTACTBCRED`) sem incluir o CC — omite os gastos de obra.
+- Concluir que "não há lançamentos" sem verificar o modo `cc_empreendimento`.
+
+### Mapeamento CC → Empreendimento (atualizar conforme necessário)
+| CC | Empreendimento | Conta Estoque |
+|---|---|---|
+| 35 | Res. Stuttgart | 5639 (1.1.2.07.0001) |
+
+
 ## PROIBIDO
 
 - `genai.GenerativeModel(...)` sem verificar `HAS_VERTEXAI` antes — incluindo em funções auxiliares como `_gemini_generate_python_plain`.

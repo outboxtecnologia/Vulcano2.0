@@ -135,7 +135,7 @@ function corDiff(diff) {
   return '#ff4d00';
 }
 
-// ── Tabela de lançamentos interna ────────────────────────────────────────────
+// ── Tabela de lançamentos interna ───────────────────────────────────────────
 function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = false }) {
   if (itens.length === 0)
     return <p className="px-4 py-2 text-[11px] font-bold text-[#333] uppercase italic">{semLabel}</p>;
@@ -199,8 +199,145 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
   );
 }
 
+// ── Mapa Tabular: Tabela agrupada por APTO (Splink-style) ────────────────────────
+function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
+  const safeItens = itens || [];
+  const [gruposAbertos, setGruposAbertos] = useState({});
 
-// ── Painel de orfaos (expande ao clicar na linha da conta) ───────────────────
+  if (safeItens.length === 0) {
+    return <p className="px-4 py-3 text-[11px] font-bold text-[#333] uppercase italic">Sem lançamentos</p>;
+  }
+
+  const total = safeItens.reduce((s, d) => s + (d.valor || 0), 0);
+
+  // Agrupa por APTO usando extractAptoNum (já existente no arquivo)
+  const grupos = useMemo(() => {
+    const map = {};
+    safeItens.forEach(d => {
+      const textoCompleto = (d.historico || '') + ' ' + (d.logica || '');
+      const apto = extractAptoNum(textoCompleto) || 'SEM_APTO';
+      if (!map[apto]) map[apto] = { key: apto, itens: [], totalD: 0, totalC: 0 };
+      map[apto].itens.push(d);
+      if (d.natureza === 'D') map[apto].totalD += (d.valor || 0);
+      else map[apto].totalC += (d.valor || 0);
+    });
+    // Ordena: APTOs numérico crescente, SEM_APTO no fim
+    return Object.values(map).sort((a, b) => {
+      if (a.key === 'SEM_APTO') return 1;
+      if (b.key === 'SEM_APTO') return -1;
+      const na = parseInt(a.key.replace('APTO_', '')) || 0;
+      const nb = parseInt(b.key.replace('APTO_', '')) || 0;
+      return na - nb;
+    });
+  }, [safeItens]);
+
+  const toggleGrupo = (key) => setGruposAbertos(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const totalD = safeItens.filter(d => d.natureza === 'D').reduce((s, d) => s + (d.valor || 0), 0);
+  const totalC = safeItens.filter(d => d.natureza === 'C').reduce((s, d) => s + (d.valor || 0), 0);
+  const liquido = totalD - totalC;
+
+  return (
+    <div className="flex flex-col">
+      {/* Cabeçalho resumido da coluna */}
+      <div className="px-3 py-1.5 bg-[var(--v-deep)] border-b border-[var(--v-border)] flex items-center gap-3 flex-wrap">
+        <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Total</span>
+        <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaD }}>D {fmt(totalD)}</span>
+        <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaC }}>C {fmt(totalC)}</span>
+        <span className="text-[9px] font-mono font-black"
+          style={{ color: Math.abs(liquido) < 0.01 ? '#34c759' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
+          Líq. {fmt(liquido)}
+        </span>
+        <span className="ml-auto text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
+          {grupos.length} grupos · {safeItens.length} lançamentos
+        </span>
+      </div>
+
+      {/* Grupos por APTO */}
+      {grupos.map(g => {
+        const subtotal = g.totalD + g.totalC;
+        const pct = total > 0 ? ((subtotal / total) * 100).toFixed(1) : '0.0';
+        const aberto = gruposAbertos[g.key] !== false; // aberto por padrão
+        const label = g.key === 'SEM_APTO' ? 'SEM IDENTIFICADOR' : g.key.replace('_', ' ');
+        const corGrupo = g.key === 'SEM_APTO' ? '#555' : '#a259ff';
+
+        return (
+          <div key={g.key} className="border-b border-[var(--v-bg)]">
+            {/* Header do grupo — clicável */}
+            <button
+              onClick={() => toggleGrupo(g.key)}
+              className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-[var(--v-card)] transition-colors text-left"
+            >
+              <ChevronDown
+                size={9}
+                style={{ color: corGrupo }}
+                className={`shrink-0 transition-transform ${aberto ? '' : '-rotate-90'}`}
+              />
+              <span className="font-mono text-[10px] font-black" style={{ color: corGrupo }}>{label}</span>
+              <span className="text-[8px] font-bold text-[var(--v-text-faint)]">{g.itens.length} lnç</span>
+              {/* Badge % do total */}
+              <span
+                className="px-1.5 py-0.5 rounded text-[8px] font-black"
+                style={{ background: `${corGrupo}22`, color: corGrupo, border: `1px solid ${corGrupo}44` }}
+              >
+                {pct}%
+              </span>
+              <span className="ml-auto font-mono text-[10px] font-black text-[var(--v-text-muted)]">{fmt(subtotal)}</span>
+            </button>
+
+            {/* Linhas do grupo */}
+            {aberto && (
+              <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '68px' }}/>
+                  <col/>
+                  <col style={{ width: '20px' }}/>
+                  <col style={{ width: '86px' }}/>
+                </colgroup>
+                <tbody>
+                  {g.itens.map((d, i) => {
+                    // Histórico completo (sem truncar) — tooltip opcional
+                    const hist = (d.historico || '').trim() || (d.logica || '').trim() || '—';
+                    return (
+                      <tr key={i} className="border-t border-[var(--v-bg)] hover:bg-[var(--v-deep)]">
+                        <td className="px-2 py-1 font-mono text-[var(--v-text-faint)] whitespace-nowrap overflow-hidden">
+                          <div className="text-[9px]">{d.data}</div>
+                          {d.cc && (
+                            <span className="text-[7px] px-1 rounded bg-[#007aff]/15 text-[#007aff] border border-[#007aff]/30 font-bold">
+                              CC:{d.cc}
+                            </span>
+                          )}
+                          {d.origem && (
+                            <span className={`text-[7px] px-1 rounded font-bold ${d.origem === 'VU' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)]' : 'bg-[var(--v-accent)]/20 text-[var(--v-accent)]'}`}>
+                              {d.origem}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1" title={hist}>
+                          {/* Histórico completo — sem truncar — quebra em múltiplas linhas se necessário */}
+                          <div className="font-bold text-[var(--v-text-faint)] break-words leading-tight">{hist}</div>
+                        </td>
+                        <td className="px-1 py-1 text-center font-black text-[11px]"
+                            style={{ color: d.natureza === 'D' ? corNaturezaD : corNaturezaC }}>
+                          {d.natureza}
+                        </td>
+                        <td className="px-2 py-1 text-right font-mono font-black text-[var(--v-text-muted)] whitespace-nowrap">
+                          {fmt(d.valor)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Painel de orfaos (expande ao clicar na linha da conta) ───────────────────────────
 function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRacional, onAgent }) {
   const [aba, setAba] = useState('orfaos');
 
@@ -328,19 +465,31 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor Legado ({questorManual.length})</span>
                 </div>
-                <TabelaLancs itens={questorManual} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="—" showTotal={true}/>
+                <TabelaMapaAgrupada
+                  itens={questorManual}
+                  corNaturezaD="#34c759" corNaturezaC="#ff4d00"
+                  titulo="Questor"
+                />
               </div>
               <div>
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[#a259ff]">Vulcano 1.0 (VU) ({vulcano1.length})</span>
                 </div>
-                <TabelaLancs itens={vulcano1} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="—" showTotal={true}/>
+                <TabelaMapaAgrupada
+                  itens={vulcano1}
+                  corNaturezaD="#a259ff" corNaturezaC="#ff9f0a"
+                  titulo="Vulcano 1.0"
+                />
               </div>
               <div>
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] text-center">
                   <span className="text-[9px] font-black uppercase tracking-widest text-[#34c759]">Vulcano 2.0 (IFRS 15) ({vulcano2.length})</span>
                 </div>
-                <TabelaLancs itens={vulcano2} corNaturezaD="#34c759" corNaturezaC="#a259ff" semLabel="—" showTotal={true}/>
+                <TabelaMapaAgrupada
+                  itens={vulcano2}
+                  corNaturezaD="#34c759" corNaturezaC="#a259ff"
+                  titulo="Vulcano 2.0"
+                />
               </div>
             </div>
           )}

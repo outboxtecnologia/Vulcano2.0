@@ -12,3 +12,5 @@ class AuditoriaGraphState(TypedDict):
     feedback_usuario: str
     # Histórico de mensagens LLM para o loop ReAct
     messages: Annotated[list[Any], operator.add]
+    # Contador de ciclos de autocorreção (evita loop infinito)
+    tentativas_autocorrecao: int

@@ -3,6 +3,7 @@ import traceback
 from datetime import datetime
 from collections import defaultdict
 from fastapi import HTTPException
+import calendar
 
 class AccountingGraphPipeline:
     @staticmethod
@@ -47,28 +48,37 @@ class AccountingGraphPipeline:
                     })
     
             # Caching Global Vulcano (Receitas e Tributos)
+            # PERF: os 2 get_receitas_caixa (mês atual + PQ) rodam em paralelo
+            # via ThreadPoolExecutor — reduz o tempo desta etapa à metade.
             try:
-                json_resp = get_receitas_caixa(
-                    empresa_id=empresa_id, 
-                    data_ini=f"{ano}-{str(mes).zfill(2)}", 
-                    data_fim=f"{ano}-{str(mes).zfill(2)}"
-                )
-                receitas_meta = json_resp.get("dashboard_meta", {})
-                impostos_config = json_resp.get("impostos_config", [])
-                
+                from concurrent.futures import ThreadPoolExecutor
+
                 y, m = int(ano), int(mes)
                 if m in (1, 2, 3): pq_y, pq_m = y - 1, 12
                 elif m in (4, 5, 6): pq_y, pq_m = y, 3
                 elif m in (7, 8, 9): pq_y, pq_m = y, 6
                 else: pq_y, pq_m = y, 9
-                
-                json_pq = get_receitas_caixa(
-                    empresa_id=empresa_id, 
-                    data_ini=f"{pq_y}-{str(pq_m).zfill(2)}", 
-                    data_fim=f"{pq_y}-{str(pq_m).zfill(2)}"
-                )
+
+                with ThreadPoolExecutor(max_workers=2) as _pool:
+                    _f_atual = _pool.submit(
+                        get_receitas_caixa,
+                        empresa_id=empresa_id,
+                        data_ini=f"{ano}-{str(mes).zfill(2)}",
+                        data_fim=f"{ano}-{str(mes).zfill(2)}",
+                    )
+                    _f_pq = _pool.submit(
+                        get_receitas_caixa,
+                        empresa_id=empresa_id,
+                        data_ini=f"{pq_y}-{str(pq_m).zfill(2)}",
+                        data_fim=f"{pq_y}-{str(pq_m).zfill(2)}",
+                    )
+                    json_resp = _f_atual.result()
+                    json_pq   = _f_pq.result()
+
+                receitas_meta    = json_resp.get("dashboard_meta", {})
+                impostos_config  = json_resp.get("impostos_config", [])
                 receitas_meta_pq = json_pq.get("dashboard_meta", {})
-                
+
             except Exception as e:
                 print(f"Erro ao obter receitas: {e}")
                 receitas_meta = {}
@@ -352,9 +362,10 @@ class AccountingGraphPipeline:
                             
                         contas_virtuais[conta_id]["movimento_liquido"] += mov
                         
+                        last_day = calendar.monthrange(int(ano), int(mes))[1]
                         contas_virtuais[conta_id]["detalhes"].append({
                             "chave": "VULCANO_SIM",
-                            "data": f"{str(mes).zfill(2)}/{ano} (Sim)",
+                            "data": f"{last_day:02d}/{int(mes):02d}/{ano} (Sim)",
                             "historico": historico,
                             "natureza": natureza,
                             "valor": v_float,
@@ -391,29 +402,29 @@ class AccountingGraphPipeline:
                 nome_emp = emp["nome"]
                 
                 # 1. OBTER CUSTO GASTO GLOBAL NA CONTABILIDADE FÍSICA (QUESTOR)
+                # PERF: 2 queries idênticas (datas diferentes) unificadas em 1 CASE WHEN
+                # → corta N×2 round-trips para N×1 por empreendimento.
                 cur_q.execute("""
-                    SELECT SUM(G.VALORLCTOGER * G.NATURLCTOCTB)
+                    SELECT
+                        SUM(CASE WHEN C.DATALCTOCTB < CAST(? AS DATE)
+                                 THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
+                        SUM(CASE WHEN C.DATALCTOCTB < CAST(? AS DATE)
+                                 THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
                     FROM LCTOGER G
                     JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
                     WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
                     AND C.DATALCTOCTB < CAST(? AS DATE)
                     AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
                     AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                """, (empresa_id, emp["cc"], data_inicio_mes_atual))
-                row = cur_q.fetchone()
-                custo_gasto_anterior = float(row[0] or 0.0)
-                
-                cur_q.execute("""
-                    SELECT SUM(G.VALORLCTOGER * G.NATURLCTOCTB)
-                    FROM LCTOGER G
-                    JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
-                    WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
-                    AND C.DATALCTOCTB < CAST(? AS DATE)
-                    AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                    AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                """, (empresa_id, emp["cc"], data_fim_mes_atual))
-                row = cur_q.fetchone()
-                custo_gasto_vigente = float(row[0] or 0.0)
+                """, (
+                    data_inicio_mes_atual,  # CASE anterior
+                    data_fim_mes_atual,     # CASE vigente
+                    empresa_id, emp["cc"],
+                    data_fim_mes_atual,     # WHERE cap (o maior dos dois)
+                ))
+                _row_custo = cur_q.fetchone()
+                custo_gasto_anterior = float(_row_custo[0] or 0.0)
+                custo_gasto_vigente  = float(_row_custo[1] or 0.0)
     
                 # 2. POC NATIVO (Reaproveitando Último Fechamento se não houver no mês)
                 poc_acumulado_vigente = 0.0
@@ -911,8 +922,9 @@ class AccountingGraphPipeline:
                                 return
                             cv = get_cv_loc(cid)
                             cv["saldo_anterior"] += float(saldo_ant)
+                            last_day = calendar.monthrange(int(ano), int(mes))[1]
                             cv["detalhes"].append({
-                                "chave": "LOC_VIRTUAL", "data": f"{str(mes).zfill(2)}/{ano} (Serviços/Locação)", "historico": historico,
+                                "chave": "LOC_VIRTUAL", "data": f"{last_day:02d}/{int(mes):02d}/{ano} (Serviços/Locação)", "historico": historico,
                                 "natureza": nat, "valor": float(valor_mes), "virtual": True,
                                 "logica": logica_str
                             })
