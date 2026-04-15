@@ -272,6 +272,7 @@
   },
   "active": "5757384ae114c044",
   "lastOpenFiles": [
+    "scripts/auto-commit.log.tmp",
     "backend/check_vertex_config.py",
     "Vulcano 2025/VULCANO 2025.fdb",
     "Vulcano 2025/vULCANO 2025.fdb",
@@ -282,7 +283,6 @@
     "backend/janitor_disk_report.json",
     "frontend/src/JanitorView.jsx",
     "backend/janitor_metrics.sqlite",
-    "backend/core/janitor/__pycache__/__init__.cpython-314.pyc",
     "frontend/node_modules/xlsx/README.md",
     "Sem título 1.canvas",
     "frontend/node_modules/object-assign/readme.md",
