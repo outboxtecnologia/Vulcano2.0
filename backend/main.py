@@ -197,11 +197,116 @@ def _ollama_generate_json(prompt: str) -> dict:
     except urllib.error.URLError as e:
         raise HTTPException(status_code=502, detail=f"Erro conectando ao Ollama ({OLLAMA_API_BASE}): {e}")
 
-async def _gemini_generate_json_async(prompt: str, file_data: bytes = None, mime_type: str = None) -> dict:
-    """Chama Gemini e retorna um objeto JSON (assíncrono nativo)."""
+# ── Schemas de Structured Output (Vertex AI) ────────────────────────────────
+# [OPT-2 Deep Think] response_schema injeta schema OpenAPI na chamada Vertex,
+# garantindo 100% aderência ao JSON sem fallback/regex.
+# [OPT-3 Deep Think] Campo "1_raciocinio_matematico" primeiro → Pseudo-CoT:
+# força o LLM a verbalizar o raciocínio ANTES das operações (emula CoT com
+# thinking_budget:0, mantendo velocidade e aumentando precisão no IFRS 15).
+SCHEMA_INVESTIGACAO = {
+    "type": "object",
+    "properties": {
+        "1_raciocinio_matematico": {
+            "type": "string",
+            "description": (
+                "PREENCHER PRIMEIRO. Descreva passo a passo o raciocínio matemático: "
+                "quais valores do contexto foram usados, qual fórmula IFRS 15 foi aplicada "
+                "e como chegou ao valor das operações correctivas."
+            )
+        },
+        "causa_raiz": {"type": "string"},
+        "tipo_divergencia": {
+            "type": "string",
+            "enum": ["MISSING_ENTRY", "VALUE_MISMATCH", "TIMING_MISMATCH",
+                     "ACCUMULATED_ERROR", "ACCOUNT_MAPPING_ERROR",
+                     "DUPLICATE_ENTRY", "ZERO_BALANCE_EXPECTED"]
+        },
+        "operacoes": {
+            "type": "array",
+            "description": "Array de operações D/C — permite rateios e lançamentos múltiplos em uma iteração",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tipo":       {"type": "string", "enum": ["D", "C"]},
+                    "conta":      {"type": "integer"},
+                    "valor":      {"type": "number"},
+                    "historico":  {"type": "string"},
+                    "competencia":{"type": "string"}
+                },
+                "required": ["tipo", "conta", "valor"]
+            }
+        },
+        "confianca": {"type": "string", "enum": ["alta", "media", "baixa"]},
+        "requer_estorno_retroativo":  {"type": "boolean"},
+        "afeta_apuracao_imposto":     {"type": "boolean"},
+        "requer_revisao_premissas":   {"type": "boolean"},
+        "premissas_a_revisar":        {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["1_raciocinio_matematico", "causa_raiz", "tipo_divergencia",
+                 "operacoes", "confianca",
+                 "requer_estorno_retroativo", "afeta_apuracao_imposto"]
+}
+
+SCHEMA_DIAGNOSTICO = {
+    "type": "object",
+    "properties": {
+        "resumo_executivo": {"type": "string"},
+        "anomalias": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "conta_id":      {"type": "integer"},
+                    "nome":          {"type": "string"},
+                    "tipo_provavel": {
+                        "type": "string",
+                        "enum": ["MISSING_ENTRY", "VALUE_MISMATCH", "TIMING_MISMATCH",
+                                 "ACCUMULATED_ERROR", "ACCOUNT_MAPPING_ERROR",
+                                 "DUPLICATE_ENTRY", "ZERO_BALANCE_EXPECTED"]
+                    },
+                    "urgencia":      {"type": "string", "enum": ["critica", "alta", "media", "baixa"]},
+                    "recomendacao":  {"type": "string"}
+                },
+                "required": ["conta_id", "nome", "tipo_provavel", "urgencia", "recomendacao"]
+            }
+        }
+    },
+    "required": ["resumo_executivo", "anomalias"]
+}
+
+
+def _build_compact_context(data: dict) -> str:
+    """
+    [OPT-1 Deep Think] Minifica o payload antes de enviar ao Vertex:
+    - Remove chaves com valor None, 0, 0.0 ou lista vazia
+    - Serializa como JSON compacto (sem indentação)
+    Reduz tokens e remove carga cognitiva desnecessária do LLM.
+    """
+    import json
+    def _strip(obj):
+        if isinstance(obj, dict):
+            return {k: _strip(v) for k, v in obj.items()
+                    if v is not None and v != 0 and v != 0.0 and v != [] and v != {}}
+        if isinstance(obj, list):
+            return [_strip(i) for i in obj]
+        return obj
+    return json.dumps(_strip(data), ensure_ascii=False, separators=(',', ':'))
+
+
+async def _gemini_generate_json_async(
+    prompt: str,
+    file_data: bytes = None,
+    mime_type: str = None,
+    response_schema: dict = None   # [OPT-2] Structured Outputs — Vertex apenas
+) -> dict:
+    """Chama Gemini e retorna um objeto JSON (assíncrono nativo).
+
+    Com response_schema (Vertex AI): garante 100% aderência ao JSON sem fallback/regex.
+    Sem response_schema (Google AI Studio / fallback): usa response_mime_type padrão.
+    """
     _require_gemini_key()
     resp = None
-    
+
     contents = [prompt]
     if file_data and mime_type:
         if HAS_VERTEXAI:
@@ -220,32 +325,41 @@ async def _gemini_generate_json_async(prompt: str, file_data: bytes = None, mime
             }
             if HAS_VERTEXAI:
                 gen_cfg["thinking_config"] = {"thinking_budget": 0}
+                # [OPT-2] Structured Outputs: injeta schema OpenAPI quando disponível
+                if response_schema:
+                    gen_cfg["response_schema"] = response_schema
             model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
-            # Descomente o fallback abaixo para forçar json text ou algo do tipo em caso de falha silenciosa.
-            
             resp = await model.generate_content_async(contents)
-            break # Success, exit retry loop
+            break
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "ResourceExhausted" in err_str or "Quota" in err_str or "503" in err_str:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 * (attempt + 1))
-                    continue # Retry on next loop
-            
-            # Se não era retry-able ou expirou os tries, tenta fallback mode 1 vez (as vezes MimeType json buga)
+                    continue
+            # Fallback sem schema (às vezes response_schema causa rejeição em modelos mais antigos)
             try:
                 model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
-                model = model_cls(GEMINI_MODEL_ID)
+                gen_cfg_fb = {
+                    "response_mime_type": "application/json",
+                    "max_output_tokens": 8192,
+                }
+                if HAS_VERTEXAI:
+                    gen_cfg_fb["thinking_config"] = {"thinking_budget": 0}
+                model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg_fb)
                 fallback_contents = [prompt + "\n\nResponda somente um objeto JSON válido, sem markdown nem texto fora do JSON."]
                 if mime_type and file_data:
-                    # Nativamente injeta a parte binária
                     fallback_contents.append(
-                        Part.from_data(mime_type=mime_type, data=file_data) if HAS_VERTEXAI else {"mime_type": mime_type, "data": file_data}
+                        Part.from_data(mime_type=mime_type, data=file_data) if HAS_VERTEXAI
+                        else {"mime_type": mime_type, "data": file_data}
                     )
                 resp = await model.generate_content_async(fallback_contents)
-                break # Success on fallback
+                break
             except Exception as ei:
-                raise HTTPException(status_code=429, detail=f"Erro ou Quota Vertex/Gemini excedida após tentativas: {str(e)[:300]} / {str(ei)[:100]}")
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Erro ou Quota Vertex/Gemini após tentativas: {str(e)[:300]} / {str(ei)[:100]}"
+                )
     return _gemini_parse_json_response(resp.text)
 
 def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str = None) -> dict:

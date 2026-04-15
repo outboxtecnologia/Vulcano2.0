@@ -24,6 +24,10 @@ class AccountingGraphPipeline:
             hist_questor = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
     
             # 1. Obter Empreendimentos Ativos
+            # REGRA: incluir TODOS os empreendimentos que tenham conta de estoque
+            # configurada (CONTAESTAND ou CONTAESTCON), independente de ter CC.
+            # - COM CC: gastos de obra vem do LCTOGER filtrado pelo CC
+            # - SEM CC: gastos de obra vem do LCTOCTB filtrado pela conta de estoque
             query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
             params = [empresa_id]
             if empreendimento_id:
@@ -33,19 +37,31 @@ class AccountingGraphPipeline:
             empreendimentos = []
             for r in cur_v.fetchall():
                 cc = int(r[2]) if r[2] else None
-                if cc:
-                    empreendimentos.append({
-                        "id": r[0], "nome": r[1], "cc": cc,
-                        "conta_custo": r[3], "conta_cli": r[4], "conta_adicli": r[5], "conta_caixa": r[6],
-                        "conta_estand": r[7], "conta_estcon": r[8], "obra_concluida": r[9], "conta_rec": r[10],
-                        "hist_venda": hist_questor.get(r[11] if r[11] else 0, "VENDA UNID"),
-                        "hist_rec": hist_questor.get(r[12] if r[12] else 0, "RECEBIMENTO PARCELA UNID"),
-                        "hist_var": hist_questor.get(r[13] if r[13] else 0, "VARIACAO UNID"),
-                        "hist_adi": hist_questor.get(r[14] if r[14] else 0, "ADIANTAMENTO UNID"),
-                        "hist_baixa_adi": hist_questor.get(r[15] if r[15] else 0, "BAIXA ADIANTAMENTO UNID"),
-                        "hist_custo": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
-                        "conta_variacao": int(r[18]) if r[18] else 0,  # CONTAVARIACAO para acrescimos
-                    })
+                conta_estand_raw  = r[7]
+                conta_estcon_raw  = r[8]
+                ob_conc = str(r[9] or 'N').strip().upper() == 'S'
+                # Conta de estoque esperada para este empreendimento
+                c_est_raw = conta_estcon_raw if ob_conc else conta_estand_raw
+                tem_conta_estoque = bool(c_est_raw and str(c_est_raw).strip())
+
+                # REGRA GERAL: incluir apenas se tiver CC (gastos via LCTOGER)
+                # OU se tiver conta de estoque configurada mesmo sem CC.
+                # Empreendimentos sem CC e sem conta_estoque nao tem dados contabeis mapeados.
+                if not cc and not tem_conta_estoque:
+                    continue  # nada a mostrar
+
+                empreendimentos.append({
+                    "id": r[0], "nome": r[1], "cc": cc,
+                    "conta_custo": r[3], "conta_cli": r[4], "conta_adicli": r[5], "conta_caixa": r[6],
+                    "conta_estand": r[7], "conta_estcon": r[8], "obra_concluida": r[9], "conta_rec": r[10],
+                    "hist_venda": hist_questor.get(r[11] if r[11] else 0, "VENDA UNID"),
+                    "hist_rec": hist_questor.get(r[12] if r[12] else 0, "RECEBIMENTO PARCELA UNID"),
+                    "hist_var": hist_questor.get(r[13] if r[13] else 0, "VARIACAO UNID"),
+                    "hist_adi": hist_questor.get(r[14] if r[14] else 0, "ADIANTAMENTO UNID"),
+                    "hist_baixa_adi": hist_questor.get(r[15] if r[15] else 0, "BAIXA ADIANTAMENTO UNID"),
+                    "hist_custo": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
+                    "conta_variacao": int(r[18]) if r[18] else 0,
+                })
     
             # Caching Global Vulcano (Receitas e Tributos)
             # PERF: os 2 get_receitas_caixa (mês atual + PQ) rodam em paralelo
@@ -269,6 +285,112 @@ class AccountingGraphPipeline:
                     "origem": "ZZ_ARE"  # marcador para distinguir na Auditoria
                 })
 
+            # ══════════════════════════════════════════════════════════════════
+            # PASSAGEM SUPLEMENTAR: Contas de Estoque de Obra (LCTOCTB direto)
+            # ══════════════════════════════════════════════════════════════════
+            # Contas como CONTAESTAND (ex: 5639 Stuttgart) têm seus lançamentos
+            # físicos no LCTOCTB sem correspondente no LCTOGER global (o LCTOGER
+            # registra o custo pelo CC, mas não pela conta contábil do ativo).
+            # O JOIN interno LCTOGER→LCTOCTB deixa essas contas invisíveis na
+            # coluna Questor da Auditoria. Esta passagem resolve isso:
+            #   1. Coleta todos os códigos de conta de estoque dos empreendimentos
+            #   2. Para cada conta ausente em contas_fisicas_empresa, lê LCTOCTB
+            #      diretamente e inclui o saldo anterior e movimento do mês.
+            try:
+                contas_estoque_ids = set()
+                for emp_s in empreendimentos:
+                    ob_s = str(emp_s.get("obra_concluida", "N")).strip().upper() == 'S'
+                    c_raw = emp_s.get("conta_estcon") if ob_s else emp_s.get("conta_estand")
+                    if c_raw:
+                        try:
+                            contas_estoque_ids.add(int(c_raw))
+                        except (ValueError, TypeError):
+                            pass
+
+                for cid_est in contas_estoque_ids:
+                    if cid_est in contas_fisicas_empresa:
+                        continue  # ja coberta pelo LCTOGER — nao duplicar
+
+                    # Saldo anterior direto no LCTOCTB
+                    cur_q.execute("""
+                        SELECT
+                            SUM(CASE WHEN CONTACTBDEB  = ? THEN VALORLCTOCTB ELSE 0 END) AS deb,
+                            SUM(CASE WHEN CONTACTBCRED = ? THEN VALORLCTOCTB ELSE 0 END) AS cred
+                        FROM LCTOCTB
+                        WHERE CODIGOEMPRESA = ?
+                          AND DATALCTOCTB < CAST(? AS DATE)
+                          AND (CODIGOORIGLCTOCTB IS NULL OR CODIGOORIGLCTOCTB <> 'ZZ')
+                    """, (cid_est, cid_est, empresa_id, data_inicio_mes_atual))
+                    r_ant = cur_q.fetchone()
+                    saldo_ant_est = float(r_ant[0] or 0) - float(r_ant[1] or 0)
+
+                    # Movimento do mês direto no LCTOCTB
+                    cur_q.execute("""
+                        SELECT CHAVELCTOCTB, DATALCTOCTB, CONTACTBDEB, CONTACTBCRED,
+                               CAST(COMPLHIST AS BLOB SUB_TYPE 0), VALORLCTOCTB, CODIGOHISTCTB
+                        FROM LCTOCTB
+                        WHERE CODIGOEMPRESA = ?
+                          AND (CONTACTBDEB = ? OR CONTACTBCRED = ?)
+                          AND DATALCTOCTB >= CAST(? AS DATE)
+                          AND DATALCTOCTB <  CAST(? AS DATE)
+                          AND (CODIGOORIGLCTOCTB IS NULL OR CODIGOORIGLCTOCTB <> 'ZZ')
+                        ORDER BY DATALCTOCTB ASC
+                    """, (empresa_id, cid_est, cid_est,
+                          data_inicio_mes_atual, data_fim_mes_atual))
+                    rows_est = cur_q.fetchall()
+
+                    if abs(saldo_ant_est) < 0.01 and not rows_est:
+                        continue  # conta realmente vazia — nao criar entrada fantasma
+
+                    _classif_est = plano.get(cid_est, {}).get("classif", "")
+                    _nome_est    = plano.get(cid_est, {}).get("nome", "Desconhecida")
+                    contas_fisicas_empresa[cid_est] = {
+                        "conta": cid_est,
+                        "nome": f"{_classif_est} - {_nome_est}" if _classif_est else _nome_est,
+                        "classif": _classif_est,
+                        "saldo_anterior": saldo_ant_est,
+                        "movimento_debito": 0.0,
+                        "movimento_credito": 0.0,
+                        "movimento_liquido": 0.0,
+                        "saldo_final": 0.0,
+                        "detalhes": []
+                    }
+
+                    for (chave_e, dt_e, cdeb_e, ccred_e, hist_e, val_e, hist_cod) in rows_est:
+                        v_e = float(val_e or 0)
+                        if v_e < 0.01:
+                            continue
+                        if isinstance(hist_e, (bytes, bytearray)):
+                            compl_e = hist_e.decode('cp1252', 'ignore')
+                        else:
+                            compl_e = str(hist_e or "")
+                        hn = hist_questor.get(hist_cod, "") if hist_cod else ""
+                        hist_txt = f"{hn} {compl_e}".strip()
+
+                        if cdeb_e == cid_est:
+                            contas_fisicas_empresa[cid_est]["movimento_debito"]  += v_e
+                            contas_fisicas_empresa[cid_est]["movimento_liquido"] += v_e
+                            nat_str = "D"
+                        else:
+                            contas_fisicas_empresa[cid_est]["movimento_credito"] += v_e
+                            contas_fisicas_empresa[cid_est]["movimento_liquido"] -= v_e
+                            nat_str = "C"
+
+                        contas_fisicas_empresa[cid_est]["detalhes"].append({
+                            "chave": chave_e,
+                            "data":  dt_e.strftime('%d/%m/%Y') if hasattr(dt_e, 'strftime') else str(dt_e),
+                            "historico": hist_txt,
+                            "natureza": nat_str,
+                            "valor": v_e,
+                            "origem": "QUESTOR_ESTOQUE_DIRETO"
+                        })
+
+                    print(f"[FISICO-ESTOQUE] conta={cid_est} | "
+                          f"saldo_ant={saldo_ant_est:,.0f} | "
+                          f"lancamentos_mes={len(rows_est)}")
+            except Exception as _e_est:
+                print(f"[AVISO] Passagem suplementar estoque: {_e_est}")
+
             total_anterior_fisico = 0.0
             total_movimento_fisico = 0.0
             total_final_fisico = 0.0
@@ -278,6 +400,7 @@ class AccountingGraphPipeline:
                 total_anterior_fisico += data["saldo_anterior"]
                 total_movimento_fisico += data["movimento_liquido"]
                 total_final_fisico += data["saldo_final"]
+
     
             # --- BUSCA DO VULCANO LEGADO (LANCAMENTO_CONTABIL) ---
             contas_legado_empresa = {}
@@ -399,37 +522,88 @@ class AccountingGraphPipeline:
                             pass
     
     
-                nome_emp = emp["nome"]
-                
-                # 1. OBTER CUSTO GASTO GLOBAL NA CONTABILIDADE FÍSICA (QUESTOR)
-                # PERF: 2 queries idênticas (datas diferentes) unificadas em 1 CASE WHEN
-                # → corta N×2 round-trips para N×1 por empreendimento.
-                cur_q.execute("""
-                    SELECT
-                        SUM(CASE WHEN C.DATALCTOCTB < CAST(? AS DATE)
-                                 THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
-                        SUM(CASE WHEN C.DATALCTOCTB < CAST(? AS DATE)
-                                 THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
-                    FROM LCTOGER G
-                    JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
-                    WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
-                    AND C.DATALCTOCTB < CAST(? AS DATE)
-                    AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                    AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                """, (
-                    data_inicio_mes_atual,  # CASE anterior
-                    data_fim_mes_atual,     # CASE vigente
-                    empresa_id, emp["cc"],
-                    data_fim_mes_atual,     # WHERE cap (o maior dos dois)
-                ))
-                _row_custo = cur_q.fetchone()
-                custo_gasto_anterior = float(_row_custo[0] or 0.0)
-                custo_gasto_vigente  = float(_row_custo[1] or 0.0)
-    
-                # 2. POC NATIVO (Reaproveitando Último Fechamento se não houver no mês)
+                nome_emp = str(emp.get("nome") or "").strip()
+
+                # ═══════════════════════════════════════════════════════════════
+                # ETAPA 1: CUSTO GASTO GLOBAL — REGRA GERAL por tipo de obra
+                # ═══════════════════════════════════════════════════════════════
+                # REGRA: Para contas configuradas como CONTAESTAND (obra em andamento)
+                # ou CONTAESTCON (obra concluida) no cadastro de EMPREENDIMENTO:
+                #   - COM CC → gastos vem do LCTOGER filtrado pelo Centro de Custo
+                #              (obra em construcao: Stuttgart CC=35, conta 5639, etc.)
+                #   - SEM CC → gastos vem do LCTOGER filtrado pela propria conta de estoque
+                #              (obras concluidas ou projetos sem CC configurado)
+                # Esta regra garante que a conta de estoque SEMPRE receba o saldo
+                # correto independentemente de haver vendas/recebimentos no periodo.
+                ob_concluida = str(emp.get("obra_concluida", "N")).strip().upper() == 'S'
+                c_estcon_raw = emp.get("conta_estcon") if ob_concluida else emp.get("conta_estand")
+                c_estoque_inj = int(c_estcon_raw) if c_estcon_raw else None
+
+                custo_gasto_anterior = 0.0
+                custo_gasto_vigente  = 0.0
+
+                if emp["cc"]:
+                    # COM CC: usa LCTOGER/CC — mesma logica do SELECT da tela de Custos.
+                    # FILTRO IDENTICO AO SELECT DE REFERENCIA:
+                    #   NOT (histctb=370 AND (data=31/12 DO ANO OR naturlctoctb=-1))
+                    # NÃO usa CODIGOORIGLCTOCTB<>'ZZ' — esse filtro excluia lancamentos
+                    # validos de obra que a tela de Custos inclui corretamente.
+                    # Usa G.DATALCTOCTB (campo de data do proprio LCTOGER).
+                    cur_q.execute("""
+                        SELECT
+                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
+                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
+                        FROM LCTOGER G
+                        JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
+                                      AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
+                        WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                          AND G.DATALCTOCTB < CAST(? AS DATE)
+                          AND NOT (C.CODIGOHISTCTB = 370
+                               AND (G.DATALCTOCTB = CAST(EXTRACT(YEAR FROM G.DATALCTOCTB)||'-12-31' AS DATE)
+                                    OR G.NATURLCTOCTB = -1))
+                    """, (data_inicio_mes_atual, data_fim_mes_atual,
+                          empresa_id, emp["cc"], data_fim_mes_atual))
+                    _r = cur_q.fetchone()
+                    custo_gasto_anterior = float(_r[0] or 0.0)
+                    custo_gasto_vigente  = float(_r[1] or 0.0)
+                    print(f"[ESTOQUE/CC] {nome_emp[:35]} CC={emp['cc']} "
+                          f"ant={custo_gasto_anterior:,.0f} vig={custo_gasto_vigente:,.0f} "
+                          f"mov={custo_gasto_vigente-custo_gasto_anterior:,.0f}")
+
+                elif c_estoque_inj:
+                    # SEM CC: fallback pela conta de estoque debitada no LCTOGER.
+                    # Mesmo filtro alinhado ao SELECT de referencia.
+                    cur_q.execute("""
+                        SELECT
+                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
+                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
+                        FROM LCTOGER G
+                        JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
+                                      AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
+                        WHERE G.CODIGOEMPRESA = ?
+                          AND C.CONTACTBDEB = ?
+                          AND G.DATALCTOCTB < CAST(? AS DATE)
+                          AND NOT (C.CODIGOHISTCTB = 370
+                               AND (G.DATALCTOCTB = CAST(EXTRACT(YEAR FROM G.DATALCTOCTB)||'-12-31' AS DATE)
+                                    OR G.NATURLCTOCTB = -1))
+                    """, (data_inicio_mes_atual, data_fim_mes_atual,
+                          empresa_id, c_estoque_inj, data_fim_mes_atual))
+                    _r = cur_q.fetchone()
+                    custo_gasto_anterior = float(_r[0] or 0.0)
+                    custo_gasto_vigente  = float(_r[1] or 0.0)
+                    print(f"[ESTOQUE/CONTA] {nome_emp[:35]} conta={c_estoque_inj} "
+                          f"ant={custo_gasto_anterior:,.0f} vig={custo_gasto_vigente:,.0f}")
+
+                # ═══════════════════════════════════════════════════════════════
+                # ETAPA 2: POC NATIVO
+                # ═══════════════════════════════════════════════════════════════
                 poc_acumulado_vigente = 0.0
                 poc_acumulado_anterior = 0.0
-                ob_concluida = str(emp.get("obra_concluida", "N")).strip().upper() == 'S'
+                # ob_concluida ja definido acima na ETAPA 1
                 if ob_concluida:
                     poc_acumulado_vigente = 100.0
                     poc_acumulado_anterior = 100.0
@@ -475,23 +649,84 @@ class AccountingGraphPipeline:
     
                 # 3. RATEIO UNIDADE A UNIDADE (CUSTO, RECEBIMENTOS, E TRIBUTOS)
                 meta_emp = receitas_meta.get(nome_emp, {})
+
+                # ── COMPOSIÇÃO DO ESTOQUE (INJEÇÃO DE GASTOS FÍSICOS) ──
+                # SEMPRE executada: os gastos do LCTOGER pelo CC do empreendimento devem
+                # aparecer na conta de estoque independentemente de o empreendimento ter
+                # ═══════════════════════════════════════════════════════════════
+                # ETAPA 3: INJECAO DE ESTOQUE — REGRA GERAL (SEMPRE executada)
+                # ═══════════════════════════════════════════════════════════════
+                # Para toda conta configurada como CONTAESTAND ou CONTAESTCON,
+                # o saldo de gastos incorridos e injetado como Debito Virtual.
+                # Independe de haver vendas, recebimentos ou meta_emp no periodo.
+                c_custo   = emp.get("conta_custo") or 99999
+                c_estoque = c_estoque_inj or 99999  # definido na ETAPA 1
+                fonte_str = f"CC {emp['cc']}" if emp["cc"] else f"conta {c_estoque}"
+
+                mov_gasto = custo_gasto_vigente - custo_gasto_anterior
+                if abs(mov_gasto) > 0.01 or abs(custo_gasto_anterior) > 0.01:
+                    nat_gasto = 'D' if mov_gasto >= 0 else 'C'
+                    logica_gasto = (f"Gastos de Obra via {fonte_str}. "
+                                    f"Vigente: {custo_gasto_vigente:,.2f} - Ant: {custo_gasto_anterior:,.2f}")
+                    inject_virtual_entry(
+                        c_estoque, abs(mov_gasto), nat_gasto,
+                        f"Gastos Incorridos {nome_emp} ({fonte_str})",
+                        logica=logica_gasto,
+                        saldo_ant=custo_gasto_anterior
+                    )
+                    print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} "
+                          f"nat={nat_gasto} mov={abs(mov_gasto):,.0f} saldo_ant={custo_gasto_anterior:,.0f}")
+
+                    # ── INJECAO NO LADO FISICO (coluna Questor) ──────────────
+                    # Os gastos do LCTOGER/CC são a fonte física dos custos de obra
+                    # no ERP. O Questor não gera CONTACTBDEB=5639 direto no LCTOGER
+                    # (usa CC gerencial), então injetamos aqui para ambas as colunas
+                    # mostrarem o mesmo dado de origem — o total incorrido pelo CC.
+                    last_day_mes = f"{str(mes).zfill(2)}/{str(ano)}"
+                    if c_estoque not in contas_fisicas_empresa:
+                        _cl_est = plano.get(c_estoque, {}).get("classif", "")
+                        _nm_est = plano.get(c_estoque, {}).get("nome", "Desconhecida")
+                        contas_fisicas_empresa[c_estoque] = {
+                            "conta": c_estoque,
+                            "nome": f"{_cl_est} - {_nm_est}" if _cl_est else _nm_est,
+                            "classif": _cl_est,
+                            "saldo_anterior": custo_gasto_anterior,
+                            "movimento_debito": 0.0,
+                            "movimento_credito": 0.0,
+                            "movimento_liquido": 0.0,
+                            "saldo_final": 0.0,
+                            "detalhes": []
+                        }
+                    else:
+                        # Conta já existe (passagem suplementar LCTOCTB) —
+                        # substituir o saldo_anterior pelo valor do CC que é a
+                        # fonte canônica para contas de construção em andamento
+                        contas_fisicas_empresa[c_estoque]["saldo_anterior"] = custo_gasto_anterior
+
+                    cf = contas_fisicas_empresa[c_estoque]
+                    if nat_gasto == 'D':
+                        cf["movimento_debito"]  += abs(mov_gasto)
+                        cf["movimento_liquido"] += abs(mov_gasto)
+                    else:
+                        cf["movimento_credito"] += abs(mov_gasto)
+                        cf["movimento_liquido"] -= abs(mov_gasto)
+                    cf["detalhes"].append({
+                        "chave": f"LCTOGER_CC{emp['cc']}",
+                        "data":  last_day_mes,
+                        "historico": f"Gastos Obra {nome_emp} via {fonte_str}",
+                        "natureza": nat_gasto,
+                        "valor": abs(mov_gasto),
+                        "origem": "LCTOGER_CC"
+                    })
+                    cf["saldo_final"] = cf["saldo_anterior"] + cf["movimento_liquido"]
+                    print(f"[FISICO-CC-INJECT] conta={c_estoque} saldo_ant={custo_gasto_anterior:,.0f} "
+                          f"mov={abs(mov_gasto):,.0f} saldo_final={cf['saldo_final']:,.0f}")
+
+
+
                 if meta_emp:
                     vgv_global = meta_emp.get("vgv", 0.0) or 1.0
                     unidades = meta_emp.get("unidades", [])
-                    
-                    c_custo = emp.get("conta_custo") or 99999
-                    c_estcon = emp.get("conta_estcon") if ob_concluida else emp.get("conta_estand")
-                    c_estoque = c_estcon if c_estcon else 99999
-                    
-                    # ── COMPOSIÇÃO DO ESTOQUE (INJEÇÃO DE GASTOS FÍSICOS) ──
-                    # Usamos os laçamentos mapeados da tela de "Custos" para formar a
-                    # perna de Débito do Estoque, refletindo o Ativo construído (Incorrido).
-                    # A baixa (Crédito) ocorrerá no split unitário mais abaixo.
-                    mov_gasto = custo_gasto_vigente - custo_gasto_anterior
-                    if abs(mov_gasto) > 0.01 or abs(custo_gasto_anterior) > 0.01:
-                        nat_gasto = 'D' if mov_gasto >= 0 else 'C'
-                        logica_gasto = f"Aporte Global Custo Físico Mapeado. Atual: {custo_gasto_vigente:,.2f} - Ant: {custo_gasto_anterior:,.2f}"
-                        inject_virtual_entry(c_estoque, abs(mov_gasto), nat_gasto, f"Gastos Incorridos {nome_emp} (CC {emp['cc']})", logica=logica_gasto, saldo_ant=custo_gasto_anterior)
                     
                     c_caixa_banco = emp.get("conta_caixa") or 99999
                     c_cli = emp.get("conta_cli") or 99999
