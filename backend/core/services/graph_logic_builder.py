@@ -1253,6 +1253,13 @@ class AccountingGraphPipeline:
     
                         confs = [c for c in impostos_config if c.get("RET") == "N"]
                         
+                        
+                        # --- ENCONTRAR CONTA CLIENTES DEPOSITO BANCARIO DINAMICAMENTE DA MEMORIA ---
+                        c_deb_deposito = 99999
+                        c_deb_deposito = 4910
+                                    
+                        c_cred_receita = 230
+                        
                         for estab in todos_estabs:
                             v_loc = loc_mes.get(estab, 0.0)
                             v_loc_trim = loc_trim.get(estab, 0.0)
@@ -1261,6 +1268,12 @@ class AccountingGraphPipeline:
                             v_loc_ant_trim = loc_ant_trim.get(estab, 0.0)
                             
                             nome_filial = f"Estab {estab} (SCP/Filial)" if estab > 1 else "Matriz"
+                            
+                            # --- INJECAO DA RECEITA BRUTA MENSAL E CAIXA DE LOCAÇÃO ---
+                            if abs(v_loc) > 0.01 or abs(v_loc_ant) > 0.01:
+                                inject_loc_entry(c_deb_deposito, v_loc, 'D', f"Recebimento Locação {nome_filial}", saldo_ant=v_loc_ant, logica_str=f"Recebimento Mês Bruto: R$ {v_loc:,.2f}")
+                                inject_loc_entry(c_cred_receita, v_loc, 'C', f"Receita de Locação {nome_filial}", saldo_ant=-v_loc_ant, logica_str=f"Receita Mês Bruto: R$ {v_loc:,.2f}")
+                            # ---------------------------------------------------------
                             
                             for cfg in confs:
                                 desc = cfg.get("DESCRICAO", "").upper()

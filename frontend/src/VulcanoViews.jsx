@@ -885,7 +885,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   };
 
   const filtered = filteredBase.filter(r =>
-    inDateRange(r.data) &&
+    inDateRange(r.vencimento_iso || r.data) &&
     (!unidadeFilter || r.descricao_venda === unidadeFilter) &&
     (!clienteFilter || r.cliente === clienteFilter)
   );
