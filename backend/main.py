@@ -1919,15 +1919,16 @@ def api_saldo_contas(
         cur_q.execute("SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
         plano = {r[0]: str(r[1] or "").strip() for r in cur_q.fetchall()}
 
-        # CC do empreendimento (para filtro opcional via LCTOGER)
-        cc_filtro = None
-        conta_estoque = None
-        if empreendimento_id:
-            cur_v.execute("SELECT CODIGOCENTROCUSTO, CONTAESTAND FROM EMPREENDIMENTO WHERE ID = ?", (int(empreendimento_id),))
-            row = cur_v.fetchone()
-            if row:
-                if row[0]: cc_filtro = int(row[0])
-                if row[1] and str(row[1]).strip().isdigit(): conta_estoque = int(str(row[1]).strip())
+        # Mapeamento Global: Conta Estoque -> CC Empreendimento
+        # Se um empreendimento_id foi passado, podemos restringir, mas o ideal é
+        # usar o mapa global para que a visão agregada (sem filtro) da Auditoria
+        # também traga o LCTOGER correto para as contas imobiliárias.
+        cur_v.execute("SELECT CONTAESTAND, CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE CONTAESTAND IS NOT NULL AND CODIGOCENTROCUSTO IS NOT NULL")
+        mapa_conta_cc = {}
+        for row in cur_v.fetchall():
+            c_est, cc_cod = str(row[0]).strip(), str(row[1]).strip()
+            if c_est.isdigit() and cc_cod.isdigit():
+                mapa_conta_cc[int(c_est)] = int(cc_cod)
 
         # Identificar contas de Imposto a Recolher para considerar apenas Apropriações (Créditos) no confronto de movimento
         cur_v.execute("SELECT CONTA_CRED_IMP_REC_DARF FROM IMPOSTO")
@@ -1941,9 +1942,45 @@ def api_saldo_contas(
             cond_contabil = "(C.CONTACTBCRED = ?)" if is_imposto_recolher else "(C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)"
             params_conta = (conta_id,) if is_imposto_recolher else (conta_id, conta_id)
             
+            cc_filtro = mapa_conta_cc.get(conta_id)
+            
+            rows_ger = []
+            rows_ctb = []
+            
+            # 1. Fetch from LCTOCTB ALWAYS (base contábil nativa, que contém Baixas de Custo/Créditos)
             if data_ini and data_fim:
-                if cc_filtro and conta_id == conta_estoque:
-                    query = f"""
+                query_ctb = f"""
+                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
+                    FROM LCTOCTB C
+                    LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                    WHERE C.CODIGOEMPRESA = ?
+                      AND {cond_contabil}
+                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                      AND C.DATALCTOCTB >= CAST(? AS DATE)
+                      AND C.DATALCTOCTB < CAST(? AS DATE)
+                    ORDER BY C.DATALCTOCTB ASC
+                """
+                cur_q.execute(query_ctb, (empresa_id, *params_conta, data_ini, data_fim))
+            else:
+                query_ctb = f"""
+                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
+                    FROM LCTOCTB C
+                    LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                    WHERE C.CODIGOEMPRESA = ?
+                      AND {cond_contabil}
+                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                    ORDER BY C.DATALCTOCTB ASC
+                """
+                cur_q.execute(query_ctb, (empresa_id, *params_conta))
+            
+            rows_ctb = cur_q.fetchall()
+            
+            # 2. Fetch from LCTOGER condicionalmente (contém os insumos/notas com rateio de CC explícito)
+            if cc_filtro:
+                if data_ini and data_fim:
+                    query_ger = f"""
                         SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
                                CASE WHEN G.NATURLCTOCTB = 1 THEN {conta_id} ELSE C.CONTACTBDEB END AS MOCK_DEB,
                                CASE WHEN G.NATURLCTOCTB = -1 THEN {conta_id} ELSE C.CONTACTBCRED END AS MOCK_CRED,
@@ -1957,24 +1994,9 @@ def api_saldo_contas(
                           AND G.DATALCTOCTB < CAST(? AS DATE)
                         ORDER BY G.DATALCTOCTB ASC
                     """
-                    cur_q.execute(query, (empresa_id, cc_filtro, data_ini, data_fim))
+                    cur_q.execute(query_ger, (empresa_id, cc_filtro, data_ini, data_fim))
                 else:
-                    query = f"""
-                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
-                        FROM LCTOCTB C
-                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
-                        WHERE C.CODIGOEMPRESA = ?
-                          AND {cond_contabil}
-                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                          AND C.DATALCTOCTB >= CAST(? AS DATE)
-                          AND C.DATALCTOCTB < CAST(? AS DATE)
-                        ORDER BY C.DATALCTOCTB ASC
-                    """
-                    cur_q.execute(query, (empresa_id, *params_conta, data_ini, data_fim))
-            else:
-                if cc_filtro and conta_id == conta_estoque:
-                    cur_q.execute(f"""
+                    query_ger = f"""
                         SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
                                CASE WHEN G.NATURLCTOCTB = 1 THEN {conta_id} ELSE C.CONTACTBDEB END AS MOCK_DEB,
                                CASE WHEN G.NATURLCTOCTB = -1 THEN {conta_id} ELSE C.CONTACTBCRED END AS MOCK_CRED,
@@ -1985,23 +2007,25 @@ def api_saldo_contas(
                         WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
                           AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
                         ORDER BY G.DATALCTOCTB ASC
-                    """, (empresa_id, cc_filtro))
-                else:
-                    cur_q.execute(f"""
-                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
-                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
-                        FROM LCTOCTB C
-                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
-                        WHERE C.CODIGOEMPRESA = ?
-                          AND {cond_contabil}
-                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
-                        ORDER BY C.DATALCTOCTB ASC
-                    """, (empresa_id, *params_conta))
+                    """
+                    cur_q.execute(query_ger, (empresa_id, cc_filtro))
+                rows_ger = cur_q.fetchall()
 
-            rows = cur_q.fetchall()
             mov_deb = 0.0
             mov_cred = 0.0
             detalhes = []
+            
+            # Map para evitar duplicar chaves nativas nativas que o LCTOGER já desmembrou
+            chaves_ger = set()
+            for r in rows_ger:
+                chaves_ger.add(r[0])  # r[0] é CHAVELCTOCTB
+
+            # Junta os dois resultsets, preferindo o LCTOGER_CC em caso de sobreposição (desmembramento fino).
+            # Mas GARANTE os créditos/baixas que só existem no LCTOCTB nativo!
+            rows = rows_ger + [r for r in rows_ctb if r[0] not in chaves_ger]
+            
+            # Rearranjando para data
+            rows = sorted(rows, key=lambda x: x[1])
 
             for row_tuple in rows:
                 chave, dt, cdeb, ccred, hist_raw, valor = row_tuple[:6]
