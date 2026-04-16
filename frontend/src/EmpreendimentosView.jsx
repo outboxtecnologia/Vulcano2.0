@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   Building2, Plus, Edit, Trash2, Search, X, Check, Loader2, 
   Settings, Database, Construction, Layers, Home, Ruler,
-  ChevronRight, ArrowRight, Save, Info, AlertCircle
+  ChevronRight, ArrowRight, Save, Info, AlertCircle, ExternalLink
 } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
 
-export const EmpreendimentosView = ({ selectedEmpresa }) => {
+export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const [empreendimentos, setEmpreendimentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -324,7 +324,18 @@ export const EmpreendimentosView = ({ selectedEmpresa }) => {
                        <span className="text-[8px] bg-[#007aff]/10 text-[var(--v-accent-4)] border border-[#007aff]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">Em Obras</span>
                     }
                  </div>
-                 <div className="text-[9px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">ID {emp.id}</div>
+                 <div className="flex items-center gap-2">
+                   <div className="text-[9px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">ID {emp.id}</div>
+                   {onNavigate && (
+                     <button
+                       onClick={(e) => { e.stopPropagation(); onNavigate('custos'); }}
+                       title="Abrir Fechamento de Custos deste empreendimento"
+                       className="flex items-center gap-1 px-2 py-1 bg-[var(--v-accent)]/10 hover:bg-[var(--v-accent)]/25 border border-[#ff4d00]/20 rounded-[var(--v-radius)] text-[8px] font-black uppercase tracking-widest text-[var(--v-accent)] transition-all group-hover:opacity-100 opacity-60"
+                     >
+                       <ExternalLink size={10} /> Custos
+                     </button>
+                   )}
+                 </div>
               </div>
             </div>
           </div>

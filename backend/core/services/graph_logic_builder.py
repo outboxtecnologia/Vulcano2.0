@@ -677,12 +677,14 @@ class AccountingGraphPipeline:
                     print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} "
                           f"nat={nat_gasto} mov={abs(mov_gasto):,.0f} saldo_ant={custo_gasto_anterior:,.0f}")
 
-                    # ── INJECAO NO LADO FISICO (coluna Questor) ──────────────
-                    # Os gastos do LCTOGER/CC são a fonte física dos custos de obra
-                    # no ERP. O Questor não gera CONTACTBDEB=5639 direto no LCTOGER
-                    # (usa CC gerencial), então injetamos aqui para ambas as colunas
-                    # mostrarem o mesmo dado de origem — o total incorrido pelo CC.
-                    last_day_mes = f"{str(mes).zfill(2)}/{str(ano)}"
+                    # ── INJECAO NO LADO FISICO (coluna Questor) — LANÇAMENTOS INDIVIDUAIS ──
+                    # Os gastos do LCTOGER/CC são a fonte física dos custos de obra.
+                    # Em vez de um único lançamento agregado sintético, buscamos os
+                    # lançamentos INDIVIDUAIS do LCTOGER para exibição na aba Razão/Órfãos.
+                    # Query IDÊNTICA à usada no fechamento de custos (api_custos_sincronizar_totalizadores).
+                    import calendar
+                    _last_d = calendar.monthrange(int(ano), int(mes))[1]
+
                     if c_estoque not in contas_fisicas_empresa:
                         _cl_est = plano.get(c_estoque, {}).get("classif", "")
                         _nm_est = plano.get(c_estoque, {}).get("nome", "Desconhecida")
@@ -700,27 +702,91 @@ class AccountingGraphPipeline:
                     else:
                         # Conta já existe (passagem suplementar LCTOCTB) —
                         # substituir o saldo_anterior pelo valor do CC que é a
-                        # fonte canônica para contas de construção em andamento
+                        # fonte canônica para contas de construção em andamento.
+                        contas_fisicas_empresa[c_estoque]["detalhes"] = []   # limpa detalhes anteriores
                         contas_fisicas_empresa[c_estoque]["saldo_anterior"] = custo_gasto_anterior
+                        contas_fisicas_empresa[c_estoque]["movimento_debito"] = 0.0
+                        contas_fisicas_empresa[c_estoque]["movimento_credito"] = 0.0
+                        contas_fisicas_empresa[c_estoque]["movimento_liquido"] = 0.0
 
                     cf = contas_fisicas_empresa[c_estoque]
-                    if nat_gasto == 'D':
-                        cf["movimento_debito"]  += abs(mov_gasto)
-                        cf["movimento_liquido"] += abs(mov_gasto)
+
+                    # Busca lançamentos individuais do mês pelo CC — mesma query do fechamento de custos
+                    try:
+                        cur_q.execute("""
+                            SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
+                                   G.VALORLCTOGER * G.NATURLCTOCTB AS VALOR_LIQUIDO,
+                                   CAST(C.COMPLHIST AS BLOB SUB_TYPE 0),
+                                   H.DESCRHISTCTB, G.NATURLCTOCTB
+                            FROM LCTOGER G
+                            JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
+                                          AND C.CHAVELCTOCTB   = G.CHAVELCTOCTB
+                            LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                            WHERE G.CODIGOEMPRESA    = ?
+                              AND G.CODIGOCENTROCUSTO = ?
+                              AND G.DATALCTOCTB >= CAST(? AS DATE)
+                              AND G.DATALCTOCTB <  CAST(? AS DATE)
+                              AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                            ORDER BY G.DATALCTOCTB ASC
+                        """, (empresa_id, emp["cc"], data_inicio_mes_atual, data_fim_mes_atual))
+                        lctoger_rows = cur_q.fetchall()
+                    except Exception as _e_lc:
+                        print(f"[AVISO] busca LCTOGER individual CC={emp['cc']}: {_e_lc}")
+                        lctoger_rows = []
+
+                    if lctoger_rows:
+                        for (chave_lc, dt_lc, val_liq, hist_raw_lc, descr_hist_lc, nat_lc) in lctoger_rows:
+                            v_lc = float(val_liq or 0)
+                            if isinstance(hist_raw_lc, (bytes, bytearray)):
+                                compl_lc = hist_raw_lc.decode("cp1252", "ignore")
+                            elif hasattr(hist_raw_lc, "read"):
+                                compl_lc = hist_raw_lc.read().decode("cp1252", "ignore")
+                            else:
+                                compl_lc = str(hist_raw_lc or "")
+                            descr_lc = str(descr_hist_lc or "").strip()
+                            hist_lc  = f"{descr_lc} {compl_lc}".strip()
+
+                            if v_lc >= 0:
+                                nat_str = "D"
+                                cf["movimento_debito"]  += v_lc
+                                cf["movimento_liquido"] += v_lc
+                            else:
+                                nat_str = "C"
+                                cf["movimento_credito"] += abs(v_lc)
+                                cf["movimento_liquido"] -= abs(v_lc)
+
+                            dt_fmt = dt_lc.strftime('%d/%m/%Y') if hasattr(dt_lc, 'strftime') else str(dt_lc)
+                            cf["detalhes"].append({
+                                "chave":     str(chave_lc),
+                                "data":      dt_fmt,
+                                "historico": hist_lc,
+                                "natureza":  nat_str,
+                                "valor":     abs(v_lc),
+                                "origem":    "LCTOGER_CC"
+                            })
                     else:
-                        cf["movimento_credito"] += abs(mov_gasto)
-                        cf["movimento_liquido"] -= abs(mov_gasto)
-                    cf["detalhes"].append({
-                        "chave": f"LCTOGER_CC{emp['cc']}",
-                        "data":  last_day_mes,
-                        "historico": f"Gastos Obra {nome_emp} via {fonte_str}",
-                        "natureza": nat_gasto,
-                        "valor": abs(mov_gasto),
-                        "origem": "LCTOGER_CC"
-                    })
+                        # Fallback: sem lançamentos no mês mas há movimento acumulado → sintético
+                        if abs(mov_gasto) > 0.01:
+                            last_day_mes = f"{_last_d:02d}/{int(mes):02d}/{int(ano)}"
+                            if nat_gasto == 'D':
+                                cf["movimento_debito"]  += abs(mov_gasto)
+                                cf["movimento_liquido"] += abs(mov_gasto)
+                            else:
+                                cf["movimento_credito"] += abs(mov_gasto)
+                                cf["movimento_liquido"] -= abs(mov_gasto)
+                            cf["detalhes"].append({
+                                "chave":     f"LCTOGER_CC{emp['cc']}",
+                                "data":      f"{_last_d:02d}/{int(mes):02d}/{int(ano)}",
+                                "historico": f"Gastos Obra {nome_emp} via {fonte_str} (aglutinado)",
+                                "natureza":  nat_gasto,
+                                "valor":     abs(mov_gasto),
+                                "origem":    "LCTOGER_CC"
+                            })
+
                     cf["saldo_final"] = cf["saldo_anterior"] + cf["movimento_liquido"]
                     print(f"[FISICO-CC-INJECT] conta={c_estoque} saldo_ant={custo_gasto_anterior:,.0f} "
-                          f"mov={abs(mov_gasto):,.0f} saldo_final={cf['saldo_final']:,.0f}")
+                          f"lancamentos={len(lctoger_rows)} mov_liq={cf['movimento_liquido']:,.0f} "
+                          f"saldo_final={cf['saldo_final']:,.0f}")
 
 
 
@@ -1059,17 +1125,17 @@ class AccountingGraphPipeline:
                 eh_primeiro = len(resultados) == 0
     
                 if len(contas_fisicas_empresa) > 0 or len(contas_virtuais) > 0:
-    
                     resultados.append({
                         "empreendimento_id": emp["id"],
                         "empreendimento_nome": emp["nome"],
                         "total_anterior_fisico": total_anterior_fisico if eh_primeiro else 0.0,
                         "total_movimento_fisico": total_movimento_fisico if eh_primeiro else 0.0,
                         "total_final_fisico": total_final_fisico if eh_primeiro else 0.0,
-                        "contas_fisicas": list(contas_fisicas_empresa.values()) if eh_primeiro else [],
-                        "contas_legado": list(contas_legado_empresa.values()) if eh_primeiro else [],
+                        "contas_fisicas": [],  # Sera preenchido no final do loop
+                        "contas_legado": [],   # Sera preenchido no final do loop
                         "contas_virtuais": list(contas_virtuais.values())
                     })
+
                     
             # --- RECEITAS GERAIS (LOCAÇÕES/ALUGUÉIS) P/ IRPJ e TRIBUTOS PRESUMIDOS ---
             if not empreendimento_id:
@@ -1266,6 +1332,15 @@ class AccountingGraphPipeline:
                 except Exception as e:
                     print("Aviso processando Locações Virtuais:", e)
                 
+            # ATRIBUICAO FINAL DAS CONTAS FISICAS GLOBAIS
+            # O frontend precisa de todas as contas fisicas (LCTOGER/LCTOCTB + injeções de CC)
+            # agrupadas na primeira posicao do resultado. Como os empreendimentos podem
+            # injetar gastos no dict global durante o loop, nos convertemos e atribuimos
+            # somente apos o termino absoluto do processamento.
+            if resultados:
+                resultados[0]["contas_fisicas"] = list(contas_fisicas_empresa.values())
+                resultados[0]["contas_legado"] = list(contas_legado_empresa.values())
+
             return {"data": resultados}
         except Exception as e:
             import traceback

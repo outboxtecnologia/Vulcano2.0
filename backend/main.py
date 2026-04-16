@@ -1812,11 +1812,13 @@ def api_saldo_contas(
 
         # CC do empreendimento (para filtro opcional via LCTOGER)
         cc_filtro = None
+        conta_estoque = None
         if empreendimento_id:
-            cur_v.execute("SELECT CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (int(empreendimento_id),))
+            cur_v.execute("SELECT CODIGOCENTROCUSTO, CONTAESTAND FROM EMPREENDIMENTO WHERE ID = ?", (int(empreendimento_id),))
             row = cur_v.fetchone()
-            if row and row[0]:
-                cc_filtro = int(row[0])
+            if row:
+                if row[0]: cc_filtro = int(row[0])
+                if row[1] and str(row[1]).strip().isdigit(): conta_estoque = int(str(row[1]).strip())
 
         # Identificar contas de Imposto a Recolher para considerar apenas Apropriações (Créditos) no confronto de movimento
         cur_v.execute("SELECT CONTA_CRED_IMP_REC_DARF FROM IMPOSTO")
@@ -1831,7 +1833,7 @@ def api_saldo_contas(
             params_conta = (conta_id,) if is_imposto_recolher else (conta_id, conta_id)
             
             if data_ini and data_fim:
-                if cc_filtro:
+                if cc_filtro and conta_id == conta_estoque:
                     query = f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
                                CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
@@ -1862,7 +1864,7 @@ def api_saldo_contas(
                     """
                     cur_q.execute(query, (empresa_id, *params_conta, data_ini, data_fim))
             else:
-                if cc_filtro:
+                if cc_filtro and conta_id == conta_estoque:
                     cur_q.execute(f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
                                CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
@@ -1941,7 +1943,7 @@ def api_saldo_contas(
             saldo_anterior = 0.0
             if data_ini:
                 try:
-                    if cc_filtro:
+                    if cc_filtro and conta_id == conta_estoque:
                         base_sum = "WHEN C.CONTACTBCRED = ? AND G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER" if is_imposto_recolher else "WHEN C.CONTACTBDEB = ? AND G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER WHEN C.CONTACTBCRED = ? AND G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER"
                         cur_q.execute(f"""
                             SELECT SUM(

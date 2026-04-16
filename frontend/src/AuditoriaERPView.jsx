@@ -1430,9 +1430,12 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
           
           let fisicoList = [];
           let urlF = `${API_BASE}/api/questor/saldo-contas?empresa_id=${selectedEmpresa}&mes=${mes}&ano=${ano}&contas=${contasCsv}`;
-          // NÃO passar empreendimento_id aqui: as contas em contasGlobais já são
-          // específicas do empreendimento (ex: 5665=RECEITA STUTTGART). Filtrar por CC no
-          // Questor LCTOGER causa perda de dados quando o Questor não taggeia por CC.
+          
+          // O backend agora é inteligente: ele só aplica o filtro de CC (do empreendimento)
+          // se a conta em questão for a conta de Estoque/Obra. Para Receitas, ele NÃO aplica o CC.
+          if (filtroEmpId) {
+            urlF += `&empreendimento_id=${filtroEmpId}`;
+          }
           
           try {
             const respF = await fetch(urlF);

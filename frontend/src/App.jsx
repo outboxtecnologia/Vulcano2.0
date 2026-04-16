@@ -355,7 +355,7 @@ return (
                    style={{ background: 'var(--v-magma-glow)' }}></div>
               <div className="max-w-[1920px] mx-auto min-h-full flex flex-col">
                   <div className="w-full h-full">
-                      {currentView === 'empreendimentos' && <EmpreendimentosView selectedEmpresa={selectedEmpresa} />}
+                      {currentView === 'empreendimentos' && <EmpreendimentosView selectedEmpresa={selectedEmpresa} onNavigate={(view) => setCurrentView(view)} />}
                       {currentView === 'vendas' && <VendasView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'recebimentos' && <RecebimentosView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'receitas' && <DashboardMeta selectedEmpresa={selectedEmpresa} />}

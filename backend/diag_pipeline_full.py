@@ -20,20 +20,12 @@ try:
     resultado = AccountingGraphPipeline.api_contabilizacoes(
         ano=2025, mes=3, empresa_id=959, empreendimento_id="335"
     )
-    resultado_raw = resultado if isinstance(resultado, list) else [resultado]
-    print(f"\nTipo resultado: {type(resultado)}")
-    print(f"Len: {len(resultado_raw)}")
-    if resultado_raw:
-        first = resultado_raw[0]
-        print(f"Tipo do primeiro item: {type(first)}")
-        if isinstance(first, dict):
-            print(f"Chaves: {list(first.keys())}")
-        elif isinstance(first, str):
-            # pode ser lista de nomes
-            print(f"Primeiro item é string: {first[:100]}")
-            # talvez o resultado seja um dict com 'empreendimentos'
-            print(f"Resultado raw: {str(resultado)[:500]}")
+    if isinstance(resultado, dict) and 'data' in resultado:
+        lista_emp = resultado['data']
+    else:
+        lista_emp = resultado if isinstance(resultado, list) else [resultado]
 
+    for emp_r in lista_emp:
         if not isinstance(emp_r, dict):
             print(f"  Tipo inesperado: {type(emp_r)} — {str(emp_r)[:200]}")
             continue
@@ -49,6 +41,8 @@ try:
             print(f"\n  [VIRTUAL 5639] saldo_anterior={conta_5639_v['saldo_anterior']:,.2f} "
                   f"mov_deb={conta_5639_v['movimento_debito']:,.2f} "
                   f"saldo_final={conta_5639_v['saldo_final']:,.2f}")
+            for d in conta_5639_v.get("detalhes", []):
+                print(f"      V-DETALHE: {d['data']} | {d['natureza']} | {d['valor']:,.2f} | {d['historico']}")
         else:
             print(f"\n  [VIRTUAL 5639] NAO ENCONTRADA")
 
@@ -57,6 +51,9 @@ try:
                   f"mov_deb={conta_5639_f['movimento_debito']:,.2f} "
                   f"saldo_final={conta_5639_f['saldo_final']:,.2f} "
                   f"({len(conta_5639_f.get('detalhes',[]))} lançamentos)")
+            for d in conta_5639_f.get("detalhes", []):
+                if d.get('origem') == 'LCTOGER_CC' or d.get('valor', 0) > 100000:
+                    print(f"      F-DETALHE: {d.get('data')} | {d.get('natureza')} | {d.get('valor'):,.2f} | {d.get('historico')} | Origem: {d.get('origem')}")
         else:
             print(f"  [FISICA  5639] NAO ENCONTRADA")
 
