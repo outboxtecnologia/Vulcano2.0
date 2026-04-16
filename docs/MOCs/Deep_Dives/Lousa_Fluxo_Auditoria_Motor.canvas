@@ -1,0 +1,20 @@
+{
+	"nodes":[
+		{"id":"n1","type":"file","file":"docs/MOCs/Deep_Dives/Motor_Auditoria_Codigo/1_API_Contabilizacoes.md","x":-600,"y":-320,"width":400,"height":900,"color":"4"},
+		{"id":"n2","type":"file","file":"docs/MOCs/Deep_Dives/Motor_Auditoria_Codigo/2_Fisico_Questor.md","x":0,"y":-700,"width":400,"height":880,"color":"1"},
+		{"id":"n3","type":"file","file":"docs/MOCs/Deep_Dives/Motor_Auditoria_Codigo/3_Oculto_LCTOGER.md","x":0,"y":250,"width":400,"height":950,"color":"1"},
+		{"id":"n4","type":"file","file":"docs/MOCs/Deep_Dives/Motor_Auditoria_Codigo/4_Virtual_Vulcano.md","x":600,"y":-200,"width":400,"height":380,"color":"2"},
+		{"id":"n5","type":"file","file":"docs/MOCs/Deep_Dives/Motor_Auditoria_Codigo/5_Locacoes_Global.md","x":600,"y":250,"width":400,"height":420,"color":"6"},
+		{"id":"t1","type":"text","text":"## Painel Frontend (Array Combinado)\nA interface de Balancete Comparativo unifica as Contas Fisicas, Contas Virtuais e Orfaos identificados na matriz do `resultados`.","x":1200,"y":0,"width":400,"height":180,"color":"3"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"n1","fromSide":"right","toNode":"n2","toSide":"left","label":"Motor Fisico"},
+		{"id":"e2","fromNode":"n1","fromSide":"right","toNode":"n3","toSide":"left","label":"Gastos CC"},
+		{"id":"e3","fromNode":"n1","fromSide":"right","toNode":"n4","toSide":"left","label":"Motor Virtual"},
+		{"id":"e4","fromNode":"n1","fromSide":"right","toNode":"n5","toSide":"left","label":"Base Rendas"},
+		{"id":"e5","fromNode":"n2","fromSide":"right","toNode":"t1","toSide":"left"},
+		{"id":"e6","fromNode":"n3","fromSide":"right","toNode":"t1","toSide":"left"},
+		{"id":"e7","fromNode":"n4","fromSide":"right","toNode":"t1","toSide":"left"},
+		{"id":"e8","fromNode":"n5","fromSide":"right","toNode":"t1","toSide":"left"}
+	]
+}
