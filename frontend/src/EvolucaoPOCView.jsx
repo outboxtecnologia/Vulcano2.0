@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Construction, RefreshCw, Layers, AlertCircle, Search, Filter, CheckSquare, Square, Building2, Calendar, ChevronDown, ChevronRight, Save } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -278,7 +278,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                     <th className="p-4 w-8"></th>
                                     <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Empreendimento</th>
                                     <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-right">VGV Base</th>
-                                    <th className="p-4 text-[10px] tracking-widest text-[var(--v-accent-4)] uppercase font-bold text-center">Evolutivo Histórico (Último POC)</th>
+                                    <th className="p-4 text-[10px] tracking-widest text-[var(--v-accent-4)] uppercase font-bold text-center">Evolutivo Histórico (Ãšltimo POC)</th>
                                     <th className="p-4 text-[10px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold text-right">Acumulado</th>
                                 </tr>
                             </thead>

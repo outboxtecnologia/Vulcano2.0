@@ -543,28 +543,23 @@ class AccountingGraphPipeline:
                 custo_gasto_vigente  = 0.0
 
                 if emp["cc"]:
-                    # COM CC: usa LCTOGER/CC — mesma logica do SELECT da tela de Custos.
-                    # FILTRO IDENTICO AO SELECT DE REFERENCIA:
-                    #   NOT (histctb=370 AND (data=31/12 DO ANO OR naturlctoctb=-1))
-                    # NÃO usa CODIGOORIGLCTOCTB<>'ZZ' — esse filtro excluia lancamentos
-                    # validos de obra que a tela de Custos inclui corretamente.
-                    # Usa G.DATALCTOCTB (campo de data do proprio LCTOGER).
+                    # COM CC: usa LCTOGER/CC — filtro idêntico ao endpoint analítico.
+                    # custo_anterior = acumulado ATÉ (exclusive) o início do mês
+                    # custo_vigente  = acumulado ATÉ (exclusive) o fim do mês (inclui o mês corrente)
                     cur_q.execute("""
                         SELECT
-                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                            SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
                                      THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
-                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                            SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
                                      THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
                                       AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
-                        WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
-                          AND G.DATALCTOCTB < CAST(? AS DATE)
-                          AND NOT (C.CODIGOHISTCTB = 370
-                               AND (G.DATALCTOCTB = CAST(EXTRACT(YEAR FROM G.DATALCTOCTB)||'-12-31' AS DATE)
-                                    OR G.NATURLCTOCTB = -1))
+                        WHERE G.CODIGOEMPRESA      = ?
+                          AND G.CODIGOCENTROCUSTO  = ?
+                          AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
                     """, (data_inicio_mes_atual, data_fim_mes_atual,
-                          empresa_id, emp["cc"], data_fim_mes_atual))
+                          empresa_id, emp["cc"]))
                     _r = cur_q.fetchone()
                     custo_gasto_anterior = float(_r[0] or 0.0)
                     custo_gasto_vigente  = float(_r[1] or 0.0)
@@ -574,24 +569,21 @@ class AccountingGraphPipeline:
 
                 elif c_estoque_inj:
                     # SEM CC: fallback pela conta de estoque debitada no LCTOGER.
-                    # Mesmo filtro alinhado ao SELECT de referencia.
+                    # Mesmo padrão: anterior < inicio_mes, vigente < fim_mes.
                     cur_q.execute("""
                         SELECT
-                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                            SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
                                      THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
-                            SUM(CASE WHEN G.DATALCTOCTB < CAST(? AS DATE)
+                            SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
                                      THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
                                       AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
                         WHERE G.CODIGOEMPRESA = ?
-                          AND C.CONTACTBDEB = ?
-                          AND G.DATALCTOCTB < CAST(? AS DATE)
-                          AND NOT (C.CODIGOHISTCTB = 370
-                               AND (G.DATALCTOCTB = CAST(EXTRACT(YEAR FROM G.DATALCTOCTB)||'-12-31' AS DATE)
-                                    OR G.NATURLCTOCTB = -1))
+                          AND C.CONTACTBDEB   = ?
+                          AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
                     """, (data_inicio_mes_atual, data_fim_mes_atual,
-                          empresa_id, c_estoque_inj, data_fim_mes_atual))
+                          empresa_id, c_estoque_inj))
                     _r = cur_q.fetchone()
                     custo_gasto_anterior = float(_r[0] or 0.0)
                     custo_gasto_vigente  = float(_r[1] or 0.0)

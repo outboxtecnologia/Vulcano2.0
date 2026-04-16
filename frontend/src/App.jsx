@@ -126,7 +126,7 @@ export default function App() {
                     <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Conectando ao banco Vulcano...</span>
                     {loadingSlow && (
                       <div className="mt-4 flex flex-col items-center gap-3 bg-black/40 border border-white/10 rounded p-5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent-6)]">Demora detectada — banco pode estar bloqueado</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent-6)]">Demora detectada â€” banco pode estar bloqueado</p>
                         <p className="text-[9px] text-[var(--v-text-faint)] uppercase tracking-widest">Digite o ID da empresa para entrar direto:</p>
                         <div className="flex gap-2">
                           <input value={manualId} onChange={e => setManualId(e.target.value)}
@@ -270,7 +270,7 @@ return (
                     <NavItem icon={<Activity size={16}/>} label="Sero INSS" active={currentView === 'sero'} onClick={() => setCurrentView('sero')} />
                     <NavItem icon={<Users size={16}/>} label="Sindicatos CCT" active={currentView === 'sindicatos'} onClick={() => setCurrentView('sindicatos')} />
                     <NavItem icon={<Database size={16}/>} label="Raw Explorer" active={currentView === 'explorer'} onClick={() => setCurrentView('explorer')} />
-                    <NavItem icon={<Trash2 size={16}/>} label="🧹 Janitor SRE" active={currentView === 'janitor'} onClick={() => setCurrentView('janitor')} />
+                    <NavItem icon={<Trash2 size={16}/>} label="ðŸ§¹ Janitor SRE" active={currentView === 'janitor'} onClick={() => setCurrentView('janitor')} />
                 </div>
             </nav>
             <div className="px-4 mt-auto">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   TrendingUp, Zap, AlertTriangle, Building2,
   ChevronDown, ChevronUp, RefreshCw
@@ -9,7 +9,7 @@ const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-// ── helpers de período ───────────────────────────────────────────────────────
+// â”€â”€ helpers de período â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function gerarCompetencias(de, ate) {
   const res = [];
   let [y, m] = de.split('-').map(Number);
@@ -25,7 +25,7 @@ const labelMes = (comp) => {
   return `${MESES_ABREV[m - 1]}/${String(y).slice(2)}`;
 };
 
-// ── classificação de conta virtual por tipo ──────────────────────────────────
+// â”€â”€ classificação de conta virtual por tipo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Os históricos injetados pelo backend seguem padrões reconhecíveis
 const GRUPOS_VIRTUAL = [
   {
@@ -60,14 +60,14 @@ const GRUPOS_VIRTUAL = [
     key: 'trib_dif',
     label: 'Tributos Diferidos / Antecipados',
     cor: '#ffcc00',
-    descricao: 'Diferenças entre base caixa e base DRE (POC) — antecipados e diferidos',
+    descricao: 'Diferenças entre base caixa e base DRE (POC) â€” antecipados e diferidos',
     test: (nome) => /diferido|antecipado|passivo tributo|constituição adiant/i.test(nome)
   },
   {
     key: 'trib_dre',
     label: 'Despesa Tributária DRE',
     cor: '#ff9f0a',
-    descricao: 'IRPJ, CSLL, PIS, COFINS, RET — pelo critério econômico (base POC)',
+    descricao: 'IRPJ, CSLL, PIS, COFINS, RET â€” pelo critério econômico (base POC)',
     test: (nome) => /despesa tribut|passivo.darf|darf exig/i.test(nome)
   },
   {
@@ -84,7 +84,7 @@ function grupoVirtual(histNome) {
   return GRUPOS_VIRTUAL[GRUPOS_VIRTUAL.length - 1];
 }
 
-// ── Linha de conta na tabela ─────────────────────────────────────────────────
+// â”€â”€ Linha de conta na tabela â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
   const [open, setOpen] = useState(false);
 
@@ -139,7 +139,7 @@ function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
           const v = movPorMes[comp];
           return (
             <td key={comp} className="px-3 py-2.5 text-right font-mono text-[11px] whitespace-nowrap">
-              {v === null ? <span className="text-[#252525]">—</span>
+              {v === null ? <span className="text-[#252525]">â€”</span>
                : v === 0  ? <span className="text-[#333]">-</span>
                : <span style={{ color: v > 0 ? '#34c759' : '#ff4d00' }}>
                    {v > 0 ? '+' : ''}{fmt(v)}
@@ -157,7 +157,7 @@ function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
         <tr>
           <td colSpan={competencias.length + 3} className="p-0 bg-[#070707]">
             <div className="px-4 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-bg)]">
-              Lançamentos analíticos — {labelMes(ultimoMesComDado)}
+              Lançamentos analíticos â€” {labelMes(ultimoMesComDado)}
             </div>
             <table className="w-full text-[10px] border-collapse">
               <tbody>
@@ -178,7 +178,7 @@ function ContaRow({ contaId, contaNome, grupo, competencias, dadosPorMes }) {
   );
 }
 
-// ── MAIN VIEW ────────────────────────────────────────────────────────────────
+// â”€â”€ MAIN VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const ContabilizacoesView = ({ selectedEmpresa }) => {
   const now = new Date();
   const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -195,7 +195,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // ── Carrega lista de empreendimentos disponíveis na montagem ──────────────
+  // â”€â”€ Carrega lista de empreendimentos disponíveis na montagem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!selectedEmpresa) return;
     setEmpsLoading(true);
@@ -213,7 +213,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
 
   const periodoValido = competencias.length <= 18;
 
-  // ── Busca dados em paralelo para cada mês ────────────────────────────────
+  // â”€â”€ Busca dados em paralelo para cada mês â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchTudo = useCallback(async () => {
     if (!selectedEmpresa || !periodoValido) return;
     setLoading(true);
@@ -252,7 +252,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
     setLoading(false);
   }, [selectedEmpresa, competencias, filtroEmpId]);
 
-  // ── index de contas (conta → { nome, grupoVirtual }) ─────────────────────
+  // â”€â”€ index de contas (conta â†’ { nome, grupoVirtual }) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const contasIndex = useMemo(() => {
     const map = {};
     Object.values(dadosPorMes).forEach(lista => {
@@ -272,7 +272,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
     return map;
   }, [dadosPorMes]);
 
-  // ── Agrupa contas por grupo ───────────────────────────────────────────────
+  // â”€â”€ Agrupa contas por grupo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const grupos = useMemo(() => {
     const gMap = {};
     Object.values(contasIndex).forEach(c => {
@@ -296,17 +296,17 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
 
   return (
     <div className="flex flex-col gap-5 pb-10 text-[var(--v-text)] animate-in fade-in">
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <div className="border-b border-[var(--v-border)] pb-4">
         <h2 className="text-4xl font-black tracking-tighter text-[var(--v-text-bold)] flex items-center gap-3 mb-1">
           <TrendingUp className="text-[var(--v-accent)]" size={36}/> Contabilizações
         </h2>
         <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
-          Visão Societária (IFRS 15) — Receita POC · Tributos · Clientes
+          Visão Societária (IFRS 15) â€” Receita POC · Tributos · Clientes
         </p>
       </div>
 
-      {/* ── Painel de filtros ── */}
+      {/* â”€â”€ Painel de filtros â”€â”€ */}
       <div className="flex flex-wrap gap-3 items-end bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4">
 
         {/* Período De */}
@@ -343,7 +343,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         <div className="flex flex-col justify-end pb-0.5">
           <span className="text-[9px] font-bold text-[var(--v-text-faint)] uppercase tracking-wider">
             {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
-            {!periodoValido && <span className="text-[var(--v-accent)] ml-2">⚠ máx. 18</span>}
+            {!periodoValido && <span className="text-[var(--v-accent)] ml-2">âš  máx. 18</span>}
           </span>
         </div>
 
@@ -373,7 +373,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         </div>
       )}
 
-      {/* ── Totalizador rápido de meses ── */}
+      {/* â”€â”€ Totalizador rápido de meses â”€â”€ */}
       {!loading && temDados && competencias.length > 1 && (
         <div className="overflow-x-auto">
           <div className="flex gap-2" style={{ minWidth: `${competencias.length * 130}px` }}>
@@ -392,7 +392,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         </div>
       )}
 
-      {/* ── Tabelas por grupo ── */}
+      {/* â”€â”€ Tabelas por grupo â”€â”€ */}
       {!loading && grupos.map(({ grupo, contas }) => (
         <div key={grupo.key} className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
           {/* Cabeçalho do grupo */}
@@ -443,7 +443,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
                 {/* Linha totalizadora */}
                 <tr className="bg-[var(--v-deep)]" style={{ borderTop: `1px solid #222` }}>
                   <td className="px-3 py-2 sticky left-0 z-10 bg-[var(--v-deep)] text-[9px] font-black uppercase tracking-widest" style={{ color: grupo.cor }}>
-                    ∑ Total {grupo.label}
+                    âˆ‘ Total {grupo.label}
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-xs text-[var(--v-text-faint)]">
                     {fmt(contas.reduce((s, c) => {
@@ -459,7 +459,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
                     return (
                       <td key={comp} className="px-3 py-2 text-right font-mono text-xs font-bold">
                         <span style={{ color: total > 0 ? '#34c759' : total < 0 ? '#ff4d00' : '#333' }}>
-                          {total !== 0 ? `${total > 0 ? '+' : ''}${fmt(total)}` : '—'}
+                          {total !== 0 ? `${total > 0 ? '+' : ''}${fmt(total)}` : 'â€”'}
                         </span>
                       </td>
                     );

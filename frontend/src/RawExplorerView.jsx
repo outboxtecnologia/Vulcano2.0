@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Database, Play, AlertCircle, RefreshCw, Search } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";

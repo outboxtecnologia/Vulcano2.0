@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Layers, RefreshCw, AlertCircle, TrendingUp, ChevronDown, Plus } from 'lucide-react';
 
@@ -278,7 +278,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                                     <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(cx)}</span>
                                                 </td>
                                                 <td className="p-3 text-[#aa88aa] font-mono text-[10px]">
-                                                    D - PROVISÃO P/ TRIBUTOS SOBRE LUCRO <br/>
+                                                    D - PROVISÃƒO P/ TRIBUTOS SOBRE LUCRO <br/>
                                                     C - TRIBUTOS DIFERIDOS (PASSIVO) <br/>
                                                     <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(meta.tributos_soc_acumulado - meta.tributos_caixa_acumulado)}</span>
                                                 </td>

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Building2, Plus, Edit, Trash2, Search, X, Check, Loader2, 
   Settings, Database, Construction, Layers, Home, Ruler,
-  ChevronRight, ArrowRight, Save, Info, AlertCircle, ExternalLink
+  ChevronRight, ArrowRight, Save, Info, AlertCircle
 } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -332,7 +332,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                        title="Abrir Fechamento de Custos deste empreendimento"
                        className="flex items-center gap-1 px-2 py-1 bg-[var(--v-accent)]/10 hover:bg-[var(--v-accent)]/25 border border-[#ff4d00]/20 rounded-[var(--v-radius)] text-[8px] font-black uppercase tracking-widest text-[var(--v-accent)] transition-all group-hover:opacity-100 opacity-60"
                      >
-                       <ExternalLink size={10} /> Custos
+                       Custos <ArrowRight size={10} /> 
                      </button>
                    )}
                  </div>

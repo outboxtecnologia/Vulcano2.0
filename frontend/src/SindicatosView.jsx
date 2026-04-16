@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw, ExternalLink, AlertTriangle,
   CheckCircle2, Clock, FileX, ChevronDown, ChevronUp
@@ -76,7 +76,7 @@ function InfoRow({ label, valor, clausula }) {
           {label}
         </span>
         <span className="text-[11px] font-bold text-[var(--v-text-bold)] text-right">
-          {valor || <span className="text-[#333] italic font-normal">—</span>}
+          {valor || <span className="text-[#333] italic font-normal">â€”</span>}
         </span>
       </div>
       <ClausulaExpand texto={clausula} />
@@ -228,7 +228,7 @@ export function SindicatosView() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="font-headline text-2xl font-black tracking-tighter text-[var(--v-text-bold)] uppercase">
-            Sindicatos — CCT
+            Sindicatos â€” CCT
           </h2>
           <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest mt-1">
             Convenções Coletivas via MTE Mediador · Extração Gemini · Atualização diária

@@ -496,10 +496,54 @@ def api_empreendimentos_basico(empresa_id: int = 959):
     finally:
         conn.close()
 
+def _ensure_poc_custo_mensal_real(conn):
+    """
+    Cria a tabela POC_CUSTO_MENSAL_REAL no Vulcano se não existir.
+    Usa firebirdsql — chamada lazy na primeira vez que o dashboard de custos é acessado.
+    """
+    cur = conn.cursor()
+    try:
+        # Verifica existência via RDB$RELATIONS
+        cur.execute("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = 'POC_CUSTO_MENSAL_REAL' AND RDB$SYSTEM_FLAG = 0")
+        exists = cur.fetchone()[0]
+        if exists:
+            return  # Já existe, nada a fazer
+
+        # Cria tabela, generator e trigger
+        cur.execute("""
+            CREATE TABLE POC_CUSTO_MENSAL_REAL (
+                ID                INTEGER NOT NULL,
+                ID_EMPREENDIMENTO INTEGER NOT NULL,
+                ANO               INTEGER NOT NULL,
+                MES               INTEGER NOT NULL,
+                COMPETENCIA       VARCHAR(10),
+                CUSTO_TOTAL       DOUBLE PRECISION DEFAULT 0.0,
+                CONSTRAINT PK_POC_CUSTO_MENSAL_REAL PRIMARY KEY (ID)
+            )
+        """)
+        cur.execute("CREATE GENERATOR GEN_POC_CUSTO_MENSAL_REAL_ID")
+        cur.execute("""
+            CREATE TRIGGER TRG_POC_CUSTO_MENSAL_BI
+            FOR POC_CUSTO_MENSAL_REAL
+            ACTIVE BEFORE INSERT POSITION 0
+            AS BEGIN
+                IF (NEW.ID IS NULL) THEN
+                    NEW.ID = GEN_ID(GEN_POC_CUSTO_MENSAL_REAL_ID, 1);
+            END
+        """)
+        conn.commit()
+    except Exception as e:
+        # Se der erro (tabela já existe em concurrent request, etc.), ignora
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
 @app.get("/api/custos/dashboard/{id_emp}")
 def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
     conn_vulcano = get_conn("vulcano")
     try:
+        _ensure_poc_custo_mensal_real(conn_vulcano)  # Cria tabela se não existir
         cur = conn_vulcano.cursor()
         cur.execute("""
             SELECT ID, NOME, CUSTOORCADO, CONTACUSTO, CONTAESTAND, CONTAESTCON, CODIGOCENTROCUSTO
@@ -736,6 +780,7 @@ def api_custos_detalhamento(id_emp: int, empresa_id: int = 959):
     conn_vulcano = get_conn("vulcano")
     conn_questor = get_conn("questor")
     try:
+        _ensure_poc_custo_mensal_real(conn_vulcano)  # Cria tabela se não existir
         # Puxar CC e Conta de Custo
         cur_v = conn_vulcano.cursor()
         cur_v.execute("SELECT CONTACUSTO, CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (id_emp,))
@@ -780,11 +825,75 @@ def api_custos_detalhamento(id_emp: int, empresa_id: int = 959):
         conn_vulcano.close()
         conn_questor.close()
 
+@app.get("/api/custos/analitico/{id_emp}")
+def api_custos_analitico(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
+    """
+    Retorna os lançamentos analíticos do LCTOGER para um empreendimento em um mês/ano.
+    Usado para o drill-down na tela de Fechamento de Custos.
+    """
+    conn_vulcano = get_conn("vulcano")
+    conn_questor = get_conn("questor")
+    try:
+        cur_v = conn_vulcano.cursor()
+        cur_v.execute("SELECT CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (id_emp,))
+        emp_info = cur_v.fetchone()
+        if not emp_info or not emp_info[0]:
+            return {"lancamentos": [], "total": 0.0, "count": 0}
+
+        cc_emp = int(emp_info[0])
+        cur_q = conn_questor.cursor()
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode("win1252", "ignore").strip()
+            return str(v).strip()
+
+        cur_q.execute("""
+            SELECT
+                lctoger.datalctoctb,
+                lctoger.valorlctoger * lctoger.naturlctoctb as valor_liquido,
+                lctoger.contactb,
+                lctoctb.contactbdeb,
+                lctoctb.contactbcred,
+                lctoctb.codigohistctb,
+                lctoctb.complhist,
+                lctoger.chavelctoctb
+            FROM lctoger
+            INNER JOIN lctoctb ON lctoctb.codigoempresa = lctoger.codigoempresa
+                AND lctoctb.chavelctoctb = lctoger.chavelctoctb
+            WHERE lctoger.codigoempresa = ?
+              AND lctoger.codigocentrocusto = ?
+              AND extract(year from lctoger.datalctoctb) = ?
+              AND extract(month from lctoger.datalctoctb) = ?
+              AND NOT (lctoctb.codigohistctb = 370 AND lctoger.naturlctoctb = -1)
+            ORDER BY lctoger.datalctoctb, lctoger.chavelctoctb
+        """, (empresa_id, cc_emp, ano, mes))
+
+        lancamentos = []
+        for r in cur_q.fetchall():
+            lancamentos.append({
+                "data": str(r[0])[:10] if r[0] else "",
+                "valor": float(r[1] or 0),
+                "conta_cc": dec(r[2]),
+                "conta_deb": dec(r[3]),
+                "conta_cred": dec(r[4]),
+                "hist_codigo": dec(r[5]),
+                "historico": dec(r[6]),
+                "chave": dec(r[7]),
+            })
+
+        total = sum(l["valor"] for l in lancamentos)
+        return {"lancamentos": lancamentos, "total": total, "count": len(lancamentos)}
+    finally:
+        conn_vulcano.close()
+        conn_questor.close()
+
 @app.post("/api/custos/sincronizar_totalizadores/{id_emp}")
 def api_custos_sincronizar_totalizadores(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
     conn_vulcano = get_conn("vulcano")
     conn_questor = get_conn("questor")
     try:
+        _ensure_poc_custo_mensal_real(conn_vulcano)  # Cria tabela se não existir
         cur_v = conn_vulcano.cursor()
         cur_q = conn_questor.cursor()
         
@@ -1835,20 +1944,20 @@ def api_saldo_contas(
             if data_ini and data_fim:
                 if cc_filtro and conta_id == conta_estoque:
                     query = f"""
-                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                        SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
+                               CASE WHEN G.NATURLCTOCTB = 1 THEN {conta_id} ELSE C.CONTACTBDEB END AS MOCK_DEB,
+                               CASE WHEN G.NATURLCTOCTB = -1 THEN {conta_id} ELSE C.CONTACTBCRED END AS MOCK_CRED,
                                CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
                         LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
                         WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
-                          AND {cond_contabil}
-                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
                           AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                          AND C.DATALCTOCTB >= CAST(? AS DATE)
-                          AND C.DATALCTOCTB < CAST(? AS DATE)
-                        ORDER BY C.DATALCTOCTB ASC
+                          AND G.DATALCTOCTB >= CAST(? AS DATE)
+                          AND G.DATALCTOCTB < CAST(? AS DATE)
+                        ORDER BY G.DATALCTOCTB ASC
                     """
-                    cur_q.execute(query, (empresa_id, cc_filtro, *params_conta, data_ini, data_fim))
+                    cur_q.execute(query, (empresa_id, cc_filtro, data_ini, data_fim))
                 else:
                     query = f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
@@ -1866,17 +1975,17 @@ def api_saldo_contas(
             else:
                 if cc_filtro and conta_id == conta_estoque:
                     cur_q.execute(f"""
-                        SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                        SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
+                               CASE WHEN G.NATURLCTOCTB = 1 THEN {conta_id} ELSE C.CONTACTBDEB END AS MOCK_DEB,
+                               CASE WHEN G.NATURLCTOCTB = -1 THEN {conta_id} ELSE C.CONTACTBCRED END AS MOCK_CRED,
                                CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
                         LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
                         WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
-                          AND {cond_contabil}
-                          AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
                           AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                        ORDER BY C.DATALCTOCTB ASC
-                    """, (empresa_id, cc_filtro, *params_conta))
+                        ORDER BY G.DATALCTOCTB ASC
+                    """, (empresa_id, cc_filtro))
                 else:
                     cur_q.execute(f"""
                         SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
@@ -1944,22 +2053,21 @@ def api_saldo_contas(
             if data_ini:
                 try:
                     if cc_filtro and conta_id == conta_estoque:
-                        base_sum = "WHEN C.CONTACTBCRED = ? AND G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER" if is_imposto_recolher else "WHEN C.CONTACTBDEB = ? AND G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER WHEN C.CONTACTBCRED = ? AND G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER"
                         cur_q.execute(f"""
                             SELECT SUM(
                                 CASE 
-                                    {base_sum} 
+                                    WHEN G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER 
+                                    WHEN G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER 
                                     ELSE 0 
                                 END
                             )
                             FROM LCTOGER G
                             JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
                             WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
-                              AND {cond_contabil}
                               AND C.DATALCTOCTB < CAST(? AS DATE)
                               AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
                               AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                        """, (*params_conta, empresa_id, cc_filtro, *params_conta, data_ini))
+                        """, (empresa_id, cc_filtro, data_ini))
                     else:
                         base_sum = "WHEN C.CONTACTBCRED = ? THEN -C.VALORLCTOCTB" if is_imposto_recolher else "WHEN C.CONTACTBDEB = ? THEN C.VALORLCTOCTB WHEN C.CONTACTBCRED = ? THEN -C.VALORLCTOCTB"
                         cur_q.execute(f"""
@@ -2773,7 +2881,7 @@ def get_vulcano_empreendimentos(empresa_id: int):
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        query = """SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO, CNO, 
+        query = """SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO, NULL AS CNO, 
                    CONTACAIXA, CONTACLI, CODIGOCENTROCUSTO, CONTAESTAND, CONTAESTCON,
                    CONTADESPESA, CONTAREC, CONTAVARIACAO, CONTALUCROACUM,
                    CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI,

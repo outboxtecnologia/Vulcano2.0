@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Zap, Activity, HardDrive, RefreshCw, Shield, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MoveRight } from 'lucide-react';
 
 const API_BASE = "http://127.0.0.1:8000";
 const fmt      = (v) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v || 0);
 const fmtKB    = (v) => v >= 1024 ? `${(v / 1024).toFixed(1)} MB` : `${v.toFixed(0)} KB`;
 
-// ── Cores por latência ────────────────────────────────────────────────────────
+// â”€â”€ Cores por latência â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const latencyColor = (ms) => {
   if (!ms || ms < 200)  return '#34c759';
   if (ms < 800)  return '#ffcc00';
@@ -26,18 +26,18 @@ const riskLabel = (risk) => ({
 }[risk] || risk);
 
 const categoriaLabel = (cat) => ({
-  SCRIPT_PATCH:   '🩹 Script de Patch',
-  SCRIPT_FIX:     '🔧 Script Fix',
-  SCRIPT_UPDATE:  '📦 Script Update',
-  SCRIPT_RECOVER: '🔄 Script Recover',
-  DEBUG_SCRIPT:   '🐛 Debug Script',
+  SCRIPT_PATCH:   'ðŸ©¹ Script de Patch',
+  SCRIPT_FIX:     'ðŸ”§ Script Fix',
+  SCRIPT_UPDATE:  'ðŸ“¦ Script Update',
+  SCRIPT_RECOVER: 'ðŸ”„ Script Recover',
+  DEBUG_SCRIPT:   'ðŸ› Debug Script',
   TMP_FILE:       '⏱ Temporário',
-  LOG_FILE:       '📄 Log/TXT',
-  DUMP_JSON:      '📊 Dump JSON',
-  DUMP_SCRIPT:    '🗂 Script Dump',
+  LOG_FILE:       'ðŸ“„ Log/TXT',
+  DUMP_JSON:      'ðŸ“Š Dump JSON',
+  DUMP_SCRIPT:    'ðŸ—‚ Script Dump',
 }[cat] || cat);
 
-// ── Card de KPI ───────────────────────────────────────────────────────────────
+// â”€â”€ Card de KPI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function KpiCard({ icon, label, value, sub, color = 'var(--v-accent)' }) {
   return (
     <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 flex flex-col gap-2">
@@ -51,7 +51,7 @@ function KpiCard({ icon, label, value, sub, color = 'var(--v-accent)' }) {
   );
 }
 
-// ── Barra de latência ─────────────────────────────────────────────────────────
+// â”€â”€ Barra de latência â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LatencyBar({ ms, max }) {
   const pct = Math.min(100, (ms / Math.max(max, 1)) * 100);
   const color = latencyColor(ms);
@@ -67,7 +67,7 @@ function LatencyBar({ ms, max }) {
   );
 }
 
-// ── Painel de Performance ────────────────────────────────────────────────────
+// â”€â”€ Painel de Performance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PerformancePanel({ data }) {
   const endpoints = data?.performance?.endpoints || [];
   const maxMs = Math.max(...endpoints.map(e => e.p95_ms || 0), 1);
@@ -124,7 +124,7 @@ function PerformancePanel({ data }) {
                   <td className="p-2 text-center">
                     {e.n_errors > 0
                       ? <span className="text-[var(--v-accent)] font-black">{e.n_errors}</span>
-                      : <span className="text-[#333]">—</span>
+                      : <span className="text-[#333]">â€”</span>
                     }
                   </td>
                 </tr>
@@ -137,7 +137,7 @@ function PerformancePanel({ data }) {
   );
 }
 
-// ── Painel de Disco ───────────────────────────────────────────────────────────
+// â”€â”€ Painel de Disco â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function DiskPanel({ onRefresh }) {
   const [diskData,   setDiskData]   = useState(null);
   const [loading,    setLoading]    = useState(false);
@@ -225,7 +225,7 @@ function DiskPanel({ onRefresh }) {
         <div className="flex items-center gap-2">
           <HardDrive size={14} className="text-[var(--v-accent)]" />
           <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">
-            Arquivos Residuais — {diskData?.total_arquivos || 0} candidatos, {fmtKB(diskData?.total_size_kb || 0)}
+            Arquivos Residuais â€” {diskData?.total_arquivos || 0} candidatos, {fmtKB(diskData?.total_size_kb || 0)}
           </span>
           <span className="text-[9px] text-[var(--v-text-faint)] ml-2">Gerado: {diskData?.gerado_em?.slice(0, 16)}</span>
         </div>
@@ -258,7 +258,7 @@ function DiskPanel({ onRefresh }) {
         <div className="flex items-center gap-2">
           <button onClick={selectAllSafe}
             className="px-2 py-0.5 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-[8px] font-black uppercase tracking-widest text-[#34c759] hover:bg-[#34c759]/20 transition-all">
-            ✓ Selecionar Lixo Seguro ({filtered.filter(c => c.risk === 'safe_delete').length})
+            âœ“ Selecionar Lixo Seguro ({filtered.filter(c => c.risk === 'safe_delete').length})
           </button>
           <button onClick={selectAll}
             className="px-2 py-0.5 bg-[var(--v-hover)] border border-[var(--v-border)] rounded text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] transition-all">
@@ -331,7 +331,7 @@ function DiskPanel({ onRefresh }) {
           {selected.size > 0 && (
             <>
               <span className="text-[10px] font-bold text-[var(--v-text-faint)]">
-                {selected.size} arquivo(s) selecionado(s) — {fmtKB(totalSelecionado)}
+                {selected.size} arquivo(s) selecionado(s) â€” {fmtKB(totalSelecionado)}
               </span>
               <button onClick={moverParaQuarentena} disabled={quarentando}
                 className="flex items-center gap-2 px-4 py-2 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/40 rounded text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[var(--v-accent)]/20 transition-all disabled:opacity-40">
@@ -345,7 +345,7 @@ function DiskPanel({ onRefresh }) {
               <CheckCircle2 size={12} className="text-[#34c759]" />
               <span className="text-[#34c759]">{result.movidos} arquivo(s) movidos para quarentena.</span>
               {result.erros > 0 && <span className="text-[var(--v-accent)]">{result.erros} erro(s).</span>}
-              <span className="text-[var(--v-text-faint)] text-[8px]">📁 {result.quarentena}</span>
+              <span className="text-[var(--v-text-faint)] text-[8px]">ðŸ“ {result.quarentena}</span>
             </div>
           )}
         </div>
@@ -354,7 +354,7 @@ function DiskPanel({ onRefresh }) {
   );
 }
 
-// ── View Principal ────────────────────────────────────────────────────────────
+// â”€â”€ View Principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const JanitorView = () => {
   const [reportData, setReportData] = useState(null);
   const [loading,    setLoading]    = useState(false);
@@ -396,7 +396,7 @@ export const JanitorView = () => {
           <Trash2 className="text-[var(--v-accent)]" size={36} /> Agente Janitor
         </h2>
         <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
-          SRE Autônomo — Performance · Limpeza · Governança
+          SRE Autônomo â€” Performance · Limpeza · Governança
         </p>
       </div>
 
@@ -418,7 +418,7 @@ export const JanitorView = () => {
         </button>
         {lastRefresh && (
           <span className="text-[9px] text-[var(--v-text-faint)] font-bold ml-auto">
-            Última atualização: {lastRefresh}
+            Ãšltima atualização: {lastRefresh}
           </span>
         )}
       </div>
@@ -436,7 +436,7 @@ export const JanitorView = () => {
           <KpiCard
             icon={<Zap size={16} />}
             label="Endpoint Mais Lento (P95)"
-            value={slowest ? `${slowest.p95_ms?.toFixed(0)}ms` : '—'}
+            value={slowest ? `${slowest.p95_ms?.toFixed(0)}ms` : 'â€”'}
             sub={slowest?.path?.split('/').slice(-2).join('/') || 'Sem dados ainda'}
             color={latencyColor(slowest?.p95_ms)}
           />
@@ -464,7 +464,7 @@ export const JanitorView = () => {
       <div className="flex items-center gap-2 mt-2">
         <HardDrive size={16} className="text-[var(--v-accent)]" />
         <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--v-text-bold)]">
-          Inspetor de Disco — Arquivos Residuais
+          Inspetor de Disco â€” Arquivos Residuais
         </h3>
       </div>
       <DiskPanel />
