@@ -551,18 +551,22 @@ class AccountingGraphPipeline:
                             SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
                                      THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
                             SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
-                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
+                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente,
+                            SUM(CASE WHEN G.DATALCTOCTB >= CAST(? AS DATE) AND G.DATALCTOCTB < CAST(? AS DATE) AND G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER ELSE 0 END) AS mov_debito_mes,
+                            SUM(CASE WHEN G.DATALCTOCTB >= CAST(? AS DATE) AND G.DATALCTOCTB < CAST(? AS DATE) AND G.NATURLCTOCTB = -1 THEN G.VALORLCTOGER ELSE 0 END) AS mov_credito_mes
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
                                       AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
                         WHERE G.CODIGOEMPRESA      = ?
                           AND G.CODIGOCENTROCUSTO  = ?
                           AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                    """, (data_inicio_mes_atual, data_fim_mes_atual,
+                    """, (data_inicio_mes_atual, data_fim_mes_atual, data_inicio_mes_atual, data_fim_mes_atual, data_inicio_mes_atual, data_fim_mes_atual,
                           empresa_id, emp["cc"]))
                     _r = cur_q.fetchone()
                     custo_gasto_anterior = float(_r[0] or 0.0)
                     custo_gasto_vigente  = float(_r[1] or 0.0)
+                    mov_debito_mes = float(_r[2] or 0.0)
+                    mov_credito_mes = float(_r[3] or 0.0)
                     print(f"[ESTOQUE/CC] {nome_emp[:35]} CC={emp['cc']} "
                           f"ant={custo_gasto_anterior:,.0f} vig={custo_gasto_vigente:,.0f} "
                           f"mov={custo_gasto_vigente-custo_gasto_anterior:,.0f}")
@@ -575,18 +579,22 @@ class AccountingGraphPipeline:
                             SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
                                      THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_anterior,
                             SUM(CASE WHEN G.DATALCTOCTB <  CAST(? AS DATE)
-                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente
+                                     THEN G.VALORLCTOGER * G.NATURLCTOCTB ELSE 0 END) AS custo_vigente,
+                            SUM(CASE WHEN G.DATALCTOCTB >= CAST(? AS DATE) AND G.DATALCTOCTB < CAST(? AS DATE) AND G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER ELSE 0 END) AS mov_debito_mes,
+                            SUM(CASE WHEN G.DATALCTOCTB >= CAST(? AS DATE) AND G.DATALCTOCTB < CAST(? AS DATE) AND G.NATURLCTOCTB = -1 THEN G.VALORLCTOGER ELSE 0 END) AS mov_credito_mes
                         FROM LCTOGER G
                         JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA
                                       AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
                         WHERE G.CODIGOEMPRESA = ?
                           AND C.CONTACTBDEB   = ?
                           AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                    """, (data_inicio_mes_atual, data_fim_mes_atual,
+                    """, (data_inicio_mes_atual, data_fim_mes_atual, data_inicio_mes_atual, data_fim_mes_atual, data_inicio_mes_atual, data_fim_mes_atual,
                           empresa_id, c_estoque_inj))
                     _r = cur_q.fetchone()
                     custo_gasto_anterior = float(_r[0] or 0.0)
                     custo_gasto_vigente  = float(_r[1] or 0.0)
+                    mov_debito_mes = float(_r[2] or 0.0)
+                    mov_credito_mes = float(_r[3] or 0.0)
                     print(f"[ESTOQUE/CONTA] {nome_emp[:35]} conta={c_estoque_inj} "
                           f"ant={custo_gasto_anterior:,.0f} vig={custo_gasto_vigente:,.0f}")
 
@@ -655,26 +663,41 @@ class AccountingGraphPipeline:
                 c_estoque = c_estoque_inj or 99999  # definido na ETAPA 1
                 fonte_str = f"CC {emp['cc']}" if emp["cc"] else f"conta {c_estoque}"
 
+                injected_any = False
                 mov_gasto = custo_gasto_vigente - custo_gasto_anterior
-                if abs(mov_gasto) > 0.01 or abs(custo_gasto_anterior) > 0.01:
-                    nat_gasto = 'D' if mov_gasto >= 0 else 'C'
-                    logica_gasto = (f"Gastos de Obra via {fonte_str}. "
-                                    f"Vigente: {custo_gasto_vigente:,.2f} - Ant: {custo_gasto_anterior:,.2f}")
+                if abs(mov_debito_mes) < 0.01 and abs(mov_credito_mes) < 0.01 and abs(custo_gasto_anterior) > 0.01:
                     inject_virtual_entry(
-                        c_estoque, abs(mov_gasto), nat_gasto,
-                        f"Gastos Incorridos {nome_emp} ({fonte_str})",
-                        logica=logica_gasto,
+                        c_estoque, 0.0, 'D',
+                        f"Saldo Obra {nome_emp} ({fonte_str})",
+                        logica="Saldo Anterior transportado (sem movimento no mes atual)",
                         saldo_ant=custo_gasto_anterior
                     )
-                    print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} "
-                          f"nat={nat_gasto} mov={abs(mov_gasto):,.0f} saldo_ant={custo_gasto_anterior:,.0f}")
+                    injected_any = True
+                
+                if abs(mov_debito_mes) > 0.01:
+                    inject_virtual_entry(
+                        c_estoque, mov_debito_mes, 'D',
+                        f"Gastos Incorridos {nome_emp} ({fonte_str} - Débitos)",
+                        logica=f"Débitos brutos da obra.",
+                        saldo_ant=custo_gasto_anterior if not injected_any else 0.0
+                    )
+                    injected_any = True
+                    print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} nat=D mov={abs(mov_debito_mes):,.0f}")
+
+                if abs(mov_credito_mes) > 0.01:
+                    inject_virtual_entry(
+                        c_estoque, mov_credito_mes, 'C',
+                        f"Gastos Incorridos {nome_emp} ({fonte_str} - Estornos/Créditos)",
+                        logica=f"Créditos brutos da obra.",
+                        saldo_ant=custo_gasto_anterior if not injected_any else 0.0
+                    )
+                    print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} nat=C mov={abs(mov_credito_mes):,.0f}")
 
                     # ── INJECAO NO LADO FISICO (coluna Questor) — LANÇAMENTOS INDIVIDUAIS ──
                     # Os gastos do LCTOGER/CC são a fonte física dos custos de obra.
                     # Em vez de um único lançamento agregado sintético, buscamos os
                     # lançamentos INDIVIDUAIS do LCTOGER para exibição na aba Razão/Órfãos.
                     # Query IDÊNTICA à usada no fechamento de custos (api_custos_sincronizar_totalizadores).
-                    import calendar
                     _last_d = calendar.monthrange(int(ano), int(mes))[1]
 
                     if c_estoque not in contas_fisicas_empresa:
