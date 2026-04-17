@@ -94,7 +94,14 @@ class CombinatorialAnalyzer:
 
 class IFRS15Analyzer:
     @staticmethod
-    def gerar_dossie_temporal(cc_empreendimento: int, empresa_id: int=959, limite_amostra: int=5):
+    def gerar_dossie_temporal(cc_empreendimento: int, empresa_id: int=959, conta_alvo: str=None, limite_amostra: int=5):
+        num_conta = None
+        if conta_alvo:
+            import re
+            m = re.search(r'\b(\d{3,6})\b', conta_alvo)
+            if m:
+                num_conta = int(m.group(1))
+
         try:
             from main import get_conn
         except ImportError:
@@ -146,7 +153,15 @@ class IFRS15Analyzer:
             GROUP BY 1, 2 ORDER BY 1, 2
         """, (cc_empreendimento, empresa_id))
         custos_questor = [{"ano": int(r[0]), "mes": int(r[1]), "custo": float(r[2] or 0)} for r in cur_q.fetchall()]
-        conn_q.close()
+        
+        # Créditos do Questor LCTOGER (NATURLCTOCTB = -1)
+        cur_q.execute("""
+            SELECT EXTRACT(YEAR FROM DATALCTOCTB), EXTRACT(MONTH FROM DATALCTOCTB), SUM(VALORLCTOGER) 
+            FROM LCTOGER 
+            WHERE CODIGOCENTROCUSTO = ? AND CODIGOEMPRESA = ? AND NATURLCTOCTB = -1
+            GROUP BY 1, 2 ORDER BY 1, 2
+        """, (cc_empreendimento, empresa_id))
+        creditos_questor_global = [{"ano": int(r[0]), "mes": int(r[1]), "credito": float(r[2] or 0)} for r in cur_q.fetchall()]
         
         # Aglutinar e cruzar arrays mensais em um Dossiê Massivo Temporal
         dossie = {
@@ -173,22 +188,64 @@ class IFRS15Analyzer:
             """, (u_id,))
             mapa_receb = {f"{int(r[0])}-{int(r[1])}": float(r[2] or 0) for r in cur_v.fetchall()}
             
+            # Pegar Creditos Questor pro Apartamento
+            nome_apto = u[1]
+            import re
+            num_apto_match = re.search(r'\d{1,5}', nome_apto)
+            apto_str = num_apto_match.group(0) if num_apto_match else nome_apto
+            # Q. Crédito é a fração dos créditos globais do CC
+            mapa_creditos = {f"{c['ano']}-{c['mes']}": c['credito'] * fracao for c in creditos_questor_global}
+            
             # Racional Híbrido Temporal
             linhas_temporal = []
-            for c in custos_questor:
+            u_dt_v_str = str(u_dt_venda).strip()
+            u_ano_venda = int(u_dt_v_str[:4]) if len(u_dt_v_str) >= 4 and u_dt_v_str[:4].isdigit() else 9999
+            u_mes_venda = int(u_dt_v_str[5:7]) if len(u_dt_v_str) >= 7 and u_dt_v_str[5:7].isdigit() else 12
+
+            acumulado_v2 = 0
+            acumulado_v1 = 0
+
+            chaves_unicas = set()
+            for c in custos_questor: chaves_unicas.add(f"{c['ano']}-{c['mes']}")
+            for c in creditos_questor_global: chaves_unicas.add(f"{c['ano']}-{c['mes']}")
+            for k in mapa_receb.keys(): chaves_unicas.add(k)
+            for k in mapa_creditos.keys(): chaves_unicas.add(k)
+            
+            meses_ordenados = sorted([ {"ano": int(k.split('-')[0]), "mes": int(k.split('-')[1])} for k in chaves_unicas ], key=lambda x: (x["ano"], x["mes"]))
+
+            for c in meses_ordenados:
                 k = f"{c['ano']}-{c['mes']}"
-                custo_v2 = c["custo"] * fracao
-                custo_v1 = custo_v2 * (mapa_poc.get(k, 0) / 100) if mapa_poc.get(k, 0) > 0 else 0
+                custo_orig = next((cq["custo"] for cq in custos_questor if cq["ano"] == c["ano"] and cq["mes"] == c["mes"]), 0)
+                custo_fis = custo_orig * fracao
+                custo_fis_v1 = custo_fis * (mapa_poc.get(k, 0) / 100) if mapa_poc.get(k, 0) > 0 else 0
                 
+                is_before_sale = (c['ano'] < u_ano_venda) or (c['ano'] == u_ano_venda and c['mes'] < u_mes_venda)
+                is_sale_month = (c['ano'] == u_ano_venda and c['mes'] == u_mes_venda)
+
+                if is_before_sale:
+                    acumulado_v2 += custo_fis
+                    acumulado_v1 += custo_fis_v1
+                    custo_v2 = 0
+                    custo_v1 = 0
+                elif is_sale_month:
+                    custo_v2 = custo_fis + acumulado_v2
+                    custo_v1 = custo_fis_v1 + acumulado_v1
+                    acumulado_v2 = 0
+                    acumulado_v1 = 0
+                else:
+                    custo_v2 = custo_fis
+                    custo_v1 = custo_fis_v1
+
                 linhas_temporal.append({
                     "ano": c["ano"], 
                     "mes": c["mes"], 
-                    "custo_questor": c["custo"],
+                    "custo_questor": custo_orig,
                     "custo_v2_ifrs": round(custo_v2, 2),
                     "custo_v1_legacy": round(custo_v1, 2),
                     "poc_mes": mapa_poc.get(k, 0.0),
                     "cub_mes": mapa_cub.get(k, 0.0),
-                    "fluxo_recebido": mapa_receb.get(k, 0.0)
+                    "fluxo_recebido": mapa_receb.get(k, 0.0),
+                    "credito_questor": mapa_creditos.get(k, 0.0)
                 })
                 
             dossie["amostra_unidades"].append({
@@ -200,6 +257,7 @@ class IFRS15Analyzer:
                 "grid_temporal": linhas_temporal
             })
             
+        conn_q.close()
         conn_v.close()
         return {"status": "success", "dossie": dossie}
 

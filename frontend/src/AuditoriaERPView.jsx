@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 import * as XLSX from 'xlsx';
 
@@ -278,7 +278,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
   if (itens.length === 0)
 
-    return <p className="px-4 py-2 text-[11px] font-bold text-[#333] uppercase italic">{semLabel}</p>;
+    return <p className="px-4 py-2 text-sm font-bold text-[#333] uppercase italic">{semLabel}</p>;
 
 
 
@@ -294,7 +294,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
   return (
 
-    <table className="w-full text-[11px] table-fixed" style={{ tableLayout: 'fixed' }}>
+    <table className="w-full text-sm table-fixed" style={{ tableLayout: 'fixed' }}>
 
       <colgroup>
 
@@ -322,7 +322,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
                 <div>{d.data}</div>
 
-                {d.origem && <span className={`text-[8px] px-1 py-0 rounded ${d.origem === 'VU' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)] border border-[#a259ff]/30' : 'bg-[var(--v-accent)]/20 text-[var(--v-accent)] border border-[var(--v-accent)]/30'}`}>{d.origem}</span>}
+                {d.origem && <span className={`text-[10px] px-1 py-0 rounded ${d.origem === 'VU' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)] border border-[#a259ff]/30' : 'bg-[var(--v-accent)]/20 text-[var(--v-accent)] border border-[var(--v-accent)]/30'}`}>{d.origem}</span>}
 
               </td>
 
@@ -354,15 +354,15 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
               <div className="flex items-center gap-3">
 
-                <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Total</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Total</span>
 
-                <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaD }}>
+                <span className="text-xs font-mono font-black" style={{ color: corNaturezaD }}>
 
                   D {fmt(totalD)}
 
                 </span>
 
-                <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaC }}>
+                <span className="text-xs font-mono font-black" style={{ color: corNaturezaC }}>
 
                   C {fmt(totalC)}
 
@@ -374,11 +374,11 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
             <td className="px-2 py-1.5 text-center">
 
-              <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Líq.</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Líq.</span>
 
             </td>
 
-            <td className="px-2 py-1.5 text-right font-mono font-black text-[11px] whitespace-nowrap"
+            <td className="px-2 py-1.5 text-right font-mono font-black text-sm whitespace-nowrap"
 
                 style={{ color: Math.abs(liquido) < 0.01 ? '#34c759' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
 
@@ -452,19 +452,19 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
               <span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span>
               
               <div className="flex items-center gap-4">
-                 <div className="text-[10px] font-mono">
+                 <div className="text-xs font-mono">
                    <span className="text-[var(--v-text-faint)]">Questor: </span>
                    <span className={d.totalQuestor >= 0 ? "text-[var(--v-accent-3)] font-bold" : "text-[var(--v-accent)] font-bold"}>{fmt(d.totalQuestor)}</span>
                  </div>
-                 <div className="text-[10px] font-mono">
+                 <div className="text-xs font-mono">
                    <span className="text-[var(--v-text-faint)]">VU 2.0: </span>
                    <span className={d.totalVulcano2 >= 0 ? "text-[var(--v-accent-5)] font-bold" : "text-[var(--v-accent-2)] font-bold"}>{fmt(d.totalVulcano2)}</span>
                  </div>
                  
                  {hasDiffVU2 ? (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-[#ff4d00]/20 text-[#ff4d00]">Divergente</span>
+                    <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#ff4d00]/20 text-[#ff4d00]">Divergente</span>
                  ) : (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-[#34c759]/20 text-[#34c759]">Bateu</span>
+                    <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#34c759]/20 text-[#34c759]">Bateu</span>
                  )}
               </div>
             </div>
@@ -472,48 +472,48 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
             <div className="grid grid-cols-3 divide-x divide-[var(--v-border)]">
               
               <div className="p-2">
-                <div className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-2 px-1 text-center">Questor ({d.questor.length})</div>
+                <div className="text-xs font-black uppercase tracking-widest text-[#34c759] mb-2 px-1 text-center">Questor ({d.questor.length})</div>
                 <div className="flex flex-col gap-1">
-                  {d.questor.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                  {d.questor.length === 0 ? <span className="text-[#333] italic text-center text-xs py-1">vazio</span> : 
                    d.questor.map((x,i) => (
                     <div key={i} className="flex flex-col border border-[var(--v-border)] bg-[#111] p-1.5 rounded">
                       <div className="flex justify-between items-center mb-1">
-                         <span className="text-[10px] font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
-                         <span className="text-[8px] text-[var(--v-text-faint)]">{x.data}</span>
+                         <span className="text-xs font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
+                         <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
                       </div>
-                      <span className="text-[9px] font-mono text-[var(--v-text-muted)] truncate" title={x.historico}>{x.historico}</span>
+                      <span className="text-xs font-mono text-[var(--v-text-muted)] truncate" title={x.historico}>{x.historico}</span>
                     </div>
                   ))}
                 </div>
               </div>
               
               <div className="p-2">
-                <div className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-2 px-1 text-center">VU 1.0 ({d.vulcano1.length})</div>
+                <div className="text-xs font-black uppercase tracking-widest text-[#a259ff] mb-2 px-1 text-center">VU 1.0 ({d.vulcano1.length})</div>
                 <div className="flex flex-col gap-1">
-                  {d.vulcano1.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                  {d.vulcano1.length === 0 ? <span className="text-[#333] italic text-center text-xs py-1">vazio</span> : 
                    d.vulcano1.map((x,i) => (
                     <div key={i} className="flex flex-col border border-[#a259ff]/20 bg-[#111] p-1.5 rounded">
                       <div className="flex justify-between items-center mb-1">
-                         <span className="text-[10px] font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
-                         <span className="text-[8px] text-[var(--v-text-faint)]">{x.data}</span>
+                         <span className="text-xs font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
+                         <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
                       </div>
-                      <span className="text-[9px] font-mono text-[#a259ff]/70 truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
+                      <span className="text-xs font-mono text-[#a259ff]/70 truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               <div className="p-2 bg-[#34c759]/5">
-                <div className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-2 px-1 text-center">VU 2.0 ({d.vulcano2.length})</div>
+                <div className="text-xs font-black uppercase tracking-widest text-[#34c759] mb-2 px-1 text-center">VU 2.0 ({d.vulcano2.length})</div>
                 <div className="flex flex-col gap-1">
-                  {d.vulcano2.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                  {d.vulcano2.length === 0 ? <span className="text-[#333] italic text-center text-xs py-1">vazio</span> : 
                    d.vulcano2.map((x,i) => (
                     <div key={i} className="flex flex-col border border-[#34c759]/30 bg-[#34c759]/10 p-1.5 rounded">
                       <div className="flex justify-between items-center mb-1">
-                         <span className="text-[10px] font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
-                         <span className="text-[8px] text-[#34c759]/70">{x.data}</span>
+                         <span className="text-xs font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
+                         <span className="text-[10px] text-[#34c759]/70">{x.data}</span>
                       </div>
-                      <span className="text-[9px] font-mono text-[#34c759] truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
+                      <span className="text-xs font-mono text-[#34c759] truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
                     </div>
                   ))}
                 </div>
@@ -539,7 +539,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
   if (safeItens.length === 0) {
 
-    return <p className="px-4 py-3 text-[11px] font-bold text-[#333] uppercase italic">Sem lançamentos</p>;
+    return <p className="px-4 py-3 text-sm font-bold text-[#333] uppercase italic">Sem lançamentos</p>;
 
   }
 
@@ -611,13 +611,13 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
       <div className="px-3 py-1.5 bg-[var(--v-deep)] border-b border-[var(--v-border)] flex items-center gap-3 flex-wrap">
 
-        <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Total</span>
+        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Total</span>
 
-        <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaD }}>D {fmt(totalD)}</span>
+        <span className="text-xs font-mono font-black" style={{ color: corNaturezaD }}>D {fmt(totalD)}</span>
 
-        <span className="text-[9px] font-mono font-black" style={{ color: corNaturezaC }}>C {fmt(totalC)}</span>
+        <span className="text-xs font-mono font-black" style={{ color: corNaturezaC }}>C {fmt(totalC)}</span>
 
-        <span className="text-[9px] font-mono font-black"
+        <span className="text-xs font-mono font-black"
 
           style={{ color: Math.abs(liquido) < 0.01 ? '#34c759' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
 
@@ -625,7 +625,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
         </span>
 
-        <span className="ml-auto text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
+        <span className="ml-auto text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
 
           {grupos.length} grupos · {safeItens.length} lançamentos
 
@@ -675,15 +675,15 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
               />
 
-              <span className="font-mono text-[10px] font-black" style={{ color: corGrupo }}>{label}</span>
+              <span className="font-mono text-xs font-black" style={{ color: corGrupo }}>{label}</span>
 
-              <span className="text-[8px] font-bold text-[var(--v-text-faint)]">{g.itens.length} lnç</span>
+              <span className="text-[10px] font-bold text-[var(--v-text-faint)]">{g.itens.length} lnç</span>
 
               {/* Badge % do total */}
 
               <span
 
-                className="px-1.5 py-0.5 rounded text-[8px] font-black"
+                className="px-1.5 py-0.5 rounded text-[10px] font-black"
 
                 style={{ background: `${corGrupo}22`, color: corGrupo, border: `1px solid ${corGrupo}44` }}
 
@@ -693,7 +693,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
               </span>
 
-              <span className="ml-auto font-mono text-[10px] font-black text-[var(--v-text-muted)]">{fmt(subtotal)}</span>
+              <span className="ml-auto font-mono text-xs font-black text-[var(--v-text-muted)]">{fmt(subtotal)}</span>
 
             </button>
 
@@ -703,7 +703,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
             {aberto && (
 
-              <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
+              <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
 
                 <colgroup>
 
@@ -731,7 +731,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
                         <td className="px-2 py-1 font-mono text-[var(--v-text-faint)] whitespace-nowrap overflow-hidden">
 
-                          <div className="text-[9px]">{d.data}</div>
+                          <div className="text-xs">{d.data}</div>
 
                           {d.cc && (
 
@@ -763,7 +763,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
                         </td>
 
-                        <td className="px-1 py-1 text-center font-black text-[11px]"
+                        <td className="px-1 py-1 text-center font-black text-sm"
 
                             style={{ color: d.natureza === 'D' ? corNaturezaD : corNaturezaC }}>
 
@@ -873,7 +873,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
               onClick={e => { e.stopPropagation(); setAba('orfaos'); }}
 
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[var(--v-accent)]/20 border-[#ff4d00]/40 text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent)]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[var(--v-accent)]/20 border-[#ff4d00]/40 text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent)]/70'}`}
 
             >
 
@@ -881,7 +881,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
               {totalOrfaos > 0 && (
 
-                <span className="ml-1 px-1.5 py-0.5 bg-[var(--v-accent)] text-black rounded-[var(--v-radius)] text-[8px] font-black">{totalOrfaos}</span>
+                <span className="ml-1 px-1.5 py-0.5 bg-[var(--v-accent)] text-black rounded-[var(--v-radius)] text-[10px] font-black">{totalOrfaos}</span>
 
               )}
 
@@ -891,13 +891,13 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
               onClick={e => { e.stopPropagation(); setAba('razao'); }}
 
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[#a259ff]/20 border-[#a259ff]/40 text-[var(--v-accent-5)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[#a259ff]/20 border-[#a259ff]/40 text-[var(--v-accent-5)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)]/70'}`}
 
             >
 
               <List size={10}/> Razao
 
-              <span className="ml-1 text-[9px] font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
+              <span className="ml-1 text-xs font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
 
             </button>
 
@@ -905,7 +905,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
               onClick={e => { e.stopPropagation(); setAba('mapa'); }}
 
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${aba === 'mapa' ? 'bg-[#34c759]/20 border-[#34c759]/40 text-[#34c759]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#34c759]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'mapa' ? 'bg-[#34c759]/20 border-[#34c759]/40 text-[#34c759]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#34c759]/70'}`}
 
             >
 
@@ -917,7 +917,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
               onClick={e => { e.stopPropagation(); onAgent(); }}
 
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/30 rounded text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[var(--v-accent)]/20 transition-all font-mono"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[var(--v-accent)]/20 transition-all font-mono"
 
             >
 
@@ -933,7 +933,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
                 onClick={e => { e.stopPropagation(); onRacional(); }}
 
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-5)] hover:bg-[#a259ff]/25 transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)] hover:bg-[#a259ff]/25 transition-all"
 
               >
 
@@ -947,7 +947,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
               onClick={handleXLSX}
 
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-3)] hover:bg-[#34c759]/20 transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent-3)] hover:bg-[#34c759]/20 transition-all"
 
             >
 
@@ -969,7 +969,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
                 <CheckCircle2 size={12}/>
 
-                <span className="text-[10px] font-black uppercase tracking-widest">Nenhum orfao encontrado</span>
+                <span className="text-xs font-black uppercase tracking-widest">Nenhum orfao encontrado</span>
 
               </div>
 
@@ -981,9 +981,9 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
                   <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] flex items-center gap-2">
 
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor s/ par no Vulcano</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-[var(--v-accent)]">Questor s/ par no Vulcano</span>
 
-                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[var(--v-accent)] text-black rounded text-[8px] font-black">{fisicosOrfaos.length}</span>}
+                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[var(--v-accent)] text-black rounded text-[10px] font-black">{fisicosOrfaos.length}</span>}
 
                   </div>
 
@@ -995,9 +995,9 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
                   <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)] flex items-center gap-2">
 
-                    <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano s/ par no Questor</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano s/ par no Questor</span>
 
-                    {virtuaisOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#a259ff] text-black rounded text-[8px] font-black">{virtuaisOrfaos.length}</span>}
+                    {virtuaisOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#a259ff] text-black rounded text-[10px] font-black">{virtuaisOrfaos.length}</span>}
 
                   </div>
 
@@ -1021,7 +1021,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)]">
 
-                  <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)]">Questor ({todosFisico.length})</span>
+                  <span className="text-xs font-black uppercase tracking-widest text-[var(--v-accent)]">Questor ({todosFisico.length})</span>
 
                 </div>
 
@@ -1033,7 +1033,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 
                 <div className="px-3 py-1 bg-[var(--v-deep)] border-b border-[var(--v-bg)]">
 
-                  <span className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano ({todosVirtual.length})</span>
+                  <span className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano ({todosVirtual.length})</span>
 
                 </div>
 
@@ -1077,7 +1077,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
   const [feedback, setFeedback] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
-
+  const [customAnotacao, setCustomAnotacao] = useState('');
   const [erroMsg, setErroMsg] = useState('');
 
   const [progressMsg, setProgressMsg] = useState('Iniciando investigação...');
@@ -1202,7 +1202,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
             headers: { 'Content-Type': 'application/json' },
 
-            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback, prompt_calibracao: customPrompt || agentState?.prompt_calibracao }),
+            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback, prompt_calibracao: customAnotacao ? ((customPrompt || agentState?.prompt_calibracao || "") + "\\n\\n--- DIRETRIZ DO AUDITOR: ---\\n" + customAnotacao) : (customPrompt || agentState?.prompt_calibracao) }),
 
         });
 
@@ -1240,7 +1240,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                <div>
 
-                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma â€” Cortex Agent (ReAct + HITL)</p>
+                 <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent)]">Auditoria Autônoma â€” Cortex Agent (ReAct + HITL)</p>
 
                  <p className="font-mono text-xs text-[var(--v-text-bold)] mt-0.5">{contaId} <span className="font-body text-[var(--v-text-faint)]">{contaNome}</span></p>
 
@@ -1248,7 +1248,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
              </div>
 
-             <button onClick={onClose} className="text-[var(--v-accent)] hover:text-white font-black px-2 py-1 uppercase tracking-widest text-[10px] transition-colors border border-transparent hover:border-[var(--v-accent)]/40 rounded">âœ• ENCERRAR</button>
+             <button onClick={onClose} className="text-[var(--v-accent)] hover:text-white font-black px-2 py-1 uppercase tracking-widest text-xs transition-colors border border-transparent hover:border-[var(--v-accent)]/40 rounded">âœ• ENCERRAR</button>
 
            </div>
 
@@ -1274,9 +1274,9 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                        <p className="text-[var(--v-accent)] font-black uppercase tracking-widest text-[14px] animate-pulse mb-3">Agente ReAct Investigando</p>
 
-                       <p className="text-[11px] font-bold tracking-[0.15em] text-[var(--v-text-faint)] animate-pulse">{progressMsg}</p>
+                       <p className="text-sm font-bold tracking-[0.15em] text-[var(--v-text-faint)] animate-pulse">{progressMsg}</p>
 
-                       <p className="text-[9px] mt-4 text-[#333] font-bold uppercase tracking-widest">Pode levar 10â€“30s · Gemini + Firebird SQL</p>
+                       <p className="text-xs mt-4 text-[#333] font-bold uppercase tracking-widest">Pode levar 10â€“30s · Gemini + Firebird SQL</p>
 
                    </div>
 
@@ -1292,11 +1292,11 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                    <p className="text-xs uppercase tracking-widest font-black">âš  Falha no Agente</p>
 
-                   <p className="text-[11px] font-mono opacity-80">{erroMsg}</p>
+                   <p className="text-sm font-mono opacity-80">{erroMsg}</p>
 
                    <button onClick={iniciarAgente}
 
-                     className="mt-2 px-4 py-2 bg-[var(--v-accent)]/20 border border-[var(--v-accent)]/40 rounded text-[9px] font-black uppercase tracking-widest hover:bg-[var(--v-accent)]/30 transition-all">
+                     className="mt-2 px-4 py-2 bg-[var(--v-accent)]/20 border border-[var(--v-accent)]/40 rounded text-xs font-black uppercase tracking-widest hover:bg-[var(--v-accent)]/30 transition-all">
 
                      â†º Tentar novamente
 
@@ -1316,13 +1316,13 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                     <div className="bg-[var(--v-bg)] border border-[var(--v-border)] p-5 rounded flex flex-col gap-3">
 
-                       <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">
+                       <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--v-accent-3)]">
 
                          Rastro de Execução â€” {agentState.passos_executados?.length || 0} passos
 
                        </h3>
 
-                       <ul className="text-[11px] font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5">
+                       <ul className="text-sm font-mono text-[var(--v-text-faint)] flex flex-col gap-1.5">
 
                            {(agentState.passos_executados || []).map((p, i) => (
 
@@ -1348,7 +1348,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                       <div className="bg-[var(--v-bg)] border border-[#007aff]/30 p-5 rounded flex flex-col gap-3">
 
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#007aff]">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#007aff]">
 
                           Dados Coletados pelas Ferramentas SQL ({agentState.resultados_db.length} chamadas)
 
@@ -1364,7 +1364,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                             <div key={i} className="border border-[#007aff]/20 rounded p-3 bg-[#007aff]/5">
 
-                              <p className="text-[9px] font-black uppercase tracking-widest text-[#007aff] mb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-[#007aff] mb-2">
 
                                 ðŸ”§ {r.tool} â€” args: {JSON.stringify(r.args || {})}
 
@@ -1372,7 +1372,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                               {parsed ? (
 
-                                <pre className="text-[10px] font-mono text-[var(--v-text-faint)] whitespace-pre-wrap max-h-32 overflow-auto">
+                                <pre className="text-xs font-mono text-[var(--v-text-faint)] whitespace-pre-wrap max-h-32 overflow-auto">
 
                                   {JSON.stringify(parsed, null, 2)}
 
@@ -1380,7 +1380,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                               ) : (
 
-                                <p className="text-[10px] font-mono text-[var(--v-text-faint)]">{String(r.result || '').slice(0, 300)}</p>
+                                <p className="text-xs font-mono text-[var(--v-text-faint)]">{String(r.result || '').slice(0, 300)}</p>
 
                               )}
 
@@ -1406,7 +1406,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                               <div className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-6)] animate-pulse"/>
 
-                              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--v-accent-6)]">Veredito da IA (Human-in-the-Loop)</h3>
+                              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[var(--v-accent-6)]">Veredito da IA (Human-in-the-Loop)</h3>
 
                            </div>
 
@@ -1420,7 +1420,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                               <div className="bg-[#34c759]/5 border border-[#34c759]/20 p-4 rounded">
 
-                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
+                                 <p className="text-xs font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
 
                                  <p className="font-mono text-sm font-bold text-[#34c759]">{agentState.sugestao_correcao.acao}</p>
 
@@ -1428,7 +1428,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                               <div className="bg-[#a259ff]/5 border border-[#a259ff]/20 p-4 rounded">
 
-                                 <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-1.5">Contrapartida (Auto-Mapping)</p>
+                                 <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-1.5">Contrapartida (Auto-Mapping)</p>
 
                                  <p className="font-mono text-sm font-bold text-[var(--v-accent-5)]">{agentState.sugestao_correcao.conta_contrapartida}</p>
 
@@ -1446,30 +1446,32 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                     
                     {/* [INICIO] Malha Analítica Heurística (Tabela Python) */}
-                    {status === 'PAUSED' && agentState?.dossie_heuristico?.dossie && (
+                    {status === 'PAUSED' && agentState?.dossie_heuristico?.dossie?.amostra_unidades && (
                       <div className="bg-[var(--v-bg)] border border-[var(--v-border)] rounded overflow-hidden flex flex-col mt-2 
 animate-in slide-in-from-bottom-6 duration-500">
                         <div className="bg-[var(--v-deep)] px-4 py-3 border-b border-[var(--v-border)] flex justify-between items-center">
-                          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#10b981] flex items-center gap-2">
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#10b981] flex items-center gap-2">
                              Dossiê Heurístico Temporal
                           </h3>
-                          <span className="text-[9px] text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado).toLocaleString('pt-BR')}</span>
+                          <span className="text-xs text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado).toLocaleString('pt-BR')}</span>
                         </div>
                         
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse text-[10px]">
+                          <table className="w-full text-left border-collapse text-xs">
                             <thead>
                               <tr>
                                 <th className="p-3 border-b border-r border-[#333] font-black text-[var(--v-text-muted)] uppercase tracking-widest bg-[#111] sticky left-0 z-10 w-24">Período</th>
                                 <th className="p-3 border-b border-r border-[#333] font-black text-white uppercase tracking-widest bg-[#111] min-w-[120px]">Obra (Questor LCTOGER)</th>
-                                {agentState.dossie_heuristico.dossie.amostra_unidades.map((u, i) => (
-                                  <th key={i} className="p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] min-w-[300px]">
+                                {agentState.dossie_heuristico.dossie.amostra_unidades?.map((u, i) => (
+                                  <th key={i} className="p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] min-w-[530px]">
                                      <div className="flex flex-col gap-1">
-                                        <span className="text-[#10b981] uppercase font-black text-[11px]">{u.unidade}</span>
-                                        <span className="text-[8px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')}</span>
-                                        <div className="grid grid-cols-5 gap-1 pt-2 mt-2 border-t border-[#333] text-[8px] uppercase tracking-widest text-[#888]">
+                                        <span className="text-[#10b981] uppercase font-black text-sm">{u.unidade}</span>
+                                        <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')}</span>
+                                        <div className="grid grid-cols-7 gap-2 pt-2 mt-2 border-t border-dashed border-[#555] text-[10.5px] uppercase tracking-wider text-gray-400">
+                                          <div className="text-white font-bold">Q. INCORRIDO</div>
                                           <div>V2 IFRS</div>
                                           <div>V1 LEGACY</div>
+                                          <div>Q. CRÉDITO</div>
                                           <div>FLUXO</div>
                                           <div>POC%</div>
                                           <div>CUB%</div>
@@ -1480,7 +1482,7 @@ animate-in slide-in-from-bottom-6 duration-500">
                               </tr>
                             </thead>
                             <tbody>
-                              {agentState.dossie_heuristico.dossie.custo_total_obra_mensal.map((custo_m, idx) => (
+                              {agentState.dossie_heuristico.dossie.custo_total_obra_mensal?.map((custo_m, idx) => (
                                 <tr key={idx} className="hover:bg-[#1a1a1a] transition-colors border-b border-[#222]">
                                   <td className="p-3 font-mono font-bold text-[var(--v-text-faint)] bg-[#111] sticky left-0 border-r border-[#333] whitespace-nowrap">
                                     {String(custo_m.mes).padStart(2, '0')} / {custo_m.ano}
@@ -1488,14 +1490,16 @@ animate-in slide-in-from-bottom-6 duration-500">
                                   <td className="p-3 font-mono font-bold text-white border-r border-[#333]">
                                     R$ {custo_m.custo?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                                   </td>
-                                  {agentState.dossie_heuristico.dossie.amostra_unidades.map((u, i) => {
+                                  {agentState.dossie_heuristico.dossie.amostra_unidades?.map((u, i) => {
                                       const rowData = u.grid_temporal?.find(g => g.ano === custo_m.ano && g.mes === custo_m.mes) || {};
                                       return (
-                                        <td key={i} className="p-3 font-mono text-[10px] border-r border-[#333]">
-                                           <div className="grid grid-cols-5 gap-1">
-                                              <div className="text-white">{(rowData.custo_v2_ifrs || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                        <td key={i} className="p-3 font-mono text-xs border-r border-[#333]">
+                                           <div className="grid grid-cols-7 gap-2 border-l border-[#333] pl-2">
+                                              <div className="text-white font-bold bg-[#222] px-1 rounded rounded-sm">{(rowData.custo_questor * u.fracao_obra / 100 || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                              <div className="text-gray-300">{(rowData.custo_v2_ifrs || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
                                               <div className="text-[var(--v-text-faint)]">{(rowData.custo_v1_legacy || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                              <div className="text-[#10b981]">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                              <div className="text-blue-400 font-bold bg-[#112] px-1 rounded-sm">{(rowData.credito_questor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                              <div className="text-[#10b981] font-bold">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
                                               <div className="text-[#a855f7]">{(rowData.poc_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
                                               <div className="text-[#facc15]">{(rowData.cub_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
                                            </div>
@@ -1514,7 +1518,7 @@ animate-in slide-in-from-bottom-6 duration-500">
 
                     {(!agentState.sugestao_correcao || Object.keys(agentState.sugestao_correcao).length === 0) && status === 'PAUSED' && (
 
-                      <div className="border border-[#ffcc00]/30 bg-[#ffcc00]/5 rounded p-4 text-[11px] text-[#ffcc00] font-bold">
+                      <div className="border border-[#ffcc00]/30 bg-[#ffcc00]/5 rounded p-4 text-sm text-[#ffcc00] font-bold">
 
                         âš  O agente ainda não gerou uma sugestão de correção. Clique em Aprovar para deixá-lo continuar ou Rejeitar para encerrar.
 
@@ -1534,12 +1538,25 @@ animate-in slide-in-from-bottom-6 duration-500">
 
            {status === 'PAUSED' && agentState?.prompt_calibracao && (
              <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 shrink-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#10b981]">[HITL] Calibração de Prompt e Contexto</p>
-                <textarea 
-                  value={customPrompt || agentState.prompt_calibracao || ''}
-                  onChange={(e) => setCustomPrompt(e.target.value)}
-                  style={{ width: '100%', minHeight: '300px', background: '#111', color: '#10b981', border: '1px solid #4ade80', borderRadius: '6px', fontFamily: 'monospace', padding: '10px' }}
-                />
+                <div className="flex flex-col gap-2">
+                   <p className="text-xs font-black uppercase tracking-widest text-[#10b981]">[HITL] Calibração de Prompt e Contexto</p>
+                   
+                   <textarea 
+                     value={customAnotacao}
+                     onChange={(e) => setCustomAnotacao(e.target.value)}
+                     placeholder="Diretrizes Adicionais (Ex: Assuma como Venda Concluída, ignore variações de CUB)."
+                     style={{ width: '100%', minHeight: '80px', background: '#1a1a1a', color: '#e2e8f0', border: '1px solid #4ade80', borderRadius: '6px', padding: '12px', fontSize: '13px' }}
+                   />
+                   
+                   <details className="mt-2 text-[10px] text-gray-500">
+                     <summary className="cursor-pointer hover:text-gray-300 transition-colors uppercase tracking-widest font-mono mb-2">Expandir Matriz Bruta do Agente</summary>
+                     <textarea 
+                       value={customPrompt || agentState.prompt_calibracao || ''}
+                       onChange={(e) => setCustomPrompt(e.target.value)}
+                       style={{ width: '100%', minHeight: '200px', background: '#0a0a0a', color: '#888', border: '1px solid #333', borderRadius: '6px', fontFamily: 'monospace', padding: '10px', fontSize: '9px' }}
+                     />
+                   </details>
+                </div>
                 <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#10b981] hover:bg-[#059669] text-white py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
                   APROVAR CONTEXTO & PROCESSAR IA
                 </button>
@@ -1549,7 +1566,7 @@ animate-in slide-in-from-bottom-6 duration-500">
            {status === 'PAUSED' && !agentState?.prompt_calibracao && (
              <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 shrink-0">
 
-                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-muted)]">Aguardando Avaliação Humana (HITL)</p>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--v-text-muted)]">Aguardando Avaliação Humana (HITL)</p>
 
                 <input 
 
@@ -1911,7 +1928,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
             <span className="text-[12px] font-bold text-[var(--v-text-faint)] truncate" title={contaNome}>{contaNome}</span>
 
-            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-6)] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
+            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-6)] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
 
             <ChevronDown size={10} className={`text-[var(--v-text-faint)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
 
@@ -1949,7 +1966,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                 {abs(saldoFisico) > 0.01 && (
 
-                  <div className="text-[10px] font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês">
+                  <div className="text-xs font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês">
 
                     S: {fmt(saldoFisico)}
 
@@ -1977,7 +1994,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                     // Movimento bruto existe mas líquido = 0 (ex: reconhecimento + recebimento no mesmo mês)
 
-                    <span className="text-[var(--v-text-faint)] text-[10px] leading-tight">
+                    <span className="text-[var(--v-text-faint)] text-xs leading-tight">
 
                       <span className="text-[var(--v-accent-5)]/60">D:{fmt(movVirtualDeb)}</span>
 
@@ -1993,7 +2010,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                 {abs(saldoVirtual) > 0.01 && (
 
-                  <div className="text-[10px] font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês (Virtual)">
+                  <div className="text-xs font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês (Virtual)">
 
                     S: {fmt(saldoVirtual)}
 
@@ -2041,7 +2058,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
               <span className="text-[12px] font-black text-[var(--v-accent-3)] uppercase tracking-wider">Conciliado</span>
 
-              {usaMovimento && <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-6)]/60 mt-0.5">via movimento</p>}
+              {usaMovimento && <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-6)]/60 mt-0.5">via movimento</p>}
 
             </div>
 
@@ -2055,7 +2072,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
               </span>
 
-              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mt-0.5">
+              <p className="text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)] mt-0.5">
 
                 {usaMovimento ? 'divergência movement' : 'divergência saldo'}
 
@@ -2141,7 +2158,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                   <div>
 
-                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-0.5">Racional de Cálculo â€” Vulcano Motor Societário</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-0.5">Racional de Cálculo â€” Vulcano Motor Societário</p>
 
                     <p className="text-[var(--v-text-bold)] font-black text-[15px]">
 
@@ -2169,13 +2186,13 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                       <div className="flex items-center gap-3 mb-2">
 
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#a259ff]">{d.comp}</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-[#a259ff]">{d.comp}</span>
 
-                        <span className="text-[10px] font-bold text-[var(--v-text-faint)]">Agregado global de {d.qtd} unidades</span>
+                        <span className="text-xs font-bold text-[var(--v-text-faint)]">Agregado global de {d.qtd} unidades</span>
 
                         <span
 
-                          className="ml-auto text-[10px] font-black px-2 py-0.5 rounded"
+                          className="ml-auto text-xs font-black px-2 py-0.5 rounded"
 
                           style={{ background: d.natureza === 'D' ? '#a259ff22' : '#ff9f0a22', color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}
 
@@ -2205,7 +2222,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                       {!d.isPOC && !d.isCusto && d.fallbackLogica && (
 
-                         <p className="text-[10px] font-mono text-[var(--v-text-faint)] bg-black/20 rounded px-3 py-2 border-l-2 border-[#555] opacity-70">
+                         <p className="text-xs font-mono text-[var(--v-text-faint)] bg-black/20 rounded px-3 py-2 border-l-2 border-[#555] opacity-70">
 
                            {d.fallbackLogica}
 
@@ -2221,7 +2238,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                   {racionaisAgrupados.length === 0 && (
 
-                    <div className="text-center py-10 text-[var(--v-text-faint)] text-[11px] font-bold uppercase tracking-widest">
+                    <div className="text-center py-10 text-[var(--v-text-faint)] text-sm font-bold uppercase tracking-widest">
 
                       Nenhum racional matemático complexo para esta conta.
 
@@ -2407,9 +2424,9 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
           <div>
 
-            <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-3)]">Conciliação Cross-Account â€” Ã“rfãos</p>
+            <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-3)]">Conciliação Cross-Account â€” Ã“rfãos</p>
 
-            <p className="text-[9px] text-[var(--v-text-faint)] mt-0.5">
+            <p className="text-xs text-[var(--v-text-faint)] mt-0.5">
 
               {result.total_matches} par{result.total_matches !== 1 ? 'es' : ''} encontrado{result.total_matches !== 1 ? 's' : ''}
 
@@ -2443,7 +2460,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
           <CheckCircle2 size={14}/>
 
-          <span className="text-[10px] font-black uppercase tracking-widest">Nenhum par candidato encontrado acima do threshold (38%)</span>
+          <span className="text-xs font-black uppercase tracking-widest">Nenhum par candidato encontrado acima do threshold (38%)</span>
 
         </div>
 
@@ -2487,9 +2504,9 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                     </div>
 
-                    <span className="text-[10px] font-black font-mono" style={{ color: cor }}>{pct}%</span>
+                    <span className="text-xs font-black font-mono" style={{ color: cor }}>{pct}%</span>
 
-                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ color: cor, border: `1px solid ${cor}40`, background: `${cor}15` }}>{labelScore(m.score)}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded" style={{ color: cor, border: `1px solid ${cor}40`, background: `${cor}15` }}>{labelScore(m.score)}</span>
 
                   </div>
 
@@ -2499,7 +2516,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {m.tipo === 'CROSS_ACCOUNT' && (
 
-                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#a259ff]/15 border border-[#a259ff]/40 text-[var(--v-accent-5)] rounded">
+                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#a259ff]/15 border border-[#a259ff]/40 text-[var(--v-accent-5)] rounded">
 
                       â‡„ Cross-Account
 
@@ -2509,7 +2526,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {!m.nat_match && (
 
-                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#ff9f0a]/15 border border-[#ff9f0a]/40 text-[var(--v-accent-2)] rounded">
+                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#ff9f0a]/15 border border-[#ff9f0a]/40 text-[var(--v-accent-2)] rounded">
 
                       âš  Nat. Invertida
 
@@ -2519,7 +2536,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {fbVeredicto && (
 
-                    <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${fbVeredicto === 'MATCH' ? 'bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759]' : 'bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)]'}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${fbVeredicto === 'MATCH' ? 'bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759]' : 'bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)]'}`}>
 
                       {fbVeredicto === 'MATCH' ? 'âœ“ Confirmado' : 'âœ— Rejeitado'}
 
@@ -2531,7 +2548,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {/* Score breakdown */}
 
-                  <span className="text-[9px] text-[#333] font-mono ml-auto shrink-0">
+                  <span className="text-xs text-[#333] font-mono ml-auto shrink-0">
 
                     V:{Math.round(m.score_valor*100)}% H:{Math.round(m.score_hist*100)}% D:{Math.round(m.score_data*100)}% C:{Math.round(m.score_conta*100)}%
 
@@ -2543,17 +2560,17 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                 {/* Par lado a lado */}
 
-                  <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
 
                     <div className="bg-[var(--v-deep)] border border-[#ff4d00]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
 
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent)] ml-1">Questor</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)] ml-1">Questor</p>
 
                       {(m.questor_detalhe && m.questor_detalhe.length > 0 ? m.questor_detalhe : [m.questor]).map((q, idx) => (
 
                           <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#ff4d00]/10">
 
-                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">
+                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[10px]">
 
                               {q.data} | c/<span className="text-[var(--v-accent)]">{q.conta}</span>
 
@@ -2573,13 +2590,13 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                     <div className="bg-[var(--v-deep)] border border-[#a259ff]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
 
-                      <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-5)] ml-1">Vulcano</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-5)] ml-1">Vulcano</p>
 
                       {(m.vulcano_detalhe && m.vulcano_detalhe.length > 0 ? m.vulcano_detalhe : [m.vulcano]).map((v, idx) => (
 
                           <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#a259ff]/10">
 
-                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[8px]">
+                            <p className="font-mono font-bold text-[var(--v-text-faint)] text-[10px]">
 
                               {v.data} | c/<span className="text-[var(--v-accent-5)]">{v.conta}</span>
 
@@ -2611,13 +2628,13 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                       <div>
 
-                        <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-accent-2)] mb-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-2)] mb-1">
 
                           â‡„ Contrapartida Questor (outro lado da partida dobrada)
 
                         </p>
 
-                        <p className="text-[9px] font-mono text-[var(--v-text-muted)]">
+                        <p className="text-xs font-mono text-[var(--v-text-muted)]">
 
                           c/<span className="font-black text-[var(--v-accent-2)]">{m.questor_contrapartida.conta}</span>
 
@@ -2639,7 +2656,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           disabled={state.loading}
 
-                          className="shrink-0 px-2 py-1 text-[8px] font-black uppercase text-[#34c759] bg-[#34c759]/10 border border-[#34c759]/40 rounded hover:bg-[#34c759]/20 transition-all disabled:opacity-40"
+                          className="shrink-0 px-2 py-1 text-[10px] font-black uppercase text-[#34c759] bg-[#34c759]/10 border border-[#34c759]/40 rounded hover:bg-[#34c759]/20 transition-all disabled:opacity-40"
 
                         >âœ“ Match pela Contrapartida</button>
 
@@ -2655,7 +2672,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                 {/* Sugestão */}
 
-                <p className="text-[9px] font-bold text-[var(--v-text-faint)] italic px-1 mb-2">{m.sugestao}</p>
+                <p className="text-xs font-bold text-[var(--v-text-faint)] italic px-1 mb-2">{m.sugestao}</p>
 
 
 
@@ -2667,7 +2684,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                     <div className="flex items-center gap-2">
 
-                      <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] shrink-0">Auditor:</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] shrink-0">Auditor:</span>
 
                       <button
 
@@ -2675,7 +2692,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                         disabled={state.loading}
 
-                        className="flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759] hover:bg-[#34c759]/30 transition-all disabled:opacity-40"
+                        className="flex items-center gap-1 px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759] hover:bg-[#34c759]/30 transition-all disabled:opacity-40"
 
                       >
 
@@ -2689,7 +2706,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                         disabled={state.loading}
 
-                        className="flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)] hover:bg-[#ff4d00]/30 transition-all disabled:opacity-40"
+                        className="flex items-center gap-1 px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)] hover:bg-[#ff4d00]/30 transition-all disabled:opacity-40"
 
                       >
 
@@ -2729,7 +2746,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           }}
 
-                          className={`flex-1 bg-[var(--v-bg)] border rounded px-2 py-1 text-[10px] text-[var(--v-text-muted)] outline-none ${state.obsFor === 'MATCH' ? 'border-[#34c759]/40 focus:border-[#34c759]' : 'border-[#ff4d00]/30 focus:border-[#ff4d00]/60'}`}
+                          className={`flex-1 bg-[var(--v-bg)] border rounded px-2 py-1 text-xs text-[var(--v-text-muted)] outline-none ${state.obsFor === 'MATCH' ? 'border-[#34c759]/40 focus:border-[#34c759]' : 'border-[#ff4d00]/30 focus:border-[#ff4d00]/60'}`}
 
                         />
 
@@ -2739,7 +2756,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           onClick={() => sendFeedback(i, m, state.obsFor || 'NO_MATCH', state.obs || '', state.useContra)}
 
-                          className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded transition-all disabled:opacity-40 ${state.obsFor === 'MATCH' ? 'text-[#34c759] bg-[#34c759]/20 border border-[#34c759]/40 hover:bg-[#34c759]/40' : 'text-[var(--v-accent)] bg-[#ff4d00]/20 border border-[#ff4d00]/40 hover:bg-[#ff4d00]/40'}`}
+                          className={`px-2 py-1 text-xs font-black uppercase tracking-widest rounded transition-all disabled:opacity-40 ${state.obsFor === 'MATCH' ? 'text-[#34c759] bg-[#34c759]/20 border border-[#34c759]/40 hover:bg-[#34c759]/40' : 'text-[var(--v-accent)] bg-[#ff4d00]/20 border border-[#ff4d00]/40 hover:bg-[#ff4d00]/40'}`}
 
                         >
 
@@ -2751,7 +2768,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           onClick={() => setFb(prev => ({ ...prev, [i]: { ...prev[i], showObs: false, obsFor: null } }))}
 
-                          className="px-1.5 py-1 text-[9px] text-[#333] hover:text-[var(--v-text-bold)] transition-colors"
+                          className="px-1.5 py-1 text-xs text-[#333] hover:text-[var(--v-text-bold)] transition-colors"
 
                         >âœ•</button>
 
@@ -2763,7 +2780,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                 ) : isSaved ? (
 
-                  <div className={`flex items-center gap-2 px-2 py-1 rounded text-[9px] font-black ${isMatch ? 'bg-[#34c759]/10 text-[#34c759]' : 'bg-[#ff4d00]/10 text-[var(--v-accent)]'}`}>
+                  <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-black ${isMatch ? 'bg-[#34c759]/10 text-[#34c759]' : 'bg-[#ff4d00]/10 text-[var(--v-accent)]'}`}>
 
                     {isMatch ? 'âœ“ Salvo como MATCH' : 'âœ— Salvo como NÃƒO MATCH'}
 
@@ -3539,7 +3556,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         </h2>
 
-        <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
+        <p className="text-xs uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
 
           Contas a Injetar no Questor â€” Calculado (Vulcano) Ã— Registrado (Questor)
 
@@ -3555,7 +3572,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <div className="flex flex-col gap-1">
 
-          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Período De</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Período De</span>
 
           <input type="month" value={periodoInicio}
 
@@ -3567,7 +3584,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <div className="flex flex-col gap-1">
 
-          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Até</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Até</span>
 
           <input type="month" value={periodoFim}
 
@@ -3579,7 +3596,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <div className="flex flex-col gap-1 min-w-[220px]">
 
-          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
 
             Empreendimento {empsLoading ? '(carregando...)' : `(${empreendimentos.length})`}
 
@@ -3599,7 +3616,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <div className="flex flex-col justify-end pb-0.5">
 
-          <span className="text-[9px] font-bold text-[var(--v-text-faint)] uppercase tracking-wider">
+          <span className="text-xs font-bold text-[var(--v-text-faint)] uppercase tracking-wider">
 
             {competencias.length} mês{competencias.length !== 1 ? 'es' : ''}
 
@@ -3611,7 +3628,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
 
-          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
 
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
 
@@ -3623,7 +3640,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           title="Analisa Questor â†” Vulcano com PyOD + DuckDB + KMeans (24 meses)"
 
-          className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
+          className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
 
             showDiag ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[var(--v-accent-5)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#a259ff]/40'
 
@@ -3639,7 +3656,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           title="Fuzzy matching cross-account: busca pares prováveis entre todos os lançamentos órfãos"
 
-          className={`px-5 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
+          className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
 
             showCross ? 'bg-[#34c759]/20 border-[#34c759]/60 text-[var(--v-accent-3)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-3)] hover:border-[#34c759]/40'
 
@@ -3655,7 +3672,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           title="Aceleração Vetorial via PostgreSQL (Embeddings Semânticos)"
 
-          className={`px-4 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
+          className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
 
             usePgVector ? 'bg-[#ffcc00]/20 border-[#ffcc00]/60 text-[#ffcc00]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#ffcc00] hover:border-[#ffcc00]/40'
 
@@ -3671,7 +3688,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           title="Oculta contas que não tiveram movimento (débito ou crédito) em nenhum mês do período selecionado"
 
-          className={`px-4 py-2.5 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
+          className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
 
             ocultarSemMovimento
 
@@ -3735,9 +3752,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               <div>
 
-                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-5)]">Diagnóstico IA â€” Causa Raiz Questor â†” Vulcano</p>
+                <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)]">Diagnóstico IA â€” Causa Raiz Questor â†” Vulcano</p>
 
-                <p className="text-[9px] text-[var(--v-text-faint)] mt-0.5">PyOD IsolationForest · DuckDB · KMeans · LevelShift (24 meses)</p>
+                <p className="text-xs text-[var(--v-text-faint)] mt-0.5">PyOD IsolationForest · DuckDB · KMeans · LevelShift (24 meses)</p>
 
               </div>
 
@@ -3755,7 +3772,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               <span className="text-[var(--v-accent-5)] animate-spin text-xl">âš¡</span>
 
-              <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Rodando PyOD + DuckDB + KMeans...</span>
+              <span className="text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)]">Rodando PyOD + DuckDB + KMeans...</span>
 
             </div>
 
@@ -3777,7 +3794,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               {/* Summary banner */}
 
-              <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-3 text-[10px] text-[var(--v-text-muted)] font-mono">
+              <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-3 text-xs text-[var(--v-text-muted)] font-mono">
 
                 {diagData.summary}
 
@@ -3789,7 +3806,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               <div className="overflow-auto max-h-[500px] custom-scrollbar">
 
-                <table className="w-full text-left border-collapse text-[10px]">
+                <table className="w-full text-left border-collapse text-xs">
 
                   <thead className="sticky top-0 bg-[var(--v-deep)] border-b border-[var(--v-border)]">
 
@@ -3845,9 +3862,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                           <td className="p-2">
 
-                            <div className="font-black text-[var(--v-text-bold)] text-[10px]">{c.conta_nome}</div>
+                            <div className="font-black text-[var(--v-text-bold)] text-xs">{c.conta_nome}</div>
 
-                            <div className="text-[var(--v-text-faint)] font-mono text-[9px]">#{c.conta_id}</div>
+                            <div className="text-[var(--v-text-faint)] font-mono text-xs">#{c.conta_id}</div>
 
                           </td>
 
@@ -3861,17 +3878,17 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                               </div>
 
-                              <span className="font-black text-[9px] font-mono" style={{color: scoreColor}}>{Math.round(score*100)}%</span>
+                              <span className="font-black text-xs font-mono" style={{color: scoreColor}}>{Math.round(score*100)}%</span>
 
                             </div>
 
-                            {isAnomalia && <span className="text-[8px] text-[var(--v-accent)] font-black uppercase">âš  Anômalo</span>}
+                            {isAnomalia && <span className="text-[10px] text-[var(--v-accent)] font-black uppercase">âš  Anômalo</span>}
 
                           </td>
 
                           <td className="p-2">
 
-                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-widest ${padraoClass}`}>
+                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border uppercase tracking-widest ${padraoClass}`}>
 
                               {c.padrao}
 
@@ -3893,7 +3910,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                           <td className="p-2 text-center">
 
-                            <span className={`font-black text-[9px] ${c.pct_meses_divergentes > 80 ? 'text-[var(--v-accent)]' : c.pct_meses_divergentes > 40 ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-accent-3)]'}`}>
+                            <span className={`font-black text-xs ${c.pct_meses_divergentes > 80 ? 'text-[var(--v-accent)]' : c.pct_meses_divergentes > 40 ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-accent-3)]'}`}>
 
                               {c.pct_meses_divergentes?.toFixed(0)}%
 
@@ -3907,9 +3924,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                               <div>
 
-                                <span className="text-[var(--v-accent-6)] font-black text-[9px]">â¬† {c.level_shift.competencia}</span>
+                                <span className="text-[var(--v-accent-6)] font-black text-xs">â¬† {c.level_shift.competencia}</span>
 
-                                <div className="text-[8px] text-[var(--v-text-faint)] mt-0.5 font-mono">
+                                <div className="text-[10px] text-[var(--v-text-faint)] mt-0.5 font-mono">
 
                                   {c.level_shift.delta_antes?.toFixed(0)} â†’ {c.level_shift.delta_depois?.toFixed(0)}
 
@@ -3919,7 +3936,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                             ) : (
 
-                              <span className="text-[#333] text-[8px]">â€”</span>
+                              <span className="text-[#333] text-[10px]">â€”</span>
 
                             )}
 
@@ -3939,13 +3956,13 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                                 <div className="max-w-2xl">
 
-                                  <div className="text-[10px] font-black text-[var(--v-accent-5)] uppercase tracking-widest mb-1">Diagnóstico IA (Causa Raiz)</div>
+                                  <div className="text-xs font-black text-[var(--v-accent-5)] uppercase tracking-widest mb-1">Diagnóstico IA (Causa Raiz)</div>
 
-                                  <div className="text-[11px] text-[#ddd] leading-relaxed mb-1.5">{c.causa_raiz}</div>
+                                  <div className="text-sm text-[#ddd] leading-relaxed mb-1.5">{c.causa_raiz}</div>
 
                                   {c.recomendacao && (
 
-                                    <div className="text-[10px] text-[var(--v-accent-6)]"><span className="font-bold">Recomendação:</span> {c.recomendacao}</div>
+                                    <div className="text-xs text-[var(--v-accent-6)]"><span className="font-bold">Recomendação:</span> {c.recomendacao}</div>
 
                                   )}
 
@@ -3991,7 +4008,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
             <Link2 className="animate-spin text-[var(--v-accent-3)]" size={18}/>
 
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
+            <span className="text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)]">
 
               Coletando órfãos e calculando fuzzy scores cross-account...
 
@@ -4019,7 +4036,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4 col-span-1">
 
-            <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2">Conciliação Global</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2">Conciliação Global</p>
 
             <div className="flex items-end gap-2">
 
@@ -4029,7 +4046,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               </span>
 
-              <span className="text-[10px] text-[var(--v-text-faint)] mb-0.5 font-bold">aderência</span>
+              <span className="text-xs text-[var(--v-text-faint)] mb-0.5 font-bold">aderência</span>
 
             </div>
 
@@ -4045,7 +4062,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
             </div>
 
-            <p className="text-[9px] text-[var(--v-text-faint)] mt-2 font-bold">
+            <p className="text-xs text-[var(--v-text-faint)] mt-2 font-bold">
 
               <span className="text-[var(--v-accent-3)]">{metrics.contasConciliadas}</span> OK · <span className="text-[var(--v-accent)]">{metrics.contasDivergentes}</span> div.
 
@@ -4067,7 +4084,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
             <div key={m.label} className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4">
 
-              <p className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2">{m.label}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2">{m.label}</p>
 
               <p className="text-xl font-black font-mono" style={{ color: m.cor }}>{fmt(m.val)}</p>
 
@@ -4091,9 +4108,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           <div className="px-4 py-3 border-b border-[var(--v-border)] flex items-center gap-4 flex-wrap">
 
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-bold)]">Confronto por Conta</h3>
+            <h3 className="text-xs font-black uppercase tracking-widest text-[var(--v-text-bold)]">Confronto por Conta</h3>
 
-            <div className="flex gap-4 ml-auto text-[9px] font-bold uppercase tracking-widest">
+            <div className="flex gap-4 ml-auto text-xs font-bold uppercase tracking-widest">
 
               <span className="flex items-center gap-1.5">
 
@@ -4141,7 +4158,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                   {/* Conta */}
 
-                  <th className="px-3 py-2 text-left text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] sticky left-0 top-0 z-30 bg-[var(--v-deep)] min-w-[220px]">
+                  <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] sticky left-0 top-0 z-30 bg-[var(--v-deep)] min-w-[220px]">
 
                     Conta
 
@@ -4155,7 +4172,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                         style={{ minWidth: '270px' }}>
 
-                      <div className="px-2 py-1.5 text-center text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
+                      <div className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
 
                         {labelMes(comp)}
 
@@ -4175,7 +4192,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                   ))}
 
-                  <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-[var(--v-text-bold)] border-b border-[var(--v-border)] sticky top-0 z-20 bg-[var(--v-deep)] min-w-[130px]">
+                  <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-widest text-[var(--v-text-bold)] border-b border-[var(--v-border)] sticky top-0 z-20 bg-[var(--v-deep)] min-w-[130px]">
 
                     Status Final
 
@@ -4251,7 +4268,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           </p>
 
-          <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest max-w-sm">
+          <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-widest max-w-sm">
 
             Confronta movimento e saldo do Questor (físico) com o motor societário Vulcano (POC + tributos) conta a conta
 
@@ -4259,7 +4276,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           <button onClick={fetchTudo} disabled={!selectedEmpresa}
 
-            className="mt-2 px-6 py-3 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
+            className="mt-2 px-6 py-3 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
 
             <Zap size={13}/> Iniciar Auditoria
 

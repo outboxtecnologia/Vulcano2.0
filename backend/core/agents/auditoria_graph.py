@@ -33,6 +33,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, Tool
 import json
 import sqlite3
 import os
+from core.services.combinatorial_analyzer import IFRS15Analyzer
 
 # ── Checkpointer (memória persistida em SQLite) ───────────────────────────────
 db_path = os.path.join(os.path.dirname(__file__), "..", "..", "agente_checkpoints.sqlite")
@@ -104,11 +105,11 @@ def extrator_heuristico_node(state: AuditoriaGraphState):
     monta a matriz temporal (Dossiê) e formata o prompt de calibração para o HITL.
     """
     conta = state.get("conta_alvo", "")
-    active_system_prompt = state.get("prompt_calibracao") or auditoria_system_prompt
+    active_system_prompt = state.get("prompt_calibracao") or SYSTEM_PROMPT
     
     if not state.get("dossie_heuristico"):
         try:
-            dossie = IFRS15Analyzer.gerar_dossie_temporal(35, 959, limite_amostra=5)
+            dossie = IFRS15Analyzer.gerar_dossie_temporal(35, 959, conta_alvo=conta, limite_amostra=5)
             str_dossie = "\\n\\n--- DOSSIÊ HEURÍSTICO PYTHON (Amostra 5 unidades - CC: 35) ---\\n" + json.dumps(dossie, ensure_ascii=False, indent=2)
         except Exception as e:
             str_dossie = "\\n\\n(Falhou ao processar dossiê heurístico: " + str(e) + ")"
@@ -132,7 +133,7 @@ def supervisor_node(state: AuditoriaGraphState):
     hist = state.get("historico_aprendizado", [])
     
     # O user pode ter reescrito o prompt_calibracao na tela de pause:
-    final_prompt = state.get("prompt_calibracao") or auditoria_system_prompt
+    final_prompt = state.get("prompt_calibracao") or SYSTEM_PROMPT
     
     messages = [SystemMessage(content=final_prompt)]
     historico_msgs = state.get("messages", [])
