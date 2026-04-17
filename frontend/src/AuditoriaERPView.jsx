@@ -1473,7 +1473,7 @@ animate-in slide-in-from-bottom-6 duration-500">
                                   <th key={i} className={`p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] ${dossierExpanded ? "min-w-[800px]" : "min-w-[400px]"}`}>
                                      <div className="flex flex-col gap-1">
                                         <span className="text-[#10b981] uppercase font-black text-sm">{u.unidade}</span>
-                                        <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')} | Fração: {u.fracao_area?.toFixed(2)}%</span>
+                                        <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')} | Fração: {u.fracao_obra?.toFixed(2)}%</span>
                                         <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} pt-2 mt-2 border-t border-dashed border-[#555] text-[10.5px] uppercase tracking-wider text-gray-400`}>
                                             <div className="text-white font-bold">Q. MENSAL</div>
                                             <div className="text-white font-bold">Q. ACUMUL.</div>

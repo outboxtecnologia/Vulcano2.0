@@ -1,12 +1,9 @@
-﻿import sqlite3
-
-def check_sqlite():
-    db_path = "backend/poc_database.sqlite"
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    rows = cur.fetchall()
-    print("TABLES:")
-    for r in rows:
-        print(r)
-check_sqlite()
+﻿import sys, os
+sys.path.append(os.path.join(os.getcwd(), 'backend'))
+from main import get_conn
+conn_v = get_conn()
+cur = conn_v.cursor()
+cur.execute("SELECT id_empreendimento, nome, METRAGEM_TOTAL FROM EMPREENDIMENTO where id_empreendimento = 191")
+print(cur.fetchone())
+cur.execute("SELECT id_unidade, METRAGEM FROM UNIDADE where id_empreendimento = 191 ROWS 1")
+print(cur.fetchone())
