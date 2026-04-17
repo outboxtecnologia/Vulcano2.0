@@ -152,7 +152,13 @@ class IFRS15Analyzer:
             WHERE CODIGOCENTROCUSTO = ? AND CODIGOEMPRESA = ? AND NATURLCTOCTB = 1
             GROUP BY 1, 2 ORDER BY 1, 2
         """, (cc_empreendimento, empresa_id))
-        custos_questor = [{"ano": int(r[0]), "mes": int(r[1]), "custo": float(r[2] or 0)} for r in cur_q.fetchall()]
+        custos_questor_raw = cur_q.fetchall()
+        custos_questor = []
+        acum_global = 0.0
+        for r in custos_questor_raw:
+            custo_m = float(r[2] or 0)
+            acum_global += custo_m
+            custos_questor.append({"ano": int(r[0]), "mes": int(r[1]), "custo": custo_m, "custo_acumulado": acum_global})
         
         # Créditos do Questor LCTOGER (NATURLCTOCTB = -1)
         cur_q.execute("""

@@ -1455,7 +1455,12 @@ animate-in slide-in-from-bottom-6 duration-500">
                           <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#10b981] flex items-center gap-2">
                              Dossiê Heurístico Temporal
                           </h3>
-                          <span className="text-xs text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado || 0).toLocaleString('pt-BR')}</span>
+                          <div className="flex items-center gap-4">
+                             <span className="text-xs text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado || 0).toLocaleString('pt-BR')}</span>
+                             <button onClick={() => setDossierExpanded(!dossierExpanded)} className="bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-400 font-bold px-3 py-1 text-[10px] uppercase tracking-widest rounded transition-colors">
+                                {dossierExpanded ? '✖ Reduzir Colunas' : '➕ Expandir Detalhes (Custo Inc./Fluxo/POC/CUB)'}
+                             </button>
+                          </div>
                         </div>
                         
                         <div className="overflow-x-auto">
@@ -1468,7 +1473,7 @@ animate-in slide-in-from-bottom-6 duration-500">
                                   <th key={i} className={`p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] ${dossierExpanded ? "min-w-[800px]" : "min-w-[400px]"}`}>
                                      <div className="flex flex-col gap-1">
                                         <span className="text-[#10b981] uppercase font-black text-sm">{u.unidade}</span>
-                                        <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')}</span>
+                                        <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')} | Fração: {u.fracao_area?.toFixed(2)}%</span>
                                         <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} pt-2 mt-2 border-t border-dashed border-[#555] text-[10.5px] uppercase tracking-wider text-gray-400`}>
                                             <div className="text-white font-bold">Q. MENSAL</div>
                                             <div className="text-white font-bold">Q. ACUMUL.</div>
@@ -1495,8 +1500,11 @@ animate-in slide-in-from-bottom-6 duration-500">
                                   <td className="p-3 font-mono font-bold text-[var(--v-text-faint)] bg-[#111] sticky left-0 border-r border-[#333] whitespace-nowrap">
                                     {String(custo_m.mes).padStart(2, '0')} / {custo_m.ano}
                                   </td>
-                                  <td className="p-3 font-mono font-bold text-white border-r border-[#333]">
-                                    R$ {custo_m.custo?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                  <td className="p-3 font-mono border-r border-[#333]">
+                                    <div className="flex justify-between items-center w-full">
+                                      <span className="font-bold text-white whitespace-nowrap">R$ {custo_m.custo?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                      <span className="font-black text-[#ffcc00] text-[10px] whitespace-nowrap ml-3">R$ {custo_m.custo_acumulado?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                    </div>
                                   </td>
                                   {agentState.dossie_heuristico.dossie.amostra_unidades?.map((u, i) => {
                                       const rowData = u.grid_temporal?.find(g => g.ano === custo_m.ano && g.mes === custo_m.mes) || {};
