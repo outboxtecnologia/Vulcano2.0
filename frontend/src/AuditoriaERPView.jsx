@@ -1070,6 +1070,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRaci
 function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
   const [status, setStatus] = useState('IDLE'); // IDLE, RUNNING, PAUSED, FINISHED, ERROR
+  const [dossierExpanded, setDossierExpanded] = useState(false);
 
   const [threadId, setThreadId] = useState(null);
 
@@ -1453,7 +1454,7 @@ animate-in slide-in-from-bottom-6 duration-500">
                           <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#10b981] flex items-center gap-2">
                              Dossiê Heurístico Temporal
                           </h3>
-                          <span className="text-xs text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado).toLocaleString('pt-BR')}</span>
+                          <span className="text-xs text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado || 0).toLocaleString('pt-BR')}</span>
                         </div>
                         
                         <div className="overflow-x-auto">
@@ -1463,19 +1464,25 @@ animate-in slide-in-from-bottom-6 duration-500">
                                 <th className="p-3 border-b border-r border-[#333] font-black text-[var(--v-text-muted)] uppercase tracking-widest bg-[#111] sticky left-0 z-10 w-24">Período</th>
                                 <th className="p-3 border-b border-r border-[#333] font-black text-white uppercase tracking-widest bg-[#111] min-w-[120px]">Obra (Questor LCTOGER)</th>
                                 {agentState.dossie_heuristico.dossie.amostra_unidades?.map((u, i) => (
-                                  <th key={i} className="p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] min-w-[530px]">
+                                  <th key={i} className={`p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] ${dossierExpanded ? "min-w-[800px]" : "min-w-[400px]"}`}>
                                      <div className="flex flex-col gap-1">
                                         <span className="text-[#10b981] uppercase font-black text-sm">{u.unidade}</span>
                                         <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')}</span>
-                                        <div className="grid grid-cols-7 gap-2 pt-2 mt-2 border-t border-dashed border-[#555] text-[10.5px] uppercase tracking-wider text-gray-400">
-                                          <div className="text-white font-bold">Q. INCORRIDO</div>
-                                          <div>V2 IFRS</div>
-                                          <div>V1 LEGACY</div>
-                                          <div>Q. CRÉDITO</div>
-                                          <div>FLUXO</div>
-                                          <div>POC%</div>
-                                          <div>CUB%</div>
-                                        </div>
+                                        <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} pt-2 mt-2 border-t border-dashed border-[#555] text-[10.5px] uppercase tracking-wider text-gray-400`}>
+                                            <div className="text-white font-bold">Q. MENSAL</div>
+                                            <div className="text-white font-bold">Q. ACUMUL.</div>
+                                            <div>V2 MENSAL</div>
+                                            <div>V2 ACUMUL.</div>
+                                            {dossierExpanded && (
+                                              <>
+                                                <div>Q. INCORRIDO</div>
+                                                <div>V1 LEGACY</div>
+                                                <div>FLUXO</div>
+                                                <div>POC%</div>
+                                                <div>CUB%</div>
+                                              </>
+                                            )}
+                                          </div>
                                      </div>
                                   </th>
                                 ))}
@@ -1494,15 +1501,21 @@ animate-in slide-in-from-bottom-6 duration-500">
                                       const rowData = u.grid_temporal?.find(g => g.ano === custo_m.ano && g.mes === custo_m.mes) || {};
                                       return (
                                         <td key={i} className="p-3 font-mono text-xs border-r border-[#333]">
-                                           <div className="grid grid-cols-7 gap-2 border-l border-[#333] pl-2">
-                                              <div className="text-white font-bold bg-[#222] px-1 rounded rounded-sm">{(rowData.custo_questor * u.fracao_obra / 100 || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                              <div className="text-gray-300">{(rowData.custo_v2_ifrs || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                              <div className="text-[var(--v-text-faint)]">{(rowData.custo_v1_legacy || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                              <div className="text-blue-400 font-bold bg-[#112] px-1 rounded-sm">{(rowData.credito_questor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                              <div className="text-[#10b981] font-bold">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                              <div className="text-[#a855f7]">{(rowData.poc_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
-                                              <div className="text-[#facc15]">{(rowData.cub_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
-                                           </div>
+                                            <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} border-l border-[#333] pl-2`}>
+                                                <div className="text-white font-bold bg-[#222] px-1 rounded-sm">{(rowData.credito_questor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                <div className="text-[#34c759] font-black">{(rowData.credito_questor_acumulado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                <div className="text-gray-300">{(rowData.custo_v2_ifrs || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                <div className="text-[#a855f7] font-bold">{(rowData.custo_v2_ifrs_acumulado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                {dossierExpanded && (
+                                                  <>
+                                                    <div className="text-blue-400 font-bold bg-[#112] px-1 rounded-sm">{(rowData.custo_questor_fracionado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                    <div className="text-[var(--v-text-faint)]">{(rowData.custo_v1_legacy || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                    <div className="text-[#10b981] font-bold">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                    <div className="text-[#a855f7]">{(rowData.poc_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
+                                                    <div className="text-[#facc15]">{(rowData.cub_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
+                                                  </>
+                                                )}
+                                             </div>
                                         </td>
                                       )
                                   })}
@@ -2865,7 +2878,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   // â”€â”€ Filtro: ocultar contas sem movimento no período â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const [ocultarSemMovimento, setOcultarSemMovimento] = useState(true);
-
+  
 
 
   // â”€â”€ Carrega empreendimentos na montagem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

@@ -213,6 +213,9 @@ class IFRS15Analyzer:
             
             meses_ordenados = sorted([ {"ano": int(k.split('-')[0]), "mes": int(k.split('-')[1])} for k in chaves_unicas ], key=lambda x: (x["ano"], x["mes"]))
 
+            acumulado_linha_questor = 0
+            acumulado_linha_questor_credito = 0
+            acumulado_linha_v2 = 0
             for c in meses_ordenados:
                 k = f"{c['ano']}-{c['mes']}"
                 custo_orig = next((cq["custo"] for cq in custos_questor if cq["ano"] == c["ano"] and cq["mes"] == c["mes"]), 0)
@@ -236,16 +239,25 @@ class IFRS15Analyzer:
                     custo_v2 = custo_fis
                     custo_v1 = custo_fis_v1
 
+                custo_questor_fracionado = custo_orig * (fracao * 100) / 100
+                acumulado_linha_questor += custo_questor_fracionado
+                acumulado_linha_questor_credito += mapa_creditos.get(k, 0.0)
+                acumulado_linha_v2 += custo_v2
+
                 linhas_temporal.append({
                     "ano": c["ano"], 
                     "mes": c["mes"], 
                     "custo_questor": custo_orig,
+                    "custo_questor_fracionado": custo_questor_fracionado,
+                    "custo_questor_acumulado": acumulado_linha_questor,
                     "custo_v2_ifrs": round(custo_v2, 2),
+                    "custo_v2_ifrs_acumulado": round(acumulado_linha_v2, 2),
                     "custo_v1_legacy": round(custo_v1, 2),
                     "poc_mes": mapa_poc.get(k, 0.0),
                     "cub_mes": mapa_cub.get(k, 0.0),
                     "fluxo_recebido": mapa_receb.get(k, 0.0),
-                    "credito_questor": mapa_creditos.get(k, 0.0)
+                    "credito_questor": mapa_creditos.get(k, 0.0),
+                    "credito_questor_acumulado": acumulado_linha_questor_credito
                 })
                 
             dossie["amostra_unidades"].append({

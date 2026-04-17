@@ -442,7 +442,7 @@ class AccountingGraphPipeline:
                 print(f"Aviso: Erro ao ler LANCAMENTO_CONTABIL: {e_legado}")
     
             if not empreendimentos:
-                empreendimentos = [{"cc": empreendimento_id or "GERAL", "vendas": []}]
+                empreendimentos = [{"id": empreendimento_id or 0, "nome": f"CC {empreendimento_id}" if empreendimento_id else "GERAL", "cc": empreendimento_id or "GERAL", "vendas": []}]
 
             resultados = []
             for emp in empreendimentos:
@@ -1141,8 +1141,8 @@ class AccountingGraphPipeline:
     
                 if len(contas_fisicas_empresa) > 0 or len(contas_virtuais) > 0:
                     resultados.append({
-                        "empreendimento_id": emp["id"],
-                        "empreendimento_nome": emp["nome"],
+                        "empreendimento_id": emp.get("id"),
+                        "empreendimento_nome": emp.get("nome", "Desconhecido"),
                         "total_anterior_fisico": total_anterior_fisico if eh_primeiro else 0.0,
                         "total_movimento_fisico": total_movimento_fisico if eh_primeiro else 0.0,
                         "total_final_fisico": total_final_fisico if eh_primeiro else 0.0,
