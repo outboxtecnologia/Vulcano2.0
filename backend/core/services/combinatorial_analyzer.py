@@ -193,8 +193,13 @@ class IFRS15Analyzer:
             import re
             num_apto_match = re.search(r'\d{1,5}', nome_apto)
             apto_str = num_apto_match.group(0) if num_apto_match else nome_apto
-            # Q. Crédito é a fração dos créditos globais do CC
-            mapa_creditos = {f"{c['ano']}-{c['mes']}": c['credito'] * fracao for c in creditos_questor_global}
+            mapa_creditos = {}
+            mapa_creditos_detalhes = {}
+            for cr in creditos_questor_detalhes:
+                if str(apto_str) in cr["str"] or str(nome_apto).upper() in cr["str"]:
+                    k = f"{cr['ano']}-{cr['mes']}"
+                    mapa_creditos[k] = mapa_creditos.get(k, 0.0) + cr["valor"]
+                    mapa_creditos_detalhes.setdefault(k, []).append(cr)
             
             # Racional Híbrido Temporal
             linhas_temporal = []
@@ -257,7 +262,8 @@ class IFRS15Analyzer:
                     "cub_mes": mapa_cub.get(k, 0.0),
                     "fluxo_recebido": mapa_receb.get(k, 0.0),
                     "credito_questor": mapa_creditos.get(k, 0.0),
-                    "credito_questor_acumulado": acumulado_linha_questor_credito
+                    "credito_questor_acumulado": acumulado_linha_questor_credito,
+                    "questor_creditos_raw": mapa_creditos_detalhes.get(k, [])
                 })
                 
             dossie["amostra_unidades"].append({
