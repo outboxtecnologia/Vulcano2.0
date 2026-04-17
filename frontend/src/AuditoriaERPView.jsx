@@ -403,14 +403,13 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 // â”€â”€ Mapa Tabular: Tabela agrupada por APTO (Splink-style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
+// CARD COMPARATIVO //
 function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
-  // Extract all unique units (APTOs)
   const mapAptos = {};
-
   const processItens = (itens, label) => {
     (itens || []).forEach(item => {
-      let key = extractAptoNum(item.historico || item.descricao || '');
-      if (!key) key = "SEM_UNIDADE";
+      let key = (item.historico || item.descricao || '').toUpperCase().match(/\bAPT[O]?[\s\-]*(\d+)/);
+      key = key ? "APTO_" + key[1] : "SEM_UNIDADE";
       
       if (!mapAptos[key]) {
         mapAptos[key] = { questor: [], vulcano1: [], vulcano2: [], totalQuestor: 0, totalVulcano1: 0, totalVulcano2: 0 };
@@ -429,7 +428,6 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
   const keys = Object.keys(mapAptos).sort((a,b) => {
     if (a === "SEM_UNIDADE") return 1;
     if (b === "SEM_UNIDADE") return -1;
-    // extract digits to sort numerically
     const na = parseInt(a.replace(/\D/g, '') || 0);
     const nb = parseInt(b.replace(/\D/g, '') || 0);
     return na - nb;
@@ -438,6 +436,8 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
   if (keys.length === 0) {
     return <div className="p-4 text-center text-xs text-[var(--v-text-faint)] italic">Sem dados iteráveis</div>;
   }
+
+  const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
 
   return (
     <div className="flex flex-col gap-3 p-3 bg-[#0a0a0a]">
@@ -448,8 +448,6 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
         
         return (
           <div key={k} className="bg-[var(--v-deep)] border border-[var(--v-border)] shadow-md rounded-[var(--v-radius)] overflow-hidden">
-            
-            {/* Cabecalho do Card */}
             <div className="flex items-center justify-between px-3 py-2 bg-[#151515] border-b border-[var(--v-border)]">
               <span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span>
               
@@ -471,7 +469,6 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
               </div>
             </div>
 
-            {/* Corpo (Colunas lado a lado) */}
             <div className="grid grid-cols-3 divide-x divide-[var(--v-border)]">
               
               <div className="p-2">
@@ -500,7 +497,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
                          <span className="text-[10px] font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
                          <span className="text-[8px] text-[var(--v-text-faint)]">{x.data}</span>
                       </div>
-                      <span className="text-[9px] font-mono text-[#a259ff]/70 truncate" title={x.descricao}>{x.descricao}</span>
+                      <span className="text-[9px] font-mono text-[#a259ff]/70 truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
                     </div>
                   ))}
                 </div>
@@ -516,7 +513,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
                          <span className="text-[10px] font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
                          <span className="text-[8px] text-[#34c759]/70">{x.data}</span>
                       </div>
-                      <span className="text-[9px] font-mono text-[#34c759] truncate" title={x.descricao}>{x.descricao}</span>
+                      <span className="text-[9px] font-mono text-[#34c759] truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
                     </div>
                   ))}
                 </div>
@@ -529,6 +526,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
     </div>
   );
 }
+// FIN CARD COMPARATIVO //
 
 
 function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
