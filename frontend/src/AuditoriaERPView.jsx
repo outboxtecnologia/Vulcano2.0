@@ -1076,6 +1076,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
   const [agentState, setAgentState] = useState(null);
 
   const [feedback, setFeedback] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
 
   const [erroMsg, setErroMsg] = useState('');
 
@@ -1201,7 +1202,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
             headers: { 'Content-Type': 'application/json' },
 
-            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback }),
+            body: JSON.stringify({ thread_id: threadId, aprovado, feedback_usuario: feedback, prompt_calibracao: customPrompt || agentState?.prompt_calibracao }),
 
         });
 
@@ -1443,6 +1444,74 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                     {/* Sem sugestão: aviso */}
 
+                    
+                    {/* [INICIO] Malha Analítica Heurística (Tabela Python) */}
+                    {status === 'PAUSED' && agentState?.dossie_heuristico?.dossie && (
+                      <div className="bg-[var(--v-bg)] border border-[var(--v-border)] rounded overflow-hidden flex flex-col mt-2 
+animate-in slide-in-from-bottom-6 duration-500">
+                        <div className="bg-[var(--v-deep)] px-4 py-3 border-b border-[var(--v-border)] flex justify-between items-center">
+                          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-[#10b981] flex items-center gap-2">
+                             Dossiê Heurístico Temporal
+                          </h3>
+                          <span className="text-[9px] text-[var(--v-text-muted)] font-mono uppercase tracking-widest">{agentState.dossie_heuristico.dossie.empreendimento} | Orçamento Base: R$ {(agentState.dossie_heuristico.dossie.custo_orcado).toLocaleString('pt-BR')}</span>
+                        </div>
+                        
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-[10px]">
+                            <thead>
+                              <tr>
+                                <th className="p-3 border-b border-r border-[#333] font-black text-[var(--v-text-muted)] uppercase tracking-widest bg-[#111] sticky left-0 z-10 w-24">Período</th>
+                                <th className="p-3 border-b border-r border-[#333] font-black text-white uppercase tracking-widest bg-[#111] min-w-[120px]">Obra (Questor LCTOGER)</th>
+                                {agentState.dossie_heuristico.dossie.amostra_unidades.map((u, i) => (
+                                  <th key={i} className="p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] min-w-[300px]">
+                                     <div className="flex flex-col gap-1">
+                                        <span className="text-[#10b981] uppercase font-black text-[11px]">{u.unidade}</span>
+                                        <span className="text-[8px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')}</span>
+                                        <div className="grid grid-cols-5 gap-1 pt-2 mt-2 border-t border-[#333] text-[8px] uppercase tracking-widest text-[#888]">
+                                          <div>V2 IFRS</div>
+                                          <div>V1 LEGACY</div>
+                                          <div>FLUXO</div>
+                                          <div>POC%</div>
+                                          <div>CUB%</div>
+                                        </div>
+                                     </div>
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {agentState.dossie_heuristico.dossie.custo_total_obra_mensal.map((custo_m, idx) => (
+                                <tr key={idx} className="hover:bg-[#1a1a1a] transition-colors border-b border-[#222]">
+                                  <td className="p-3 font-mono font-bold text-[var(--v-text-faint)] bg-[#111] sticky left-0 border-r border-[#333] whitespace-nowrap">
+                                    {String(custo_m.mes).padStart(2, '0')} / {custo_m.ano}
+                                  </td>
+                                  <td className="p-3 font-mono font-bold text-white border-r border-[#333]">
+                                    R$ {custo_m.custo?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                  </td>
+                                  {agentState.dossie_heuristico.dossie.amostra_unidades.map((u, i) => {
+                                      const rowData = u.grid_temporal?.find(g => g.ano === custo_m.ano && g.mes === custo_m.mes) || {};
+                                      return (
+                                        <td key={i} className="p-3 font-mono text-[10px] border-r border-[#333]">
+                                           <div className="grid grid-cols-5 gap-1">
+                                              <div className="text-white">{(rowData.custo_v2_ifrs || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                              <div className="text-[var(--v-text-faint)]">{(rowData.custo_v1_legacy || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                              <div className="text-[#10b981]">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                              <div className="text-[#a855f7]">{(rowData.poc_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
+                                              <div className="text-[#facc15]">{(rowData.cub_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
+                                           </div>
+                                        </td>
+                                      )
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {/* [FIM] Malha Analítica */}
+
+
                     {(!agentState.sugestao_correcao || Object.keys(agentState.sugestao_correcao).length === 0) && status === 'PAUSED' && (
 
                       <div className="border border-[#ffcc00]/30 bg-[#ffcc00]/5 rounded p-4 text-[11px] text-[#ffcc00] font-bold">
@@ -1463,8 +1532,21 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
            {/* FOOTER (HITL Input) */}
 
-           {status === 'PAUSED' && (
+           {status === 'PAUSED' && agentState?.prompt_calibracao && (
+             <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 shrink-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#10b981]">[HITL] Calibração de Prompt e Contexto</p>
+                <textarea 
+                  value={customPrompt || agentState.prompt_calibracao || ''}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  style={{ width: '100%', minHeight: '300px', background: '#111', color: '#10b981', border: '1px solid #4ade80', borderRadius: '6px', fontFamily: 'monospace', padding: '10px' }}
+                />
+                <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#10b981] hover:bg-[#059669] text-white py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
+                  APROVAR CONTEXTO & PROCESSAR IA
+                </button>
+             </div>
+           )}
 
+           {status === 'PAUSED' && !agentState?.prompt_calibracao && (
              <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 shrink-0">
 
                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-muted)]">Aguardando Avaliação Humana (HITL)</p>

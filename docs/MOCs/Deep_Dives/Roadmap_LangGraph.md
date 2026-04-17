@@ -25,7 +25,8 @@ Marque `[x]` quando as etapas do LangGraph forem construídas e implementadas na
   - ✅ Entregue: 6 tools (analisar_lancamentos_questor, verificar_receitas_custos_poc, buscar_conta_no_plano, buscar_proximidade_passivos_fiscais, analisar_estoque_lctoger, agrupar_creditos_por_apto)
 - [x] 2. **Fluxos com Human-in-the-Loop (Decisão de Risco)**
   - O grafo é pausado (`Interrupt`) em conciliações de alto impacto. O sistema só avança e grava no banco após você aprovar na interface do Explorer.
-  - ✅ Entregue: nodo Revisao com interrupt_before + frontend HITL modal com Aprovar/Rejeitar
+  - ✅ Entregue: nodo Revisão com interrupt_before + frontend HITL modal com Aprovar/Rejeitar.
+  - ✅ Entregue: **Dossiê Heurístico Temporal**: Painel visual dinâmico com tabela matriz comparando Mês-a-Mês métricas do Custo Questor vs IFRS V2 vs Fluxo vs POC/CUB para embasar a validação humana inteligente. [Ver Lousa Visual](Fluxo_Heuristico_Temporal.canvas)
 - [x] 3. **Ciclos de Autocorreção Reflexiva (Self-Correction)**
   - Retorno em Loop nas extrações quebra-cabeça que quebrarem a extração de Sienge PDF. O próprio sistema avista o JSON errado, diz "quebrei" e arruma sem a mão humana.
   - ✅ Entregue: nodo AutoCorrecao + roteador _route_ferramentas + budget MAX_AUTOCORRECOES=2

@@ -6416,6 +6416,8 @@ async def api_agentes_iniciar(req: AuditStartReq):
         sugestao_correcao={},
         aprovado_pelo_usuario=False,
         feedback_usuario="",
+        prompt_calibracao="",
+        dossie_heuristico={},
         messages=[],
         tentativas_autocorrecao=0,   # reinicia o contador de autocorreção
     )
@@ -6454,6 +6456,7 @@ class AuditResumeReq(BaseModel):
     thread_id: str
     aprovado: bool
     feedback_usuario: str
+    prompt_calibracao: str = None
 
 @app.post("/api/agentes/resumir_auditoria")
 def api_agentes_resumir(req: AuditResumeReq):
@@ -6462,11 +6465,14 @@ def api_agentes_resumir(req: AuditResumeReq):
     if not state.next:
         raise HTTPException(status_code=400, detail="A thread não está pausada.")
     
-    graph_app.update_state(config, {
+    update_data = {
         "aprovado_pelo_usuario": req.aprovado,
         "feedback_usuario": req.feedback_usuario,
         "passos_executados": [f"Human feedback received: Approved={req.aprovado}"]
-    })
+    }
+    if req.prompt_calibracao is not None:
+        update_data["prompt_calibracao"] = req.prompt_calibracao
+    graph_app.update_state(config, update_data)
     
     res = graph_app.invoke(None, config=config)
     return {

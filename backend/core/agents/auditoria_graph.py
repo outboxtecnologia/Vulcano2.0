@@ -25,6 +25,8 @@ from core.agents.tools import (
     buscar_proximidade_passivos_fiscais,
     analisar_estoque_lctoger,
     agrupar_creditos_por_apto,
+    calcular_custo_realizado_poc_metragem,
+    dossie_amostral_unidades_vulcano,
 )
 from langgraph.prebuilt import ToolNode
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
@@ -45,6 +47,8 @@ tools_list = [
     buscar_proximidade_passivos_fiscais,
     analisar_estoque_lctoger,
     agrupar_creditos_por_apto,
+    calcular_custo_realizado_poc_metragem,
+    dossie_amostral_unidades_vulcano,
 ]
 tool_node = ToolNode(tools_list)
 
@@ -76,6 +80,7 @@ REGRAS ESPECIAIS para contas de ESTOQUE DE OBRA (classif 1.x — ex: IMÓVEIS A 
    - `coeficiente_variacao` > 0.60 = distribuição CONCENTRADA (investigar unidades de valor atípico)
    - O % de cada APTO deve ser proporcional à sua fração de área sobre a área total do empreendimento.
    - Um crédito em conta 1.x não representa fluxo financeiro mas estimativa de custo incorrido.
+9. OBRIGATÓRIO: Para testar a exatidão fracionária do Estoque, chame calcular_custo_realizado_poc_metragem(cc_empreendimento). Se a unidade bater perfeitamente com a rubrica 	este_distorcao_com_poc em vez de custo_correto_ifrs15, AONDE HOUVER erro, a recomendação (acao) é refazer o custeio: a empresa aplicou o % de POC sobre a mensuração do custo inadvertidamente.
 
 Regras IFRS 15 / CPC 47:
 - Receita é reconhecida com base na POC (Percentual de Obra Concluída) × VGV por venda individual.
@@ -92,11 +97,57 @@ Responda em JSON com:
 """
 
 # ── Nodo Supervisor (ReAct Loop) ───────────────────────────────────────────────
-def supervisor_node(state: AuditoriaGraphState):
-    llm = get_agent_llm().bind_tools(tools_list)
-    conta = state.get("conta_alvo", "conta desconhecida")
 
-    # Monta as mensagens para enviar ao LLM
+def extrator_heuristico_node(state: AuditoriaGraphState):
+    """
+    Roda apenas uma vez no inicio do Grafo: Extrai os dados do Firebird/SQLite,
+    monta a matriz temporal (Dossiê) e formata o prompt de calibração para o HITL.
+    """
+    conta = state.get("conta_alvo", "")
+    active_system_prompt = state.get("prompt_calibracao") or auditoria_system_prompt
+    
+    if not state.get("dossie_heuristico"):
+        try:
+            dossie = IFRS15Analyzer.gerar_dossie_temporal(35, 959, limite_amostra=5)
+            str_dossie = "\\n\\n--- DOSSIÊ HEURÍSTICO PYTHON (Amostra 5 unidades - CC: 35) ---\\n" + json.dumps(dossie, ensure_ascii=False, indent=2)
+        except Exception as e:
+            str_dossie = "\\n\\n(Falhou ao processar dossiê heurístico: " + str(e) + ")"
+            dossie = {}
+
+        prompt_com_amostra = active_system_prompt + "\\n\\nConta alvo: " + conta + str_dossie
+        _dossie_val = dossie if isinstance(dossie, dict) else {}
+        
+        return {
+            "prompt_calibracao": prompt_com_amostra, 
+            "dossie_heuristico": _dossie_val, 
+            "passos_executados": ["Pausado para Calibração Visual do Dossiê. Verifique a nova tabela abaixo."]
+        }
+    return {}
+
+def supervisor_node(state: AuditoriaGraphState):
+    """
+    Nó LLM: Invoca o Vertex AI com base no Prompt de Calibração (que pode ter sido reescrito pelo usuário).
+    """
+    conta = state.get("conta_alvo", "")
+    hist = state.get("historico_aprendizado", [])
+    
+    # O user pode ter reescrito o prompt_calibracao na tela de pause:
+    final_prompt = state.get("prompt_calibracao") or auditoria_system_prompt
+    
+    messages = [SystemMessage(content=final_prompt)]
+    historico_msgs = state.get("messages", [])
+    # Rehidrata MSGS antigas se precisar (simplificado)
+    messages.extend(historico_msgs)
+    
+    if state.get("sugestao_correcao"):
+        messages.append(HumanMessage(content=f"Dica p/ autocorreção: {json.dumps(state['sugestao_correcao'])}"))
+        
+    print("[Supervisor] Chamando Vertex AI...")
+    response = llm.invoke(messages)
+    
+    return {"messages": [response], "passos_executados": ["Supervisor (LLM) avaliou os dados e tomou decisão."]}
+
+# Monta as mensagens para enviar ao LLM
     # IMPORTANTE: o LangGraph acumula via operator.add — não re-passamos o historico no retorno
     historico_msgs = state.get("messages", [])
 
@@ -351,13 +402,15 @@ def _route_revisao(state: AuditoriaGraphState):
 # ── Construção do Grafo ───────────────────────────────────────────────────────
 workflow = StateGraph(AuditoriaGraphState)
 
+workflow.add_node("Extrator", extrator_heuristico_node)
 workflow.add_node("Supervisor",    supervisor_node)
 workflow.add_node("FerraRegras",   ferramentas_node)
 workflow.add_node("AutoCorrecao",  autocorrecao_node)   # ← Tarefa 3
 workflow.add_node("Revisao",       revisao_node)
 workflow.add_node("Finalizacao",   finalizacao_node)
 
-workflow.set_entry_point("Supervisor")
+workflow.set_entry_point("Extrator")
+workflow.add_edge("Extrator", "Supervisor")
 
 workflow.add_conditional_edges("Supervisor", _route_supervisor, {
     "FerraRegras": "FerraRegras",
@@ -382,5 +435,5 @@ workflow.add_edge("Finalizacao", END)
 # Compila com checkpointer e pausa HITL antes de Revisao
 graph_app = workflow.compile(
     checkpointer=memory,
-    interrupt_before=["Revisao"]
+    interrupt_before=["Supervisor", "Revisao"]
 )
