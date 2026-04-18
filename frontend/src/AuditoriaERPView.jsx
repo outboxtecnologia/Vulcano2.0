@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import * as XLSX from 'xlsx';
 
@@ -418,11 +418,89 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
 // CARD COMPARATIVO //
 function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
+  const [manualOverrides, setManualOverrides] = useState({});
+  const [dragOverApto, setDragOverApto] = useState(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [soDivergentes, setSoDivergentes] = useState(false);
+  const [filtroApto, setFiltroApto] = useState('');
+
+  // KANBAN EDGE AUTO-SCROLL LOGIC
+  const boardScrollRef = useRef(null);
+  const scrollZoneRef = useRef({ hoverValue: 0 });
+  const scrollInterval = useRef(null);
+
+  const startAutoScroll = () => {
+     if (scrollInterval.current) return;
+     const scrollStep = () => {
+         if (boardScrollRef.current && scrollZoneRef.current.hoverValue !== 0) {
+            boardScrollRef.current.scrollLeft += scrollZoneRef.current.hoverValue;
+            scrollInterval.current = requestAnimationFrame(scrollStep);
+         } else {
+            scrollInterval.current = null;
+         }
+     };
+     scrollInterval.current = requestAnimationFrame(scrollStep);
+  };
+
+  const stopAutoScroll = () => {
+     scrollZoneRef.current.hoverValue = 0;
+     if (scrollInterval.current) {
+         cancelAnimationFrame(scrollInterval.current);
+         scrollInterval.current = null;
+     }
+  };
+
+  const handleContainerDragOver = (e) => {
+      e.preventDefault();
+      if (!boardScrollRef.current) return;
+      
+      const { clientX } = e;
+      const { left, right } = boardScrollRef.current.getBoundingClientRect();
+      const edgeThreshold = 120; // pixels trigger zone
+
+      const distRight = right - clientX;
+      const distLeft = clientX - left;
+
+      if (distRight > 0 && distRight < edgeThreshold) {
+          // Scroll Direita
+          scrollZoneRef.current.hoverValue = 20 * (1 - distRight / edgeThreshold); 
+          startAutoScroll();
+      } else if (distLeft > 0 && distLeft < edgeThreshold) {
+          // Scroll Esquerda
+          scrollZoneRef.current.hoverValue = -20 * (1 - distLeft / edgeThreshold);
+          startAutoScroll();
+      } else {
+          stopAutoScroll();
+      }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isFullScreen) setIsFullScreen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullScreen]);
+
+  const handleDragStart = (e, item, origem) => {
+     const chv = item.chave;
+     if (!chv) return;
+     e.dataTransfer.setData("application/json", JSON.stringify({ chave: chv, origem: origem }));
+     e.dataTransfer.effectAllowed = "move";
+     e.currentTarget.style.opacity = '0.5';
+  };
+
+  const handleGlobalDragEnd = (e) => {
+     e.currentTarget.style.opacity = '1';
+     stopAutoScroll();
+  };
+
   const mapAptos = {};
   const processItens = (itens, label) => {
     (itens || []).forEach(item => {
       let texto = (item.historico || item.descricao || '');
-      let key = extractAptoNum(texto) || "SEM_UNIDADE";
+      let chv = item.chave || null;
+      let key = (chv && manualOverrides[chv]) || item.override_apto || extractAptoNum(texto) || "SEM_UNIDADE";
       
       if (!mapAptos[key]) {
         mapAptos[key] = { questor: [], vulcano1: [], vulcano2: [], totalQuestor: 0, totalVulcano1: 0, totalVulcano2: 0 };
@@ -438,7 +516,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
   processItens(vulcano1, 'vulcano1');
   processItens(vulcano2, 'vulcano2');
 
-  const keys = Object.keys(mapAptos).sort((a,b) => {
+  const allKeys = Object.keys(mapAptos).sort((a,b) => {
     if (a === "SEM_UNIDADE") return 1;
     if (b === "SEM_UNIDADE") return -1;
     const na = parseInt(a.replace(/\D/g, '') || 0);
@@ -446,100 +524,342 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
     return na - nb;
   });
 
-  if (keys.length === 0) {
+  const keys = allKeys.filter(k => {
+      const d = mapAptos[k];
+      const hasDiff = Math.abs(d.totalQuestor - d.totalVulcano2) > 0.5;
+      if (soDivergentes && !hasDiff) return false;
+      if (filtroApto && !k.toLowerCase().includes(filtroApto.toLowerCase())) return false;
+      return true;
+  });
+
+  if (allKeys.length === 0) {
     return <div className="p-4 text-center text-xs text-[var(--v-text-faint)] italic">Sem dados iteráveis</div>;
   }
 
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(v || 0);
+  const fmtK = (val) => {
+      if (!val) return 'R$ 0,0';
+      const abs = Math.abs(val);
+      if (abs >= 1000) return 'R$ ' + (val / 1000).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + 'k';
+      return 'R$ ' + val.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
+  };
 
-  return (
+  const contentToRender = isFullScreen ? (
+     <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col w-screen h-screen overflow-hidden font-mono select-none">
+         {/* HEADER MOCKUP STYLE */}
+         <div className="flex flex-col border-b border-[#222]">
+             <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                   <div className="px-2 py-1 bg-[#1a1412] border border-[#331c14] rounded text-[#ff6b1a] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#a8440d] mr-1">APTOS</span> {allKeys.length}</div>
+                   <div className="px-2 py-1 bg-[#1a1412] border border-[#331c14] rounded text-[#ff6b1a] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#a8440d] mr-1">DIVERGENTES</span> {allKeys.filter(k => Math.abs(mapAptos[k].totalQuestor - mapAptos[k].totalVulcano2) > 0.5).length}</div>
+                   <div className="px-2 py-1 bg-[#121c15] border border-[#14331e] rounded text-[#22c55e] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#147a38] mr-1">BATEU</span> {allKeys.filter(k => Math.abs(mapAptos[k].totalQuestor - mapAptos[k].totalVulcano2) <= 0.5).length}</div>
+                   <div className="px-2 py-1 bg-[#151515] border border-[#333] rounded text-[#888] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#444] mr-1">LANÇAMENTOS</span> {allKeys.reduce((a,c) => a + mapAptos[c].questor.length + mapAptos[c].vulcano1.length + mapAptos[c].vulcano2.length, 0)}</div>
+                </div>
+                <div className="flex items-center gap-4">
+                   <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-white transition-colors">
+                      <input type="checkbox" checked={soDivergentes} onChange={e => setSoDivergentes(e.target.checked)} className="accent-[#ff6b1a] w-3 h-3" />
+                      SÓ DIVERGENTES
+                   </label>
+                   <div className="relative">
+                      <input type="text" placeholder="⌕ Filtrar APTO..." value={filtroApto} onChange={e => setFiltroApto(e.target.value)} className="w-[180px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[#ff6b1a] text-white text-[10px] font-mono uppercase px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
+                   </div>
+                   <button onClick={() => setIsFullScreen(false)} className="w-7 h-7 flex items-center justify-center bg-[#1a1a1a] hover:bg-white text-[#888] hover:text-black border border-[#333] rounded transition-colors" title="Fechar Kanban (Esc)">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 1L1 11M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                   </button>
+                </div>
+             </div>
+             <div className="flex items-center justify-between px-4 pb-3">
+                <div className="text-[#666] text-[10px] font-mono tracking-widest leading-none">
+                   <span className="text-[#aaa] mr-2">DICA</span> arraste um card de lançamentos para outro APTO ou banco - o total recalcula em tempo real.
+                </div>
+                <div className="flex items-center gap-4 text-[10px] font-mono tracking-widest leading-none">
+                   <span className="flex items-center gap-1.5"><span className="text-[#22c55e]">■</span> <span className="text-[#888]">QUESTOR</span></span>
+                   <span className="flex items-center gap-1.5"><span className="text-[#9945ff]">■</span> <span className="text-[#888]">VU 1.0</span></span>
+                   <span className="flex items-center gap-1.5"><span className="text-[#ffb020]">■</span> <span className="text-[#888]">VU 2.0</span></span>
+                </div>
+             </div>
+         </div>
+
+         {/* BOARD HORIZONTAL SCROLL */}
+         <div 
+           ref={boardScrollRef}
+           onDragOver={handleContainerDragOver}
+           onDragLeave={() => stopAutoScroll()}
+           className="flex-1 overflow-x-auto overflow-y-hidden flex gap-3 p-4 items-start bg-[#0a0a0a] custom-scrollbar">
+             {keys.map(k => {
+                const d = mapAptos[k];
+                const hasDiff = Math.abs(d.totalQuestor - d.totalVulcano2) > 0.5;
+                const isDragOver = dragOverApto === k;
+
+                const renderCard = (x, colorKey) => {
+                    const badgeColor = colorKey === 'Q' ? '#22c55e' : colorKey === 'V1' ? '#9945ff' : '#ffb020';
+                    const bgVar = colorKey === 'Q' ? 'bg-[#151a15]' : colorKey === 'V1' ? 'bg-[#181120]' : 'bg-[#1f1a11]';
+                    const borderVar = colorKey === 'Q' ? 'border-[#1a331a]' : colorKey === 'V1' ? 'border-[#33114d]' : 'border-[#4d3311]';
+                    return (
+                        <div 
+                          key={x.chave || Math.random()}
+                          draggable={!!x.chave}
+                          onDragStart={(e) => handleDragStart(e, x, colorKey === 'Q' ? 'QUESTOR' : 'VU')}
+                          onDragEnd={handleGlobalDragEnd}
+                          className={`${bgVar} border ${borderVar} p-2 rounded shadow-sm transition-all mb-1.5 last:mb-0`}
+                          style={{ cursor: x.chave ? 'grab' : 'default', borderLeft: `2px solid ${badgeColor}` }}
+                        >
+                           <div className="flex items-center justify-between mb-1.5 leading-none">
+                               <span className="text-white font-mono text-[10px] font-bold flex items-baseline gap-1">{fmt(x.valor)} <span className={`text-[8px] font-black ${x.natureza === 'D' ? 'text-[#34c759]' : x.natureza === 'C' ? 'text-[#ff4d00]' : 'text-[#888]'}`}>{x.natureza}</span></span>
+                               <span className="text-[#666] font-mono text-[8px]">{x.data}</span>
+                           </div>
+                           <div className="text-[#999] font-mono text-[9px] leading-tight truncate uppercase" title={x.historico || x.logica || "-"}>
+                               {x.historico || x.logica || "-"}
+                           </div>
+                        </div>
+                    )
+                };
+
+                return (
+                   <div 
+                     key={k}
+                     onDragOver={(e) => { e.preventDefault(); setDragOverApto(k); }}
+                     onDragLeave={() => setDragOverApto(null)}
+                     onDrop={async (e) => {
+                        e.preventDefault();
+                        setDragOverApto(null);
+                        const dataStr = e.dataTransfer.getData("application/json");
+                        if(!dataStr) return;
+                        try {
+                           const { chave, origem } = JSON.parse(dataStr);
+                           if (!chave) return;
+                           setManualOverrides(prev => ({...prev, [chave]: k}));
+                           fetch('http://localhost:8000/api/questor/memoria_arraste', {
+                               method: 'POST',
+                               headers: { 'Content-Type': 'application/json' },
+                               body: JSON.stringify({ chave, conta_destino: k, origem })
+                           }).catch(err => console.error("Erro salvando memoria arraste:", err));
+                        } catch(err) { console.error(err); }
+                     }}
+                     className={`w-[320px] flex-shrink-0 flex flex-col bg-[#111] border rounded overflow-hidden transition-colors duration-150 h-[calc(100vh-140px)] ${isDragOver ? 'border-[#ff6b1a] shadow-[0_0_10px_rgba(255,107,26,0.2)]' : 'border-[#222]'}`}
+                   >
+                       {/* Column Head */}
+                       <div className={`px-3 py-2 flex items-center justify-between border-t-2 ${hasDiff ? 'border-t-[#d32f2f] bg-[#171111]' : 'border-t-[#22c55e] bg-[#111713]'}`}>
+                          <div className="flex items-baseline gap-2">
+                             <span className="text-[#555] text-[10px] font-mono tracking-widest">APTO</span>
+                             <span className="text-white text-lg font-black leading-none">{k.replace(/\D/g, '') || k}</span>
+                          </div>
+                          <div className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest leading-none ${hasDiff ? 'bg-[#d32f2f]/20 text-[#d32f2f]' : 'bg-[#22c55e]/20 text-[#22c55e]'}`}>
+                             {hasDiff ? 'DIVERGENTE' : 'BATEU'}
+                          </div>
+                       </div>
+                       
+                       {/* Totals Sub-head */}
+                       <div className="grid grid-cols-3 divide-x divide-[#222] border-b border-[#222] shrink-0">
+                          <div className="px-2 py-2 flex flex-col gap-1 text-center">
+                             <span className="text-[#888] text-[8px] font-mono uppercase tracking-widest leading-none">Questor</span>
+                             <span className="text-[#22c55e] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalQuestor)}</span>
+                          </div>
+                          <div className="px-2 py-2 flex flex-col gap-1 text-center">
+                             <span className="text-[#888] text-[8px] font-mono uppercase tracking-widest leading-none">VU 1.0</span>
+                             <span className="text-[#9945ff] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalVulcano1)}</span>
+                          </div>
+                          <div className="px-2 py-2 flex flex-col gap-1 text-center">
+                             <span className="text-[#888] text-[8px] font-mono uppercase tracking-widest leading-none">VU 2.0</span>
+                             <span className="text-[#ffb020] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalVulcano2)}</span>
+                          </div>
+                       </div>
+
+                       {/* Scroller Area */}
+                       <div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar">
+                          {d.questor.length > 0 && (
+                            <div className="flex flex-col">
+                               <div className="px-3 py-1.5 bg-[#141814] border-b border-[#222] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
+                                   <div className="flex items-center gap-2">
+                                       <span className="text-[#22c55e] text-[8px] leading-none mb-0.5">■</span>
+                                       <span className="text-[#22c55e] font-mono text-[9px] font-bold tracking-widest leading-none">QUESTOR</span>
+                                       <span className="bg-[#1a331a] text-[#22c55e] text-[9px] px-1 rounded leading-none">{d.questor.length}</span>
+                                   </div>
+                                   <span className="text-[#888] text-[9px] font-mono leading-none">{fmtK(d.totalQuestor)}</span>
+                               </div>
+                               <div className="p-2 flex flex-col">
+                                   {d.questor.map(x => renderCard(x, 'Q'))}
+                               </div>
+                            </div>
+                          )}
+                          {d.vulcano1.length > 0 && (
+                            <div className="flex flex-col">
+                               <div className="px-3 py-1.5 bg-[#17141a] border-b border-[#222] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
+                                   <div className="flex items-center gap-2">
+                                       <span className="text-[#9945ff] text-[8px] leading-none mb-0.5">■</span>
+                                       <span className="text-[#9945ff] font-mono text-[9px] font-bold tracking-widest leading-none">VU 1.0</span>
+                                       <span className="bg-[#331a4d] text-[#9945ff] text-[9px] px-1 rounded leading-none">{d.vulcano1.length}</span>
+                                   </div>
+                                   <span className="text-[#888] text-[9px] font-mono leading-none">{fmtK(d.totalVulcano1)}</span>
+                               </div>
+                               <div className="p-2 flex flex-col">
+                                   {d.vulcano1.map(x => renderCard(x, 'V1'))}
+                               </div>
+                            </div>
+                          )}
+                          {d.vulcano2.length > 0 && (
+                            <div className="flex flex-col">
+                               <div className="px-3 py-1.5 bg-[#1a1814] border-b border-[#222] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
+                                   <div className="flex items-center gap-2">
+                                       <span className="text-[#ffb020] text-[8px] leading-none mb-0.5">■</span>
+                                       <span className="text-[#ffb020] font-mono text-[9px] font-bold tracking-widest leading-none">VU 2.0</span>
+                                       <span className="bg-[#4d3311] text-[#ffb020] text-[9px] px-1 rounded leading-none">{d.vulcano2.length}</span>
+                                   </div>
+                                   <span className="text-[#888] text-[9px] font-mono leading-none">{fmtK(d.totalVulcano2)}</span>
+                               </div>
+                               <div className="p-2 flex flex-col">
+                                   {d.vulcano2.map(x => renderCard(x, 'V2'))}
+                               </div>
+                            </div>
+                          )}
+                       </div>
+                   </div>
+                );
+             })}
+         </div>
+     </div>
+  ) : (
     <div className="flex flex-col gap-3 p-3 bg-[#0a0a0a]">
-      {keys.map(k => {
-        const d = mapAptos[k];
-        const hasDiffVU1 = Math.abs(d.totalQuestor - d.totalVulcano1) > 0.5;
-        const hasDiffVU2 = Math.abs(d.totalQuestor - d.totalVulcano2) > 0.5;
-        
-        return (
-          <div key={k} className="bg-[var(--v-deep)] border border-[var(--v-border)] shadow-md rounded-[var(--v-radius)] overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-[#151515] border-b border-[var(--v-border)]">
-              <span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span>
-              
-              <div className="flex items-center gap-4">
-                 <div className="text-xs font-mono">
-                   <span className="text-[var(--v-text-faint)]">Questor: </span>
-                   <span className={d.totalQuestor >= 0 ? "text-[var(--v-accent-3)] font-bold" : "text-[var(--v-accent)] font-bold"}>{fmt(d.totalQuestor)}</span>
+       <div className="flex justify-end mb-2">
+          <button onClick={() => setIsFullScreen(true)} className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#ff6b1a]/20 border border-[#333] hover:border-[#ff6b1a] text-[#ff6b1a] text-[11px] font-mono font-bold uppercase tracking-widest transition-colors flex items-center gap-2">
+             ⤢ ATIVAR KANBAN E FILTROS DINÂMICOS
+          </button>
+       </div>
+       <div className="flex-1 overflow-auto flex flex-col gap-3 pb-4">
+          {keys.map(k => {
+             const d = mapAptos[k];
+             const hasDiffVU1 = Math.abs(d.totalQuestor - d.totalVulcano1) > 0.5;
+             const hasDiffVU2 = Math.abs(d.totalQuestor - d.totalVulcano2) > 0.5;
+             const isDragOver = dragOverApto === k;
+             
+             return (
+               <div 
+                  key={k} 
+                  onDragOver={(e) => { e.preventDefault(); setDragOverApto(k); }}
+                  onDragLeave={() => setDragOverApto(null)}
+                  onDrop={async (e) => {
+                     e.preventDefault();
+                     setDragOverApto(null);
+                     const dataStr = e.dataTransfer.getData("application/json");
+                     if(!dataStr) return;
+                     try {
+                        const { chave, origem } = JSON.parse(dataStr);
+                        if (!chave) return;
+                        setManualOverrides(prev => ({...prev, [chave]: k}));
+                        fetch('http://localhost:8000/api/questor/memoria_arraste', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ chave, conta_destino: k, origem })
+                        }).catch(err => console.error("Erro salvando memoria arraste:", err));
+                     } catch(err) { console.error(err); }
+                  }}
+                  style={{
+                     transition: 'border-color 0.1s linear',
+                     borderColor: isDragOver ? '#ff6b1a' : undefined
+                  }}
+                  className="bg-[var(--v-deep)] border border-[var(--v-border)] shadow-md rounded-[var(--v-radius)] overflow-hidden">
+                 <div className={`flex items-center justify-between px-3 py-2 bg-[#151515] border-b border-[var(--v-border)] ${isDragOver ? 'bg-[#ff6b1a]/10' : ''}`}>
+                   <span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span>
+                   
+                   <div className="flex items-center gap-4">
+                      <div className="text-xs font-mono">
+                         <span className="text-[var(--v-text-faint)]">Questor: </span>
+                        <span className={d.totalQuestor >= 0 ? "text-[var(--v-accent-3)] font-bold" : "text-[var(--v-accent)] font-bold"}>{fmt(d.totalQuestor)}</span>
+                      </div>
+                      <div className="text-[10px] font-mono">
+                         <span className="text-[var(--v-text-faint)]">VU 2.0: </span>
+                        <span className={d.totalVulcano2 >= 0 ? "text-[var(--v-accent-5)] font-bold" : "text-[var(--v-accent-2)] font-bold"}>{fmt(d.totalVulcano2)}</span>
+                      </div>
+                      
+                      {hasDiffVU2 ? (
+                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#ff4d00]/20 text-[#ff4d00]">Divergente</span>
+                      ) : (
+                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#34c759]/20 text-[#34c759]">Bateu</span>
+                      )}
+                   </div>
                  </div>
-                 <div className="text-xs font-mono">
-                   <span className="text-[var(--v-text-faint)]">VU 2.0: </span>
-                   <span className={d.totalVulcano2 >= 0 ? "text-[var(--v-accent-5)] font-bold" : "text-[var(--v-accent-2)] font-bold"}>{fmt(d.totalVulcano2)}</span>
+
+                 <div className="grid grid-cols-3 divide-x divide-[var(--v-border)]">
+                   <div className="p-2">
+                     <div className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5 px-1 text-center">Questor ({d.questor.length})</div>
+                     <div className="flex flex-col gap-1.5">
+                       {d.questor.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                        d.questor.map((x,i) => (
+                         <div 
+                           key={i}
+                           draggable={!!x.chave}
+                           onDragStart={(e) => handleDragStart(e, x, "QUESTOR")}
+                           onDragEnd={handleGlobalDragEnd}
+                           style={{ cursor: x.chave ? 'grab' : 'default' }}
+                           className="flex flex-col border border-[var(--v-border)] bg-[#111] p-1.5 rounded hover:bg-[#1a1a1a]">
+                           <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-mono text-white">{fmt(x.valor)} {x.natureza}</span>
+                              <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
+                           </div>
+                           <span className="text-xs font-mono text-[var(--v-text-muted)] truncate uppercase" title={x.historico}>{x.historico}</span>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                   
+                   <div className="p-2">
+                     <div className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-1.5 px-1 text-center">VU 1.0 ({d.vulcano1.length})</div>
+                     <div className="flex flex-col gap-1.5">
+                       {d.vulcano1.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                        d.vulcano1.map((x,i) => (
+                         <div 
+                           key={i}
+                           draggable={!!x.chave}
+                           onDragStart={(e) => handleDragStart(e, x, "VU")}
+                           onDragEnd={handleGlobalDragEnd}
+                           style={{ cursor: x.chave ? 'grab' : 'default' }}
+                           className="flex flex-col border border-[#a259ff]/20 bg-[#111] p-1.5 rounded hover:bg-[#1a1a1a]">
+                           <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-mono text-white">{fmt(x.valor)} {x.natureza}</span>
+                              <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
+                           </div>
+                           <span className="text-xs font-mono text-[#a259ff]/70 truncate uppercase" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+
+                   <div className="p-2 bg-[#34c759]/5">
+                     <div className="text-[9px] font-black uppercase tracking-widest text-[#34c759] mb-1.5 px-1 text-center">VU 2.0 ({d.vulcano2.length})</div>
+                     <div className="flex flex-col gap-1.5">
+                       {d.vulcano2.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                        d.vulcano2.map((x,i) => (
+                         <div 
+                           key={i}
+                           draggable={!!x.chave}
+                           onDragStart={(e) => handleDragStart(e, x, "VU")}
+                           onDragEnd={handleGlobalDragEnd}
+                           style={{ cursor: x.chave ? 'grab' : 'default' }}
+                           className="flex flex-col border border-[#34c759]/30 bg-[#111] p-1.5 rounded hover:bg-[#1a1a1a]">
+                           <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-mono text-white">{fmt(x.valor)} {x.natureza}</span>
+                              <span className="text-[10px] text-[#34c759]/70">{x.data}</span>
+                           </div>
+                           <span className="text-xs font-mono text-[#34c759] truncate uppercase" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
                  </div>
-                 
-                 {hasDiffVU2 ? (
-                    <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#ff4d00]/20 text-[#ff4d00]">Divergente</span>
-                 ) : (
-                    <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#34c759]/20 text-[#34c759]">Bateu</span>
-                 )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 divide-x divide-[var(--v-border)]">
-              
-              <div className="p-2">
-                <div className="text-xs font-black uppercase tracking-widest text-[#34c759] mb-2 px-1 text-center">Questor ({d.questor.length})</div>
-                <div className="flex flex-col gap-1">
-                  {d.questor.length === 0 ? <span className="text-[#333] italic text-center text-xs py-1">vazio</span> : 
-                   d.questor.map((x,i) => (
-                    <div key={i} className="flex flex-col border border-[var(--v-border)] bg-[#111] p-1.5 rounded">
-                      <div className="flex justify-between items-center mb-1">
-                         <span className="text-xs font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
-                         <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
-                      </div>
-                      <span className="text-xs font-mono text-[var(--v-text-muted)] truncate" title={x.historico}>{x.historico}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="p-2">
-                <div className="text-xs font-black uppercase tracking-widest text-[#a259ff] mb-2 px-1 text-center">VU 1.0 ({d.vulcano1.length})</div>
-                <div className="flex flex-col gap-1">
-                  {d.vulcano1.length === 0 ? <span className="text-[#333] italic text-center text-xs py-1">vazio</span> : 
-                   d.vulcano1.map((x,i) => (
-                    <div key={i} className="flex flex-col border border-[#a259ff]/20 bg-[#111] p-1.5 rounded">
-                      <div className="flex justify-between items-center mb-1">
-                         <span className="text-xs font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
-                         <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
-                      </div>
-                      <span className="text-xs font-mono text-[#a259ff]/70 truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-2 bg-[#34c759]/5">
-                <div className="text-xs font-black uppercase tracking-widest text-[#34c759] mb-2 px-1 text-center">VU 2.0 ({d.vulcano2.length})</div>
-                <div className="flex flex-col gap-1">
-                  {d.vulcano2.length === 0 ? <span className="text-[#333] italic text-center text-xs py-1">vazio</span> : 
-                   d.vulcano2.map((x,i) => (
-                    <div key={i} className="flex flex-col border border-[#34c759]/30 bg-[#34c759]/10 p-1.5 rounded">
-                      <div className="flex justify-between items-center mb-1">
-                         <span className="text-xs font-mono text-white text-xs">{fmt(x.valor)} {x.natureza}</span>
-                         <span className="text-[10px] text-[#34c759]/70">{x.data}</span>
-                      </div>
-                      <span className="text-xs font-mono text-[#34c759] truncate" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        );
-      })}
+               </div>
+             );
+          })}
+       </div>
     </div>
   );
+
+  if (isFullScreen) {
+     return createPortal(<div style={{ zIndex: 99999, position: 'relative' }}>{contentToRender}</div>, document.body);
+  }
+  return contentToRender;
 }
 // FIN CARD COMPARATIVO //
+
 
 
 function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {

@@ -1224,6 +1224,35 @@ class DiagnosticoInput(BaseModel):
     linhas: list[DiagnosticoRow]
     top_n: int = 20
 
+@app.post("/api/questor/memoria_arraste")
+async def salvar_memoria_arraste(request: Request):
+    """Salva a preferência de arrastar-e-soltar do Kanban no SQLite"""
+    try:
+        data = await request.json()
+        chave = str(data.get("chave", "")).strip()
+        conta_destino = str(data.get("conta_destino", "")).strip()
+        origem = str(data.get("origem", "QUESTOR")).strip()
+        
+        if not chave or not conta_destino:
+            return JSONResponse({"status": "error", "message": "Chave ou destino vazio"}, status_code=400)
+            
+        import sqlite3
+        conn = sqlite3.connect(POC_DB)
+        conn.execute('''
+            INSERT INTO auditoria_memoria_arraste (chave_lancamento, conta_destino, origem, data_modificacao)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(chave_lancamento) DO UPDATE SET 
+                conta_destino=excluded.conta_destino,
+                origem=excluded.origem,
+                data_modificacao=CURRENT_TIMESTAMP
+        ''', (chave, conta_destino, origem))
+        conn.commit()
+        conn.close()
+        return {"status": "ok", "message": f"Mapeado para {conta_destino}"}
+    except Exception as e:
+        print(f"Erro ao salvar memória arraste: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
 @app.post("/api/auditoria/diagnostico")
 async def api_auditoria_diagnostico(data: DiagnosticoInput):
     """

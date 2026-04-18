@@ -149,6 +149,20 @@ class AccountingGraphPipeline:
             # O saldo_anterior das contas de resultado acumula SEM ZZ, mostrando o
             # histórico completo do projeto (acumulado multiexercício) para auditoria.
 
+            import sqlite3
+            memoria_arraste = {}
+            try:
+                from main import POC_DB
+                conn_poc = sqlite3.connect(POC_DB)
+                cur_poc = conn_poc.cursor()
+                cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
+                for chv, dest in cur_poc.fetchall():
+                    memoria_arraste[str(chv).strip()] = str(dest).strip()
+                conn_poc.close()
+            except Exception as ei:
+                print('Erro ao carregar memoria de arraste do sqlite:', ei)
+
+
             cur_v.execute("""
                 SELECT UPPER(E.NOME), V.DESCUNIDIMOB 
                 FROM VENDA V 
@@ -241,13 +255,15 @@ class AccountingGraphPipeline:
                     contas_fisicas_empresa[conta]["movimento_credito"] += v
                     contas_fisicas_empresa[conta]["movimento_liquido"] -= v
                     
+                override = memoria_arraste.get(str(chave).strip())
                 contas_fisicas_empresa[conta]["detalhes"].append({
                     "chave": chave,
                     "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
                     "historico": hist,
                     "natureza": "D" if nat == 1 else "C",
                     "valor": v,
-                    "origem": "QUESTOR_MANUAL" if not chave_origem else str(chave_origem).strip()
+                    "origem": "QUESTOR_MANUAL" if not chave_origem else str(chave_origem).strip(),
+                    **({"override_apto": override} if override else {})
                 })
     
             for conta_id, saldo in saldo_anterior_por_conta.items():
@@ -315,13 +331,16 @@ class AccountingGraphPipeline:
                 else:
                     contas_fisicas_empresa[conta]["movimento_credito"] += v
                     contas_fisicas_empresa[conta]["movimento_liquido"] -= v
+                
+                override = memoria_arraste.get(str(chave).strip())
                 contas_fisicas_empresa[conta]["detalhes"].append({
                     "chave": chave,
                     "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
                     "historico": hist_zz,
                     "natureza": "D" if nat == 1 else "C",
                     "valor": v,
-                    "origem": "ZZ_ARE"  # marcador para distinguir na Auditoria
+                    "origem": "ZZ_ARE" if not chave_origem else str(chave_origem).strip(),
+                    **({"override_apto": override} if override else {})
                 })
 
             # ══════════════════════════════════════════════════════════════════
@@ -473,10 +492,14 @@ class AccountingGraphPipeline:
                         hist_legado = str(hist).strip() if hist else ""
                         hist_legado = _append_apto_if_matched(hist_legado)
 
+                        str_chv_or = str(chave_origem).strip() if chave_origem else ""
+                        override = memoria_arraste.get(str_chv_or)
+
                         contas_legado_empresa[cid]["detalhes"].append({
-                            "chave": str(chave_origem) if chave_origem else "", "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
+                            "chave": str_chv_or, "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
                             "historico": hist_legado, "natureza": natura,
-                            "valor": v, "origem": "VU"
+                            "valor": v, "origem": "VU",
+                            **({"override_apto": override} if override else {})
                         })
                     if cdeb: add_legado(cdeb, 'D')
                     if ccred: add_legado(ccred, 'C')

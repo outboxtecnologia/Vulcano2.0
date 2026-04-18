@@ -542,10 +542,10 @@ export const VendasView = ({ selectedEmpresa }) => {
             <Building2 size={16} className="text-[var(--v-text-faint)]"/>
             <h3 className="text-[10px] uppercase font-bold tracking-widest text-[var(--v-text-muted)]">Obras/Empreendimentos</h3>
           </div>
-          <div className="overflow-y-auto flex-1 p-2 space-y-1">
+          <div className="overflow-y-auto flex-1 p-2 space-y-[2px] custom-scrollbar">
             <div 
               onClick={() => setEmpreendimentoFilter('')}
-              className={`p-3 text-xs font-bold cursor-pointer transition-colors rounded-[var(--v-radius)] ${empreendimentoFilter === '' ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-border)]'}`}
+              className={`px-3 py-1.5 text-[11px] font-bold cursor-pointer transition-colors border-l-[3px] rounded-r-[var(--v-radius)] ${empreendimentoFilter === '' ? 'border-[var(--v-accent-3)] text-[var(--v-accent-3)] bg-[var(--v-hover)]' : 'border-transparent text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`}
             >
               [ CONSOLIDADO GERAL ]
             </div>
@@ -553,7 +553,7 @@ export const VendasView = ({ selectedEmpresa }) => {
               <div 
                 key={i} 
                 onClick={() => setEmpreendimentoFilter(emp)}
-                className={`p-3 text-xs cursor-pointer transition-colors truncate rounded-[var(--v-radius)] ${empreendimentoFilter === emp ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
+                className={`px-3 py-1.5 text-[11px] cursor-pointer transition-colors truncate border-l-[3px] rounded-r-[var(--v-radius)] ${empreendimentoFilter === emp ? 'border-[var(--v-accent-3)] text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'border-transparent text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
                 title={emp}
               >
                 {emp || 'Indefinido'}
@@ -568,38 +568,38 @@ export const VendasView = ({ selectedEmpresa }) => {
           <div className="magma-card p-4 border border-[var(--v-border)] flex gap-4 shrink-0 rounded-[var(--v-radius)]">
              <div className="flex-1">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Pesquisar Comprador</label>
-                <input type="text" placeholder="Nome ou Documento..." value={compradorFilter} onChange={(e) => setCompradorFilter(e.target.value)} className="bento-input w-full" />
+                <input type="text" placeholder="Nome ou Documento..." value={compradorFilter} onChange={(e) => setCompradorFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
              <div className="flex-1">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Unidade / Num / Desc</label>
-                <input type="text" placeholder="Ex: Apto 101..." value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="bento-input w-full" />
+                <input type="text" placeholder="Ex: Apto 101..." value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
              <div className="w-32">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Data Inicial</label>
-                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bento-input w-full" />
+                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
              <div className="w-32">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Data Final</label>
-                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bento-input w-full" />
+                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
-             <div className="flex items-end text-[var(--v-text-faint)]">
-                {filtered.length} Vendas
+             <div className="flex items-end text-[var(--v-text-faint)] text-[11px] font-mono whitespace-nowrap pb-1.5">
+                <span className="text-[var(--v-accent-3)] font-black mr-1">{filtered.length}</span> VENDAS
              </div>
           </div>
 
           {/* KPI BENTO GRIDS */}
           <div className="grid grid-cols-2 gap-5 shrink-0">
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-accent-3)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">VGV Lançado (Período / Empresa)</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalVgv)}</h4>
+            <div className="magma-card overflow-hidden relative group p-4 border-l-2 border-l-[var(--v-accent-3)] flex justify-between items-center bg-[#111]">
+               <div className="flex flex-col">
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-muted)] font-black mb-0.5">VGV Lançado (Período/Empresa)</p>
+                  <h4 className="text-3xl font-black text-[var(--v-text-bold)] tabular-nums">{formatCurrency(totalVgv)}</h4>
                </div>
                <ShoppingCart size={40} className="text-[var(--v-accent-3)] opacity-20 absolute -right-2 -bottom-2 group-hover:scale-110 transition-transform"/>
             </div>
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-text-red)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Total de Distratos Realizados</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalDistratos)}</h4>
+            <div className="magma-card overflow-hidden relative group p-4 border-l-2 border-l-[var(--v-text-red)] flex justify-between items-center bg-[#111]">
+               <div className="flex flex-col">
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-muted)] font-black mb-0.5">Total de Distratos Realizados</p>
+                  <h4 className="text-3xl font-black text-[var(--v-text-bold)] tabular-nums">{formatCurrency(totalDistratos)}</h4>
                </div>
             </div>
           </div>
@@ -612,18 +612,18 @@ export const VendasView = ({ selectedEmpresa }) => {
                    <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-bold)]">Integrando Vendas Vulcano...</span>
                </div>
             )}
-            <div className="overflow-auto flex-1">
-               <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-auto flex-1 custom-scrollbar">
+               <table className="w-full text-left text-xs border-collapse font-mono tabular-nums">
                   <thead className="bg-[var(--v-surface-container)] sticky top-0 z-10 shadow-sm border-b border-[var(--v-border)]">
                      <tr>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold w-32 border-b border-[var(--v-border)]">Venda/Contrato</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Data</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Descrição/Unid.</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">CPF/CNPJ</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Cliente</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold border-b border-[var(--v-border)] text-right">Total Venda</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent)] uppercase font-bold border-b border-[var(--v-border)] text-center w-24">Condições</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-red)] uppercase font-bold border-b border-[var(--v-border)] text-center w-24">Distrato</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Contrato</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Data</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Descrição/Unid.</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">CPF/CNPJ</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Cliente</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold border-b border-[var(--v-border)] text-right">Total Venda</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[#888] uppercase font-bold border-b border-[var(--v-border)] text-center w-16" title="Projeção e Condições">Cond</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[#888] uppercase font-bold border-b border-[var(--v-border)] text-center w-16" title="Averbar Distrato/Cancelamento">Dist</th>
                      </tr>
                   </thead>
                   <tbody>
@@ -1064,8 +1064,8 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                    <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-bold)]">Carregando Diário de Caixa...</span>
                </div>
             )}
-            <div className="overflow-auto flex-1">
-               <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-auto flex-1 custom-scrollbar">
+               <table className="w-full text-left text-xs border-collapse font-mono tabular-nums">
                   <thead className="bg-[var(--v-surface-container)] sticky top-0 z-10 shadow-sm border-b border-[var(--v-border)]">
                      <tr>
                        <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold w-24">Data</th>
