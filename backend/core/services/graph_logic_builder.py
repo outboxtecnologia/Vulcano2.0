@@ -28,7 +28,7 @@ class AccountingGraphPipeline:
             # configurada (CONTAESTAND ou CONTAESTCON), independente de ter CC.
             # - COM CC: gastos de obra vem do LCTOGER filtrado pelo CC
             # - SEM CC: gastos de obra vem do LCTOCTB filtrado pela conta de estoque
-            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
+            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO, CODIGO_HIST_ESTORNO_CUSTO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
             params = [empresa_id]
             if empreendimento_id:
                 query += f" AND ID = {int(empreendimento_id)}"
@@ -59,8 +59,9 @@ class AccountingGraphPipeline:
                     "hist_var": hist_questor.get(r[13] if r[13] else 0, "VARIACAO UNID"),
                     "hist_adi": hist_questor.get(r[14] if r[14] else 0, "ADIANTAMENTO UNID"),
                     "hist_baixa_adi": hist_questor.get(r[15] if r[15] else 0, "BAIXA ADIANTAMENTO UNID"),
-                    "hist_custo": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
+                    "hist_aprcusto": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
                     "conta_variacao": int(r[18]) if r[18] else 0,
+                    "hist_estorno_custo": hist_questor.get(r[19] if r[19] else 0, "ESTORNO CUSTO UNID"),
                 })
     
             # Caching Global Vulcano (Receitas e Tributos)
@@ -853,7 +854,8 @@ class AccountingGraphPipeline:
                     for uni_data in unidades:
                         uni_nome = uni_data["unidade"]
                         vgv_uni = uni_data["vgv"]
-                        if vgv_uni <= 0: continue
+                        vgv_base = uni_data.get("vgv_base", vgv_uni)
+                        if vgv_base <= 0: continue
     
                         # --- IFRS 15: Detectar se a venda ocorreu NO mês-alvo ---
                         # Se a DATA_VENDA cai no mesmo mês que estamos processando, a unidade
@@ -863,17 +865,22 @@ class AccountingGraphPipeline:
                         venda_ym = data_venda_str[:7] if data_venda_str and len(data_venda_str) >= 7 else ""
                         is_nova_venda_mes_alvo = bool(venda_ym) and (venda_ym == target_ym)
                         is_venda_futura = bool(venda_ym) and (venda_ym > target_ym)
+                        
+                        data_distrato_str = uni_data.get("data_distrato") or ""
+                        distrato_ym = data_distrato_str[:7] if data_distrato_str and len(data_distrato_str) >= 7 else ""
+                        is_novo_distrato_mes_alvo = bool(distrato_ym) and (distrato_ym == target_ym)
+                        is_distrato_antigo = bool(distrato_ym) and (distrato_ym < target_ym)
     
                         # CUSTO ECONÔMICO (Fração Física / Metragem)
                         # O Custo já reflete a evolução física (foi gasto e medido). Deve-se aplicar apenas o Índice Comercial da unidade.
                         area_da_unidade = area_unidades.get(str(uni_nome).strip(), 0.0)
                         fracao_fisica = (area_da_unidade / total_area_emp) if total_area_emp > 0 else 0.0
                         
-                        if is_venda_futura:
+                        if is_venda_futura or is_distrato_antigo:
                             custo_u_atual = 0.0
                             custo_u_ant = 0.0
                         else:
-                            custo_u_atual = custo_gasto_vigente * fracao_fisica
+                            custo_u_atual = 0.0 if (bool(distrato_ym) and distrato_ym <= target_ym) else (custo_gasto_vigente * fracao_fisica)
                             
                             # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
                             custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
@@ -882,9 +889,17 @@ class AccountingGraphPipeline:
                         mov_custo_u = custo_u_atual - custo_u_ant
                         
                         if abs(mov_custo_u) > 0.01 or abs(custo_u_ant) > 0.01:
-                             logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}"
-                             inject_virtual_entry(c_custo, mov_custo_u, 'D', f"{emp.get('hist_aprcusto', 'Apropriação Custo')} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
-                             inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"BAIXA ESTOQUE UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+                             nat_custo = 'D' if mov_custo_u >= 0 else 'C'
+                             nat_est = 'C' if mov_custo_u >= 0 else 'D'
+                             
+                             if is_novo_distrato_mes_alvo and mov_custo_u < 0:
+                                 hist_base = emp.get('hist_estorno_custo', 'Estorno Custo')
+                             else:
+                                 hist_base = emp.get('hist_aprcusto', 'Apropriação Custo')
+                                 
+                             logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}{'  [DISTRATO MÊS ALVO]' if is_novo_distrato_mes_alvo else ''}"
+                             inject_virtual_entry(c_custo, abs(mov_custo_u), nat_custo, f"{hist_base} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
+                             inject_virtual_entry(c_estoque, abs(mov_custo_u), nat_est, f"BAIXA ESTOQUE UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
     
                         # ── RECEBIMENTOS: Split Principal vs Variação Monetária ─────────────────────────
                         caixa_acum = uni_data["caixa_acumulado"]
@@ -895,21 +910,21 @@ class AccountingGraphPipeline:
                              logica_caixa = f"Unid {uni_nome}: Integralização de Caixa/Banco no mês = {caixa_mes:,.2f}"
                              inject_virtual_entry(c_caixa_banco, abs(caixa_mes), 'D' if caixa_mes > 0 else 'C', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
 
-                        if is_venda_futura:
+                        if is_venda_futura or is_distrato_antigo:
                              rec_auferida_atual = 0.0
                              rec_auferida_ant = 0.0
                         else:
-                             rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
+                             rec_auferida_atual = 0.0 if (bool(distrato_ym) and distrato_ym <= target_ym) else (vgv_uni * (poc_acumulado_vigente / 100.0))
                              rec_auferida_ant = 0.0 if is_nova_venda_mes_alvo else \
-                                               vgv_uni * (poc_acumulado_anterior / 100.0)
+                                               vgv_base * (poc_acumulado_anterior / 100.0)
                         
                         # -----------------
                         # RECEITA DRE (Econômico)
                         mov_receita_auferida = rec_auferida_atual - rec_auferida_ant
-                        logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]{'  [NOVA VENDA MÊS — rec_ant forçado 0]' if is_nova_venda_mes_alvo else ''}"
+                        logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]{'  [NOVA VENDA MÊS / ANT 0]' if is_nova_venda_mes_alvo else ''}{'  [DISTRATO MÊS ALVO]' if is_novo_distrato_mes_alvo else ''}"
                         if abs(mov_receita_auferida) > 0.01 or abs(rec_auferida_ant) > 0.01:
-                             nat_rec = 'C' if mov_receita_auferida > 0 else 'D'
-                             nat_cli_rec = 'D' if mov_receita_auferida > 0 else 'C'
+                             nat_rec = 'C' if mov_receita_auferida >= 0 else 'D'
+                             nat_cli_rec = 'D' if mov_receita_auferida >= 0 else 'C'
                              inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"{emp.get('hist_venda', 'Receita POC')} UNID {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
                              inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"{emp.get('hist_venda', 'Faturamento')} UNID {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
                         # -----------------

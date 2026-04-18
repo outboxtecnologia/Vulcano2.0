@@ -100,6 +100,7 @@ class RevenueTimePipeline:
             df = pd.read_sql_query(query, conn, params=tuple(join_params + params))
             # Salvar as colunas numéricas que não queremos que virem 0.0 se forem NaN (como os códigos de histórico que podem ser None)
             _dv_backup = df['DATA_VENDA'].copy()
+            _dd_backup = df['DATADISTRATO'].copy()
             _hist_rec = df['CODIGOHISTRECEBIMENTO'].copy()
             _hist_var = df['CODIGOHISTVARIACAO'].copy()
             _hist_venda = df['CODIGOHISTVENDA'].copy()
@@ -122,6 +123,7 @@ class RevenueTimePipeline:
                 except Exception:
                     return None
             df['DATA_VENDA'] = _dv_backup.apply(_safe_date)
+            df['DATADISTRATO'] = _dd_backup.apply(_safe_date)
     
             
             # Saneamento Vetorizável
@@ -147,7 +149,10 @@ class RevenueTimePipeline:
             df['RET_FLAG'] = df['RET'].astype(str).str.upper().str.strip() == 'S'
             df['DISTRATO_FLAG'] = df['DISTRATO'].astype(str).str.upper().str.strip() == 'S'
             
-            df['VGV'] = np.where(df['DISTRATO_FLAG'], 0.0, df['VGV_BASE'])
+            target_dt_str = data_fim[:10] if data_fim else "2099-01-01"
+            is_distrato_past_or_present = df['DISTRATO_FLAG'] & (df['DATADISTRATO'].fillna("1900-01-01") <= target_dt_str)
+            
+            df['VGV'] = np.where(is_distrato_past_or_present, 0.0, df['VGV_BASE'])
             
             # Acréscimo
             acrescimo_base = np.maximum(0, df['RECEITA_CAIXA'] - df['VALORPARCELA'])
@@ -308,7 +313,9 @@ class RevenueTimePipeline:
             # Agrupamento no nível da Unidade Comercial
             unit_group = df.groupby(['EMPREENDIMENTO', 'UNIDADE', 'COMPRADOR', 'IDVENDA']).agg({
                 'VGV': 'first',
+                'VGV_BASE': 'first',
                 'DATA_VENDA': 'first',
+                'DATADISTRATO': 'first',
                 'RECEITA_CAIXA': 'sum',
                 'CAIXA_MES': 'sum',
                 'ACRESCIMO': 'sum',
@@ -512,6 +519,8 @@ class RevenueTimePipeline:
     
                 meta_emp["unidades"].append({
                     "unidade": uni, "comprador": comp, "vgv": row.VGV,
+                    "vgv_base": row.VGV_BASE,
+                    "data_distrato": str(row.DATADISTRATO)[:10] if row.DATADISTRATO and str(row.DATADISTRATO) not in ('0', '', 'None', 'nan', '0.0', 'NaT') else None,
                     "data_venda": str(row.DATA_VENDA)[:10] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else None,
                     "caixa_acumulado": row.RECEITA_CAIXA, "caixa_mes": row.CAIXA_MES,
                     # Acréscimos (Variação Monetária) separados do principal

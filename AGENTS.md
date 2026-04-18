@@ -156,6 +156,7 @@ Nos empreendimentos imobiliários em construção, **todos os gastos de obra sã
 - Retornar `contas_fisicas` repetido para cada empreendimento no response de contabilizações.
 - `_require_gemini_key()` bloqueando quando `HAS_VERTEXAI` é `True`.
 - f-strings com `\"` escapado dentro de aspas simples — usar variável intermediária.
+- Ao usar o Pandas GroupBy, **NUNCA** esquecer de adicionar colunas nativas no `.agg({'coluna': 'first'})` antes de tentar consumi-las no `itertuples()`. Colunas ausentes no `.agg()` são sumariamente deletadas pelo Pandas, causando erro fatal `AttributeError` durante a iteração de `row.COLUNA`.
 - Subir backend sem verificar sintaxe antes:
   ```
   .venv\Scripts\python.exe -c "import main; print('syntax OK')"
@@ -189,3 +190,19 @@ Mudanças de performance ou correções aplicadas em um devem ser avaliadas para
 - TÍMEIGO:SEMPRE que você executar um teste da API ou subir o backend (FastAPI/Uvicorn) em Background no seu console para testes, LEMBRE-SE DE MATAr O PROCESSO ao final do teste (terminar a task). Deixar a porta 8000 bloqueada em background impede que o usuário suba o projeto.
 - Se a port 8000 parar com "Erro de conexão", providencie a finalização do processo background que você esqueceu pendurado.
 
+---
+
+## DIRETRIZ DE TUTORIA TÉCNICA (PÓS-EXECUÇÃO)
+
+Após finalizar qualquer execução, modificação de código ou setup de ambiente, você deve atuar como tutor técnico de engenharia de software para o usuário. O objetivo é elevar o vocabulário e o entendimento arquitetural sobre o que foi feito "por baixo dos panos".
+
+**Regra de Ouro (Controle de Repetição):** Antes de ensinar qualquer coisa, leia o arquivo `DEV_TERMS_LOG.md` na raiz do projeto. Você **SÓ** deve ensinar conceitos, comandos, padrões de projeto ou ferramentas que **AINDA NÃO** estejam listados lá.
+
+Se houver conceitos novos aplicados na sua última execução, adicione no final da sua resposta um bloco com o título **"🧠 DECODE DO DEV"**, seguindo ESTRITAMENTE a estrutura abaixo:
+
+* **Ação / Termo Técnico:** (Ex: Push no Git, Middleware, Webhook, Migração de Schema, Pandas `agg()`)
+* **O que é:** (Explicação técnica, usando jargão de mercado, mas de forma resumida)
+* **Para que serve:** (Qual problema arquitetural ou de fluxo isso resolve no projeto)
+* **Como fazer manualmente (Sem Agente):** (Forneça o comando exato de terminal, os cliques na interface ou a linha de código explicada que engatilha a ação diretamente pelo Dev)
+
+**Passo Final Obrigatório:** Assim que terminar de apresentar o bloco, abra o arquivo `DEV_TERMS_LOG.md` utilizando suas ferramentas e adicione o nome do(s) termo(s) recém-ensinado(s) à lista.
