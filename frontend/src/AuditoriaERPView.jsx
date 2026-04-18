@@ -113,13 +113,26 @@ const CONTAS_GRUPO_APTO = new Set([5653, 5665, 5666]);
  */
 
 function extractAptoNum(texto) {
+  // Captura:
+  // 1) APTO 290 ou APT 290
+  // 2) UNID 290 ou UNIDADE 290
+  // 3) STUTTGART290 (letras seguidas de números)
+  const padrao = /\b(?:APT[O]?|UNID(?:ADE)?)[\s\-]*(\d+)/g;
+  const matches = [...(texto || '').toUpperCase().matchAll(padrao)];
+  
+  if (matches.length > 0) {
+    return `APTO_${matches[matches.length - 1][1]}`; // sempre a última ocorrência
+  }
 
-  const matches = [...(texto || '').toUpperCase().matchAll(/\bAPT[O]?[\s\-]*(\d+)/g)];
+  // Fallback: se não achar APTO nem UNID, tenta achar um nome seguido diretamente de números (ex: STUTTGART290)
+  const fallbackPadrao = /[A-Z]+(\d{2,4})\b/g;
+  const fallbackMatches = [...(texto || '').toUpperCase().matchAll(fallbackPadrao)];
+  
+  if (fallbackMatches.length > 0) {
+      return `APTO_${fallbackMatches[fallbackMatches.length - 1][1]}`;
+  }
 
-  if (matches.length === 0) return null;
-
-  return `APTO_${matches[matches.length - 1][1]}`; // sempre a última ocorrência
-
+  return null;
 }
 
 
@@ -408,8 +421,8 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
   const mapAptos = {};
   const processItens = (itens, label) => {
     (itens || []).forEach(item => {
-      let key = (item.historico || item.descricao || '').toUpperCase().match(/\bAPT[O]?[\s\-]*(\d+)/);
-      key = key ? "APTO_" + key[1] : "SEM_UNIDADE";
+      let texto = (item.historico || item.descricao || '');
+      let key = extractAptoNum(texto) || "SEM_UNIDADE";
       
       if (!mapAptos[key]) {
         mapAptos[key] = { questor: [], vulcano1: [], vulcano2: [], totalQuestor: 0, totalVulcano1: 0, totalVulcano2: 0 };

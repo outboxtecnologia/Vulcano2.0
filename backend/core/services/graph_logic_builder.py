@@ -148,6 +148,41 @@ class AccountingGraphPipeline:
             # Usado pelo bloco de movimento (ZZ de dezembro) — NÃO afeta saldo_anterior.
             # O saldo_anterior das contas de resultado acumula SEM ZZ, mostrando o
             # histórico completo do projeto (acumulado multiexercício) para auditoria.
+
+            cur_v.execute("""
+                SELECT UPPER(E.NOME), V.DESCUNIDIMOB 
+                FROM VENDA V 
+                JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID 
+                JOIN UNIDADE U ON U.ID = VU.IDUNIDADE 
+                JOIN BLOCO B ON B.ID = U.IDBLOCO 
+                JOIN EMPREENDIMENTO E ON E.ID = B.IDEMPREENDIMENTO
+            """)
+            import re
+            contrato_to_apto = {}
+            for e_nome, desc in cur_v.fetchall():
+                if desc and e_nome:
+                    d_str = str(desc).strip()
+                    m_c = re.search(r'^(\d+)\s*/', d_str)
+                    m_u = re.search(r'APTO\s*(\d+)', d_str, re.IGNORECASE)
+                    if m_c and m_u:
+                        emp_words = set(re.findall(r'[A-Z]{4,}', str(e_nome)))
+                        for w in emp_words:
+                            if w not in ('RESIDENCIAL', 'EDIFICIO', 'CONDOMINIO', 'EMPREENDIMENTO'):
+                                if w not in contrato_to_apto: contrato_to_apto[w] = {}
+                                contrato_to_apto[w][m_c.group(1)] = m_u.group(1)
+
+            def _append_apto_if_matched(hist_str):
+                hist_mod = hist_str
+                for emp_word in contrato_to_apto.keys():
+                    m = re.search(rf'{emp_word}\s*-?\s*0*(\d{{1,4}})\b', hist_mod, re.IGNORECASE)
+                    if m:
+                        c_num = m.group(1)
+                        if c_num in contrato_to_apto[emp_word]:
+                            hist_mod += f" [APTO {contrato_to_apto[emp_word][c_num]}]"
+                            break
+                return hist_mod
+
+
             def _e_conta_resultado(cod):
                 cl = plano.get(cod, {}).get("classif", "") or ""
                 return cl and not cl.startswith(("1.", "2.", "3."))
@@ -173,6 +208,7 @@ class AccountingGraphPipeline:
                     
                 descr = str(descr_hist or "").strip()
                 hist = f"{descr} {compl}".strip()
+                hist = _append_apto_if_matched(hist)
                     
                 v = float(val or 0)
                 conta = cdeb if nat == 1 else ccred
@@ -260,6 +296,8 @@ class AccountingGraphPipeline:
                     compl_zz = str(hist_val) if hist_val else ""
                 descr_zz = str(descr_hist or "").strip()
                 hist_zz = f"{descr_zz} {compl_zz}".strip() or "APURAÇÃO RESULTADO EXERCÍCIO (ARE)"
+                hist_zz = _append_apto_if_matched(hist_zz)
+
                 if conta not in contas_fisicas_empresa:
                     _classif = plano.get(conta, {}).get("classif", "")
                     _nome = plano.get(conta, {}).get("nome", "Desconhecida")
@@ -432,9 +470,12 @@ class AccountingGraphPipeline:
                             contas_legado_empresa[cid]["movimento_credito"] += v
                             contas_legado_empresa[cid]["movimento_liquido"] -= v
                             
+                        hist_legado = str(hist).strip() if hist else ""
+                        hist_legado = _append_apto_if_matched(hist_legado)
+
                         contas_legado_empresa[cid]["detalhes"].append({
                             "chave": str(chave_origem) if chave_origem else "", "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
-                            "historico": str(hist) if hist else "", "natureza": natura,
+                            "historico": hist_legado, "natureza": natura,
                             "valor": v, "origem": "VU"
                         })
                     if cdeb: add_legado(cdeb, 'D')
@@ -761,6 +802,7 @@ class AccountingGraphPipeline:
                                 compl_lc = str(hist_raw_lc or "")
                             descr_lc = str(descr_hist_lc or "").strip()
                             hist_lc  = f"{descr_lc} {compl_lc}".strip()
+                            hist_lc = _append_apto_if_matched(hist_lc)
 
                             if v_lc >= 0:
                                 nat_str = "D"
@@ -803,7 +845,6 @@ class AccountingGraphPipeline:
                     print(f"[FISICO-CC-INJECT] conta={c_estoque} saldo_ant={custo_gasto_anterior:,.0f} "
                           f"lancamentos={len(lctoger_rows)} mov_liq={cf['movimento_liquido']:,.0f} "
                           f"saldo_final={cf['saldo_final']:,.0f}")
-
 
 
                 if meta_emp:
@@ -851,40 +892,90 @@ class AccountingGraphPipeline:
                         area_unidades = {}
                         total_area_emp = 1.0
     
-                    for uni_data in unidades:
-                        uni_nome = uni_data["unidade"]
+                    unidades = meta_emp.get("unidades", [])
+                    unidades_com_caixa = {str(u["unidade"]).strip(): u for u in unidades}
+                    
+                    data_ini_mes_ctb = f"{ano}-{str(mes).zfill(2)}-01"
+                    data_fim_mes_ctb = f"{ano+1}-01-01" if int(mes) == 12 else f"{ano}-{str(int(mes)+1).zfill(2)}-01"
+                    target_ym = f"{str(ano).zfill(4)}-{str(mes).zfill(2)}"
+                    
+                    try:
+                        _cur_vendas = conn_vulcano.cursor()
+                        _cur_vendas.execute("""
+                            SELECT DESCUNIDIMOB, TOTALVENDA, DTOPER, DATADISTRATO
+                            FROM VENDA
+                            WHERE IDEMPREENDIMENTO = ?
+                              AND DTOPER < CAST(? AS DATE)
+                        """, (emp["id"], data_fim_mes_ctb))
+                        todas_vendas = _cur_vendas.fetchall()
+                        _cur_vendas.close()
+                    except Exception as _e_ven:
+                        print(f"Erro consultando todas as vendas em graph logic: {_e_ven}")
+                        todas_vendas = []
+                        
+                    for v_row in todas_vendas:
+                        uni_raw, vgv_venda, dt_ven, dt_dis = v_row
+                        uni_nome = (uni_raw.decode('win1252', 'ignore') if isinstance(uni_raw, bytes) else str(uni_raw or '')).strip()
+                        if not uni_nome: continue
+                        
+                        dt_dis_str = str(dt_dis)[:10] if dt_dis else ""
+                        distrato_ym = dt_dis_str[:7] if len(dt_dis_str) >= 7 else ""
+                        
+                        # Se já estava distratada ANTES do mês-alvo, não processamos mais nada para a unidade
+                        if distrato_ym and distrato_ym < target_ym:
+                            continue
+                            
+                        # Resgata estado do pipeline de caixa caso tenha
+                        uni_data = unidades_com_caixa.get(uni_nome)
+                        
+                        if not uni_data:
+                            # Unidade vendida mas sem movimento no caixa
+                            uni_data = {
+                                "unidade": uni_nome,
+                                "vgv": float(vgv_venda or 0.0),
+                                "vgv_base": float(vgv_venda or 0.0),
+                                "data_venda": str(dt_ven)[:10] if dt_ven else "",
+                                "data_distrato": dt_dis_str,
+                                "caixa_acumulado": 0.0,
+                                "caixa_mes": 0.0,
+                                "acrescimo_acumulado": 0.0,
+                                "acrescimo_mes": 0.0,
+                                "tributos_caixa_mes": 0.0,
+                                "tributos_caixa_acumulado": 0.0,
+                                "tributos_soc_mes": 0.0,
+                                "tributos_soc_acumulado": 0.0,
+                                "soc_acumulado": 0.0,
+                                "receita_soc_mes": 0.0,
+                                "tributos_total": 0.0,
+                                "pis": 0, "cofins": 0, "irpj": 0, "csll": 0, "ret": 0, "irpj_adicional": 0
+                            }
+                            
+                            # Para garantir lucro acumulado ou receitas passadas que não vieram do caixa deste mês,
+                            # o idéal é assumir que o 'caixa_acumulado' não importa para o rateio do CMV,
+                            # pois o CMV usa a 'Fração Física'
+                        
                         vgv_uni = uni_data["vgv"]
                         vgv_base = uni_data.get("vgv_base", vgv_uni)
                         if vgv_base <= 0: continue
-    
+                        
                         # --- IFRS 15: Detectar se a venda ocorreu NO mês-alvo ---
-                        # Se a DATA_VENDA cai no mesmo mês que estamos processando, a unidade
-                        # não existia como "vendida" no mês anterior — rec_ant e custo_ant devem ser 0.
-                        target_ym = f"{str(ano).zfill(4)}-{str(mes).zfill(2)}"
                         data_venda_str = uni_data.get("data_venda") or ""
                         venda_ym = data_venda_str[:7] if data_venda_str and len(data_venda_str) >= 7 else ""
                         is_nova_venda_mes_alvo = bool(venda_ym) and (venda_ym == target_ym)
                         is_venda_futura = bool(venda_ym) and (venda_ym > target_ym)
                         
-                        data_distrato_str = uni_data.get("data_distrato") or ""
-                        distrato_ym = data_distrato_str[:7] if data_distrato_str and len(data_distrato_str) >= 7 else ""
                         is_novo_distrato_mes_alvo = bool(distrato_ym) and (distrato_ym == target_ym)
-                        is_distrato_antigo = bool(distrato_ym) and (distrato_ym < target_ym)
-    
+                        
+                        if is_venda_futura:
+                            continue
+                            
                         # CUSTO ECONÔMICO (Fração Física / Metragem)
                         # O Custo já reflete a evolução física (foi gasto e medido). Deve-se aplicar apenas o Índice Comercial da unidade.
                         area_da_unidade = area_unidades.get(str(uni_nome).strip(), 0.0)
                         fracao_fisica = (area_da_unidade / total_area_emp) if total_area_emp > 0 else 0.0
                         
-                        if is_venda_futura or is_distrato_antigo:
-                            custo_u_atual = 0.0
-                            custo_u_ant = 0.0
-                        else:
-                            custo_u_atual = 0.0 if (bool(distrato_ym) and distrato_ym <= target_ym) else (custo_gasto_vigente * fracao_fisica)
-                            
-                            # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
-                            custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
-                                          custo_gasto_anterior * fracao_fisica
+                        custo_u_atual = 0.0 if is_novo_distrato_mes_alvo else (custo_gasto_vigente * fracao_fisica)
+                        custo_u_ant = 0.0 if is_nova_venda_mes_alvo else (custo_gasto_anterior * fracao_fisica)
                             
                         mov_custo_u = custo_u_atual - custo_u_ant
                         
@@ -893,13 +984,15 @@ class AccountingGraphPipeline:
                              nat_est = 'C' if mov_custo_u >= 0 else 'D'
                              
                              if is_novo_distrato_mes_alvo and mov_custo_u < 0:
-                                 hist_base = emp.get('hist_estorno_custo', 'Estorno Custo')
+                                 hist_base = emp.get('hist_estorno_custo', 'ESTORNO CUSTO')
+                                 hist_estoque = emp.get('hist_estorno_custo', 'ESTORNO CUSTO')
                              else:
                                  hist_base = emp.get('hist_aprcusto', 'Apropriação Custo')
+                                 hist_estoque = "BAIXA ESTOQUE"
                                  
                              logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}{'  [DISTRATO MÊS ALVO]' if is_novo_distrato_mes_alvo else ''}"
                              inject_virtual_entry(c_custo, abs(mov_custo_u), nat_custo, f"{hist_base} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
-                             inject_virtual_entry(c_estoque, abs(mov_custo_u), nat_est, f"BAIXA ESTOQUE UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+                             inject_virtual_entry(c_estoque, abs(mov_custo_u), nat_est, f"{hist_estoque} UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
     
                         # ── RECEBIMENTOS: Split Principal vs Variação Monetária ─────────────────────────
                         caixa_acum = uni_data["caixa_acumulado"]
@@ -910,7 +1003,7 @@ class AccountingGraphPipeline:
                              logica_caixa = f"Unid {uni_nome}: Integralização de Caixa/Banco no mês = {caixa_mes:,.2f}"
                              inject_virtual_entry(c_caixa_banco, abs(caixa_mes), 'D' if caixa_mes > 0 else 'C', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
 
-                        if is_venda_futura or is_distrato_antigo:
+                        if is_venda_futura:
                              rec_auferida_atual = 0.0
                              rec_auferida_ant = 0.0
                         else:
@@ -1103,60 +1196,7 @@ class AccountingGraphPipeline:
                                 nat_c = 'C' if m_ant > 0 else 'D'
                                 inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_ant_ant * peso_imp))
                                 inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Estorno Excesso Despesa Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_ant_ant * peso_imp))
-                # -----------------------------------------------------------------------
-                # IFRS 15 — Vendas do mês-alvo sem recebimentos (não estão em receitas_meta)
-                # Regra: se POC >= 100% na data_venda, a receita é integralmente reconhecida.
-                # Essas unidades não geram linhas no get_receitas_caixa (LEFT JOIN vazio),
-                # por isso precisam ser buscadas diretamente aqui.
-                # -----------------------------------------------------------------------
-                try:
-                    data_ini_mes_ctb = f"{ano}-{str(mes).zfill(2)}-01"
-                    data_fim_mes_ctb = f"{ano+1}-01-01" if int(mes) == 12 else f"{ano}-{str(int(mes)+1).zfill(2)}-01"
-    
-                    _cur_nv = conn_vulcano.cursor()  # cursor dedicado — não sobrescreve cur_v
-                    # Busca vendas do mês que pertencem a este empreendimento
-                    _cur_nv.execute("""
-                        SELECT v.ID, v.DESCUNIDIMOB, v.TOTALVENDA, v.DTOPER
-                        FROM VENDA v
-                        WHERE v.IDEMPREENDIMENTO = ?
-                          AND v.DTOPER >= CAST(? AS DATE)
-                          AND v.DTOPER <  CAST(? AS DATE)
-                          AND (v.DISTRATO IS NULL OR v.DISTRATO <> 'S')
-                    """, (emp["id"], data_ini_mes_ctb, data_fim_mes_ctb))
-                    vendas_mes = _cur_nv.fetchall()
-                    _cur_nv.close()
-                    print(f"[INFO nv_scan] {emp['nome'][:35]} ID={emp['id']} poc={poc_acumulado_vigente} vendas_mes={len(vendas_mes)}")
-    
-                    # contas com fallback seguro (meta_emp pode estar vazio)
-                    _c_cli = emp.get("conta_cli") or 99999
-                    _c_rec = emp.get("conta_rec") or 99999
-    
-                    # Unidades já processadas via receitas_meta (têm recebimentos)
-                    unidades_ja_processadas = {u["unidade"] for u in meta_emp.get("unidades", [])}
-    
-                    for vrow in vendas_mes:
-                        vid, vuni_raw, vvgv, vdtoper = vrow
-                        vuni = (vuni_raw.decode('win1252', 'ignore').strip() if isinstance(vuni_raw, bytes) else str(vuni_raw or '').strip())
-                        vvgv = float(vvgv or 0.0)
-                        if vvgv <= 0: continue
-                        if vuni in unidades_ja_processadas: continue  # já reconhecida via pipeline normal
-    
-                        if poc_acumulado_vigente < 100.0:
-                            print(f"[INFO nv_scan] {vuni} poc={poc_acumulado_vigente} < 100 → pulando")
-                            continue
-    
-                        # Reconhecimento integral: D Clientes / C Receita = VGV
-                        logica_nv = (f"[VENDA NO MÊS SEM RECEBIMENTOS] Unid {vuni}: VGV={vvgv:,.2f} | "
-                                     f"POC={poc_acumulado_vigente}% → Reconhecimento integral IFRS 15")
-                        inject_virtual_entry(_c_cli, vvgv, 'D',
-                                             f"Faturamento Direito s/ Venda - Unid {vuni}",
-                                             logica=logica_nv, saldo_ant=0.0)
-                        inject_virtual_entry(_c_rec, vvgv, 'C',
-                                             f"Receita de Vendas POC 100% - Unid {vuni}",
-                                             logica=logica_nv, saldo_ant=0.0)
-                        print(f"[INFO nova_venda_sem_recb] {emp['nome'][:35]} | {vuni} | VGV={vvgv:,.0f} | INJETADO")
-                except Exception as _e_nv:
-                    print(f"Erro ao buscar vendas do mês sem recebimentos: {_e_nv}")
+
     
                 # Fecha saldo_final de todas as contas virtuais APÓS todas as injeções (incluindo novas vendas)
                 for c, data in contas_virtuais.items():

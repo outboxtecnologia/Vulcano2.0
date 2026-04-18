@@ -6,3 +6,6 @@ Para não repetir conceitos, o agente consulta essa lista ativamente antes de ge
 ## Termos já explicados:
 - Pandas DataFrame (.groupby, .agg)
 - Nomeação e Recuperação Dinâmica (`hasattr`, `getattr`, `.get()`)
+- Loop de Processamento Desacoplado
+- Data Enrichment / Payload Annotation
+- Scoped Dictionary Pattern
