@@ -629,7 +629,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
                            const { chave, origem } = JSON.parse(dataStr);
                            if (!chave) return;
                            setManualOverrides(prev => ({...prev, [chave]: k}));
-                           fetch('http://localhost:8000/api/questor/memoria_arraste', {
+                           fetch(`${API_BASE}/api/questor/memoria_arraste`, {
                                method: 'POST',
                                headers: { 'Content-Type': 'application/json' },
                                body: JSON.stringify({ chave, conta_destino: k, origem })
@@ -746,7 +746,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2 }) {
                         const { chave, origem } = JSON.parse(dataStr);
                         if (!chave) return;
                         setManualOverrides(prev => ({...prev, [chave]: k}));
-                        fetch('http://localhost:8000/api/questor/memoria_arraste', {
+                        fetch(`${API_BASE}/api/questor/memoria_arraste`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ chave, conta_destino: k, origem })

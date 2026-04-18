@@ -3186,37 +3186,7 @@ def get_vulcano_vendas(empresa_id: int):
         df_vendas = pd.read_sql_query(query_vendas, conn, params=(empresa_id,))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
         
-        query_livres = """
-            SELECT u.ID as UNIDADE_ID, u.NUMCADIMOB, u.DESCRICAO as DESCUNIDIMOB, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID
-            FROM UNIDADE u
-            JOIN BLOCO b ON u.IDBLOCO = b.ID
-            JOIN EMPREENDIMENTO e ON b.IDEMPREENDIMENTO = e.ID
-            WHERE e.CODIGOEMPRESA = ?
-              AND NOT EXISTS (
-                  SELECT 1 FROM VENDAUNIDADE vu
-                  JOIN VENDA v ON vu.IDVENDA = v.ID
-                  WHERE vu.IDUNIDADE = u.ID AND COALESCE(v.DISTRATO, 'N') <> 'S'
-              )
-        """
-        df_livres = pd.read_sql_query(query_livres, conn, params=(empresa_id,))
-        
-        # Populate missing columns to match schema
-        df_livres['ID'] = None
-        df_livres['DTOPER'] = None
-        df_livres['CNPJ'] = None
-        df_livres['CLIENTE_NOME'] = None
-        df_livres['TOTALVENDA'] = 0.0
-        df_livres['DISTRATO'] = 'LIVRE' # Special flag for frontend
-        df_livres['PERMUTA'] = None
-
-        if len(df_livres) > 0 or len(df_vendas) > 0:
-            df = pd.concat([df_vendas, df_livres], ignore_index=True)
-            # Sort by ID (putting None/Livres at the end) and then DTOPER
-            df['sort_id'] = df['ID'].fillna(0)
-            df.sort_values(by=['sort_id', 'DTOPER'], ascending=[False, False], inplace=True)
-        else:
-            df = df_vendas
-            
+        df = df_vendas
         df = df.replace({np.nan: None})
         conn.close()
 
