@@ -1412,7 +1412,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                            </div>
 
-                           <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)]">
+                           <p className="text-[14px] text-[var(--v-text-bold)] font-bold mb-6 leading-relaxed bg-[var(--v-deep)] p-4 rounded border border-[var(--v-border)] whitespace-pre-wrap">
 
                              {agentState.sugestao_correcao.descricao}
 

@@ -27,11 +27,12 @@ Marque `[x]` quando as etapas do LangGraph forem construídas e implementadas na
   - O grafo é pausado (`Interrupt`) em conciliações de alto impacto. O sistema só avança e grava no banco após você aprovar na interface do Explorer.
   - ✅ Entregue: nodo Revisão com interrupt_before + frontend HITL modal com Aprovar/Rejeitar.
   - ✅ Entregue: **Dossiê Heurístico Temporal**: Painel visual dinâmico com tabela matriz comparando Mês-a-Mês métricas do Custo Questor vs IFRS V2 vs Fluxo vs POC/CUB para embasar a validação humana inteligente. [Ver Lousa Visual](Fluxo_Heuristico_Temporal.canvas)
+  - ✅ Entregue (Upgrade): Sistema de Modais React blindados contra vazamentos (Event Bubbling) para rastreio textual direto da LCTOCTB (Extrato Razão Específico da Unidade), somadores globais nativos calculados em Cascata via Backend e Cálculo Transparente do Coeficiente de M² (Fração da Obra).
 - [x] 3. **Ciclos de Autocorreção Reflexiva (Self-Correction)**
   - Retorno em Loop nas extrações quebra-cabeça que quebrarem a extração de Sienge PDF. O próprio sistema avista o JSON errado, diz "quebrei" e arruma sem a mão humana.
   - ✅ Entregue: nodo AutoCorrecao + roteador _route_ferramentas + budget MAX_AUTOCORRECOES=2
-- [ ] 4. **Orquestração Multi-Agente Avançada**
-  - Ramificação de Especialistas: Agente Fiscal (DARFs e Guias), Agente Imobiliário (Cálculos de POC/VGV) e Agente de Síntese (Montador de JSON).
+- [x] 4. **Orquestração Multi-Agente Avançada**
+  - Ramificação Total de Especialistas: Agente Fiscal/Tributos (DARFs e Guias), Agente Imobiliário (Cálculos de Obra em LCTOGER), Agente de Clientes (Contas a Receber 1.y), Agente de Antecipações (Adiantamento 2.y), Agente de Receitas (3.x/4.x - IFRS 15), e Agente de Síntese (Montador de JSON Estrito com citação em Markdown de Lançamentos SQL).
 
 ---
 

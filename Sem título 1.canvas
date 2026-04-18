@@ -14069,7 +14069,7 @@
 		{"id":"56491705f7e76088","type":"file","file":"frontend/node_modules/@eslint-community/eslint-utils/node_modules/eslint-visitor-keys/dist/visitor-keys.d.ts","x":-283,"y":633584,"width":400,"height":400},
 		{"id":"6ba3b1e246790904","type":"file","file":"frontend/node_modules/@babel/traverse/lib/visitors.js","x":162,"y":633584,"width":400,"height":400},
 		{"id":"fc001d0fea3eae0c","type":"file","file":"frontend/node_modules/@babel/traverse/lib/visitors.js.map","x":607,"y":633584,"width":400,"height":400},
-		{"id":"5b7e2084ad855381","type":"file","file":"frontend/src/assets/vite.svg","x":1052,"y":633584,"width":400,"height":400},
+		{"id":"5b7e2084ad855381","type":"file","file":"frontend/src/assets/vite.svg","x":1052,"y":633584,"width":400,"height":244},
 		{"id":"fa539684da0e9dd9","type":"file","file":"frontend/node_modules/vite/bin/vite.js","x":-2953,"y":634029,"width":400,"height":400},
 		{"id":"430025137b44e68a","type":"file","file":"frontend/vite_error.txt","x":-2508,"y":634029,"width":400,"height":400},
 		{"id":"65aeb04b03973dee","type":"file","file":"frontend/vite.config.js","x":-2063,"y":634029,"width":400,"height":400},

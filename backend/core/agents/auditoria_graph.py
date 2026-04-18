@@ -1,18 +1,21 @@
 """
-Grafo LangGraph — Agente Investigativo de Auditoria Contábil (ReAct)
+Grafo LangGraph — Orquestração Multi-Agente Avançada (Phase 4)
 
 Nodos:
-  Supervisor   → LLM com tool-calling ReAct
-  FerraRegras  → ToolNode (executa tools reais no Firebird/SQLite)
-  Revisao      → Interrupção HITL (aguarda aprovação humana)
-  Finalizacao  → Persiste resultado aprovado
-
-Fluxo:
-  Supervisor ──(tool_call)──→ FerraRegras ──→ Supervisor (loop ReAct)
-  Supervisor ──(resposta)──→ Revisao (PAUSE)
-  Revisao ──(aprovado=True)──→ Finalizacao
-  Revisao ──(aprovado=False)──→ END
+  Extrator             → Prepara (Dossiê Heurístico Temporal) via Python/Pandas logic
+  SupervisorRouter     → Agente Básico LLM que define para onde a investigação deve ir
+  AgenteImobiliario    → Especialista em Cusos de Obra, Estoques 1.x e Metragens
+  AgenteFiscal         → Especialista em Tributos e Contas 2.x
+  Sintese              → Agente que emite o formato JSON Factual obrigatório
+  FerraRegras          → ToolNode padrão acionado pelos Especialistas
+  Revisao              → Interrupção HITL (aguarda aprovação humana)
+  Finalizacao          → Persiste resultado aprovado
 """
+
+import json
+import sqlite3
+import os
+import re
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -30,10 +33,9 @@ from core.agents.tools import (
 )
 from langgraph.prebuilt import ToolNode
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
-import json
-import sqlite3
-import os
 from core.services.combinatorial_analyzer import IFRS15Analyzer
+
+llm = get_agent_llm()
 
 # ── Checkpointer (memória persistida em SQLite) ───────────────────────────────
 db_path = os.path.join(os.path.dirname(__file__), "..", "..", "agente_checkpoints.sqlite")
@@ -52,389 +54,270 @@ tools_list = [
     dossie_amostral_unidades_vulcano,
 ]
 tool_node = ToolNode(tools_list)
+llm_with_tools = llm.bind_tools(tools_list)
 
-# ── System Prompt ─────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Você é um Agente Investigativo Contábil especializado em reconciliar divergências no ERP Questor.
-Você tem acesso a ferramentas SQL que consultam o banco Firebird (Questor/Vulcano) e o SQLite (poc_database).
+# ── Prompts Especializados ───────────────────────────────────────────────────
 
-Missão:
-1. Receba a conta alvo e chame OBRIGATORIAMENTE pelo menos 2 ferramentas para coletar dados reais.
-2. A ferramenta `buscar_conta_no_plano` deve ser a primeira chamada para entender o grupo da conta.
-3. Use `analisar_lancamentos_questor` para ver o histórico físico de lançamentos (amostra rápida).
-4. Se for conta de resultado/receita (classif 4.x ou 5.x), use `verificar_receitas_custos_poc`.
-5. Se for passivo ou tributo (classif 2.x), use `buscar_proximidade_passivos_fiscais`.
+ROUTER_PROMPT = """Você é o Supervisor de Auditoria Roteador.
+Baseado no nome da conta e nos dados do Dossiê, você OBRIGATORIAMENTE DEVE escolher quem vai conduzir a análise profunda respondendo APENAS com a palavra chave:
+1. Se for ESTOQUE, CUSTO DE OBRA ou IMÓVEL (começa com 1.1.X ou envolve métricas Físicas/Stuttgart): Responda "IMOBILIARIO"
+2. Se for CLIENTES / DUPLICATAS (começa com 1.1.2.01.X): Responda "CLIENTES"
+3. Se for PASSIVO FISCAL, FORNECEDORES ou TRIBUTOS (começa com 2.X e trata de DARF/Imposto): Responda "TRIBUTOS"
+4. Se for ADIANTAMENTO DE CLIENTES / ANTECIPAÇÕES (Geralmente 2.1.2.02.X): Responda "ANTECIPACOES"
+5. Se for RESULTADO DE VENDA / RECEITA (começa com 3.X ou 4.X e fala sobre Custo IFRS 15): Responda "RECEITAS"
+Se não tiver certeza, ou for apenas Resultado genérico e houver CC e Metragem: Responda "IMOBILIARIO".
+NÃO ESCREVA NENHUM OUTRO TEXTO ALÉM DA PALAVRA-CHAVE."""
 
-REGRAS ESPECIAIS para contas de ESTOQUE DE OBRA (classif 1.x — ex: IMÓVEIS A CONCLUIR):
-6. PADRÃO DE OBRA: nos empreendimentos imobiliários em construção, os gastos de obra são
-   lançados DIRETAMENTE em LCTOGER pelo Centro de Custo (CC) do empreendimento,
-   INDEPENDENTEMENTE da conta contábil. O CC é o identificador-chave do empreendimento.
-   Exemplo: Res. Stuttgart = CC 35.
-   NUNCA filtre por conta ao analisar LCTOGER para contas 1.x. Filtre sempre por CC.
-7. Chame OBRIGATORIAMENTE `analisar_estoque_lctoger` com o parâmetro `cc_empreendimento`:
-   - Isto ativa o modo CC que retorna TODOS os lançamentos do empreendimento no LCTOGER.
-   - Exemplo: analisar_estoque_lctoger(conta_alvo='5639', cc_empreendimento=35)
-   - O retorno inclui `contas_mais_debitadas_no_cc` (top-15) para mapear a composição de custo.
-   - `conta_alvo_presente_nos_lancamentos` = True confirma que a conta 1.x aparece neste CC.
-   - Se False: conta ou CC incorretos, ou não há lançamentos no período consultado.
-8. Se a conta tem créditos com APTO no histórico, chame `agrupar_creditos_por_apto`:
-   - `coeficiente_variacao` < 0.30 = distribuição UNIFORME (fração física provavelmente correta)
-   - `coeficiente_variacao` > 0.60 = distribuição CONCENTRADA (investigar unidades de valor atípico)
-   - O % de cada APTO deve ser proporcional à sua fração de área sobre a área total do empreendimento.
-   - Um crédito em conta 1.x não representa fluxo financeiro mas estimativa de custo incorrido.
-9. OBRIGATÓRIO: Para testar a exatidão fracionária do Estoque, chame calcular_custo_realizado_poc_metragem(cc_empreendimento). Se a unidade bater perfeitamente com a rubrica 	este_distorcao_com_poc em vez de custo_correto_ifrs15, AONDE HOUVER erro, a recomendação (acao) é refazer o custeio: a empresa aplicou o % de POC sobre a mensuração do custo inadvertidamente.
+IMOBILIARIO_PROMPT = """Você é o Agente Especialista Imobiliário (CPC 47 e IFRS 15).
+Você analisa contas 1.x e Custos de Obra de empreendimentos via Dossiê Heurístico e Tools (Firebird).
 
-Regras IFRS 15 / CPC 47:
-- Receita é reconhecida com base na POC (Percentual de Obra Concluída) × VGV por venda individual.
-- Custos são reconhecidos proporcionalmente à fração de área de cada unidade.
-- Divergências comuns: diferença de timing, conta filho vs conta mãe, lançamento ZZ zerado.
+REGRAS DE OURO DA ENGENHARIA CONTÁBIL (CUSTO E POC):
+1. CUSTOS DE OBRA FISICOS: Em LCTOGER (filtrado por CC, ex 35). Use 'analisar_estoque_lctoger' para ver os lançamentos brutos da obra inteira.
+2. CUSTO FRACIONÁRIO: Cada APTO acumula um % físico de Custeio Total (baseado na Área m²).
+3. DESVIO DE POC NO CUSTO (O GRANDE ERRO): Para frações/unidades vendidas, o Custo INCORRIDO deve ser 100% da sua Fração de Obra. O Percentual de POC Global (ex: 27%) serve para medir o Ritmo da Receita ao longo dos anos, MAS NÃO DEVE ser aplicado para mutilar a baixa do custo de uma fração unitária transferida. Se os créditos (baixas no estoque) estiverem batendo exatamente com a métrica "teste_distorcao_com_poc" da ferramenta, a empresa cometeu o erro fatal de mutilar o custo fracionário multiplicando-o pelo POC! Denuncie esse erro!
+4. PADRÕES: Use 'agrupar_creditos_por_apto'. Se a distribuição de créditos é <= 0.30, a taxa fracionária base é boa, mas o valor bruto pode ter sido distorcido por POC equivocado.
+Para encerrar a investigação chame FINALIZAR_INVESTIGACAO na sua mente e aguarde o nó de Síntese."""
 
-Formato da sugestão final (após ferramentas):
-Responda em JSON com:
+TRIBUTOS_PROMPT = """Você é o Agente Especialista Fiscal e Tributário do Questor.
+Geralmente opera contas passivas 2.x e DARFs.
+Sua regra master é usar 'buscar_proximidade_passivos_fiscais' e cruzar pagamentos parciais no banco. Considere apropriação indevida ou juros sobre multas.
+Para encerrar a investigação chame FINALIZAR_INVESTIGACAO na sua mente e aguarde o nó de Síntese."""
+
+CLIENTES_PROMPT = """Você é o Agente Especialista de Contas a Receber (VGV de Clientes - 1.1.2.01.x).
+Analisa se a soma de recebimentos e saldos bate com os dossiês e o Vulcano Caixa.
+Use 'agrupar_creditos_por_apto' ou analise lançamentos da conta. Se o saldo não baixar conforme o Dossiê indica, sinalize erro de baixa.
+Para encerrar chame FINALIZAR_INVESTIGACAO na sua mente."""
+
+ANTECIPACOES_PROMPT = """Você é o Agente Especialista de Antecipações (Adiantamento de Clientes - 2.1.2.02.x).
+Você foca nas unidades não entregues (em construção). O dinheiro que entra antes do encerramento deve ficar aqui como Passivo, migrando para Receita conforme a proporção do POC da Obra IFRS 15.
+Analise a distorção se a conta não estiver batendo com a métrica de Caixa recebido não realizado do Vulcano.
+Para encerrar chame FINALIZAR_INVESTIGACAO na sua mente."""
+
+RECEITAS_PROMPT = """Você é o Agente Especialista de Receitas (3.x ou 4.x - IFRS 15).
+Você analisa o reconhecimento de Vendas e Multas. Use rigorosamente a 'verificar_receitas_custos_poc'.
+Se o POC diz que deve realizar 10% da receita e a empresa realizou 100% num imóvel em planta, emite um Alerta Crítico.
+Para encerrar chame FINALIZAR_INVESTIGACAO na sua mente."""
+
+SINTESE_PROMPT = """Você é o Sintetizador Final. Seu objetivo estruturar os relatos e ferramentas encontradas num laudo técnico que entrará na tela do Fechamento P/ Human-in-the-Loop.
+Regra de Ouro (LANÇAMENTOS EXAUSTIVOS): Se o Especialista relatar inconsistências originadas em lançamentos contábeis específicos (ex: datas, históricos ou valores atípicos que causaram a divergência na ferramenta SQL), você DEVE EXPLICITAMENTE embutir esses lançamentos citados no final do texto da "descricao" no padrão Bullet Point Exemplo: `* Data: 2025-03-31 | Valor: R$ 900.00 | Histórico: TRANSFERENCIA X`. Nunca omita o lançamento se o especialista o encontrou.
+
+Você precisa emitir um JSON VÁLIDO obedecendo a:
 {
-  "descricao": "<análise factual baseada nos dados retornados pelas ferramentas>",
-  "acao": "<ação contábil recomendada: ex: Reclassificar, Estornar, Complementar, Verificar lançamento X>",
-  "conta_contrapartida": "<conta sugerida para a contrapartida, ex: 5.1.02.001>"
-}
-"""
+  "descricao": "<resenha analitica factual do Especialista anterior com Bullet Points dos Lançamentos identificados>",
+  "acao": "<acao contábil prática>",
+  "conta_contrapartida": "<conta sugerida ou vazio>"
+}"""
 
-# ── Nodo Supervisor (ReAct Loop) ───────────────────────────────────────────────
+# ── Nodos Orquestrados ────────────────────────────────────────────────────────
 
 def extrator_heuristico_node(state: AuditoriaGraphState):
-    """
-    Roda apenas uma vez no inicio do Grafo: Extrai os dados do Firebird/SQLite,
-    monta a matriz temporal (Dossiê) e formata o prompt de calibração para o HITL.
-    """
     conta = state.get("conta_alvo", "")
-    active_system_prompt = state.get("prompt_calibracao") or SYSTEM_PROMPT
-    
     if not state.get("dossie_heuristico"):
         try:
             dossie = IFRS15Analyzer.gerar_dossie_temporal(35, 959, conta_alvo=conta, limite_amostra=5)
-            str_dossie = "\\n\\n--- DOSSIÊ HEURÍSTICO PYTHON (Amostra 5 unidades - CC: 35) ---\\n" + json.dumps(dossie, ensure_ascii=False, indent=2)
+            str_dossie = "\n\n--- DOSSIÊ HEURÍSTICO PYTHON (Amostra 5 unidades - CC: 35) ---\n" + json.dumps(dossie, ensure_ascii=False, indent=2)
         except Exception as e:
-            str_dossie = "\\n\\n(Falhou ao processar dossiê heurístico: " + str(e) + ")"
+            str_dossie = "(Falhou ao processar dossiê: " + str(e) + ")"
             dossie = {}
 
-        prompt_com_amostra = active_system_prompt + "\\n\\nConta alvo: " + conta + str_dossie
-        _dossie_val = dossie if isinstance(dossie, dict) else {}
-        
         return {
-            "prompt_calibracao": prompt_com_amostra, 
-            "dossie_heuristico": _dossie_val, 
-            "passos_executados": ["Pausado para Calibração Visual do Dossiê. Verifique a nova tabela abaixo."]
+            "dossie_heuristico": dossie if isinstance(dossie, dict) else {},
+            "prompt_calibracao": str_dossie,
+            "passos_executados": ["Motor Python extraiu Dados Determinísticos: Dossiê Temporal Heurístico Carregado."]
         }
     return {}
 
-def supervisor_node(state: AuditoriaGraphState):
-    """
-    Nó LLM: Invoca o Vertex AI com base no Prompt de Calibração (que pode ter sido reescrito pelo usuário).
-    """
+def supervisor_router_node(state: AuditoriaGraphState):
     conta = state.get("conta_alvo", "")
-    hist = state.get("historico_aprendizado", [])
+    dossie = state.get("prompt_calibracao", "")
+    msg = HumanMessage(content=f"Análise a conta: {conta}. E os logs: {dossie[:300]}")
+    resp = llm.invoke([SystemMessage(content=ROUTER_PROMPT), msg])
+    decision = resp.content.strip().upper()
     
-    # O user pode ter reescrito o prompt_calibracao na tela de pause:
-    final_prompt = state.get("prompt_calibracao") or SYSTEM_PROMPT
+    agente_escolhido = "Imobiliario"
+    if "CLIENTES" in decision: agente_escolhido = "Clientes"
+    elif "TRIBUTOS" in decision: agente_escolhido = "Tributos"
+    elif "ANTECIPACOES" in decision: agente_escolhido = "Antecipacoes"
+    elif "RECEITAS" in decision: agente_escolhido = "Receitas"
+    elif "IMOBILIARIO" in decision: agente_escolhido = "Imobiliario"
     
-    messages = [SystemMessage(content=final_prompt)]
-    historico_msgs = state.get("messages", [])
-    # Rehidrata MSGS antigas se precisar (simplificado)
-    messages.extend(historico_msgs)
-    
-    if state.get("sugestao_correcao"):
-        messages.append(HumanMessage(content=f"Dica p/ autocorreção: {json.dumps(state['sugestao_correcao'])}"))
-        
-    print("[Supervisor] Chamando Vertex AI...")
-    response = llm.invoke(messages)
-    
-    return {"messages": [response], "passos_executados": ["Supervisor (LLM) avaliou os dados e tomou decisão."]}
-
-# Monta as mensagens para enviar ao LLM
-    # IMPORTANTE: o LangGraph acumula via operator.add — não re-passamos o historico no retorno
-    historico_msgs = state.get("messages", [])
-
-    if not historico_msgs:
-        # Primeira chamada: cria a mensagem humana inicial e envia junto
-        user_msg = HumanMessage(content=f"Investigue a divergência na conta: {conta}. Comece coletando dados com as ferramentas disponíveis.")
-        msgs = [SystemMessage(content=SYSTEM_PROMPT), user_msg]
-        # Retorna a HumanMessage inicial para o estado (delta)
-        msgs_delta_pre = [user_msg]
-    else:
-        msgs = [SystemMessage(content=SYSTEM_PROMPT)] + historico_msgs
-        msgs_delta_pre = []
-
-    res = llm.invoke(msgs)
-
-    # Determina se o LLM quer chamar tools ou finalizou
-    tool_calls = getattr(res, "tool_calls", None) or []
-
-    passo = f"Supervisor: {'Chamando ' + ', '.join(tc['name'] for tc in tool_calls) if tool_calls else 'Formulando resposta final'}"
-
-    # Retorna APENAS as novas mensagens (delta) — operator.add faz a concatenação
-    novo_state = {
-        "passos_executados": [passo],
-        "messages": msgs_delta_pre + [res],
-    }
-
-    # Se o LLM respondeu com texto final (sem mais tool calls), extrai a sugestão
-    if not tool_calls:
-        texto = ""
-        if hasattr(res, "content"):
-            c = res.content
-            if isinstance(c, list):
-                for part in c:
-                    if isinstance(part, dict) and part.get("type") == "text":
-                        texto += part.get("text", "")
-            else:
-                texto = str(c)
-
-        # Tenta extrair JSON da resposta
-        sugestao = _extract_json_sugestao(texto, conta)
-        novo_state["sugestao_correcao"] = sugestao
-
-    return novo_state
-
-
-def _extract_json_sugestao(texto: str, conta_alvo: str) -> dict:
-    """Extrai o JSON de sugestão do texto do LLM. Fallback gracioso se não encontrar."""
-    import re
-    # Tenta encontrar bloco JSON na resposta
-    match = re.search(r'\{[^{}]*"descricao"[^{}]*\}', texto, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except Exception:
-            pass
-
-    # Fallback: usa o texto como descrição
-    descricao = texto.strip()[:500] if texto.strip() else f"Análise da conta {conta_alvo} concluída."
     return {
-        "descricao": descricao,
-        "acao": "Revisar manualmente os lançamentos identificados nas ferramentas",
-        "conta_contrapartida": "—"
+        "passos_executados": [f"Supervisor Router avaliou o contexto e ativou: Agente {agente_escolhido}"],
+        "messages": [AIMessage(content=f"[SYSTEM: Rotetado para Agente {agente_escolhido}]")]
     }
 
+def route_from_router(state: AuditoriaGraphState):
+    last = state.get("messages", [])[-1].content
+    if "Agente Tributos" in last: return "AgenteTributos"
+    if "Agente Clientes" in last: return "AgenteClientes"
+    if "Agente Antecipacoes" in last: return "AgenteAntecipacoes"
+    if "Agente Receitas" in last: return "AgenteReceitas"
+    return "AgenteImobiliario"
 
-# ── Nodo de Ferramentas (ToolNode padrão LangGraph) ───────────────────────────
-def ferramentas_node(state: AuditoriaGraphState):
-    """Executa as tools solicitadas pelo LLM e adiciona os resultados ao histórico."""
+def especialista_node(state: AuditoriaGraphState, system_prompt: str, nome: str):
+    conta = state.get("conta_alvo", "")
+    dossie = state.get("prompt_calibracao", "")
     historico = state.get("messages", [])
-    last_msg = historico[-1] if historico else None
+    
+    # Injetamos o alvo diretamente no SystemMessage do Especialista para que ele saiba O QUE invocar
+    contexto_injetado = f"{system_prompt}\n\nManda bala na investigação! A CONTA ALVO é: {conta}\nLeitura Inicial do Dossiê Extrator:\n{dossie}"
+    
+    msgs = [SystemMessage(content=contexto_injetado)] + historico
+    res = llm_with_tools.invoke(msgs)
+    
+    tool_calls = getattr(res, "tool_calls", None) or []
+    passo = f"{nome}: {'Chamando {0} tools'.format(len(tool_calls)) if tool_calls else 'Investigação Finalizada. Enviando para Síntese'}"
+    return {"messages": [res], "passos_executados": [passo]}
 
-    if not last_msg or not getattr(last_msg, "tool_calls", None):
-        return {"passos_executados": ["Ferramenta: nenhuma tool_call encontrada"]}
+def agente_imobiliario_node(state: AuditoriaGraphState):
+    return especialista_node(state, IMOBILIARIO_PROMPT, "Especialista Imobiliário")
 
-    # Executa todas as tools e coleta apenas as ToolMessages (delta)
+def agente_tributos_node(state: AuditoriaGraphState):
+    return especialista_node(state, TRIBUTOS_PROMPT, "Especialista Tributos")
+
+def agente_clientes_node(state: AuditoriaGraphState):
+    return especialista_node(state, CLIENTES_PROMPT, "Especialista Clientes")
+
+def agente_antecipacoes_node(state: AuditoriaGraphState):
+    return especialista_node(state, ANTECIPACOES_PROMPT, "Especialista Antecipações")
+
+def agente_receitas_node(state: AuditoriaGraphState):
+    return especialista_node(state, RECEITAS_PROMPT, "Especialista Receitas")
+
+def route_especialista(state: AuditoriaGraphState):
+    last = state.get("messages", [])[-1]
+    if getattr(last, "tool_calls", None):
+        return "FerraRegras"
+    return "Sintese"
+
+def ferramentas_node(state: AuditoriaGraphState):
+    last_msg = state.get("messages", [])[-1]
+    if not getattr(last_msg, "tool_calls", None):
+        return {}
+    
     result_msgs = []
-    resultados_db = list(state.get("resultados_db", []))
     passos = []
-
+    
     for tc in last_msg.tool_calls:
         tool_name = tc["name"]
-        tool_args = tc["args"]
-        tool_id   = tc["id"]
-
-        # Localiza a ferramenta pelo nome
+        tool_args = tc.get("args", {})
+        tool_id = tc["id"]
+        
         tool_fn = next((t for t in tools_list if t.name == tool_name), None)
-        if tool_fn is None:
-            output = json.dumps({"status": "error", "message": f"Tool {tool_name} não encontrada"})
+        if not tool_fn:
+            output = json.dumps({"status": "error", "message": "Tool not found"})
         else:
             try:
                 output = tool_fn.invoke(tool_args)
             except Exception as e:
-                output = json.dumps({"status": "error", "message": str(e)})
+                output = str(e)
+                
+        result_msgs.append(ToolMessage(content=str(output)[:3000], tool_call_id=tool_id))
+        passos.append(f"FerraRegras: Executou {tool_name}")
+        
+    return {"messages": result_msgs, "passos_executados": passos}
 
-        result_msgs.append(ToolMessage(content=str(output), tool_call_id=tool_id))
-        resultados_db.append({"tool": tool_name, "args": tool_args, "result": output})
-        passos.append(f"Tool '{tool_name}' executada → {len(str(output))} chars de resultado")
-
-    # Retorna APENAS as novas ToolMessages (delta) — operator.add faz a concatenação
-    return {
-        "messages": result_msgs,
-        "resultados_db": resultados_db,
-        "passos_executados": passos,
-    }
-
-
-# ── Nodo de Revisão HITL ──────────────────────────────────────────────────────
-def revisao_node(state: AuditoriaGraphState):
-    """Ponto de interrupção HITL. O grafo pausa aqui para aguardar aprovação humana."""
-    return {"passos_executados": ["Aguardando revisão humana (HITL interrupt)..."]}
-
-
-# ── Nodo de Finalização ───────────────────────────────────────────────────────
-def finalizacao_node(state: AuditoriaGraphState):
-    """Executado após aprovação humana. Persiste o resultado e encerra."""
-    aprovado = state.get("aprovado_pelo_usuario", False)
-    feedback = state.get("feedback_usuario", "")
-    sugestao = state.get("sugestao_correcao", {})
-
-    passo = (
-        f"Correção APROVADA pelo usuário. Feedback: '{feedback}'. Ação: {sugestao.get('acao', '—')}"
-        if aprovado
-        else f"Correção REJEITADA pelo usuário. Feedback: '{feedback}'. Ciclo encerrado sem alteração."
-    )
-    return {"passos_executados": [passo]}
-
-
-# ── Nodo de Autocorreção Reflexiva (Tarefa 3 do Roadmap) ──────────────────────
-MAX_AUTOCORRECOES = 2  # Máximo de tentativas antes de desistir e ir para Revisao
-
-def autocorrecao_node(state: AuditoriaGraphState):
-    """Detecta erros nas ToolMessages, classifica a causa e injeta uma mensagem
-    corretiva no loop ReAct para que o LLM tente novamente com parâmetros ajustados.
-    Limita a MAX_AUTOCORRECOES ciclos para evitar loop infinito."""
-
+def route_ferramentas(state: AuditoriaGraphState):
+    # Retorna para o agente que emitiu a tool_call
     msgs = state.get("messages", [])
-    tentativas = state.get("tentativas_autocorrecao", 0)
+    # Procura backwards qual agente fez a analise
+    for m in reversed(msgs):
+        if isinstance(m, AIMessage):
+            if "Fiscal" in m.content: # ou metadata
+                return "Sintese" # Simplificando por ser prototype
+    return "AgenteImobiliario" # Default fallback
 
-    # Coleta ToolMessages com erro na última rodada de ferramentas
-    # Procura do fim do histórico até a última AIMessage (que continha os tool_calls)
-    erros_encontrados = []
-    for msg in reversed(msgs):
-        from langchain_core.messages import ToolMessage, AIMessage
-        if isinstance(msg, AIMessage):
-            break  # Parou na AIMessage da rodada — saímos do loop
-        if isinstance(msg, ToolMessage):
-            try:
-                parsed = json.loads(msg.content)
-                if parsed.get("status") == "error":
-                    erros_encontrados.append(parsed.get("message", "erro desconhecido"))
-            except Exception:
-                # Conteúdo não é JSON — verifica texto livre
-                if "error" in msg.content.lower() or "traceback" in msg.content.lower():
-                    erros_encontrados.append(msg.content[:200])
+def route_ferramentassimples(state: AuditoriaGraphState):
+    # Procura backwards quem chamou a tool para retornar a ele.
+    historico = state.get("messages", [])
+    for msg in reversed(historico):
+        if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+            # Achamos a AI que emitiu. Identificaremos o autor por inferencia da stack
+            pass
+    # No protótipo simplificado atual, não guardamos o sender ID. Usaremos o último Roteado!
+    roteado = "AgenteImobiliario"
+    for msg in historico:
+        if isinstance(msg, AIMessage) and "[SYSTEM: Rotetado" in msg.content:
+            roteado = msg.content.replace("[SYSTEM: Rotetado para Agente ", "").replace("]", "").strip()
+    return f"Agente{roteado}"
 
-    # Classifica o tipo de erro e monta instrução de correção
-    instrucao_correcao = ""
-    for erro in erros_encontrados:
-        err_lower = erro.lower()
-        if "não encontrei número de conta" in err_lower or "número de conta não encontrado" in err_lower:
-            instrucao_correcao += (
-                "ERRO DE PARÂMETRO: o argumento `conta_alvo` deve conter apenas o número da conta (ex: '5639'). "
-                "Não inclua palavras como 'conta', 'classif', ou o nome da conta. Use apenas os dígitos.\n"
-            )
-        elif "connection" in err_lower or "firebird" in err_lower or "unavailable" in err_lower:
-            instrucao_correcao += (
-                "ERRO DE CONEXÃO: o banco Firebird está inacessível. "
-                "Tente novamente com a mesma ferramenta — pode ser uma falha temporária.\n"
-            )
-        elif "tool" in err_lower and "não encontrada" in err_lower:
-            instrucao_correcao += (
-                "ERRO DE FERRAMENTA: você chamou uma ferramenta que não existe. "
-                f"As ferramentas disponíveis são: {[t.name for t in tools_list]}. Escolha uma delas.\n"
-            )
-        else:
-            instrucao_correcao += (
-                f"ERRO GENÉRICO na ferramenta: {erro[:200]}. "
-                "Tente uma abordagem diferente ou use outra ferramenta para obter os dados necessários.\n"
-            )
-
-    if not instrucao_correcao:
-        instrucao_correcao = (
-            "Algumas ferramentas retornaram resultados inesperados. "
-            "Revise os parâmetros e tente novamente ou use ferramentas alternativas."
-        )
-
-    # Injeta mensagem corretiva como HumanMessage para guiar o próximo ciclo ReAct
-    msg_correcao = HumanMessage(
-        content=(
-            f"[AUTOCORREÇÃO — Ciclo {tentativas + 1}/{MAX_AUTOCORRECOES}]\n"
-            f"{instrucao_correcao.strip()}\n\n"
-            "Por favor, corrija os parâmetros e continue a investigação usando as ferramentas disponíveis."
-        )
-    )
-
-    passo = f"AutoCorreção #{tentativas + 1}: {len(erros_encontrados)} erro(s) detectado(s) → instrução corretiva injetada"
-
-    return {
-        "messages": [msg_correcao],
-        "passos_executados": [passo],
-        "tentativas_autocorrecao": tentativas + 1,
-    }
-
-
-# ── Roteamento condicional do Supervisor ────────────────────────────────────
-def _route_supervisor(state: AuditoriaGraphState):
-    """Se o LLM ainda quer chamar tools, vai para FerraRegras. Senão, vai para Revisao."""
-    msgs = state.get("messages", [])
-    last = msgs[-1] if msgs else None
-    if last and getattr(last, "tool_calls", None):
-        return "FerraRegras"
-    return "Revisao"
-
-
-# ── Roteamento pós-FerraRegras: Autocorreção ou continua ReAct ────────────────
-def _route_ferramentas(state: AuditoriaGraphState):
-    """Após executar as tools:
-    - Se alguma retornou erro E ainda há budget de autocorreção → AutoCorrecao
-    - Caso contrário → Supervisor (continua o loop ReAct normalmente)
-    """
-    from langchain_core.messages import ToolMessage
-    msgs = state.get("messages", [])
-    tentativas = state.get("tentativas_autocorrecao", 0)
-
-    # Verifica se há erros nas ToolMessages da última rodada
-    tem_erro = False
-    for msg in reversed(msgs):
-        if not isinstance(msg, ToolMessage):
-            break  # Chegou fora das tool messages — para aqui
+def agente_sintese_node(state: AuditoriaGraphState):
+    historico = state.get("messages", [])
+    msgs = [SystemMessage(content=SINTESE_PROMPT)] + historico + [HumanMessage(content="Finalize a investigação e emita O JSON EXATO.")]
+    res = llm.invoke(msgs)
+    
+    texto = res.content
+    sugestao = {}
+    import re
+    match = re.search(r'\{[^{}]*"descricao"[^{}]*\}', texto, re.DOTALL)
+    if match:
         try:
-            parsed = json.loads(msg.content)
-            if parsed.get("status") == "error":
-                tem_erro = True
-                break
-        except Exception:
-            if "error" in msg.content.lower():
-                tem_erro = True
-                break
+            sugestao = json.loads(match.group(0))
+        except:
+            sugestao = {"descricao": texto[:500], "acao": "Revisar", "conta_contrapartida":""}
+    else:
+        sugestao = {"descricao": texto[:500], "acao": "Revisar", "conta_contrapartida":""}
+        
+    return {"sugestao_correcao": sugestao, "passos_executados": ["Sintese concluída. Pausando no HITL para Avaliação."], "messages": [res]}
 
-    if tem_erro and tentativas < MAX_AUTOCORRECOES:
-        return "AutoCorrecao"
-    return "Supervisor"
+def revisao_node(state: AuditoriaGraphState):
+    return {"passos_executados": ["Aguardando revisão humana..."]}
 
+def finalizacao_node(state: AuditoriaGraphState):
+    aprovado = state.get("aprovado_pelo_usuario", False)
+    return {"passos_executados": [f"Finalizado. Aprovado? {aprovado}"]}
 
-def _route_revisao(state: AuditoriaGraphState):
-    """Após HITL: aprovado → Finalização; rejeitado → END."""
-    if state.get("aprovado_pelo_usuario", False):
-        return "Finalizacao"
-    return END
+# ── Construção do Grafo Dinâmico ──────────────────────────────────────────────
 
-
-# ── Construção do Grafo ───────────────────────────────────────────────────────
 workflow = StateGraph(AuditoriaGraphState)
 
 workflow.add_node("Extrator", extrator_heuristico_node)
-workflow.add_node("Supervisor",    supervisor_node)
-workflow.add_node("FerraRegras",   ferramentas_node)
-workflow.add_node("AutoCorrecao",  autocorrecao_node)   # ← Tarefa 3
-workflow.add_node("Revisao",       revisao_node)
-workflow.add_node("Finalizacao",   finalizacao_node)
+workflow.add_node("SupervisorRouter", supervisor_router_node)
+workflow.add_node("AgenteImobiliario", agente_imobiliario_node)
+workflow.add_node("AgenteTributos", agente_tributos_node)
+workflow.add_node("AgenteClientes", agente_clientes_node)
+workflow.add_node("AgenteAntecipacoes", agente_antecipacoes_node)
+workflow.add_node("AgenteReceitas", agente_receitas_node)
+workflow.add_node("Sintese", agente_sintese_node)
+workflow.add_node("FerraRegras", ferramentas_node)
+workflow.add_node("Revisao", revisao_node)
+workflow.add_node("Finalizacao", finalizacao_node)
 
 workflow.set_entry_point("Extrator")
-workflow.add_edge("Extrator", "Supervisor")
+workflow.add_edge("Extrator", "SupervisorRouter")
 
-workflow.add_conditional_edges("Supervisor", _route_supervisor, {
-    "FerraRegras": "FerraRegras",
-    "Revisao":     "Revisao",
+workflow.add_conditional_edges("SupervisorRouter", route_from_router, {
+    "AgenteImobiliario": "AgenteImobiliario",
+    "AgenteTributos": "AgenteTributos",
+    "AgenteClientes": "AgenteClientes",
+    "AgenteAntecipacoes": "AgenteAntecipacoes",
+    "AgenteReceitas": "AgenteReceitas"
 })
 
-# Após executar as tools: verifica erros → autocorrect ou ReAct normal
-workflow.add_conditional_edges("FerraRegras", _route_ferramentas, {
-    "AutoCorrecao": "AutoCorrecao",
-    "Supervisor":   "Supervisor",
+for agente in ["AgenteImobiliario", "AgenteTributos", "AgenteClientes", "AgenteAntecipacoes", "AgenteReceitas"]:
+    workflow.add_conditional_edges(agente, route_especialista, {
+        "FerraRegras": "FerraRegras",
+        "Sintese": "Sintese"
+    })
+
+workflow.add_conditional_edges("FerraRegras", route_ferramentassimples, {
+    "AgenteImobiliario": "AgenteImobiliario",
+    "AgenteTributos": "AgenteTributos",
+    "AgenteClientes": "AgenteClientes",
+    "AgenteAntecipacoes": "AgenteAntecipacoes",
+    "AgenteReceitas": "AgenteReceitas"
 })
 
-# Autocorreção injeta mensagem e volta para o Supervisor (ReAct continua)
-workflow.add_edge("AutoCorrecao", "Supervisor")
 
-workflow.add_conditional_edges("Revisao", _route_revisao, {
+
+workflow.add_edge("Sintese", "Revisao")
+workflow.add_conditional_edges("Revisao", lambda state: "Finalizacao" if state.get("aprovado_pelo_usuario") else END, {
     "Finalizacao": "Finalizacao",
-    END:           END,
+    END: END
 })
 workflow.add_edge("Finalizacao", END)
 
-# Compila com checkpointer e pausa HITL antes de Revisao
 graph_app = workflow.compile(
     checkpointer=memory,
-    interrupt_before=["Supervisor", "Revisao"]
+    interrupt_before=["SupervisorRouter", "Revisao"]
 )

@@ -305,13 +305,10 @@ def analisar_estoque_lctoger(conta_alvo: str, empresa_id: int = 959,
                 SELECT FIRST 50
                     C.DATALCTOCTB, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0),
                     G.VALORLCTOGER, G.NATURLCTOCTB,
-                    C.CONTACTBDEB, C.CONTACTBCRED, G.CODIGOCENTROCUSTO,
-                    H.DESCRHISTCTB
+                    C.CONTACTBDEB, C.CONTACTBCRED, G.CODIGOCENTROCUSTO
                 FROM LCTOGER G
                 JOIN LCTOCTB C ON C.CODIGOEMPRESA  = G.CODIGOEMPRESA
                                AND C.CHAVELCTOCTB  = G.CHAVELCTOCTB
-                LEFT JOIN HISTCTB H ON H.CODIGOEMPRESA = C.CODIGOEMPRESA
-                               AND H.CODIGOHISTCTB = C.CODIGOHISTCTB
                 WHERE G.CODIGOEMPRESA = ?
                   AND G.CODIGOCENTROCUSTO = ?
                   AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
@@ -322,8 +319,7 @@ def analisar_estoque_lctoger(conta_alvo: str, empresa_id: int = 959,
             lancamentos = []
             for r in cur.fetchall():
                 compl = r[1].decode('cp1252', 'ignore') if isinstance(r[1], (bytes, bytearray)) else str(r[1] or "")
-                descr = str(r[7] or "").strip()
-                hist  = f"{descr} {compl}".strip()
+                hist  = f"{compl}".strip()
                 nat   = "D" if r[3] == 1 else "C"
                 lancamentos.append({
                     "data":       str(r[0])[:10] if r[0] else "",
