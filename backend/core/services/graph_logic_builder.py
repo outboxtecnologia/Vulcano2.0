@@ -862,17 +862,23 @@ class AccountingGraphPipeline:
                         data_venda_str = uni_data.get("data_venda") or ""
                         venda_ym = data_venda_str[:7] if data_venda_str and len(data_venda_str) >= 7 else ""
                         is_nova_venda_mes_alvo = bool(venda_ym) and (venda_ym == target_ym)
+                        is_venda_futura = bool(venda_ym) and (venda_ym > target_ym)
     
                         # CUSTO ECONÔMICO (Fração Física / Metragem)
                         # O Custo já reflete a evolução física (foi gasto e medido). Deve-se aplicar apenas o Índice Comercial da unidade.
                         area_da_unidade = area_unidades.get(str(uni_nome).strip(), 0.0)
                         fracao_fisica = (area_da_unidade / total_area_emp) if total_area_emp > 0 else 0.0
                         
-                        custo_u_atual = custo_gasto_vigente * fracao_fisica
-                        
-                        # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
-                        custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
-                                      custo_gasto_anterior * fracao_fisica
+                        if is_venda_futura:
+                            custo_u_atual = 0.0
+                            custo_u_ant = 0.0
+                        else:
+                            custo_u_atual = custo_gasto_vigente * fracao_fisica
+                            
+                            # Se nova venda no mês: custo anterior = 0 (unidade ainda não estava vendida)
+                            custo_u_ant = 0.0 if is_nova_venda_mes_alvo else \
+                                          custo_gasto_anterior * fracao_fisica
+                            
                         mov_custo_u = custo_u_atual - custo_u_ant
                         
                         if abs(mov_custo_u) > 0.01 or abs(custo_u_ant) > 0.01:
@@ -889,9 +895,13 @@ class AccountingGraphPipeline:
                              logica_caixa = f"Unid {uni_nome}: Integralização de Caixa/Banco no mês = {caixa_mes:,.2f}"
                              inject_virtual_entry(c_caixa_banco, abs(caixa_mes), 'D' if caixa_mes > 0 else 'C', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
 
-                        rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
-                        rec_auferida_ant = 0.0 if is_nova_venda_mes_alvo else \
-                                          vgv_uni * (poc_acumulado_anterior / 100.0)
+                        if is_venda_futura:
+                             rec_auferida_atual = 0.0
+                             rec_auferida_ant = 0.0
+                        else:
+                             rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
+                             rec_auferida_ant = 0.0 if is_nova_venda_mes_alvo else \
+                                               vgv_uni * (poc_acumulado_anterior / 100.0)
                         
                         # -----------------
                         # RECEITA DRE (Econômico)

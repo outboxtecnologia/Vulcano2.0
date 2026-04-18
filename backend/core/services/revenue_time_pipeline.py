@@ -36,7 +36,7 @@ class RevenueTimePipeline:
             c.NOME AS COMPRADOR,
             r.DATA AS DATA_RECEBIMENTO,
             CASE 
-                WHEN UPPER(fp.DESCRICAO) LIKE '%PERMUTA%' AND r.TOTALPAGO = 0 THEN r.VALORPARCELA 
+                WHEN r.TOTALPAGO = 0 AND r.ID IS NOT NULL THEN r.VALORPARCELA 
                 ELSE r.TOTALPAGO 
             END AS RECEITA_CAIXA,
             r.VALORPARCELA,
@@ -54,8 +54,9 @@ class RevenueTimePipeline:
         JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
         LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
         LEFT JOIN RECEBER r ON r.IDVENDA = v.ID 
-        LEFT JOIN VENDAFORMAPAGTO fp ON r.IDVENDAFORMAPAGTO = fp.ID
-        WHERE (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%')
+            AND (r.TOTALPAGO > 0 OR EXISTS (SELECT 1 FROM VENDAFORMAPAGTO WHERE ID = r.IDVENDAFORMAPAGTO AND UPPER(DESCRICAO) LIKE '%PERMUTA%'))
+            <JOIN_CONDITIONS>
+        WHERE 1=1
         """
         
         try:
@@ -89,7 +90,7 @@ class RevenueTimePipeline:
                 join_conditions += " AND r.DATA >= ?"
                 join_params.append(data_ini)
             
-            query = query.replace("WHERE (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%')", "WHERE (r.TOTALPAGO > 0 OR UPPER(fp.DESCRICAO) LIKE '%PERMUTA%')" + join_conditions)
+            query = query.replace("<JOIN_CONDITIONS>", join_conditions)
                 
             if conditions:
                 query += " AND " + " AND ".join(conditions)
@@ -457,14 +458,24 @@ class RevenueTimePipeline:
                 poc_acumulado = dashboard_meta[emp]["poc"] / 100.0
                 poc_mes = dashboard_meta[emp]["poc_mes"] / 100.0
                 
-                soc_acumulada_uni = row.VGV * poc_acumulado
-                soc_mes_uni = row.VGV * poc_mes
+                data_venda_row = str(row.DATA_VENDA)[:7] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else ''
+                target_ym_rcx = data_fim[:7] if data_fim else ''
+                is_venda_futura = bool(data_venda_row) and bool(target_ym_rcx) and (data_venda_row > target_ym_rcx)
                 
-                eff_rate_acum = (row.TRIBUTOS_CAIXA_ACUMULADO / row.RECEITA_CAIXA) if row.RECEITA_CAIXA > 0 else 0
-                
-                tributos_soc_acumulada_uni = soc_acumulada_uni * eff_rate_acum
-                # Usar a taxa efetiva acumulada do histórico da unidade para prever passivo tributário sobre o crescimento do POC no período
-                tributos_soc_mes_uni = soc_mes_uni * eff_rate_acum
+                if is_venda_futura:
+                    soc_acumulada_uni = 0.0
+                    soc_mes_uni = 0.0
+                    tributos_soc_acumulada_uni = 0.0
+                    tributos_soc_mes_uni = 0.0
+                else:
+                    soc_acumulada_uni = row.VGV * poc_acumulado
+                    soc_mes_uni = row.VGV * poc_mes
+                    
+                    eff_rate_acum = (row.TRIBUTOS_CAIXA_ACUMULADO / row.RECEITA_CAIXA) if row.RECEITA_CAIXA > 0 else 0
+                    
+                    tributos_soc_acumulada_uni = soc_acumulada_uni * eff_rate_acum
+                    # Usar a taxa efetiva acumulada do histórico da unidade para prever passivo tributário sobre o crescimento do POC no período
+                    tributos_soc_mes_uni = soc_mes_uni * eff_rate_acum
                 
                 # Filtro Poda de UI (Zerar visual da UI para unidades ociosas que não tenham pendência fiscal considerável)
                 is_idle = (row.CAIXA_MES == 0) and (soc_mes_uni == 0)
@@ -473,12 +484,8 @@ class RevenueTimePipeline:
                 # NUNCA pular unidades cuja venda ocorreu no mês alvo:
                 # mesmo sem recebimento ainda (boleto cai no mês seguinte), o motor
                 # de contabilizacoes precisa enxergá-la para gerar D Clientes / C Receita.
-                data_venda_row = str(row.DATA_VENDA)[:7] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else ''
-                target_ym_rcx = data_ini[:7] if data_ini else ''
-                is_nova_venda_no_mes = bool(data_venda_row) and bool(target_ym_rcx) and (data_venda_row == target_ym_rcx)
-    
-                # DEBUG temporário
-                # (removido)
+                target_ini_rcx = data_ini[:7] if data_ini else ''
+                is_nova_venda_no_mes = bool(data_venda_row) and bool(target_ini_rcx) and (data_venda_row == target_ini_rcx)
     
                 if is_idle and pending_diff < 5.0 and data_ini is not None and not is_nova_venda_no_mes:
                     continue # Pula unidade completamente
