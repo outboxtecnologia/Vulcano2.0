@@ -607,6 +607,10 @@ class AccountingGraphPipeline:
 
                 custo_gasto_anterior = 0.0
                 custo_gasto_vigente  = 0.0
+                mov_debito_mes = 0.0
+                mov_credito_mes = 0.0
+                mov_debito_mes       = 0.0
+                mov_credito_mes      = 0.0
 
                 if emp["cc"]:
                     # COM CC: usa LCTOGER/CC — filtro idêntico ao endpoint analítico.

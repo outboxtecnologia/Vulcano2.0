@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import * as XLSX from 'xlsx';
@@ -15,23 +15,7 @@ import {
 
 import { createPortal } from 'react-dom';
 
-class TabelaErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false, error: null, info: null }; }
-  static getDerivedStateFromError(error) { return { hasError: true, error }; }
-  componentDidCatch(error, info) { this.setState({ info }); console.error("TABELA CRASHED", error, info); }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 bg-red-900 border-2 border-red-500 rounded text-white overflow-auto max-w-full">
-           <h2 className="text-xl font-bold mb-4">CRASH DETECTADO NA TABELA MAPA!</h2>
-           <p className="font-mono text-sm mb-2 text-yellow-300">{this.state.error?.toString()}</p>
-           <pre className="text-xs text-red-200 mt-2 p-2 bg-red-950 rounded">{this.state.info?.componentStack}</pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+
 
 
 
@@ -433,16 +417,35 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
 
 
-// â”€â”€ Mapa Tabular: Tabela agrupada por APTO (Splink-style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Mapa Tabular: Tabela agrupada por APTO (Splink-style) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 // CARD COMPARATIVO //
+class TabelaErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null, info: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { this.setState({ info }); console.error("TABELA CRASHED", error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '40px', background: 'red', border: '5px solid yellow', color: 'white', zIndex: 999999, position: 'relative', width: '100%', height: '100%', overflow: 'auto' }}>
+           <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>CRASH DETECTADO NA TABELA MAPA! POR FAVOR, ENVIE O TEXTO ABAIXO PRO DEV:</h2>
+           <p style={{ fontFamily: 'monospace', fontSize: '18px', margin: '20px 0', background: '#000', padding: '10px' }}>{this.state.error?.toString()}</p>
+           <pre style={{ fontSize: '12px', background: '#330000', padding: '10px' }}>{this.state.info?.componentStack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta }) {
   const [manualOverrides, setManualOverrides] = useState({});
   const [dragOverApto, setDragOverApto] = useState(null);
   const [detalheApto, setDetalheApto] = useState(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [soDivergentes, setSoDivergentes] = useState(false);
+  const [fontesFaltantes, setFontesFaltantes] = useState(false);
   const [filtroApto, setFiltroApto] = useState('');
 
   // KANBAN EDGE AUTO-SCROLL LOGIC
@@ -549,6 +552,9 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta }) {
       const d = mapAptos[k];
       const hasDiff = Math.abs(d.totalQuestor - d.totalVulcano2) > 0.5;
       if (soDivergentes && !hasDiff) return false;
+      // Fontes Faltantes: mostra só APTOs em que pelo menos UMA fonte está vazia
+      const todasFontes = d.questor.length > 0 && d.vulcano1.length > 0 && d.vulcano2.length > 0;
+      if (fontesFaltantes && todasFontes) return false;
       if (filtroApto && !k.toLowerCase().includes(filtroApto.toLowerCase())) return false;
       return true;
   });
@@ -581,6 +587,10 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta }) {
                       <input type="checkbox" checked={soDivergentes} onChange={e => setSoDivergentes(e.target.checked)} className="accent-[#ff6b1a] w-3 h-3" />
                       SÓ DIVERGENTES
                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-[#ffcc00] transition-colors">
+                       <input type="checkbox" checked={fontesFaltantes} onChange={e => setFontesFaltantes(e.target.checked)} className="accent-[#ffcc00] w-3 h-3" />
+                       FONTES FALTANTES
+                    </label>
                    <div className="relative">
                       <input type="text" placeholder="⌕ Filtrar APTO..." value={filtroApto} onChange={e => setFiltroApto(e.target.value)} className="w-[180px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[#ff6b1a] text-white text-[10px] font-mono uppercase px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
                    </div>
@@ -741,11 +751,21 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta }) {
      </div>
   ) : (
     <div className="flex flex-col gap-3 p-3 bg-[#0a0a0a]">
-       <div className="flex justify-end mb-2">
-          <button onClick={() => setIsFullScreen(true)} className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#ff6b1a]/20 border border-[#333] hover:border-[#ff6b1a] text-[#ff6b1a] text-[11px] font-mono font-bold uppercase tracking-widest transition-colors flex items-center gap-2">
-             ⤢ ATIVAR KANBAN E FILTROS DINÂMICOS
-          </button>
-       </div>
+     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-white transition-colors">
+             <input type="checkbox" checked={soDivergentes} onChange={e => setSoDivergentes(e.target.checked)} className="accent-[#ff6b1a] w-3 h-3" />
+             SÓ DIVERGENTES
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-[#ffcc00] transition-colors">
+             <input type="checkbox" checked={fontesFaltantes} onChange={e => setFontesFaltantes(e.target.checked)} className="accent-[#ffcc00] w-3 h-3" />
+             FONTES FALTANTES
+          </label>
+        </div>
+        <button onClick={() => setIsFullScreen(true)} className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#ff6b1a]/20 border border-[#333] hover:border-[#ff6b1a] text-[#ff6b1a] text-[11px] font-mono font-bold uppercase tracking-widest transition-colors flex items-center gap-2">
+           ⤢ ATIVAR KANBAN E FILTROS DINÂMICOS
+        </button>
+     </div>
        <div className="flex-1 overflow-auto flex flex-col gap-3 pb-4">
           {keys.map(k => {
              const d = mapAptos[k];
@@ -780,7 +800,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta }) {
                   }}
                   className="bg-[var(--v-deep)] border border-[var(--v-border)] shadow-md rounded-[var(--v-radius)] overflow-hidden">
                  <div className={`flex items-center justify-between px-3 py-2 bg-[#151515] border-b border-[var(--v-border)] ${isDragOver ? 'bg-[#ff6b1a]/10' : ''}`}>
-                   <span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span>
+                   <div className="flex items-center gap-3"><span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span> <button onClick={() => setDetalheApto(k)} className="px-1.5 py-0.5 rounded bg-[#1f1a11] border border-[#ff6b1a] text-[#ff6b1a] hover:bg-[#ff6b1a] hover:text-white text-[9px] font-mono tracking-widest transition-colors font-bold z-10 cursor-pointer">INFO</button></div>
                    
                    <div className="flex items-center gap-4">
                       <div className="text-xs font-mono">
@@ -795,7 +815,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta }) {
                       {hasDiffVU2 ? (
                          <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#ff4d00]/20 text-[#ff4d00]">Divergente</span>
                       ) : (
-                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#34c759]/20 text-[#34c759]">Bateu</span>
+                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#3b82f6]/20 text-[#3b82f6]">Bateu</span>
                       )}
                    </div>
                  </div>
@@ -1246,7 +1266,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
 // â”€â”€ Painel de orfaos (expande ao clicar na linha da conta) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, onRacional, onAgent }) {
+function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashboardMeta, onRacional, onAgent }) {
 
   const [aba, setAba] = useState('orfaos');
 
@@ -2130,7 +2150,7 @@ animate-in slide-in-from-bottom-6 duration-500">
 
 // â”€â”€ Linha de conta na tabela de confronto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultarSemMovimento }) {
+function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultarSemMovimento, dashboardMeta }) {
 
   const [open, setOpen] = useState(false);
 
@@ -2597,6 +2617,8 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
           contaNome={contaNome}
 
           todosVirtualLogica={racionaisAgrupados}
+
+          dashboardMeta={dashboardMeta}
 
           onRacional={() => setRacionalOpen(true)}
 
@@ -4731,6 +4753,8 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
                     dadosPorMes={dadosPorMes}
 
                     ocultarSemMovimento={ocultarSemMovimento}
+
+                    dashboardMeta={dashboardMeta}
 
                   />
 

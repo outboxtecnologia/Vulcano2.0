@@ -11,3 +11,5 @@ Para não repetir conceitos, o agente consulta essa lista ativamente antes de ge
 - Scoped Dictionary Pattern
 - CORS (Cross-Origin Resource Sharing) Failures
 - UNION POLLUTION (Data Lake vs UI)
+- useState (React Hook de Estado Local)
+- ReferenceError em Runtime React (tela preta / componente desmontado)
