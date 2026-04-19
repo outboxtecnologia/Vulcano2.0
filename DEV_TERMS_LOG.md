@@ -13,3 +13,5 @@ Para não repetir conceitos, o agente consulta essa lista ativamente antes de ge
 - UNION POLLUTION (Data Lake vs UI)
 - useState (React Hook de Estado Local)
 - ReferenceError em Runtime React (tela preta / componente desmontado)
+- Prop Derivation por Contexto de Dados (useMemo + inferência de campo a partir dos próprios dados)
+- Cross-Empreendimento Data Contamination (Set acumulado vs filtro por campo direto)

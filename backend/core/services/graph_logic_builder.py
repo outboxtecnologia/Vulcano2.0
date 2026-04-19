@@ -77,17 +77,21 @@ class AccountingGraphPipeline:
                 else: pq_y, pq_m = y, 9
 
                 with ThreadPoolExecutor(max_workers=2) as _pool:
+                    _kwargs = dict(
+                        empresa_id=empresa_id,
+                        empreendimentos_ids=str(empreendimento_id) if empreendimento_id else None,
+                    )
                     _f_atual = _pool.submit(
                         get_receitas_caixa,
-                        empresa_id=empresa_id,
                         data_ini=f"{ano}-{str(mes).zfill(2)}",
                         data_fim=f"{ano}-{str(mes).zfill(2)}",
+                        **_kwargs,
                     )
                     _f_pq = _pool.submit(
                         get_receitas_caixa,
-                        empresa_id=empresa_id,
                         data_ini=f"{pq_y}-{str(pq_m).zfill(2)}",
                         data_fim=f"{pq_y}-{str(pq_m).zfill(2)}",
+                        **_kwargs,
                     )
                     json_resp = _f_atual.result()
                     json_pq   = _f_pq.result()
@@ -532,6 +536,7 @@ class AccountingGraphPipeline:
                             "nome": f"{_classif} - {_nome}" if _classif else _nome,
                             "classif": _classif,
                             "is_caixa": _is_caixa,
+                            "empreendimento_nome": nome_emp,   # ← chave para filtro do Racional
                             "saldo_anterior": 0.0,
                             "movimento_debito": 0.0,
                             "movimento_credito": 0.0,

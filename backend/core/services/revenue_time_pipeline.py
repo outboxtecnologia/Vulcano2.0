@@ -518,7 +518,7 @@ class RevenueTimePipeline:
                 
     
                 meta_emp["unidades"].append({
-                    "unidade": uni, "comprador": comp, "vgv": row.VGV,
+                    "unidade": uni, "comprador": comp, "empreendimento": emp, "vgv": row.VGV,
                     "vgv_base": row.VGV_BASE,
                     "data_distrato": str(row.DATADISTRATO)[:10] if row.DATADISTRATO and str(row.DATADISTRATO) not in ('0', '', 'None', 'nan', '0.0', 'NaT') else None,
                     "data_venda": str(row.DATA_VENDA)[:10] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else None,
