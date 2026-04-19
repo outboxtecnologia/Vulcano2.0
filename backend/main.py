@@ -1224,8 +1224,10 @@ class DiagnosticoInput(BaseModel):
     linhas: list[DiagnosticoRow]
     top_n: int = 20
 
+from typing import Union
+
 class MemoriaArrasteInput(BaseModel):
-    chave: str
+    chave: Union[str, int]
     conta_destino: str
     origem: str = "QUESTOR"
 
@@ -1977,6 +1979,19 @@ def api_saldo_contas(
 
         resultado = {}
 
+        memoria_arraste = {}
+        try:
+            import sqlite3
+            conn_poc = sqlite3.connect(POC_DATABASE_FILE)
+            cur_poc = conn_poc.cursor()
+            cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
+            for chv, dest in cur_poc.fetchall():
+                memoria_arraste[str(chv).strip()] = str(dest).strip()
+            conn_poc.close()
+        except Exception as e_poc:
+            print(f"[AVISO] Falha ao ler memoria de arraste no saldo_contas: {e_poc}")
+
+
         for conta_id in lista_contas:
             is_imposto_recolher = conta_id in contas_imposto_recolher
             
@@ -2090,26 +2105,29 @@ def api_saldo_contas(
                 v = float(valor or 0)
                 
                 # Para evitar duplicidade de lançamentos no CC:
+                override = memoria_arraste.get(str(chave).strip())
+                ov_dict = {"override_apto": override} if override else {}
+
                 if opt_nat is not None:
                     # opt_nat = G.NATURLCTOCTB (1 para Debito, -1 para Credito do LCTOCTB)
                     if opt_nat == 1 and cdeb == conta_id:
                         nat = "D"
                         mov_deb += v
-                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
                     elif opt_nat == -1 and ccred == conta_id:
                         nat = "C"
                         mov_cred += v
-                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
                 else:
                     # Fallback standard do LCTOCTB (nível de Lote/Partida)
                     if cdeb == conta_id:
                         nat = "D"
                         mov_deb += v
-                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
                     elif ccred == conta_id:
                         nat = "C"
                         mov_cred += v
-                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v})
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
 
             mov_liq = mov_deb - mov_cred
 

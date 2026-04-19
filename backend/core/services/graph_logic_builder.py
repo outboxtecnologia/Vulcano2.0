@@ -557,14 +557,24 @@ class AccountingGraphPipeline:
                         contas_virtuais[conta_id]["movimento_liquido"] += mov
                         
                         last_day = calendar.monthrange(int(ano), int(mes))[1]
+                        
+                        # Gera chave única, estável e reprodutível baseada no conteúdo
+                        import hashlib
+                        stable_str = f"{ano}_{mes}_{conta_id}_{natureza}_{v_float}_{historico}"
+                        chv_hash = hashlib.md5(stable_str.encode('utf-8')).hexdigest()[:12]
+                        chave_v2 = f"VU2_{chv_hash}"
+                        
+                        override = memoria_arraste.get(chave_v2)
+                        
                         contas_virtuais[conta_id]["detalhes"].append({
-                            "chave": "VULCANO_SIM",
+                            "chave": chave_v2,
                             "data": f"{last_day:02d}/{int(mes):02d}/{ano} (Sim)",
                             "historico": historico,
                             "natureza": natureza,
                             "valor": v_float,
                             "virtual": True,
-                            "logica": logica
+                            "logica": logica,
+                            **({"override_apto": override} if override else {})
                         })
 
     
@@ -847,13 +857,15 @@ class AccountingGraphPipeline:
                                 cf["movimento_liquido"] -= abs(v_lc)
 
                             dt_fmt = dt_lc.strftime('%d/%m/%Y') if hasattr(dt_lc, 'strftime') else str(dt_lc)
+                            override = memoria_arraste.get(str(chave_lc).strip())
                             cf["detalhes"].append({
                                 "chave":     str(chave_lc),
                                 "data":      dt_fmt,
                                 "historico": hist_lc,
                                 "natureza":  nat_str,
                                 "valor":     abs(v_lc),
-                                "origem":    "LCTOGER_CC"
+                                "origem":    "LCTOGER_CC",
+                                **({"override_apto": override} if override else {})
                             })
                     else:
                         # Fallback: sem lançamentos no mês mas há movimento acumulado → sintético

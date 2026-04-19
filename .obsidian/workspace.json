@@ -196,6 +196,8 @@
   },
   "active": "d4a59030fe5ed52e",
   "lastOpenFiles": [
+    "check_api.py",
+    "check_dbs.py",
     "patch_racional_kanban.py",
     "fix_kanban_checkbox.py",
     "frontend/node_modules/@types/react-dom/client.d.ts",
@@ -205,8 +207,6 @@
     "frontend/node_modules/lucide-react/dist/esm/icons/user-key.js",
     "frontend/node_modules/lucide-react/dist/esm/icons/user-check.js",
     "frontend/node_modules/lucide-react/dist/esm/icons/unlink.js",
-    "frontend/node_modules/lucide-react/dist/esm/icons/unplug.js",
-    "frontend/node_modules/lucide-react/dist/esm/icons/unfold-vertical.js",
     "artifacts/playwright_step.png",
     "artifacts/playwright_test.png",
     "artifacts/tabular_crash_debug.png",
