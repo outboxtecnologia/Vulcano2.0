@@ -1,17 +1,17 @@
 {
-  "gerado_em": "2026-04-18T22:08:08",
-  "total_arquivos": 461,
-  "total_size_kb": 6946.9,
-  "safe_delete_count": 239,
+  "gerado_em": "2026-04-19T11:32:58",
+  "total_arquivos": 464,
+  "total_size_kb": 6952.5,
+  "safe_delete_count": 242,
   "review_count": 222,
   "por_categoria": {
     "LOG_FILE": 183,
-    "DEBUG_SCRIPT": 132,
+    "DEBUG_SCRIPT": 133,
     "SCRIPT_RECOVER": 8,
     "DUMP_JSON": 35,
-    "SCRIPT_FIX": 30,
+    "SCRIPT_FIX": 31,
     "SCRIPT_UPDATE": 12,
-    "SCRIPT_PATCH": 48,
+    "SCRIPT_PATCH": 49,
     "TMP_FILE": 13
   },
   "candidatos": [
@@ -21,7 +21,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 5012.3,
-      "age_days": 10.3,
+      "age_days": 10.9,
       "modified": "2026-04-08 14:41"
     },
     {
@@ -30,7 +30,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 197.9,
-      "age_days": 16.4,
+      "age_days": 16.9,
       "modified": "2026-04-02 13:18"
     },
     {
@@ -39,7 +39,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 123.7,
-      "age_days": 8.0,
+      "age_days": 8.6,
       "modified": "2026-04-10 21:54"
     },
     {
@@ -48,7 +48,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 123.7,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -57,7 +57,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 93.2,
-      "age_days": 16.1,
+      "age_days": 16.7,
       "modified": "2026-04-02 19:12"
     },
     {
@@ -66,7 +66,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 56.5,
-      "age_days": 10.3,
+      "age_days": 10.8,
       "modified": "2026-04-08 15:11"
     },
     {
@@ -75,7 +75,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 53.2,
-      "age_days": 24.1,
+      "age_days": 24.7,
       "modified": "2026-03-25 19:24"
     },
     {
@@ -84,7 +84,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 53.2,
-      "age_days": 21.2,
+      "age_days": 21.7,
       "modified": "2026-03-28 17:45"
     },
     {
@@ -93,7 +93,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 51.9,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:48"
     },
     {
@@ -102,7 +102,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 44.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -111,7 +111,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 38.9,
-      "age_days": 20.4,
+      "age_days": 21.0,
       "modified": "2026-03-29 11:35"
     },
     {
@@ -120,7 +120,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 33.1,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:45"
     },
     {
@@ -129,7 +129,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 31.5,
-      "age_days": 11.4,
+      "age_days": 11.9,
       "modified": "2026-04-07 13:30"
     },
     {
@@ -138,7 +138,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 30.1,
-      "age_days": 17.1,
+      "age_days": 17.7,
       "modified": "2026-04-01 19:37"
     },
     {
@@ -147,7 +147,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 28.4,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:34"
     },
     {
@@ -156,7 +156,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 26.2,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:34"
     },
     {
@@ -165,7 +165,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 22.0,
-      "age_days": 14.2,
+      "age_days": 14.8,
       "modified": "2026-04-04 17:00"
     },
     {
@@ -174,7 +174,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 21.8,
-      "age_days": 12.0,
+      "age_days": 12.6,
       "modified": "2026-04-06 21:37"
     },
     {
@@ -183,7 +183,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 17.7,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:37"
     },
     {
@@ -192,7 +192,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 16.0,
-      "age_days": 18.0,
+      "age_days": 18.6,
       "modified": "2026-03-31 21:29"
     },
     {
@@ -201,7 +201,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 15.8,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 18:28"
     },
     {
@@ -210,7 +210,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 14.0,
-      "age_days": 18.0,
+      "age_days": 18.5,
       "modified": "2026-03-31 22:27"
     },
     {
@@ -219,7 +219,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 13.8,
-      "age_days": 18.0,
+      "age_days": 18.6,
       "modified": "2026-03-31 21:47"
     },
     {
@@ -228,7 +228,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 13.6,
-      "age_days": 18.1,
+      "age_days": 18.6,
       "modified": "2026-03-31 20:44"
     },
     {
@@ -237,7 +237,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 12.7,
-      "age_days": 12.1,
+      "age_days": 12.7,
       "modified": "2026-04-06 19:05"
     },
     {
@@ -246,7 +246,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 12.5,
-      "age_days": 18.0,
+      "age_days": 18.6,
       "modified": "2026-03-31 21:51"
     },
     {
@@ -255,7 +255,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 12.5,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -264,7 +264,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 12.4,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 17:34"
     },
     {
@@ -273,7 +273,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 12.3,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 17:33"
     },
     {
@@ -282,7 +282,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 12.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -291,7 +291,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 12.0,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:22"
     },
     {
@@ -300,7 +300,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 11.5,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:16"
     },
     {
@@ -309,7 +309,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 11.2,
-      "age_days": 27.0,
+      "age_days": 27.5,
       "modified": "2026-03-22 22:34"
     },
     {
@@ -318,7 +318,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 10.4,
-      "age_days": 18.0,
+      "age_days": 18.6,
       "modified": "2026-03-31 20:59"
     },
     {
@@ -327,7 +327,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "review",
       "size_kb": 9.2,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:51"
     },
     {
@@ -336,7 +336,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 9.0,
-      "age_days": 2.4,
+      "age_days": 2.9,
       "modified": "2026-04-16 12:59"
     },
     {
@@ -345,7 +345,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 8.7,
-      "age_days": 14.1,
+      "age_days": 14.6,
       "modified": "2026-04-04 20:22"
     },
     {
@@ -354,7 +354,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 8.7,
-      "age_days": 2.4,
+      "age_days": 2.9,
       "modified": "2026-04-16 13:17"
     },
     {
@@ -363,7 +363,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 8.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -372,7 +372,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 8.3,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:22"
     },
     {
@@ -381,7 +381,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 8.2,
-      "age_days": 17.7,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:27"
     },
     {
@@ -390,7 +390,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 8.1,
-      "age_days": 11.2,
+      "age_days": 11.7,
       "modified": "2026-04-07 18:08"
     },
     {
@@ -399,7 +399,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 8.1,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 20:29"
     },
     {
@@ -408,7 +408,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 8.0,
-      "age_days": 8.3,
+      "age_days": 8.8,
       "modified": "2026-04-10 16:07"
     },
     {
@@ -417,7 +417,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 7.6,
-      "age_days": 15.6,
+      "age_days": 16.1,
       "modified": "2026-04-03 08:52"
     },
     {
@@ -426,7 +426,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 7.4,
-      "age_days": 17.5,
+      "age_days": 18.0,
       "modified": "2026-04-01 10:53"
     },
     {
@@ -435,7 +435,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 7.0,
-      "age_days": 21.4,
+      "age_days": 22.0,
       "modified": "2026-03-28 12:42"
     },
     {
@@ -444,7 +444,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 7.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -453,7 +453,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 6.9,
-      "age_days": 12.5,
+      "age_days": 13.0,
       "modified": "2026-04-06 10:57"
     },
     {
@@ -462,7 +462,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 6.6,
-      "age_days": 2.1,
+      "age_days": 2.7,
       "modified": "2026-04-16 18:46"
     },
     {
@@ -471,7 +471,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 6.6,
-      "age_days": 13.1,
+      "age_days": 13.6,
       "modified": "2026-04-05 19:58"
     },
     {
@@ -480,7 +480,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 6.4,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:16"
     },
     {
@@ -489,7 +489,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 6.3,
-      "age_days": 2.2,
+      "age_days": 2.7,
       "modified": "2026-04-16 18:22"
     },
     {
@@ -498,7 +498,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 6.3,
-      "age_days": 17.5,
+      "age_days": 18.0,
       "modified": "2026-04-01 10:31"
     },
     {
@@ -507,7 +507,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 6.2,
-      "age_days": 18.6,
+      "age_days": 19.1,
       "modified": "2026-03-31 08:01"
     },
     {
@@ -516,7 +516,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 6.2,
-      "age_days": 2.1,
+      "age_days": 2.7,
       "modified": "2026-04-16 18:34"
     },
     {
@@ -525,7 +525,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 6.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -534,7 +534,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 6.1,
-      "age_days": 17.6,
+      "age_days": 18.1,
       "modified": "2026-04-01 08:15"
     },
     {
@@ -543,7 +543,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 6.1,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -552,7 +552,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 6.0,
-      "age_days": 18.0,
+      "age_days": 18.6,
       "modified": "2026-03-31 21:21"
     },
     {
@@ -561,7 +561,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 5.9,
-      "age_days": 17.5,
+      "age_days": 18.0,
       "modified": "2026-04-01 10:52"
     },
     {
@@ -570,7 +570,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 5.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -579,7 +579,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 5.4,
-      "age_days": 16.4,
+      "age_days": 16.9,
       "modified": "2026-04-02 13:22"
     },
     {
@@ -588,7 +588,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 5.3,
-      "age_days": 19.5,
+      "age_days": 20.1,
       "modified": "2026-03-30 10:20"
     },
     {
@@ -597,7 +597,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 5.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -606,7 +606,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 5.1,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:03"
     },
     {
@@ -615,7 +615,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 5.0,
-      "age_days": 17.3,
+      "age_days": 17.8,
       "modified": "2026-04-01 15:14"
     },
     {
@@ -624,7 +624,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 5.0,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 06:37"
     },
     {
@@ -633,7 +633,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.8,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:20"
     },
     {
@@ -642,7 +642,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 4.7,
-      "age_days": 15.5,
+      "age_days": 16.1,
       "modified": "2026-04-03 09:06"
     },
     {
@@ -651,7 +651,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -660,7 +660,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -669,7 +669,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.5,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -678,7 +678,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.4,
-      "age_days": 14.1,
+      "age_days": 14.6,
       "modified": "2026-04-04 20:23"
     },
     {
@@ -687,7 +687,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 4.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -696,7 +696,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.3,
-      "age_days": 16.0,
+      "age_days": 16.6,
       "modified": "2026-04-02 20:59"
     },
     {
@@ -705,8 +705,17 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 4.2,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:16"
+    },
+    {
+      "arquivo": "patcher16.py",
+      "path": "C:\\Users\\dirfe\\.gemini\\antigravity\\scratch\\questor_explorer\\patcher16.py",
+      "categoria": "SCRIPT_PATCH",
+      "risk": "safe_delete",
+      "size_kb": 4.2,
+      "age_days": 0.1,
+      "modified": "2026-04-19 08:37"
     },
     {
       "arquivo": "imposto_data.json",
@@ -714,7 +723,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 4.2,
-      "age_days": 16.0,
+      "age_days": 16.6,
       "modified": "2026-04-02 21:03"
     },
     {
@@ -723,7 +732,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 4.1,
-      "age_days": 8.0,
+      "age_days": 8.6,
       "modified": "2026-04-10 21:43"
     },
     {
@@ -732,7 +741,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 4.1,
-      "age_days": 21.4,
+      "age_days": 22.0,
       "modified": "2026-03-28 12:44"
     },
     {
@@ -741,7 +750,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 4.1,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 19:58"
     },
     {
@@ -750,7 +759,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 4.1,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:23"
     },
     {
@@ -759,7 +768,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.1,
-      "age_days": 22.1,
+      "age_days": 22.7,
       "modified": "2026-03-27 19:44"
     },
     {
@@ -768,7 +777,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 4.1,
-      "age_days": 16.2,
+      "age_days": 16.8,
       "modified": "2026-04-02 16:16"
     },
     {
@@ -777,7 +786,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.9,
-      "age_days": 16.2,
+      "age_days": 16.7,
       "modified": "2026-04-02 17:42"
     },
     {
@@ -786,7 +795,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.8,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:11"
     },
     {
@@ -795,7 +804,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.8,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -804,7 +813,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.8,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -813,7 +822,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.7,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -822,7 +831,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.7,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:09"
     },
     {
@@ -831,7 +840,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.7,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:22"
     },
     {
@@ -840,7 +849,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 3.7,
-      "age_days": 2.5,
+      "age_days": 3.1,
       "modified": "2026-04-16 09:24"
     },
     {
@@ -849,7 +858,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 3.5,
-      "age_days": 2.6,
+      "age_days": 3.1,
       "modified": "2026-04-16 08:54"
     },
     {
@@ -858,7 +867,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.5,
-      "age_days": 16.1,
+      "age_days": 16.7,
       "modified": "2026-04-02 19:25"
     },
     {
@@ -867,7 +876,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.5,
-      "age_days": 21.4,
+      "age_days": 22.0,
       "modified": "2026-03-28 12:42"
     },
     {
@@ -876,7 +885,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.4,
-      "age_days": 7.0,
+      "age_days": 7.5,
       "modified": "2026-04-11 22:23"
     },
     {
@@ -885,7 +894,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.4,
-      "age_days": 17.7,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:13"
     },
     {
@@ -894,7 +903,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.4,
-      "age_days": 18.6,
+      "age_days": 19.1,
       "modified": "2026-03-31 08:06"
     },
     {
@@ -903,7 +912,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.4,
-      "age_days": 16.0,
+      "age_days": 16.6,
       "modified": "2026-04-02 21:31"
     },
     {
@@ -912,7 +921,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 3.3,
-      "age_days": 2.6,
+      "age_days": 3.1,
       "modified": "2026-04-16 08:53"
     },
     {
@@ -921,7 +930,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.3,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:09"
     },
     {
@@ -930,7 +939,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.3,
-      "age_days": 18.1,
+      "age_days": 18.6,
       "modified": "2026-03-31 20:38"
     },
     {
@@ -939,7 +948,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -948,7 +957,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -957,7 +966,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 3.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -966,7 +975,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 3.1,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -975,7 +984,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 3.0,
-      "age_days": 18.6,
+      "age_days": 19.1,
       "modified": "2026-03-31 08:09"
     },
     {
@@ -984,7 +993,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -993,7 +1002,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 3.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1002,7 +1011,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 2.9,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 14:10"
     },
     {
@@ -1011,7 +1020,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "review",
       "size_kb": 2.9,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:04"
     },
     {
@@ -1020,7 +1029,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.9,
-      "age_days": 16.2,
+      "age_days": 16.7,
       "modified": "2026-04-02 17:53"
     },
     {
@@ -1029,7 +1038,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1038,7 +1047,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.9,
-      "age_days": 21.2,
+      "age_days": 21.7,
       "modified": "2026-03-28 18:02"
     },
     {
@@ -1047,7 +1056,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 2.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1056,7 +1065,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1065,7 +1074,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 2.8,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:00"
     },
     {
@@ -1074,7 +1083,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.8,
-      "age_days": 22.0,
+      "age_days": 22.6,
       "modified": "2026-03-27 20:59"
     },
     {
@@ -1083,7 +1092,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 2.7,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:19"
     },
     {
@@ -1092,7 +1101,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 2.7,
-      "age_days": 10.5,
+      "age_days": 11.1,
       "modified": "2026-04-08 10:01"
     },
     {
@@ -1101,7 +1110,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 2.7,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1110,7 +1119,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.7,
-      "age_days": 13.6,
+      "age_days": 14.1,
       "modified": "2026-04-05 08:42"
     },
     {
@@ -1119,7 +1128,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.6,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:18"
     },
     {
@@ -1128,7 +1137,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.6,
-      "age_days": 20.2,
+      "age_days": 20.8,
       "modified": "2026-03-29 16:47"
     },
     {
@@ -1137,7 +1146,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.6,
-      "age_days": 20.5,
+      "age_days": 21.1,
       "modified": "2026-03-29 09:43"
     },
     {
@@ -1146,7 +1155,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.6,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:00"
     },
     {
@@ -1155,7 +1164,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.6,
-      "age_days": 16.4,
+      "age_days": 17.0,
       "modified": "2026-04-02 12:44"
     },
     {
@@ -1164,7 +1173,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.6,
-      "age_days": 18.3,
+      "age_days": 18.8,
       "modified": "2026-03-31 16:01"
     },
     {
@@ -1173,7 +1182,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "review",
       "size_kb": 2.5,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:15"
     },
     {
@@ -1182,7 +1191,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.5,
-      "age_days": 15.4,
+      "age_days": 16.0,
       "modified": "2026-04-03 11:45"
     },
     {
@@ -1191,7 +1200,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.5,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:04"
     },
     {
@@ -1200,7 +1209,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1209,7 +1218,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1218,7 +1227,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1227,7 +1236,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1236,7 +1245,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.4,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:20"
     },
     {
@@ -1245,7 +1254,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 2.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1254,7 +1263,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1263,7 +1272,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.3,
-      "age_days": 17.7,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:14"
     },
     {
@@ -1272,7 +1281,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.2,
-      "age_days": 7.0,
+      "age_days": 7.5,
       "modified": "2026-04-11 22:24"
     },
     {
@@ -1281,7 +1290,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.2,
-      "age_days": 21.2,
+      "age_days": 21.7,
       "modified": "2026-03-28 17:44"
     },
     {
@@ -1290,7 +1299,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.2,
-      "age_days": 15.4,
+      "age_days": 15.9,
       "modified": "2026-04-03 13:24"
     },
     {
@@ -1299,7 +1308,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 2.1,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:12"
     },
     {
@@ -1308,7 +1317,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 2.1,
-      "age_days": 17.5,
+      "age_days": 18.1,
       "modified": "2026-04-01 10:17"
     },
     {
@@ -1317,7 +1326,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 2.1,
-      "age_days": 2.5,
+      "age_days": 3.1,
       "modified": "2026-04-16 09:08"
     },
     {
@@ -1326,7 +1335,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.1,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:17"
     },
     {
@@ -1335,7 +1344,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.1,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1344,7 +1353,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 2.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1353,7 +1362,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.0,
-      "age_days": 12.5,
+      "age_days": 13.0,
       "modified": "2026-04-06 10:55"
     },
     {
@@ -1362,7 +1371,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.0,
-      "age_days": 12.5,
+      "age_days": 13.0,
       "modified": "2026-04-06 10:58"
     },
     {
@@ -1371,7 +1380,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 2.0,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:23"
     },
     {
@@ -1380,7 +1389,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 2.0,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:07"
     },
     {
@@ -1389,7 +1398,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 2.0,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:00"
     },
     {
@@ -1398,7 +1407,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 2.0,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:43"
     },
     {
@@ -1407,7 +1416,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 1.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1416,7 +1425,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.9,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 06:33"
     },
     {
@@ -1425,7 +1434,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 1.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1434,7 +1443,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.9,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:13"
     },
     {
@@ -1443,7 +1452,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.9,
-      "age_days": 18.3,
+      "age_days": 18.8,
       "modified": "2026-03-31 16:05"
     },
     {
@@ -1452,7 +1461,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.8,
-      "age_days": 15.6,
+      "age_days": 16.1,
       "modified": "2026-04-03 08:51"
     },
     {
@@ -1461,7 +1470,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.8,
-      "age_days": 17.6,
+      "age_days": 18.2,
       "modified": "2026-04-01 07:19"
     },
     {
@@ -1470,7 +1479,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.8,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1479,7 +1488,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.8,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:37"
     },
     {
@@ -1488,7 +1497,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.8,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 20:12"
     },
     {
@@ -1497,7 +1506,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.7,
-      "age_days": 2.5,
+      "age_days": 3.1,
       "modified": "2026-04-16 10:00"
     },
     {
@@ -1506,7 +1515,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.7,
-      "age_days": 2.4,
+      "age_days": 2.9,
       "modified": "2026-04-16 12:51"
     },
     {
@@ -1515,7 +1524,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.7,
-      "age_days": 17.6,
+      "age_days": 18.1,
       "modified": "2026-04-01 08:19"
     },
     {
@@ -1524,7 +1533,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.7,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1533,7 +1542,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "review",
       "size_kb": 1.7,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 06:41"
     },
     {
@@ -1542,7 +1551,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.7,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:54"
     },
     {
@@ -1551,7 +1560,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.7,
-      "age_days": 21.4,
+      "age_days": 22.0,
       "modified": "2026-03-28 12:39"
     },
     {
@@ -1560,7 +1569,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.7,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:33"
     },
     {
@@ -1569,7 +1578,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.7,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:51"
     },
     {
@@ -1578,7 +1587,7 @@
       "categoria": "SCRIPT_UPDATE",
       "risk": "safe_delete",
       "size_kb": 1.7,
-      "age_days": 20.4,
+      "age_days": 21.0,
       "modified": "2026-03-29 11:46"
     },
     {
@@ -1587,7 +1596,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.6,
-      "age_days": 18.3,
+      "age_days": 18.9,
       "modified": "2026-03-31 14:15"
     },
     {
@@ -1596,7 +1605,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:19"
     },
     {
@@ -1605,7 +1614,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:20"
     },
     {
@@ -1614,7 +1623,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.6,
-      "age_days": 7.1,
+      "age_days": 7.6,
       "modified": "2026-04-11 20:28"
     },
     {
@@ -1623,7 +1632,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.6,
-      "age_days": 10.1,
+      "age_days": 10.7,
       "modified": "2026-04-08 19:55"
     },
     {
@@ -1632,7 +1641,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.6,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 20:23"
     },
     {
@@ -1641,7 +1650,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.6,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:23"
     },
     {
@@ -1650,7 +1659,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1659,7 +1668,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.6,
-      "age_days": 10.1,
+      "age_days": 10.7,
       "modified": "2026-04-08 19:55"
     },
     {
@@ -1668,7 +1677,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.4,
-      "age_days": 1.6,
+      "age_days": 2.2,
       "modified": "2026-04-17 07:00"
     },
     {
@@ -1677,7 +1686,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1686,7 +1695,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1695,7 +1704,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.4,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:15"
     },
     {
@@ -1704,7 +1713,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.4,
-      "age_days": 21.2,
+      "age_days": 21.7,
       "modified": "2026-03-28 17:43"
     },
     {
@@ -1713,7 +1722,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.4,
-      "age_days": 16.2,
+      "age_days": 16.8,
       "modified": "2026-04-02 16:16"
     },
     {
@@ -1722,7 +1731,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 16:37"
     },
     {
@@ -1731,7 +1740,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 8.0,
+      "age_days": 8.6,
       "modified": "2026-04-10 21:57"
     },
     {
@@ -1740,7 +1749,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 18.0,
+      "age_days": 18.6,
       "modified": "2026-03-31 21:38"
     },
     {
@@ -1749,7 +1758,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1758,7 +1767,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 7.1,
+      "age_days": 7.6,
       "modified": "2026-04-11 20:29"
     },
     {
@@ -1767,7 +1776,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:53"
     },
     {
@@ -1776,7 +1785,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.3,
-      "age_days": 19.3,
+      "age_days": 19.8,
       "modified": "2026-03-30 15:48"
     },
     {
@@ -1785,7 +1794,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1794,7 +1803,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.3,
-      "age_days": 21.4,
+      "age_days": 22.0,
       "modified": "2026-03-28 12:40"
     },
     {
@@ -1803,7 +1812,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.3,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:01"
     },
     {
@@ -1812,7 +1821,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.3,
-      "age_days": 13.1,
+      "age_days": 13.6,
       "modified": "2026-04-05 20:25"
     },
     {
@@ -1821,7 +1830,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.2,
-      "age_days": 17.5,
+      "age_days": 18.1,
       "modified": "2026-04-01 09:59"
     },
     {
@@ -1830,7 +1839,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1839,7 +1848,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.2,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 06:53"
     },
     {
@@ -1848,7 +1857,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.2,
-      "age_days": 15.5,
+      "age_days": 16.1,
       "modified": "2026-04-03 09:12"
     },
     {
@@ -1857,7 +1866,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.2,
-      "age_days": 14.0,
+      "age_days": 14.6,
       "modified": "2026-04-04 21:20"
     },
     {
@@ -1866,7 +1875,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 1.1,
-      "age_days": 2.3,
+      "age_days": 2.8,
       "modified": "2026-04-16 15:37"
     },
     {
@@ -1875,7 +1884,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.1,
-      "age_days": 7.1,
+      "age_days": 7.6,
       "modified": "2026-04-11 20:03"
     },
     {
@@ -1884,7 +1893,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.1,
-      "age_days": 15.3,
+      "age_days": 15.9,
       "modified": "2026-04-03 14:44"
     },
     {
@@ -1893,7 +1902,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.1,
-      "age_days": 18.2,
+      "age_days": 18.8,
       "modified": "2026-03-31 17:31"
     },
     {
@@ -1902,7 +1911,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.1,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:01"
     },
     {
@@ -1911,7 +1920,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.1,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 06:52"
     },
     {
@@ -1920,7 +1929,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.1,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:18"
     },
     {
@@ -1929,7 +1938,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.1,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:16"
     },
     {
@@ -1938,7 +1947,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -1947,7 +1956,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 7.0,
+      "age_days": 7.5,
       "modified": "2026-04-11 22:26"
     },
     {
@@ -1956,7 +1965,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.0,
-      "age_days": 17.0,
+      "age_days": 17.6,
       "modified": "2026-04-01 21:22"
     },
     {
@@ -1965,7 +1974,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 16.5,
+      "age_days": 17.1,
       "modified": "2026-04-02 09:30"
     },
     {
@@ -1974,7 +1983,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 19:58"
     },
     {
@@ -1983,7 +1992,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 20:00"
     },
     {
@@ -1992,7 +2001,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 19.5,
+      "age_days": 20.0,
       "modified": "2026-03-30 10:23"
     },
     {
@@ -2001,7 +2010,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 19.1,
+      "age_days": 19.6,
       "modified": "2026-03-30 20:12"
     },
     {
@@ -2010,7 +2019,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 1.0,
-      "age_days": 25.4,
+      "age_days": 26.0,
       "modified": "2026-03-24 12:00"
     },
     {
@@ -2019,7 +2028,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.0,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:08"
     },
     {
@@ -2028,7 +2037,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 1.0,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:01"
     },
     {
@@ -2037,7 +2046,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 1.0,
-      "age_days": 19.3,
+      "age_days": 19.9,
       "modified": "2026-03-30 14:09"
     },
     {
@@ -2046,7 +2055,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 5.0,
+      "age_days": 5.5,
       "modified": "2026-04-13 22:57"
     },
     {
@@ -2055,7 +2064,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 17:35"
     },
     {
@@ -2064,7 +2073,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:16"
     },
     {
@@ -2073,7 +2082,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 7.1,
+      "age_days": 7.6,
       "modified": "2026-04-11 20:32"
     },
     {
@@ -2082,7 +2091,7 @@
       "categoria": "SCRIPT_RECOVER",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 17.5,
+      "age_days": 18.0,
       "modified": "2026-04-01 10:30"
     },
     {
@@ -2091,7 +2100,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 16.5,
+      "age_days": 17.1,
       "modified": "2026-04-02 09:42"
     },
     {
@@ -2100,7 +2109,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 3.2,
+      "age_days": 3.8,
       "modified": "2026-04-15 16:28"
     },
     {
@@ -2109,7 +2118,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:22"
     },
     {
@@ -2118,7 +2127,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 10.5,
+      "age_days": 11.1,
       "modified": "2026-04-08 10:02"
     },
     {
@@ -2127,7 +2136,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 16.5,
+      "age_days": 17.1,
       "modified": "2026-04-02 09:43"
     },
     {
@@ -2136,7 +2145,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 21.1,
+      "age_days": 21.7,
       "modified": "2026-03-28 19:14"
     },
     {
@@ -2145,7 +2154,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 25.4,
+      "age_days": 26.0,
       "modified": "2026-03-24 11:32"
     },
     {
@@ -2154,7 +2163,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2163,7 +2172,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.9,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2172,7 +2181,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.9,
-      "age_days": 15.6,
+      "age_days": 16.1,
       "modified": "2026-04-03 08:52"
     },
     {
@@ -2181,7 +2190,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 16:39"
     },
     {
@@ -2190,7 +2199,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 17:26"
     },
     {
@@ -2199,7 +2208,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 2.1,
+      "age_days": 2.7,
       "modified": "2026-04-16 18:48"
     },
     {
@@ -2208,8 +2217,17 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 2.1,
+      "age_days": 2.7,
       "modified": "2026-04-16 18:54"
+    },
+    {
+      "arquivo": "fix_dup.py",
+      "path": "C:\\Users\\dirfe\\.gemini\\antigravity\\scratch\\questor_explorer\\fix_dup.py",
+      "categoria": "SCRIPT_FIX",
+      "risk": "safe_delete",
+      "size_kb": 0.8,
+      "age_days": 0.1,
+      "modified": "2026-04-19 08:46"
     },
     {
       "arquivo": "fix_fallback.py",
@@ -2217,7 +2235,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 1.2,
+      "age_days": 1.8,
       "modified": "2026-04-17 16:49"
     },
     {
@@ -2226,7 +2244,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 6.9,
+      "age_days": 7.5,
       "modified": "2026-04-11 23:36"
     },
     {
@@ -2235,7 +2253,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2244,7 +2262,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 18.0,
+      "age_days": 18.5,
       "modified": "2026-03-31 22:29"
     },
     {
@@ -2253,7 +2271,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 5.0,
+      "age_days": 5.5,
       "modified": "2026-04-13 22:57"
     },
     {
@@ -2262,7 +2280,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:50"
     },
     {
@@ -2271,7 +2289,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:49"
     },
     {
@@ -2280,7 +2298,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 22.3,
+      "age_days": 22.8,
       "modified": "2026-03-27 15:56"
     },
     {
@@ -2289,7 +2307,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 16.2,
+      "age_days": 16.8,
       "modified": "2026-04-02 16:16"
     },
     {
@@ -2298,7 +2316,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.8,
-      "age_days": 20.4,
+      "age_days": 21.0,
       "modified": "2026-03-29 11:36"
     },
     {
@@ -2307,7 +2325,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.8,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:01"
     },
     {
@@ -2316,7 +2334,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:39"
     },
     {
@@ -2325,7 +2343,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 2.3,
+      "age_days": 2.8,
       "modified": "2026-04-16 15:37"
     },
     {
@@ -2334,7 +2352,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.8,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:05"
     },
     {
@@ -2343,7 +2361,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.8,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 11:34"
     },
     {
@@ -2352,7 +2370,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.8,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:02"
     },
     {
@@ -2361,7 +2379,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.8,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:51"
     },
     {
@@ -2370,7 +2388,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 5.0,
+      "age_days": 5.5,
       "modified": "2026-04-13 23:05"
     },
     {
@@ -2379,7 +2397,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.7,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 14:55"
     },
     {
@@ -2388,8 +2406,17 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.7,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 14:56"
+    },
+    {
+      "arquivo": "debug_meta3.py",
+      "path": "C:\\Users\\dirfe\\.gemini\\antigravity\\scratch\\questor_explorer\\debug_meta3.py",
+      "categoria": "DEBUG_SCRIPT",
+      "risk": "safe_delete",
+      "size_kb": 0.7,
+      "age_days": 0.1,
+      "modified": "2026-04-19 08:58"
     },
     {
       "arquivo": "d_empresas.txt",
@@ -2397,7 +2424,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.7,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 14:46"
     },
     {
@@ -2406,7 +2433,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 18.0,
+      "age_days": 18.5,
       "modified": "2026-03-31 22:32"
     },
     {
@@ -2415,7 +2442,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 14:39"
     },
     {
@@ -2424,7 +2451,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 17.5,
+      "age_days": 18.1,
       "modified": "2026-04-01 09:02"
     },
     {
@@ -2433,7 +2460,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.7,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 15:06"
     },
     {
@@ -2442,7 +2469,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 19.3,
+      "age_days": 19.8,
       "modified": "2026-03-30 15:43"
     },
     {
@@ -2451,7 +2478,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:04"
     },
     {
@@ -2460,7 +2487,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:34"
     },
     {
@@ -2469,7 +2496,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 18.3,
+      "age_days": 18.8,
       "modified": "2026-03-31 16:05"
     },
     {
@@ -2478,7 +2505,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 22.3,
+      "age_days": 22.8,
       "modified": "2026-03-27 15:57"
     },
     {
@@ -2487,7 +2514,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.7,
-      "age_days": 21.1,
+      "age_days": 21.7,
       "modified": "2026-03-28 19:15"
     },
     {
@@ -2496,7 +2523,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.7,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2505,7 +2532,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 16.5,
+      "age_days": 17.1,
       "modified": "2026-04-02 09:19"
     },
     {
@@ -2514,7 +2541,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.6,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 15:07"
     },
     {
@@ -2523,7 +2550,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 16:14"
     },
     {
@@ -2532,7 +2559,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.6,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 14:22"
     },
     {
@@ -2541,7 +2568,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 7.1,
+      "age_days": 7.6,
       "modified": "2026-04-11 20:32"
     },
     {
@@ -2550,7 +2577,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 14:35"
     },
     {
@@ -2559,7 +2586,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 5.0,
+      "age_days": 5.5,
       "modified": "2026-04-13 22:58"
     },
     {
@@ -2568,7 +2595,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.6,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 16:07"
     },
     {
@@ -2577,7 +2604,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:09"
     },
     {
@@ -2586,7 +2613,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.6,
-      "age_days": 22.2,
+      "age_days": 22.8,
       "modified": "2026-03-27 17:24"
     },
     {
@@ -2595,7 +2622,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:01"
     },
     {
@@ -2604,7 +2631,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:18"
     },
     {
@@ -2613,7 +2640,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.6,
-      "age_days": 15.5,
+      "age_days": 16.1,
       "modified": "2026-04-03 09:11"
     },
     {
@@ -2622,7 +2649,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2631,7 +2658,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.6,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 14:36"
     },
     {
@@ -2640,7 +2667,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.6,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:16"
     },
     {
@@ -2649,7 +2676,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 16.5,
+      "age_days": 17.1,
       "modified": "2026-04-02 08:57"
     },
     {
@@ -2658,7 +2685,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 17:24"
     },
     {
@@ -2667,7 +2694,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 1.6,
+      "age_days": 2.2,
       "modified": "2026-04-17 06:59"
     },
     {
@@ -2676,7 +2703,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 2.4,
+      "age_days": 2.9,
       "modified": "2026-04-16 12:50"
     },
     {
@@ -2685,7 +2712,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2694,7 +2721,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2703,7 +2730,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 1.6,
+      "age_days": 2.2,
       "modified": "2026-04-17 07:06"
     },
     {
@@ -2712,7 +2739,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 14:35"
     },
     {
@@ -2721,7 +2748,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2730,7 +2757,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 17.1,
+      "age_days": 17.7,
       "modified": "2026-04-01 19:50"
     },
     {
@@ -2739,7 +2766,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 17.0,
+      "age_days": 17.5,
       "modified": "2026-04-01 22:54"
     },
     {
@@ -2748,7 +2775,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 18.3,
+      "age_days": 18.8,
       "modified": "2026-03-31 15:33"
     },
     {
@@ -2757,7 +2784,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 19.3,
+      "age_days": 19.9,
       "modified": "2026-03-30 13:49"
     },
     {
@@ -2766,7 +2793,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:02"
     },
     {
@@ -2775,7 +2802,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:48"
     },
     {
@@ -2784,7 +2811,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 18.3,
+      "age_days": 18.9,
       "modified": "2026-03-31 15:07"
     },
     {
@@ -2793,7 +2820,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 21.2,
+      "age_days": 21.7,
       "modified": "2026-03-28 17:45"
     },
     {
@@ -2802,7 +2829,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 18.3,
+      "age_days": 18.8,
       "modified": "2026-03-31 16:00"
     },
     {
@@ -2811,7 +2838,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:53"
     },
     {
@@ -2820,7 +2847,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 24.1,
+      "age_days": 24.7,
       "modified": "2026-03-25 19:24"
     },
     {
@@ -2829,7 +2856,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 16:07"
     },
     {
@@ -2838,7 +2865,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 22.2,
+      "age_days": 22.7,
       "modified": "2026-03-27 18:22"
     },
     {
@@ -2847,7 +2874,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 06:37"
     },
     {
@@ -2856,7 +2883,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:03"
     },
     {
@@ -2865,7 +2892,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 22.0,
+      "age_days": 22.6,
       "modified": "2026-03-27 21:01"
     },
     {
@@ -2874,7 +2901,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 16.4,
+      "age_days": 16.9,
       "modified": "2026-04-02 13:14"
     },
     {
@@ -2883,7 +2910,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:49"
     },
     {
@@ -2892,7 +2919,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:39"
     },
     {
@@ -2901,7 +2928,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.5,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 17:22"
     },
     {
@@ -2910,7 +2937,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.5,
-      "age_days": 19.5,
+      "age_days": 20.1,
       "modified": "2026-03-30 10:20"
     },
     {
@@ -2919,7 +2946,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -2928,7 +2955,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 17:14"
     },
     {
@@ -2937,7 +2964,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 17:34"
     },
     {
@@ -2946,7 +2973,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 16:19"
     },
     {
@@ -2955,7 +2982,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 1.7,
+      "age_days": 2.2,
       "modified": "2026-04-17 06:04"
     },
     {
@@ -2964,7 +2991,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 2.1,
+      "age_days": 2.6,
       "modified": "2026-04-16 20:29"
     },
     {
@@ -2973,7 +3000,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.4,
-      "age_days": 17.0,
+      "age_days": 17.6,
       "modified": "2026-04-01 21:27"
     },
     {
@@ -2982,7 +3009,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.4,
-      "age_days": 18.3,
+      "age_days": 18.9,
       "modified": "2026-03-31 13:51"
     },
     {
@@ -2991,7 +3018,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3000,7 +3027,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 1.6,
+      "age_days": 2.2,
       "modified": "2026-04-17 07:14"
     },
     {
@@ -3009,7 +3036,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 2.6,
+      "age_days": 3.2,
       "modified": "2026-04-16 06:51"
     },
     {
@@ -3018,7 +3045,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3027,7 +3054,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3036,7 +3063,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:10"
     },
     {
@@ -3045,7 +3072,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 13.1,
+      "age_days": 13.6,
       "modified": "2026-04-05 20:27"
     },
     {
@@ -3054,7 +3081,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3063,7 +3090,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 16.4,
+      "age_days": 16.9,
       "modified": "2026-04-02 13:07"
     },
     {
@@ -3072,7 +3099,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 10.1,
+      "age_days": 10.7,
       "modified": "2026-04-08 19:40"
     },
     {
@@ -3081,7 +3108,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:00"
     },
     {
@@ -3090,7 +3117,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 16.4,
+      "age_days": 16.9,
       "modified": "2026-04-02 13:14"
     },
     {
@@ -3099,7 +3126,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:34"
     },
     {
@@ -3108,7 +3135,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:52"
     },
     {
@@ -3117,7 +3144,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:17"
     },
     {
@@ -3126,7 +3153,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3135,7 +3162,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:37"
     },
     {
@@ -3144,7 +3171,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 14:09"
     },
     {
@@ -3153,7 +3180,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:02"
     },
     {
@@ -3162,7 +3189,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:15"
     },
     {
@@ -3171,7 +3198,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:13"
     },
     {
@@ -3180,7 +3207,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.4,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:47"
     },
     {
@@ -3189,7 +3216,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.4,
-      "age_days": 15.5,
+      "age_days": 16.1,
       "modified": "2026-04-03 09:17"
     },
     {
@@ -3198,7 +3225,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.4,
-      "age_days": 21.4,
+      "age_days": 21.9,
       "modified": "2026-03-28 13:10"
     },
     {
@@ -3207,7 +3234,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3216,7 +3243,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3225,7 +3252,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:51"
     },
     {
@@ -3234,7 +3261,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3243,7 +3270,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 3.6,
+      "age_days": 4.2,
       "modified": "2026-04-15 07:06"
     },
     {
@@ -3252,7 +3279,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3261,7 +3288,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.4,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3270,7 +3297,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 17:33"
     },
     {
@@ -3279,7 +3306,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 17:26"
     },
     {
@@ -3288,7 +3315,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 15.2,
+      "age_days": 15.7,
       "modified": "2026-04-03 17:39"
     },
     {
@@ -3297,7 +3324,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 15.2,
+      "age_days": 15.8,
       "modified": "2026-04-03 17:16"
     },
     {
@@ -3306,7 +3333,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 2.1,
+      "age_days": 2.6,
       "modified": "2026-04-16 20:37"
     },
     {
@@ -3315,7 +3342,7 @@
       "categoria": "SCRIPT_FIX",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 1.7,
+      "age_days": 2.2,
       "modified": "2026-04-17 06:16"
     },
     {
@@ -3324,7 +3351,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 20.2,
+      "age_days": 20.8,
       "modified": "2026-03-29 16:42"
     },
     {
@@ -3333,7 +3360,7 @@
       "categoria": "SCRIPT_PATCH",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 7.1,
+      "age_days": 7.6,
       "modified": "2026-04-11 20:53"
     },
     {
@@ -3342,7 +3369,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3351,7 +3378,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 17.1,
+      "age_days": 17.7,
       "modified": "2026-04-01 19:55"
     },
     {
@@ -3360,7 +3387,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 17.1,
+      "age_days": 17.6,
       "modified": "2026-04-01 20:41"
     },
     {
@@ -3369,7 +3396,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 18.3,
+      "age_days": 18.8,
       "modified": "2026-03-31 15:38"
     },
     {
@@ -3378,7 +3405,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 18.2,
+      "age_days": 18.8,
       "modified": "2026-03-31 17:27"
     },
     {
@@ -3387,7 +3414,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 18.2,
+      "age_days": 18.8,
       "modified": "2026-03-31 17:30"
     },
     {
@@ -3396,7 +3423,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 16:58"
     },
     {
@@ -3405,7 +3432,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 12.2,
+      "age_days": 12.8,
       "modified": "2026-04-06 17:18"
     },
     {
@@ -3414,7 +3441,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:23"
     },
     {
@@ -3423,7 +3450,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:13"
     },
     {
@@ -3432,7 +3459,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 5.0,
+      "age_days": 5.6,
       "modified": "2026-04-13 22:16"
     },
     {
@@ -3441,7 +3468,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3450,7 +3477,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 3.6,
+      "age_days": 4.2,
       "modified": "2026-04-15 07:06"
     },
     {
@@ -3459,7 +3486,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 11:37"
     },
     {
@@ -3468,7 +3495,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:15"
     },
     {
@@ -3477,7 +3504,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.3,
-      "age_days": 16.0,
+      "age_days": 16.6,
       "modified": "2026-04-02 20:59"
     },
     {
@@ -3486,7 +3513,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 13.0,
+      "age_days": 13.6,
       "modified": "2026-04-05 20:59"
     },
     {
@@ -3495,7 +3522,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:54"
     },
     {
@@ -3504,7 +3531,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 22.0,
+      "age_days": 22.6,
       "modified": "2026-03-27 21:45"
     },
     {
@@ -3513,7 +3540,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 14.1,
+      "age_days": 14.7,
       "modified": "2026-04-04 19:47"
     },
     {
@@ -3522,7 +3549,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.3,
-      "age_days": 19.5,
+      "age_days": 20.1,
       "modified": "2026-03-30 10:17"
     },
     {
@@ -3531,7 +3558,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 17.1,
+      "age_days": 17.6,
       "modified": "2026-04-01 19:59"
     },
     {
@@ -3540,7 +3567,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 13.1,
+      "age_days": 13.7,
       "modified": "2026-04-05 18:48"
     },
     {
@@ -3549,7 +3576,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:51"
     },
     {
@@ -3558,7 +3585,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:05"
     },
     {
@@ -3567,7 +3594,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 13.1,
+      "age_days": 13.7,
       "modified": "2026-04-05 19:26"
     },
     {
@@ -3576,7 +3603,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 19.1,
+      "age_days": 19.7,
       "modified": "2026-03-30 18:50"
     },
     {
@@ -3585,7 +3612,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:54"
     },
     {
@@ -3594,7 +3621,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:49"
     },
     {
@@ -3603,7 +3630,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 18.2,
+      "age_days": 18.7,
       "modified": "2026-03-31 17:52"
     },
     {
@@ -3612,7 +3639,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 21.4,
+      "age_days": 22.0,
       "modified": "2026-03-28 12:38"
     },
     {
@@ -3621,7 +3648,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 27.0,
+      "age_days": 27.5,
       "modified": "2026-03-22 22:36"
     },
     {
@@ -3630,7 +3657,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 2.3,
+      "age_days": 2.9,
       "modified": "2026-04-16 13:56"
     },
     {
@@ -3639,7 +3666,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:19"
     },
     {
@@ -3648,7 +3675,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 18.6,
+      "age_days": 19.1,
       "modified": "2026-03-31 08:45"
     },
     {
@@ -3657,7 +3684,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 16.2,
+      "age_days": 16.8,
       "modified": "2026-04-02 16:30"
     },
     {
@@ -3666,7 +3693,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 16.1,
+      "age_days": 16.7,
       "modified": "2026-04-02 19:19"
     },
     {
@@ -3675,7 +3702,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -3684,7 +3711,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 20.3,
+      "age_days": 20.8,
       "modified": "2026-03-29 15:33"
     },
     {
@@ -3693,7 +3720,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 25.4,
+      "age_days": 26.0,
       "modified": "2026-03-24 12:00"
     },
     {
@@ -3702,7 +3729,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 11:37"
     },
     {
@@ -3711,7 +3738,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 16.0,
+      "age_days": 16.6,
       "modified": "2026-04-02 21:10"
     },
     {
@@ -3720,7 +3747,7 @@
       "categoria": "TMP_FILE",
       "risk": "safe_delete",
       "size_kb": 0.2,
-      "age_days": 16.0,
+      "age_days": 16.6,
       "modified": "2026-04-02 21:31"
     },
     {
@@ -3729,7 +3756,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 19.1,
+      "age_days": 19.7,
       "modified": "2026-03-30 18:39"
     },
     {
@@ -3738,17 +3765,8 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.2,
-      "age_days": 10.1,
+      "age_days": 10.6,
       "modified": "2026-04-08 20:38"
-    },
-    {
-      "arquivo": "debug.txt",
-      "path": "C:\\Users\\dirfe\\.gemini\\antigravity\\scratch\\questor_explorer\\debug.txt",
-      "categoria": "LOG_FILE",
-      "risk": "review",
-      "size_kb": 0.1,
-      "age_days": 17.6,
-      "modified": "2026-04-01 06:54"
     },
     {
       "arquivo": "dump.json",
@@ -3756,7 +3774,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 18.4,
+      "age_days": 18.9,
       "modified": "2026-03-31 13:29"
     },
     {
@@ -3765,7 +3783,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 17.2,
+      "age_days": 17.7,
       "modified": "2026-04-01 17:37"
     },
     {
@@ -3774,7 +3792,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 14:51"
     },
     {
@@ -3783,7 +3801,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 17.0,
+      "age_days": 17.6,
       "modified": "2026-04-01 21:27"
     },
     {
@@ -3792,7 +3810,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 18.6,
+      "age_days": 19.1,
       "modified": "2026-03-31 08:52"
     },
     {
@@ -3801,7 +3819,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.1,
-      "age_days": 2.3,
+      "age_days": 2.8,
       "modified": "2026-04-16 15:37"
     },
     {
@@ -3810,7 +3828,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 17.1,
+      "age_days": 17.6,
       "modified": "2026-04-01 20:42"
     },
     {
@@ -3819,7 +3837,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 17.0,
+      "age_days": 17.5,
       "modified": "2026-04-01 22:51"
     },
     {
@@ -3828,7 +3846,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:09"
     },
     {
@@ -3837,7 +3855,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.1,
-      "age_days": 4.9,
+      "age_days": 5.5,
       "modified": "2026-04-13 23:22"
     },
     {
@@ -3846,7 +3864,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:13"
     },
     {
@@ -3855,7 +3873,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 17.1,
+      "age_days": 17.7,
       "modified": "2026-04-01 18:54"
     },
     {
@@ -3864,7 +3882,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 13.1,
+      "age_days": 13.6,
       "modified": "2026-04-05 20:27"
     },
     {
@@ -3873,7 +3891,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:39"
     },
     {
@@ -3882,7 +3900,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 12.2,
+      "age_days": 12.8,
       "modified": "2026-04-06 17:17"
     },
     {
@@ -3891,7 +3909,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 12.2,
+      "age_days": 12.8,
       "modified": "2026-04-06 17:20"
     },
     {
@@ -3900,7 +3918,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:46"
     },
     {
@@ -3909,7 +3927,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:46"
     },
     {
@@ -3918,7 +3936,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 12.6,
+      "age_days": 13.2,
       "modified": "2026-04-06 07:19"
     },
     {
@@ -3927,7 +3945,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:18"
     },
     {
@@ -3936,7 +3954,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:48"
     },
     {
@@ -3945,7 +3963,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:49"
     },
     {
@@ -3954,7 +3972,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 25.4,
+      "age_days": 26.0,
       "modified": "2026-03-24 12:00"
     },
     {
@@ -3963,7 +3981,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 12:15"
     },
     {
@@ -3972,7 +3990,7 @@
       "categoria": "DEBUG_SCRIPT",
       "risk": "safe_delete",
       "size_kb": 0.1,
-      "age_days": 16.4,
+      "age_days": 16.9,
       "modified": "2026-04-02 12:52"
     },
     {
@@ -3981,7 +3999,7 @@
       "categoria": "DUMP_JSON",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.3,
+      "age_days": 19.9,
       "modified": "2026-03-30 13:49"
     },
     {
@@ -3990,7 +4008,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 13.2,
+      "age_days": 13.8,
       "modified": "2026-04-05 16:32"
     },
     {
@@ -3999,7 +4017,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:54"
     },
     {
@@ -4008,7 +4026,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.1,
-      "age_days": 21.3,
+      "age_days": 21.9,
       "modified": "2026-03-28 14:09"
     },
     {
@@ -4017,7 +4035,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 17.0,
+      "age_days": 17.6,
       "modified": "2026-04-01 21:23"
     },
     {
@@ -4026,8 +4044,17 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 11.3,
+      "age_days": 11.9,
       "modified": "2026-04-07 15:08"
+    },
+    {
+      "arquivo": "debug.txt",
+      "path": "C:\\Users\\dirfe\\.gemini\\antigravity\\scratch\\questor_explorer\\debug.txt",
+      "categoria": "LOG_FILE",
+      "risk": "review",
+      "size_kb": 0.0,
+      "age_days": 0.1,
+      "modified": "2026-04-19 09:02"
     },
     {
       "arquivo": "found_vulcano.txt",
@@ -4035,7 +4062,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 17.6,
+      "age_days": 18.1,
       "modified": "2026-04-01 08:14"
     },
     {
@@ -4044,7 +4071,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 16.6,
+      "age_days": 17.2,
       "modified": "2026-04-02 07:33"
     },
     {
@@ -4053,7 +4080,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 17.3,
+      "age_days": 17.8,
       "modified": "2026-04-01 15:09"
     },
     {
@@ -4062,7 +4089,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -4071,7 +4098,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:10"
     },
     {
@@ -4080,7 +4107,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:37"
     },
     {
@@ -4089,7 +4116,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 24.1,
+      "age_days": 24.7,
       "modified": "2026-03-25 19:23"
     },
     {
@@ -4098,7 +4125,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:49"
     },
     {
@@ -4107,7 +4134,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 19.2,
+      "age_days": 19.7,
       "modified": "2026-03-30 17:47"
     },
     {
@@ -4116,7 +4143,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:13"
     },
     {
@@ -4125,7 +4152,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 16.3,
+      "age_days": 16.8,
       "modified": "2026-04-02 15:12"
     },
     {
@@ -4134,7 +4161,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 14.4,
+      "age_days": 15.0,
       "modified": "2026-04-04 11:36"
     },
     {
@@ -4143,7 +4170,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 19.2,
+      "age_days": 19.8,
       "modified": "2026-03-30 17:16"
     },
     {
@@ -4152,7 +4179,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     },
     {
@@ -4161,7 +4188,7 @@
       "categoria": "LOG_FILE",
       "risk": "review",
       "size_kb": 0.0,
-      "age_days": 7.0,
+      "age_days": 7.6,
       "modified": "2026-04-11 22:05"
     }
   ]

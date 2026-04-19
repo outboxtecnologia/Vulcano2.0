@@ -152,9 +152,10 @@ class AccountingGraphPipeline:
             import sqlite3
             memoria_arraste = {}
             try:
-                from main import POC_DB
-                conn_poc = sqlite3.connect(POC_DB)
+                from main import POC_DATABASE_FILE
+                conn_poc = sqlite3.connect(POC_DATABASE_FILE)
                 cur_poc = conn_poc.cursor()
+                cur_poc.execute('CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (chave_lancamento TEXT PRIMARY KEY, conta_destino TEXT, origem TEXT, data_modificacao TIMESTAMP)')
                 cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
                 for chv, dest in cur_poc.fetchall():
                     memoria_arraste[str(chv).strip()] = str(dest).strip()
@@ -507,7 +508,7 @@ class AccountingGraphPipeline:
                 print(f"Aviso: Erro ao ler LANCAMENTO_CONTABIL: {e_legado}")
     
             if not empreendimentos:
-                empreendimentos = [{"id": empreendimento_id or 0, "nome": f"CC {empreendimento_id}" if empreendimento_id else "GERAL", "cc": empreendimento_id or "GERAL", "vendas": []}]
+                empreendimentos = [{"id": empreendimento_id or 0, "nome": f"CC {empreendimento_id}" if empreendimento_id else "GERAL", "cc": empreendimento_id or 0, "vendas": []}]
 
             resultados = []
             for emp in empreendimentos:
@@ -1469,8 +1470,7 @@ class AccountingGraphPipeline:
             if resultados:
                 resultados[0]["contas_fisicas"] = list(contas_fisicas_empresa.values())
                 resultados[0]["contas_legado"] = list(contas_legado_empresa.values())
-
-            return {"data": resultados}
+            return {"data": resultados, "dashboard_meta": receitas_meta}
         except Exception as e:
             import traceback
             traceback.print_exc()

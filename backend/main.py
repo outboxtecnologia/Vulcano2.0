@@ -1224,20 +1224,32 @@ class DiagnosticoInput(BaseModel):
     linhas: list[DiagnosticoRow]
     top_n: int = 20
 
+class MemoriaArrasteInput(BaseModel):
+    chave: str
+    conta_destino: str
+    origem: str = "QUESTOR"
+
 @app.post("/api/questor/memoria_arraste")
-async def salvar_memoria_arraste(request: Request):
+async def salvar_memoria_arraste(payload: MemoriaArrasteInput):
     """Salva a preferência de arrastar-e-soltar do Kanban no SQLite"""
     try:
-        data = await request.json()
-        chave = str(data.get("chave", "")).strip()
-        conta_destino = str(data.get("conta_destino", "")).strip()
-        origem = str(data.get("origem", "QUESTOR")).strip()
+        chave = str(payload.chave).strip()
+        conta_destino = str(payload.conta_destino).strip()
+        origem = str(payload.origem).strip()
         
         if not chave or not conta_destino:
             return JSONResponse({"status": "error", "message": "Chave ou destino vazio"}, status_code=400)
             
         import sqlite3
-        conn = sqlite3.connect(POC_DB)
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (
+                chave_lancamento TEXT PRIMARY KEY,
+                conta_destino TEXT,
+                origem TEXT,
+                data_modificacao TIMESTAMP
+            )
+        ''')
         conn.execute('''
             INSERT INTO auditoria_memoria_arraste (chave_lancamento, conta_destino, origem, data_modificacao)
             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
