@@ -888,7 +888,7 @@ class AccountingGraphPipeline:
                     
                     try:
                         cur_v.execute("""
-                            SELECT V.DESCUNIDIMOB, U.ID, U.METRAGEM 
+                            SELECT V.DESCUNIDIMOB, U.ID, U.METRAGEM, U.DESCRICAO
                             FROM VENDA V
                             JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
                             JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
@@ -897,15 +897,25 @@ class AccountingGraphPipeline:
                         """, (emp["id"],))
                         area_unidades = {}
                         seen_uids_per_desc = {}
-                        for r_desc, u_id, r_met in cur_v.fetchall():
+                        desc_unid_dominant_map = {}
+                        
+                        for r_desc, u_id, r_met, r_udesc in cur_v.fetchall():
                             if r_desc:
                                 k = str(r_desc).strip()
                                 if k not in area_unidades:
                                     area_unidades[k] = 0.0
                                     seen_uids_per_desc[k] = set()
+                                    desc_unid_dominant_map[k] = {"met": -1.0, "name": k}
+                                    
                                 if u_id not in seen_uids_per_desc[k]:
-                                    area_unidades[k] += float(r_met or 0.0)
+                                    _met = float(r_met or 0.0)
+                                    area_unidades[k] += _met
                                     seen_uids_per_desc[k].add(u_id)
+                                    
+                                    if _met > desc_unid_dominant_map[k]["met"]:
+                                        desc_unid_dominant_map[k]["met"] = _met
+                                        _u_name = (r_udesc.decode('win1252', 'ignore') if isinstance(r_udesc, bytes) else str(r_udesc or '')).strip()
+                                        desc_unid_dominant_map[k]["name"] = _u_name
                         
                         cur_v.execute("SELECT SUM(U.METRAGEM) FROM UNIDADE U JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ?", (emp["id"],))
                         area_row = cur_v.fetchone()
@@ -938,8 +948,11 @@ class AccountingGraphPipeline:
                         
                     for v_row in todas_vendas:
                         uni_raw, vgv_venda, dt_ven, dt_dis = v_row
-                        uni_nome = (uni_raw.decode('win1252', 'ignore') if isinstance(uni_raw, bytes) else str(uni_raw or '')).strip()
-                        if not uni_nome: continue
+                        uni_nome_raw = (uni_raw.decode('win1252', 'ignore') if isinstance(uni_raw, bytes) else str(uni_raw or '')).strip()
+                        if not uni_nome_raw: continue
+                        
+                        # Apply dominant unit name to fix Kanban groupings (e.g. "290 / Vaga..." -> "APTO 1801")
+                        uni_nome = desc_unid_dominant_map.get(uni_nome_raw, {}).get("name", uni_nome_raw)
                         
                         dt_dis_str = str(dt_dis)[:10] if dt_dis else ""
                         distrato_ym = dt_dis_str[:7] if len(dt_dis_str) >= 7 else ""
@@ -948,13 +961,13 @@ class AccountingGraphPipeline:
                         if distrato_ym and distrato_ym < target_ym:
                             continue
                             
-                        # Resgata estado do pipeline de caixa caso tenha
-                        uni_data = unidades_com_caixa.get(uni_nome)
+                        # Resgata estado do pipeline de caixa usando raw name
+                        uni_data = unidades_com_caixa.get(uni_nome_raw)
                         
                         if not uni_data:
                             # Unidade vendida mas sem movimento no caixa
                             uni_data = {
-                                "unidade": uni_nome,
+                                "unidade": uni_nome_raw,
                                 "vgv": float(vgv_venda or 0.0),
                                 "vgv_base": float(vgv_venda or 0.0),
                                 "data_venda": str(dt_ven)[:10] if dt_ven else "",
@@ -994,7 +1007,7 @@ class AccountingGraphPipeline:
                             
                         # CUSTO ECONÔMICO (Fração Física / Metragem)
                         # O Custo já reflete a evolução física (foi gasto e medido). Deve-se aplicar apenas o Índice Comercial da unidade.
-                        area_da_unidade = area_unidades.get(str(uni_nome).strip(), 0.0)
+                        area_da_unidade = area_unidades.get(str(uni_nome_raw).strip(), 0.0)
                         fracao_fisica = (area_da_unidade / total_area_emp) if total_area_emp > 0 else 0.0
                         
                         custo_u_atual = 0.0 if is_novo_distrato_mes_alvo else (custo_gasto_vigente * fracao_fisica)
@@ -1150,7 +1163,7 @@ class AccountingGraphPipeline:
                             
                             if is_trimestral:
                                 meta_pq = receitas_meta_pq.get(nome_emp, {})
-                                uni_data_pq = next((u for u in meta_pq.get("unidades", []) if u["unidade"] == uni_nome), {})
+                                uni_data_pq = next((u for u in meta_pq.get("unidades", []) if u["unidade"] == uni_nome_raw), {})
                                 saldo_soc_pq = uni_data_pq.get("tributos_soc_acumulado", 0.0)
                                 saldo_caixa_pq = uni_data_pq.get("tributos_caixa_acumulado", 0.0)
                                 

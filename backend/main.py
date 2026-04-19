@@ -3182,6 +3182,9 @@ def get_vulcano_vendas(empresa_id: int):
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
             WHERE v.CODIGOEMPRESA = ?
+              AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
+              AND COALESCE(c.CNPJ, '') <> '000.000.000-00'
+              AND COALESCE(v.TOTALVENDA, 0) > 0.01
         """
         df_vendas = pd.read_sql_query(query_vendas, conn, params=(empresa_id,))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
