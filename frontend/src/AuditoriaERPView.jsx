@@ -3952,11 +3952,15 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       });
 
-      // 2. Contas Legado
-
+      // 2. Contas Legado (VU 1.0) — só aparecem se também tiverem
+      // presença no motor VU 2.0 (virtual) ou Questor (fisico).
+      // Contas com movimento exclusivo em VU 1.0 são suprimidas.
       (legado || []).forEach(c => {
-
-        if (!m[c.conta]) m[c.conta] = { nome: c.nome ? `${c.nome} (Vulcano 1.0)` : `Conta ${c.conta} (Vulcano 1.0)`, classif: c.classif || '9.99.99' };
+        if (m[c.conta]) {
+          // Conta já existe via VU 2.0 — apenas complementa o nome se necessário
+          if (!m[c.conta]._temLegado) m[c.conta]._temLegado = true;
+        }
+        // Conta exclusiva VU 1.0: NÃO adicionar ao mapa → não aparece na tabela
       });
     });
 
