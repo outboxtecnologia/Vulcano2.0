@@ -3957,14 +3957,32 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       (legado || []).forEach(c => {
 
         if (!m[c.conta]) m[c.conta] = { nome: c.nome ? `${c.nome} (Vulcano 1.0)` : `Conta ${c.conta} (Vulcano 1.0)`, classif: c.classif || '9.99.99' };
-
       });
-
     });
 
-    return m; // { contaId â†’ nome }
+    const contasEmpreendimento = new Set();
+    Object.values(dashboardMeta || {}).forEach(emp => {
+      [
+        emp.conta_custo, emp.conta_estoque, emp.conta_estconc,
+        emp.conta_caixa, emp.conta_clientes, emp.conta_adi_cli,
+        emp.conta_rec, emp.conta_variacao, emp.conta_despesa,
+        emp.CONTAESTAND, emp.CONTAESTCON,
+      ].forEach(v => {
+        if (v) {
+          const num = parseInt(String(v).split(' ')[0].split('-')[0].trim(), 10);
+          if (!isNaN(num) && num > 0) contasEmpreendimento.add(String(num));
+        }
+      });
+    });
 
-  }, [dadosPorMes]);
+    // Se dashboardMeta ainda nao carregou (sem contas), mostra tudo sem filtrar.
+    const filtered = contasEmpreendimento.size > 0
+      ? Object.fromEntries(Object.entries(m).filter(([cid]) => contasEmpreendimento.has(String(cid))))
+      : m;
+
+    return filtered; // { contaId → { nome, classif } }
+
+  }, [dadosPorMes, dashboardMeta]);
 
 
 
@@ -4135,10 +4153,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         </div>
 
-        <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa || !filtroEmpId}
+        <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
 
-          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-          title={!filtroEmpId ? 'Selecione um empreendimento específico antes de auditar' : 'Auditar'}>
+          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
 
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
 
@@ -4215,15 +4232,6 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       </div>
 
 
-
-      {!filtroEmpId && !loading && (
-        <div className="flex items-center gap-3 border border-[#eab308]/30 bg-[#eab308]/8 px-4 py-2.5" style={{ borderRadius: '2px' }}>
-          <AlertTriangle size={13} className="text-[#eab308] shrink-0"/>
-          <p className="text-[11px] font-black uppercase tracking-widest text-[#eab308]">
-            Selecione um empreendimento específico no filtro — auditar "Todos" mistura contas de diferentes obras e distorce a conciliação por conta
-          </p>
-        </div>
-      )}
 
       {error && (
 
