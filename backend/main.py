@@ -2135,7 +2135,7 @@ def api_saldo_contas(
             saldo_anterior = 0.0
             if data_ini:
                 try:
-                    if cc_filtro and conta_id == conta_estoque:
+                    if cc_filtro:
                         cur_q.execute(f"""
                             SELECT SUM(
                                 CASE 

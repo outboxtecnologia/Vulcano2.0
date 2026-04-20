@@ -520,6 +520,8 @@ class RevenueTimePipeline:
                 meta_emp["unidades"].append({
                     "unidade": uni, "comprador": comp, "empreendimento": emp, "vgv": row.VGV,
                     "vgv_base": row.VGV_BASE,
+                    "fracao": float(row.VGV / meta_emp["vgv"]) if meta_emp["vgv"] and meta_emp["vgv"] > 0 else 0.0,
+                    "percentual_pago": float(row.RECEITA_CAIXA / row.VGV) if row.VGV > 0 else 0.0,
                     "data_distrato": str(row.DATADISTRATO)[:10] if row.DATADISTRATO and str(row.DATADISTRATO) not in ('0', '', 'None', 'nan', '0.0', 'NaT') else None,
                     "data_venda": str(row.DATA_VENDA)[:10] if row.DATA_VENDA and str(row.DATA_VENDA) not in ('0', '', 'None', 'nan', '0.0') else None,
                     "caixa_acumulado": row.RECEITA_CAIXA, "caixa_mes": row.CAIXA_MES,
@@ -571,7 +573,14 @@ class RevenueTimePipeline:
                  })
     
             valid_dashboard_meta = {k: v for k, v in dashboard_meta.items() if len(v["unidades"]) > 0}
-    
+            
+            # Corrige a fração que dependia do VGV total do empreendimento (pós-acúmulo)
+            for k_emp, obj_emp in valid_dashboard_meta.items():
+                total_vgv = obj_emp["vgv"]
+                for u in obj_emp["unidades"]:
+                    # Atualiza com o denominador global do empreendimento
+                    u["fracao"] = float(u["vgv"] / total_vgv) if total_vgv > 0 else 0.0
+
             cur.execute("SELECT * FROM IMPOSTO")
             imposto_cols = [desc[0].strip() for desc in cur.description]
             imposto_rows = cur.fetchall()

@@ -655,6 +655,9 @@ class AccountingGraphPipeline:
                     print(f"[ESTOQUE/CC] {nome_emp[:35]} CC={emp['cc']} "
                           f"ant={custo_gasto_anterior:,.0f} vig={custo_gasto_vigente:,.0f} "
                           f"mov={custo_gasto_vigente-custo_gasto_anterior:,.0f}")
+                          
+                    if nome_emp in receitas_meta:
+                        receitas_meta[nome_emp]["custo_gasto_vigente"] = custo_gasto_vigente
 
                 elif c_estoque_inj:
                     # SEM CC: fallback pela conta de estoque debitada no LCTOGER.
@@ -682,6 +685,9 @@ class AccountingGraphPipeline:
                     mov_credito_mes = float(_r[3] or 0.0)
                     print(f"[ESTOQUE/CONTA] {nome_emp[:35]} conta={c_estoque_inj} "
                           f"ant={custo_gasto_anterior:,.0f} vig={custo_gasto_vigente:,.0f}")
+                    
+                    if nome_emp in receitas_meta:
+                        receitas_meta[nome_emp]["custo_gasto_vigente"] = custo_gasto_vigente
 
                 # ═══════════════════════════════════════════════════════════════
                 # ETAPA 2: POC NATIVO
