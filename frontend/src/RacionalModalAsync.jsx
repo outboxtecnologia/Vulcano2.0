@@ -24,65 +24,73 @@ export default function RacionalModalAsync({
   const [isLoading, setIsLoading] = useState(true);
 
   const rawAptoNum = detalheApto ? detalheApto.replace(/\D/g, '') : '';
-  const todasVendas = [];
-  
-  let ccId = null;
-  let custoGlobalObra = 0;
-  const _qCsv = new Set();
 
-  Object.entries(dashboardMeta || {}).forEach(([empNomeKey, emp]) => {
-    if (filtroEmpNome && !empNomeKey.toLowerCase().includes(filtroEmpNome.toLowerCase()) &&
-        !filtroEmpNome.toLowerCase().includes(empNomeKey.toLowerCase())) return;
-    
-    (emp.unidades || []).forEach(u => {
-      if (u.unidade && rawAptoNum && u.unidade.includes(`APTO ${rawAptoNum}`)) {
-        todasVendas.push(u);
+  // Bug #3 fix: memoizar derivações de dashboardMeta para deps estáveis no useEffect
+  const { todasVendas, ccId, custoGlobalObra, contasCsv, fracaoTotal, custoRealizadoIdeal } = useMemo(() => {
+    const vendas = [];
+    let cc = null;
+    let custoGlobal = 0;
+    const qCsv = new Set();
+
+    Object.entries(dashboardMeta || {}).forEach(([empNomeKey, emp]) => {
+      if (filtroEmpNome && !empNomeKey.toLowerCase().includes(filtroEmpNome.toLowerCase()) &&
+          !filtroEmpNome.toLowerCase().includes(empNomeKey.toLowerCase())) return;
+
+      (emp.unidades || []).forEach(u => {
+        if (u.unidade && rawAptoNum && u.unidade.includes(`APTO ${rawAptoNum}`)) {
+          vendas.push(u);
+        }
+      });
+
+      if (emp.custo_gasto_vigente > 0) custoGlobal = emp.custo_gasto_vigente;
+      if (emp.contas_contabeis && emp.contas_contabeis.estoque_obras) {
+        qCsv.add(emp.contas_contabeis.estoque_obras);
       }
+      if (emp.cc) cc = emp.cc;
     });
 
-    if (emp.custo_gasto_vigente > 0) custoGlobalObra = emp.custo_gasto_vigente;
-    if (emp.contas_contabeis && emp.contas_contabeis.estoque_obras) {
-        _qCsv.add(emp.contas_contabeis.estoque_obras);
-    }
-    if (emp.cc) ccId = emp.cc;
-  });
-
-  const fracaoTotal = todasVendas.reduce((s, v) => s + (v.fracao || 0), 0);
-  const custoRealizadoIdeal = custoGlobalObra * fracaoTotal;
+    const fracao = vendas.reduce((s, v) => s + (v.fracao || 0), 0);
+    return {
+      todasVendas: vendas,
+      ccId: cc,
+      custoGlobalObra: custoGlobal,
+      contasCsv: Array.from(qCsv).join(','),
+      fracaoTotal: fracao,
+      custoRealizadoIdeal: custoGlobal * fracao,
+    };
+  }, [dashboardMeta, filtroEmpNome, rawAptoNum]);
 
   useEffect(() => {
     async function loadHistory() {
       setIsLoading(true);
-      const contasCsv = Array.from(_qCsv).join(',');
-      if (!contasCsv) {
-          setQuestorHistory([]);
-          setIsLoading(false);
-          return;
+
+      // Extrai o número do apto e monta o texto de busca
+      // detalheApto pode ser 'APTO_202' ou 'APTO 202' — normalize para 'APTO 202'
+      const aptoText = `APTO ${rawAptoNum}`;
+      // conta estoque: primeiro item do contasCsv
+      const contaNum = contasCsv ? parseInt(contasCsv.split(',')[0], 10) : null;
+
+      if (!contaNum || !rawAptoNum) {
+        setQuestorHistory([]);
+        setIsLoading(false);
+        return;
       }
-      
+
       try {
-        const url = `${API_BASE}/api/questor/saldo-contas?empresa_id=${selectedEmpresa}&contas=${contasCsv}${ccId ? `&empreendimento_id=${ccId}` : ''}`;
+        // Novo endpoint: busca LCTOCTB com COMPLHIST LIKE '%APTO 202%'
+        // Retorna apenas os lançamentos de realização de custo da unidade
+        const url = `${API_BASE}/api/questor/historico-unidade?empresa_id=${selectedEmpresa}&conta=${contaNum}&apto_text=${encodeURIComponent(aptoText)}`;
         const res = await fetch(url);
         const json = await res.json();
-        
-        const targetUnit = detalheApto.trim();
-        const numPattern = `APTO ${rawAptoNum}`;
-        
-        const filtered = (json.data || []).filter(linha => {
-           if (linha.override_apto) return linha.override_apto === targetUnit;
-           const h1 = (linha.historico || '').toUpperCase();
-           const h2 = (linha.historico_base || '').toUpperCase();
-           return h1.includes(numPattern) || h2.includes(numPattern);
-        });
-        setQuestorHistory(filtered);
+        setQuestorHistory(json.data || []);
       } catch (e) {
-        console.error("Failed to load historical timeline", e);
+        console.error('Failed to load historico-unidade', e);
         setQuestorHistory([]);
       }
       setIsLoading(false);
     }
     if (detalheApto) loadHistory();
-  }, [detalheApto, selectedEmpresa, ccId, API_BASE]);
+  }, [detalheApto, selectedEmpresa, contasCsv, rawAptoNum, API_BASE]);
 
   if (!detalheApto) return null;
 
@@ -187,13 +195,27 @@ export default function RacionalModalAsync({
           </div>
 
           <div className="px-5 py-4 border-b border-[#1a1a1a] flex flex-col gap-3">
-            <div className="grid grid-cols-4 gap-3">
+            {/* Bug #2 fix: grid de 5 KPIs — adicionado Acumulado Questor Histórico */}
+            <div className="grid grid-cols-5 gap-2">
               <div className="bg-[#161616] rounded-lg border border-[#222] p-3 flex flex-col gap-1">
-                <span className="text-[8px] text-[#555] uppercase tracking-widest">Custo Físico (Neste Mês)</span>
+                <span className="text-[8px] text-[#555] uppercase tracking-widest">Custo Físico (Mês Kanban)</span>
                 <span className="text-base font-black text-[#3b82f6]">
                   {(d.totalQuestor || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                 </span>
-                <span className="text-[9px] text-[#555]">{d.questor.length} lançamentos arrastados</span>
+                <span className="text-[9px] text-[#555]">{d.questor.len              <div className="bg-[#0a1628] rounded-lg border border-[#1a3a66] p-3 flex flex-col gap-1">
+                <span className="text-[8px] text-[#3b82f6]/70 uppercase tracking-widest">Acumulado Questor (Histórico)</span>
+                {isLoading ? (
+                  <span className="text-sm font-black text-[#3b82f6]/40 animate-pulse">...</span>
+                ) : (
+                  <span className="text-base font-black text-[#3b82f6]">
+                    {mesesQ.length > 0
+                      ? mesesQ[mesesQ.length - 1].acumulado.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
+                      : '—'}
+                  </span>
+                )}
+                <span className="text-[9px] text-[#3b82f6]/40">{questorHistory.length} lnç históricos</span>
+              </div>�ricos`}
+                </span>
               </div>
               <div className="bg-[#161616] rounded-lg border border-[#222] p-3 flex flex-col gap-1">
                 <span className="text-[8px] text-[#555] uppercase tracking-widest">Custo Sistêmico (VU 2.0)</span>
@@ -240,7 +262,7 @@ export default function RacionalModalAsync({
 
           <div className="px-5 py-4 border-b border-[#1a1a1a]">
             <div className="text-[9px] font-black uppercase tracking-widest text-[#3b82f6] mb-3 flex items-center gap-2">
-              <span>◈</span> EVOLUÇÃO MENSAL DE GASTOS — QUESTOR (Histórico Completo)
+              <span>◈</span> EVOLUÇÃO MENSAL DE GASTOS — QUESTOR (Histórico Completo LCTOCTB)
             </div>
             {isLoading ? (
               <div className="px-4 py-8 text-center text-[#555] animate-pulse uppercase tracking-widest text-[10px]">Baixando histórico LCTOGER...</div>

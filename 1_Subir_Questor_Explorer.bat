@@ -9,6 +9,25 @@ echo.
 set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer
 set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
+set FIREBIRD_BIN=C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\Firebird\bin
+
+echo [0/3] Verificando servico Firebird (porta 3050)...
+netstat -aon | findstr ":3050 " | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   Firebird NAO esta rodando. Iniciando fbserver.exe...
+    start "Firebird Server" /MIN "%FIREBIRD_BIN%\fbserver.exe" -a
+    timeout /t 3 >nul
+    netstat -aon | findstr ":3050 " | findstr "LISTENING" >nul 2>&1
+    if errorlevel 1 (
+        echo   [AVISO] Firebird pode nao ter iniciado. Verifique se o arquivo existe em:
+        echo   %FIREBIRD_BIN%\fbserver.exe
+    ) else (
+        echo   Firebird iniciado com sucesso na porta 3050.
+    )
+) else (
+    echo   Firebird ja esta rodando na porta 3050. OK.
+)
+echo.
 
 echo [1/3] Encerrando processos antigos nas portas 8000 e 5173...
 for /f "tokens=5" %%p in ('netstat -aon ^| findstr ":8000 " ^| findstr "LISTENING"') do (

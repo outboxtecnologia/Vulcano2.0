@@ -2187,7 +2187,97 @@ def api_saldo_contas(
         conn_q.close()
         conn_v.close()
 
+@app.get("/api/questor/historico-unidade")
+def api_historico_unidade(
+    empresa_id: int = 959,
+    conta: int = None,
+    apto_text: str = None,
+):
+    """
+    Busca histórico de realização de custo de uma unidade no LCTOCTB.
+    
+    Os lançamentos de baixa de custo (Db CMV / Cr Estoque) ficam no LCTOCTB
+    com o identificador da unidade (ex: 'APTO 202') no COMPLHIST.
+    Sem filtro de data — devolve toda a vida financeira da unidade.
+    """
+    if not conta or not apto_text:
+        return {"data": [], "total_lancamentos": 0}
+
+    conn_q = get_conn("questor")
+    try:
+        cur = conn_q.cursor()
+
+        # Plano de contas para nome da conta
+        cur.execute("SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
+        plano = {r[0]: str(r[1] or "").strip() for r in cur.fetchall()}
+
+        # Busca LCTOCTB onde a unidade aparece no histórico complementar (COMPLHIST)
+        # LIKE 'padrao' em Firebird é case-sensitive → usamos UPPER() em ambos os lados
+        like_pattern = f"%{apto_text.upper()}%"
+        query = """
+            SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                   CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
+            FROM LCTOCTB C
+            LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+            WHERE C.CODIGOEMPRESA = ?
+              AND (C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)
+              AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+              AND UPPER(CAST(C.COMPLHIST AS VARCHAR(800))) LIKE ?
+            ORDER BY C.DATALCTOCTB ASC
+        """
+        cur.execute(query, (empresa_id, conta, conta, like_pattern))
+        rows = cur.fetchall()
+
+        detalhes = []
+        for row in rows:
+            chave, dt, cdeb, ccred, hist_raw, valor, descr = (
+                row[0], row[1], row[2], row[3], row[4], row[5], row[6]
+            )
+
+            if isinstance(hist_raw, (bytes, bytearray)):
+                compl = hist_raw.decode("cp1252", "ignore")
+            elif hasattr(hist_raw, "read"):
+                compl = hist_raw.read().decode("cp1252", "ignore")
+            else:
+                compl = str(hist_raw or "")
+
+            descr_str = str(descr or "").strip()
+            hist = f"{descr_str} {compl}".strip()
+            v = float(valor or 0)
+
+            if cdeb == conta:
+                nat = "D"
+            elif ccred == conta:
+                nat = "C"
+            else:
+                continue
+
+            detalhes.append({
+                "chave": chave,
+                "data": str(dt),
+                "historico": hist,
+                "natureza": nat,
+                "valor": v,
+                "conta_deb": cdeb,
+                "conta_cred": ccred,
+            })
+
+        return {
+            "data": detalhes,
+            "conta": conta,
+            "nome": plano.get(conta, f"Conta {conta}"),
+            "total_lancamentos": len(detalhes),
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn_q.close()
+
 @app.get("/api/health")
+
 
 def api_health():
     key = os.environ.get("GEMINI_API_KEY") or ""
