@@ -19,3 +19,7 @@ Para não repetir conceitos, o agente consulta essa lista ativamente antes de ge
 - Component Extraction & Side Effect Lifecycle Hooks (useEffect / Async UI)
 - Silent Error Swallowing (NameError silenciado por except genérico)
 - flatMap em resposta paginada (agregar sub-arrays de múltiplas contas da API)
+- Prop Drilling Cascata (periodoFim propagado por 3 componentes: raiz → Tabela → Modal)
+- Derived Timeline from POC History (reconstruir evolução mensal VU 2.0 com Δpoc × custo × fração)
+- Date Cutoff Filter (corte temporal de dados históricos pelo período do Kanban via ym <= corteYM)
+- Field Name Mismatch Bug (emp.contas_contabeis.estoque_obras vs CONTAESTAND — campo inexistente causando URL vazia)

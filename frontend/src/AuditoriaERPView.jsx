@@ -440,7 +440,7 @@ class TabelaErrorBoundary extends React.Component {
   }
 }
 
-function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, empresaId, filtroEmpNome, nomesEmpresasAuditadas }) {
+function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, empresaId, filtroEmpNome, nomesEmpresasAuditadas, periodoFim }) {
   const [manualOverrides, setManualOverrides] = useState({});
   const [dragOverApto, setDragOverApto] = useState(null);
   const [detalheApto, setDetalheApto] = useState(null);
@@ -911,6 +911,7 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
       dashboardMeta={dashboardMeta}
       filtroEmpNome={filtroEmpNome}
       selectedEmpresa={empresaId}
+      periodoFim={periodoFim || ''}
       API_BASE={API_BASE}
   />;
 
@@ -1453,7 +1454,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
           {aba === 'mapa' && (
 
-            <TabelaErrorBoundary><TabelaMapaComparativa questor={questorManual} vulcano1={vulcano1} vulcano2={vulcano2} dashboardMeta={dashboardMeta} empresaId={empresaId} filtroEmpNome={filtroEmpNome} nomesEmpresasAuditadas={nomesEmpresasAuditadas} /></TabelaErrorBoundary>
+            <TabelaErrorBoundary><TabelaMapaComparativa questor={questorManual} vulcano1={vulcano1} vulcano2={vulcano2} dashboardMeta={dashboardMeta} empresaId={empresaId} filtroEmpNome={filtroEmpNome} nomesEmpresasAuditadas={nomesEmpresasAuditadas} periodoFim={porComp?.length > 0 ? porComp[porComp.length-1].competencia : ''} /></TabelaErrorBoundary>
 
           )}
 
