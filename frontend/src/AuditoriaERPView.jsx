@@ -2411,7 +2411,16 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
             <span className="font-mono text-[13px] font-black text-[var(--v-accent)] shrink-0">{contaId}</span>
 
-            <span className="text-[12px] font-bold text-[var(--v-text-faint)] truncate" title={contaNome}>{contaNome}</span>
+            <span className="font-mono text-[10px] text-[var(--v-text-faint)] shrink-0 tracking-tight"
+              title={contaNome}>
+              {(() => {
+                const parts = contaNome ? contaNome.split(' - ') : [];
+                if (parts.length >= 2) {
+                  return <><span className="text-[var(--v-text-dim)]">{parts[0]}</span><span className="text-[var(--v-text-faint)] ml-1 truncate max-w-[150px] inline-block align-bottom">{parts.slice(1).join(' - ')}</span></>;
+                }
+                return <span className="truncate max-w-[170px] inline-block align-bottom">{contaNome}</span>;
+              })()}
+            </span>
 
             {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-6)] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
 
@@ -4039,31 +4048,32 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
   const temDados = Object.keys(dadosPorMes).length > 0;
 
+  const [isErpFullscreen, setIsErpFullscreen] = useState(false);
 
+  const erpContent = (
+    <div className={`text-[var(--v-text)] ${isErpFullscreen ? 'flex flex-col' : 'flex flex-col gap-5 pb-10 animate-in fade-in'}`}>
 
-  return (
-
-    <div className="flex flex-col gap-5 pb-10 text-[var(--v-text)] animate-in fade-in">
-
-      {/* Header */}
-
-      <div className="border-b border-[var(--v-border)] pb-4">
-
-        <h2 className="text-4xl font-black tracking-tighter text-[var(--v-text-bold)] flex items-center gap-3 mb-1">
-
-          <ShieldCheck className="text-[var(--v-accent)]" size={36}/> Auditoria ERP
-
-        </h2>
-
-        <p className="text-xs uppercase tracking-[0.3em] text-[var(--v-text-faint)] font-black">
-
-          Contas a Injetar no Questor â€” Calculado (Vulcano) Ã— Registrado (Questor)
-
-        </p>
-
+      <div className={`flex items-center gap-3 border-b border-[var(--v-border)] ${isErpFullscreen ? 'px-5 py-2 bg-[#0d0d0d] sticky top-0 z-50' : 'pb-3 pt-1'}`}>
+        <ShieldCheck className="text-[var(--v-accent)] shrink-0" size={isErpFullscreen ? 16 : 22}/>
+        <div className="flex flex-col leading-none gap-0.5">
+          <h2 className={`font-black tracking-tighter text-[var(--v-text-bold)] leading-none ${isErpFullscreen ? 'text-sm' : 'text-xl'}`}>
+            Auditoria ERP
+          </h2>
+          {!isErpFullscreen && (
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--v-text-faint)] font-black">
+              Calculado (Vulcano) × Registrado (Questor)
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setIsErpFullscreen(f => !f)}
+          title={isErpFullscreen ? 'Sair do modo tela cheia (Esc)' : 'Expandir — sobrepoe sidebar e header para trabalho intensivo'}
+          className="ml-auto px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent)] hover:border-[var(--v-accent)]/50 transition-all flex items-center gap-1.5"
+          style={{ borderRadius: '2px' }}
+        >
+          {isErpFullscreen ? '✕ SAIR' : '⛶ TELA CHEIA'}
+        </button>
       </div>
-
-
 
       {/* Filtros */}
 
@@ -4794,8 +4804,28 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       )}
 
     </div>
-
   );
+
+  if (isErpFullscreen) {
+    return createPortal(
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9000,
+          background: 'var(--v-deep)', display: 'flex',
+          flexDirection: 'column', overflow: 'hidden',
+        }}
+        onKeyDown={e => { if (e.key === 'Escape') setIsErpFullscreen(false); }}
+        tabIndex={-1}
+      >
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px 40px' }} className="custom-scrollbar">
+          {erpContent}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return erpContent;
 
 };
 
