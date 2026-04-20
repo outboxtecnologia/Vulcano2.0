@@ -2395,7 +2395,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
       <tr
 
-        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/10 hover:bg-[var(--v-magma-glow)]' : 'border-[var(--v-border)] hover:bg-[var(--v-card)]'}`}
+        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/20 hover:bg-[#1a0a00]' : 'border-[#202020] hover:bg-[#171717]'}`}
 
         onClick={() => setOpen(o => !o)}
 
@@ -2403,7 +2403,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
         {/* Conta + nome */}
 
-        <td className="px-3 py-2.5 sticky left-0 z-10 bg-[var(--v-deep)] min-w-[220px]">
+        <td className="px-3 py-2 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px] border-r border-[#222]">
 
           <div className="flex items-center gap-2">
 
@@ -2448,7 +2448,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                   {temFisico || abs(movFisico) > 0.01 ? (
 
-                    <span className={movFisico == 0 ? 'text-[var(--v-text-muted)]' : movFisico >= 0 ? 'text-[var(--v-accent-3)]/80' : 'text-[var(--v-accent)]/80'}>
+                    <span className={movFisico == 0 ? 'text-[#454545]' : movFisico >= 0 ? 'text-[var(--v-accent-3)]' : 'text-[var(--v-accent)]'}>
 
                       {movFisico > 0 ? '+' : ''}{fmt(movFisico)}
 
@@ -2460,7 +2460,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                 {abs(saldoFisico) > 0.01 && (
 
-                  <div className="text-xs font-bold font-mono text-[var(--v-text-faint)] mt-0.5" title="Saldo Final no Mês">
+                  <div className="text-[10px] font-bold font-mono text-[#666] mt-0.5" title="Saldo Final no Mês">
 
                     S: {fmt(saldoFisico)}
 
@@ -4068,7 +4068,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         <button
           onClick={() => setIsErpFullscreen(f => !f)}
           title={isErpFullscreen ? 'Sair do modo tela cheia (Esc)' : 'Expandir — sobrepoe sidebar e header para trabalho intensivo'}
-          className="ml-auto px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent)] hover:border-[var(--v-accent)]/50 transition-all flex items-center gap-1.5"
+          className={`ml-auto px-3 py-1.5 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all ${isErpFullscreen ? 'bg-[#ef4444]/20 border border-[#ef4444]/60 text-[#ef4444] hover:bg-[#ef4444]/30' : 'bg-[#00bcd4]/15 border border-[#00bcd4]/60 text-[#00bcd4] hover:bg-[#00bcd4]/25 hover:border-[#00bcd4]'}`}
           style={{ borderRadius: '2px' }}
         >
           {isErpFullscreen ? '✕ SAIR' : '⛶ TELA CHEIA'}
@@ -4077,7 +4077,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       {/* Filtros */}
 
-      <div className="flex flex-wrap gap-3 items-end bg-[var(--v-deep)] border border-[var(--v-border)] rounded p-4">
+      <div className="flex flex-wrap gap-3 items-end bg-[#0d0d0d] border border-[#222] p-3" style={{borderRadius:'2px'}}>
 
         <div className="flex flex-col gap-1">
 
@@ -4135,9 +4135,10 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         </div>
 
-        <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
+        <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa || !filtroEmpId}
 
-          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          title={!filtroEmpId ? 'Selecione um empreendimento específico antes de auditar' : 'Auditar'}>
 
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
 
@@ -4214,6 +4215,15 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
       </div>
 
 
+
+      {!filtroEmpId && !loading && (
+        <div className="flex items-center gap-3 border border-[#eab308]/30 bg-[#eab308]/8 px-4 py-2.5" style={{ borderRadius: '2px' }}>
+          <AlertTriangle size={13} className="text-[#eab308] shrink-0"/>
+          <p className="text-[11px] font-black uppercase tracking-widest text-[#eab308]">
+            Selecione um empreendimento específico no filtro — auditar "Todos" mistura contas de diferentes obras e distorce a conciliação por conta
+          </p>
+        </div>
+      )}
 
       {error && (
 
@@ -4651,7 +4661,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
 
 
-          <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+          <div className="overflow-auto" style={{ maxHeight: isErpFullscreen ? 'calc(100vh - 120px)' : 'calc(100vh - 280px)' }}>
 
             <table
 
@@ -4667,7 +4677,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                   {/* Conta */}
 
-                  <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)] sticky left-0 top-0 z-30 bg-[var(--v-deep)] min-w-[220px]">
+                  <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest text-[#8a8a8a] border-b-2 border-[#363636] sticky left-0 top-0 z-30 bg-[#0d0d0d] min-w-[220px]">
 
                     Conta
 
@@ -4681,19 +4691,19 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                         style={{ minWidth: '270px' }}>
 
-                      <div className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-widest text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
+                      <div className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-widest text-[#c8c8c8] border-b-2 border-[#363636] bg-[#0d0d0d]">
 
                         {labelMes(comp)}
 
                       </div>
 
-                      <div className="flex text-[7px] font-black uppercase tracking-widest text-[#333]">
+                      <div className="flex text-[9px] font-black uppercase tracking-widest">
 
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[var(--v-bg)]">Questor</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[#2a2a2a] text-[#ff6b1a]/80">Questor</div>
 
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[var(--v-bg)]">Vulcano</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[#2a2a2a] text-[#a259ff]/80">Vulcano</div>
 
-                        <div className="flex-1 px-2 py-1 text-right">Î”</div>
+                        <div className="flex-1 px-2 py-1 text-right text-[#eab308]/80">Δ</div>
 
                       </div>
 
@@ -4701,7 +4711,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                   ))}
 
-                  <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-widest text-[var(--v-text-bold)] border-b border-[var(--v-border)] sticky top-0 z-20 bg-[var(--v-deep)] min-w-[130px]">
+                  <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-widest text-[#e8e8e8] border-b-2 border-[#363636] sticky top-0 z-20 bg-[#0d0d0d] min-w-[130px]">
 
                     Status Final
 
