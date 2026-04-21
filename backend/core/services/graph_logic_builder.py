@@ -963,7 +963,7 @@ class AccountingGraphPipeline:
                     try:
                         _cur_vendas = conn_vulcano.cursor()
                         _cur_vendas.execute("""
-                            SELECT DESCUNIDIMOB, TOTALVENDA, DTOPER, DATADISTRATO
+                            SELECT DESCUNIDIMOB, TOTALVENDA, DTOPER, DATADISTRATO, DISTRATO
                             FROM VENDA
                             WHERE IDEMPREENDIMENTO = ?
                               AND DTOPER < CAST(? AS DATE)
@@ -975,7 +975,7 @@ class AccountingGraphPipeline:
                         todas_vendas = []
                         
                     for v_row in todas_vendas:
-                        uni_raw, vgv_venda, dt_ven, dt_dis = v_row
+                        uni_raw, vgv_venda, dt_ven, dt_dis, distrato_flag = v_row[0], v_row[1], v_row[2], v_row[3], v_row[4]
                         uni_nome_raw = (uni_raw.decode('win1252', 'ignore') if isinstance(uni_raw, bytes) else str(uni_raw or '')).strip()
                         if not uni_nome_raw: continue
                         
@@ -984,6 +984,8 @@ class AccountingGraphPipeline:
                         
                         dt_dis_str = str(dt_dis)[:10] if dt_dis else ""
                         distrato_ym = dt_dis_str[:7] if len(dt_dis_str) >= 7 else ""
+                        _flag = distrato_flag.decode('win1252','ignore') if isinstance(distrato_flag, bytes) else str(distrato_flag or "N")
+                        is_distrato_s = _flag.strip().upper() == "S"
                         
                         # Se já estava distratada ANTES do mês-alvo, não processamos mais nada para a unidade
                         if distrato_ym and distrato_ym < target_ym:
@@ -1260,6 +1262,40 @@ class AccountingGraphPipeline:
                                 nat_c = 'C' if m_ant > 0 else 'D'
                                 inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_ant_ant * peso_imp))
                                 inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Estorno Excesso Despesa Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_ant_ant * peso_imp))
+
+                        # ── ESTORNO DE RET NO DISTRATO ────────────────────────────────────
+                        # Se a unidade foi distratada NESTE mês-alvo e o empreendimento usa RET,
+                        # gera D:conta_cred_darf (4995) / C:conta_antecipado (4845 se obra em
+                        # construção, 4996 se obra concluída) proporcional ao caixa acumulado.
+                        # Base legal: Lei 10.931/2004 + CPC 47 estorno de ativo/passivo tributário.
+                        if distrato_ym == target_ym and is_distrato_s:
+                            try:
+                                for imp_cfg in valid_confs:
+                                    desc = imp_cfg.get("DESCRICAO")
+                                    # Para o estorno retroativo do distrato, a base real inabalada no modelo de dados
+                                    # é o `caixa_acumulado` (ele retém o histórico mesmo que o VGV da unidade vire 0).
+                                    # O `trib_detalhe_caixa_acumulado` quebra quando não há movimento novo no mês.
+                                    aliquota = float(imp_cfg.get("ALIQUOTA", 0)) / 100.0
+                                    caixa_real_acumulado = uni_data.get("caixa_acumulado", 0.0)
+                                    trib_acum_ant = caixa_real_acumulado * aliquota
+
+                                    if trib_acum_ant > 0.01:
+                                        c_deb_est  = imp_cfg.get("CONTA_CRED_IMP_REC_DARF") or 4995   # debita RET a Recolher (reduz passivo)
+                                        obra_conc  = str(emp.get("obra_concluida") or "N").upper() == "S"
+                                        c_cred_est = (imp_cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 4996  # obra concluída → estorna despesa
+                                                      if obra_conc
+                                                      else imp_cfg.get("CONTA_DEB_IMP_APROP_ATIVO") or 4845)  # obra em andamento → estorna ativo diferido
+                                        
+                                        hist_dist  = f"ESTORNO {desc} DISTRATO UNID {uni_nome}"
+                                        logica_dist = (f"Distrato em {dt_dis_str} — estorno {desc} acumulado até {target_ym}: "
+                                                       f"R${trib_acum_ant:,.2f} base R${caixa_real_acumulado:,.2f}. Obra: {obra_conc}. "
+                                                       f"D:{c_deb_est} / C:{c_cred_est}.")
+                                        
+                                        inject_virtual_entry(c_deb_est,  trib_acum_ant, 'D', hist_dist, logica=logica_dist, saldo_ant=0.0)
+                                        inject_virtual_entry(c_cred_est, trib_acum_ant, 'C', hist_dist, logica=logica_dist, saldo_ant=0.0)
+                                        print(f"[{desc}-DISTRATO] {uni_nome} | D:{c_deb_est} C:{c_cred_est} | R${trib_acum_ant:,.2f} | {dt_dis_str}")
+                            except Exception as _e_ret_dist:
+                                print(f"[{desc}-DISTRATO] Erro no estorno para {uni_nome}: {_e_ret_dist}")
 
     
                 # Fecha saldo_final de todas as contas virtuais APÓS todas as injeções (incluindo novas vendas)

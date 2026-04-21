@@ -1231,7 +1231,55 @@ class MemoriaArrasteInput(BaseModel):
     conta_destino: str
     origem: str = "QUESTOR"
 
-@app.post("/api/questor/memoria_arraste")
+@app.post("/api/questor/populate_poc")
+async def api_populate_questor(payload: dict):
+    """
+    Roda a matriz de inteligência VU (graph_logic_builder), achata todas as virtual_entries
+    resultantes para a Empresa selecionada e envia o flat bulk para injeção física no LCTOCTB do Questor.
+    Payload: {"ano": int, "mes": int, "empresa_id": int}
+    """
+    ano = int(payload.get("ano"))
+    mes = int(payload.get("mes"))
+    empresa_id = int(payload.get("empresa_id", 959))
+    empreendimento_id = payload.get("empreendimento_id")
+    
+    # 1. Obter snapshot vivo (A mesma memória rodando na tela de Auditoria)
+    import asyncio
+    from core.services.graph_logic_builder import AccountingGraphPipeline
+    
+    # Recomputa o grafo de dependências atualizado (Single Source of Truth)
+    res_list = await asyncio.to_thread(
+        AccountingGraphPipeline().run, str(ano), f"{ano}-{mes:02d}", str(empresa_id), empreendimento_id
+    )
+    
+    flat_entries = []
+    
+    # 2. Descer e Aplainar o grafo
+    for proj in res_list:
+        for cv in proj.get("contas_virtuais", []):
+            conta = cv.get("conta")
+            if not conta or conta == 99999: # Ignora saldenhos sintéticos informativos
+                continue
+            
+            for detalhe in cv.get("detalhes", []):
+                # Só nos importamos com as virtual entries produzidas pela regra VU 
+                if detalhe.get("virtual"):
+                    flat_entries.append({
+                        "conta": conta,
+                        "mov": detalhe.get("valor", detalhe.get("mov", 0.0)),
+                        "nat": detalhe.get("natureza", detalhe.get("nat", "D")),
+                        "historico": detalhe.get("historico", "")
+                    })
+                    
+    # 3. Disparar pro Injector
+    from core.services.questor_injector import inject_batch_to_questor
+    target_ym = f"{ano}-{mes:02d}"
+    resultado_injekao = await asyncio.to_thread(
+        inject_batch_to_questor, empresa_id, target_ym, flat_entries
+    )
+
+    return resultado_injekao
+
 async def salvar_memoria_arraste(payload: MemoriaArrasteInput):
     """Salva a preferência de arrastar-e-soltar do Kanban no SQLite"""
     try:
@@ -3748,6 +3796,93 @@ def _heuristic_extract_recebimentos_from_pdf(content: bytes) -> list:
                     )
     return results
 
+
+class ConversorSavePayload(BaseModel):
+    filename: str
+    import_mode: str
+    raw_pdf_text: str = ""
+    extracted_data: list[dict]
+
+@app.post("/api/conversor/salvar-extraidos")
+async def conversor_salvar_extraidos(payload: ConversorSavePayload):
+    """
+    Grava a extração no SQLite, dividindo em um Batch Pai (onde mora o texto do PDF)
+    e os Registros Filhos (o JSON). Converte automaticamente as datas D/M/Y em ISO.
+    """
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    cur = conn.cursor()
+    try:
+        cur.execute('''
+            INSERT INTO conversor_batches (filename, import_mode, raw_pdf_text)
+            VALUES (?, ?, ?)
+        ''', (payload.filename, payload.import_mode, payload.raw_pdf_text))
+        
+        batch_id = cur.lastrowid
+        
+        # Regex to match DD/MM/YYYY
+        import re
+        def to_iso(date_str):
+            if not date_str: return None
+            # Ex: "15/04/2025" -> "2025-04-15"
+            m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", str(date_str).strip())
+            if m:
+                return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+            return date_str # if already iso or format is weird, fallback
+
+        inserts = []
+        for reg in payload.extracted_data:
+            inserts.append((
+                batch_id,
+                reg.get('comprador', ''),
+                reg.get('cpf_cnpj', ''),
+                reg.get('empreendimento', ''),
+                reg.get('unidade', ''),
+                to_iso(reg.get('dt_vencimento')),
+                to_iso(reg.get('dt_pagamento')),
+                str(reg.get('parcela', '')),
+                float(reg.get('valor_raiz', 0) or 0),
+                float(reg.get('descontos', 0) or 0),
+                float(reg.get('acrescimos_variacoes', 0) or 0),
+                float(reg.get('total_pago', 0) or 0)
+            ))
+            
+        cur.executemany('''
+            INSERT INTO conversor_data_staging (
+                batch_id, comprador, cpf_cnpj, empreendimento, unidade, 
+                dt_vencimento, dt_pagamento, parcela, valor_raiz, descontos, 
+                acrescimos_variacoes, total_pago
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', inserts)
+
+        conn.commit()
+        return {"success": True, "batch_id": batch_id, "items": len(inserts)}
+    except Exception as e:
+        conn.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/conversor/listar-extraidos")
+def conversor_listar_extraidos():
+    """Retorna os batches pai já gravados"""
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT b.id, b.filename, b.import_mode, b.created_at, 
+                   COUNT(s.id) as linhas_importadas
+            FROM conversor_batches b
+            LEFT JOIN conversor_data_staging s ON s.batch_id = b.id
+            GROUP BY b.id
+            ORDER BY b.id DESC
+        ''')
+        rows = cur.fetchall()
+        return {"success": True, "batches": [dict(r) for r in rows]}
+    finally:
+        conn.close()
 
 @app.post("/api/extract-pdf")
 async def extract_pdf(
