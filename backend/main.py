@@ -5441,6 +5441,11 @@ def _splink_build_match_map(extracted_rows: list[dict], todas_vendas: list) -> d
 
 @app.post("/api/parser/preview-baixas")
 def preview_baixas(data: PreviewBaixasInput):
+    def dec(v):
+        if v is None: return ''
+        if isinstance(v, (bytes, bytearray)): return v.decode('win1252', 'ignore')
+        return str(v)
+
     conn = None
     try:
         conn = get_conn("vulcano")
@@ -5479,7 +5484,8 @@ def preview_baixas(data: PreviewBaixasInput):
             total_pago = float(row.get("total_pago", 0) or 0)
             valor_raiz = float(row.get("valor_raiz", 0) or 0)
             has_date = bool(row.get("dt_vencimento"))
-            comprador_nome = str(row.get("comprador_nome", "")).strip()
+            # FIX: campo pode vir como 'comprador' ou 'comprador_nome' dependendo do extrator
+            comprador_nome = str(row.get("comprador_nome") or row.get("comprador") or "").strip()
             
             if not unidade and not comprador_nome:
                 pass
@@ -5520,6 +5526,7 @@ def preview_baixas(data: PreviewBaixasInput):
                     # NÍVEL 1: Nome — RapidFuzz token_set_ratio
                     # Captura: "PEDRO ALVES MONTEIRO" ↔ "PEDRO MONTEIRO ALVES" → 100
                     # Captura: "JOAO CARLOS SILVA"   ↔ "JOAO CARLOS DA SILVA" → 95
+                    _nome_ratio = 0
                     if comprador_nome:
                         _nome_ratio = _fuzz.token_set_ratio(
                             comprador_nome, str(c_nome or ''), score_cutoff=0
@@ -5529,12 +5536,17 @@ def preview_baixas(data: PreviewBaixasInput):
                         
                     # NÍVEL 2: Unidade — partial_ratio (cobre abreviações)
                     # Captura: "APTO 302" ↔ "BLOCO A APTO 302" → 100
+                    # FIX: se nome bate muito bem (≥85) e unidade está vazia no ERP,
+                    # aceita candidato mesmo sem DESCUNIDIMOB (ex: Flávio Hormann)
                     if unidade and v_desc:
                         _unid_ratio = _fuzz.partial_ratio(
                             clean_str(unidade), clean_str(v_desc), score_cutoff=0
                         )
                         if _unid_ratio >= 80:
                             score += max(5, int(_unid_ratio / 100 * 15))  # proporcional 5–15
+                    elif unidade and not v_desc and _nome_ratio >= 85:
+                        # Unidade no PDF mas DESCUNIDIMOB vazio no ERP — nome forte compensa
+                        score += 5  # bônus mínimo para entrar no pool
                         
                     if score > 0:
                         candidatas.append({
@@ -5551,17 +5563,25 @@ def preview_baixas(data: PreviewBaixasInput):
                                "match_probability": _splink_prob})
                 continue
 
-            candidatas.sort(key=lambda x: x['score'], reverse=True)
-            
-            def dec(vx):
-                if vx is None: return ''
-                if isinstance(vx, bytes): return vx.decode('win1252', 'ignore')
-                return str(vx)
-                
+            if candidatas:
+                candidatas.sort(key=lambda x: x['score'], reverse=True)
+                best_s = candidatas[0]['score']
+                candidatas = [c for c in candidatas if c['score'] >= best_s - 15][:10]
+                # DEBUG
+                import logging
+                logging.warning(f"[PREVIEW_BAIXAS] '{comprador_nome}' unid='{unidade}' val={total_pago:.2f} → {len(candidatas)} candidata(s): {[(dec(c['v_row'][1])[:20], c['score'], dec(c['v_row'][4])[:20]) for c in candidatas]}")
+
             grupos_unidades = {}
             for cand in candidatas:
-                desc_unid = dec(cand["v_row"][4]).upper().strip()
-                if not desc_unid: desc_unid = f'V_{cand["v_row"][0]}'
+                import re
+                desc_bruto = dec(cand["v_row"][4]).upper().strip()
+                m = re.search(r'(?:APTO|AP|UNIDADE|SALA|CASA|CT|COTA)\s*(\w+)', desc_bruto)
+                if m:
+                    desc_unid = m.group(1)
+                else:
+                    digits = re.findall(r'\d+', desc_bruto)
+                    desc_unid = digits[-1] if digits else f'V_{cand["v_row"][0]}'
+                    
                 if desc_unid not in grupos_unidades:
                     grupos_unidades[desc_unid] = []
                 grupos_unidades[desc_unid].append(cand)
@@ -5594,7 +5614,9 @@ def preview_baixas(data: PreviewBaixasInput):
                     v_id = int(cand['v_row'][0])
                     
                     if v_id not in _cache_receber:
-                        cur.execute("SELECT ID, DATA, VALORPARCELA, TOTALPAGO, PARCELA FROM RECEBER WHERE IDVENDA = ? AND DATA >= '2025-06-01'", (v_id,))
+                        # FIX: sem corte de data — queremos TODAS as parcelas da venda
+                        # separando abertas (TOTALPAGO=0) de quitadas (TOTALPAGO>0) em memória
+                        cur.execute("SELECT ID, DATA, VALORPARCELA, TOTALPAGO, PARCELA FROM RECEBER WHERE IDVENDA = ?", (v_id,))
                         _cache_receber[v_id] = cur.fetchall()
                         
                     for ra in _cache_receber[v_id]: 
@@ -5609,7 +5631,7 @@ def preview_baixas(data: PreviewBaixasInput):
                             SELECT p.ID, p.DATA, p.VALOR, vfp.ID, p.VALOR_PAGO
                             FROM VENDAFORMAPAGTOPRAZO p
                             JOIN VENDAFORMAPAGTO vfp ON vfp.ID = p.IDVENDAFORMAPAGTO
-                            WHERE vfp.IDVENDA = ? AND p.DATA >= '2025-06-01'
+                            WHERE vfp.IDVENDA = ?
                         """, (v_id,))
                         _cache_prazos[v_id] = cur.fetchall()
                         
@@ -5622,6 +5644,13 @@ def preview_baixas(data: PreviewBaixasInput):
                         
                 pool_abertas.sort(key=lambda x: str(x[0][1]) if x[0][1] else '9999')
                 pool_prazos.sort(key=lambda x: str(x[0][1]) if x[0][1] else '9999')
+                
+                logging.warning(f"  [GRUPO '{grupo_key}'] pool_abertas={len(pool_abertas)} pool_quitadas={len(pool_quitadas)} pool_prazos={len(pool_prazos)} pdf_mes={pdf_mes} pdf_ano={pdf_ano}")
+                # Detalha quitadas do mês alvo para diagnóstico
+                for _pq, _, _ in pool_quitadas[:30]:
+                    _pq_data = str(_pq[1])
+                    if pdf_mes and f'-{pdf_mes}-' in _pq_data:
+                        logging.warning(f"    [QUITADA MÊS OK] id={_pq[0]} data={_pq_data} valorparc={_pq[2]} totalpago={_pq[3]}")
                 
                 match_perfeito = None
                 lista_multipla = []
@@ -5639,44 +5668,51 @@ def preview_baixas(data: PreviewBaixasInput):
                     return (pdf_mes and f'-{pdf_mes}-' in db_venc and (not pdf_ano or pdf_ano in db_venc))
 
                 # PRIORIDADE SUPREMA 00: JA PAGO (Faturas Quitadas Históricas)
-                # Dois critérios:
-                #   A) Com data extraída: valor próximo (< 5 reais) + mês/ano bate
-                #   B) Sem data (ou OCR falhou): valor EXATO (< 0.50 reais) - sinal forte de duplicata
+                # FIX: tolerância proporcional de 30% para cobrir variação CUB/INCC
+                # Critérios (em ordem de força):
+                #   A) Com data + valor_raiz bate com parcela-base (CUB identificado)
+                #   B) Com data + diferença < 30% do valor da parcela
+                #   C) Sem data + valor EXATO (< 0.50) — sinal forte de duplicata
                 for _pool, _type in [(pool_quitadas, "JA_PAGO_RECEBER"), (pool_prazos_quitados, "JA_PAGO_PROJETADA")]:
                     for p_tuple in _pool:
                         p, cand, is_prazo = p_tuple
                         p_valor = float(p[2] or 0)
                         if p_valor <= 0: continue
-                        diff_abs = min(abs(p_valor - total_pago), abs(p_valor - valor_raiz) if valor_raiz else 9999)
-                        if diff_abs >= 5.0: continue  # Valor muito diferente, ignorar
+                        diff_abs = abs(p_valor - total_pago)
+                        diff_abs_raiz = abs(p_valor - valor_raiz) if valor_raiz else 9999
+                        diff_rate = diff_abs / p_valor if p_valor else 9999
                         db_venc = str(p[1])
-                        # Critério A: data bate + valor próximo
                         date_ok = pdf_mes and f'-{pdf_mes}-' in db_venc and (not pdf_ano or pdf_ano in db_venc)
-                        # Critério B: valor exato (< 0.50) mesmo sem data
+                        # A: data bate + valor_raiz confirma a parcela-base
+                        raiz_bate = valor_raiz and diff_abs_raiz < 5.0
+                        # B: data bate + margem 30% (cobre CUB)
+                        margem_ok = diff_rate < 0.30
+                        # C: valor exatíssimo sem data
                         exact_value = diff_abs < 0.50
-                        if date_ok or exact_value:
+                        if (date_ok and (raiz_bate or margem_ok)) or exact_value:
                             match_perfeito = p_tuple
                             mat_type = _type
                             break
                     if match_perfeito: break
 
-                # 00B. Múltiplo JA PAGO (Titulos Conjuntos quitados) — requer data
-                if not match_perfeito and not lista_multipla and pdf_mes:
+                # 00B. Múltiplo JA PAGO (Titulos Conjuntos quitados)
+                # Não exigimos same_date_combo aqui porque parcelas conjuntas (ex: Gilberto) 
+                # podem ter vencimentos DB como 01/09 e 30/09, mas foram pagas juntas no PDF.
+                if not match_perfeito and not lista_multipla:
                     achou_combo_pago = False
                     for _pool, _type in [(pool_quitadas, "MULTIPLO_JA_PAGO_RECEBER"), (pool_prazos_quitados, "MULTIPLO_JA_PAGO_PROJETADA")]:
                         if len(_pool) >= 2:
                             for combo_tamanho in [2, 3, 4]:
                                 if achou_combo_pago or len(_pool) < combo_tamanho: break
                                 for combo in combinations(_pool, combo_tamanho):
-                                    if same_date_combo(combo) and has_pdf_date(combo):
-                                        soma_combo = sum(float(it[0][2] or 0) for it in combo)
-                                        if soma_combo > 0 and soma_combo <= total_pago:
-                                            diff_rate = abs(total_pago - soma_combo)/soma_combo
-                                            if diff_rate < 0.05:
-                                                lista_multipla = list(combo)
-                                                mat_type = _type
-                                                achou_combo_pago = True
-                                                break
+                                    soma_combo = sum(float(it[0][2] or 0) for it in combo)
+                                    if soma_combo > 0 and soma_combo <= total_pago:
+                                        diff_rate = abs(total_pago - soma_combo)/soma_combo
+                                        if diff_rate < 0.05:
+                                            lista_multipla = list(combo)
+                                            mat_type = _type
+                                            achou_combo_pago = True
+                                            break
                         if achou_combo_pago: break
                 
                 # PRIORIDADE MÁXIMA 0: DATA BATE ESTREITAMENTE COM A DATA DO PDF e o VALOR BATE.
@@ -5714,6 +5750,13 @@ def preview_baixas(data: PreviewBaixasInput):
                                 if f'-{pdf_mes}-' in db_venc and (not pdf_ano or pdf_ano in db_venc):
                                     match_perfeito = p_tuple
                                     mat_type = "PERFEITO_RECEBER_MULTI"
+                                    break
+                            elif _multi_vendas and not pdf_mes:
+                                # FIX: PDF sem data em cenário multi-comprador — só confirma
+                                # se valor_raiz for exato (< R$0,50) para evitar adiantamento
+                                if valor_raiz and abs(p_valor - valor_raiz) < 0.50:
+                                    match_perfeito = p_tuple
+                                    mat_type = "PERFEITO_RECEBER_MULTI_SEM_DATA"
                                     break
                             elif not _multi_vendas:
                                 match_perfeito = p_tuple
@@ -5807,40 +5850,52 @@ def preview_baixas(data: PreviewBaixasInput):
                                             achou_combo = True
                                             break
                 
-                # 3. Margem CUB Singular SE DIAMANTE
+                # 3. Margem CUB Singular — com data exata independe de diamante (FIX Schutzeler)
+                # Sem data: exige diamante (CPF) para evitar false-positives
                 if not match_perfeito and not lista_multipla:
                     diamante_no_grupo = any(c['is_diamante'] for c in grupo_vendas)
-                    if diamante_no_grupo:
+                    # FASE CUB-A: Data exata + margem 30% — qualquer match, não precisa de diamante
+                    # Cobre variações de CUB/INCC onde o OCR capturou a data corretamente
+                    if pdf_mes:
                         for p_tuple in pool_abertas:
                             p, cand, is_prazo = p_tuple
                             p_valor = float(p[2] or 0)
-                            if p_valor > 0 and total_pago > p_valor and (abs(total_pago - p_valor) / p_valor) < 5.0:
-                                db_venc = str(p[1])
-                                if pdf_mes and f'-{pdf_mes}-' in db_venc and pdf_ano in db_venc:
+                            db_venc = str(p[1])
+                            if (p_valor > 0 and total_pago > p_valor
+                                    and f'-{pdf_mes}-' in db_venc
+                                    and (not pdf_ano or pdf_ano in db_venc)):
+                                diff_rate = (total_pago - p_valor) / p_valor
+                                # valor_raiz bate com a parcela-base → acréscimo é a variação
+                                valor_raiz_bate = valor_raiz and abs(valor_raiz - p_valor) < 5.0
+                                if diff_rate < 0.30 or valor_raiz_bate:
                                     match_perfeito = p_tuple
                                     mat_type = "CUB_RECEBER_DATA_EXATA"
                                     break
-                                    
-                        if not match_perfeito:
-                            for p_tuple in pool_abertas:
-                                p, cand, is_prazo = p_tuple
-                                p_valor = float(p[2] or 0)
-                                if p_valor > 0 and total_pago > p_valor and (abs(total_pago - p_valor) / p_valor) < 2.0:
-                                    match_perfeito = p_tuple
-                                    mat_type = "CUB_RECEBER"
-                                    break
-                                    
                         if not match_perfeito:
                             for pr_tuple in pool_prazos:
                                 pr, cand, is_prazo = pr_tuple
                                 pr_valor = float(pr[2] or 0)
-                                if pr_valor > 0 and total_pago > pr_valor and (abs(total_pago - pr_valor) / pr_valor) < 5.0:
-                                    db_venc = str(pr[1])
-                                    if pdf_mes and f'-{pdf_mes}-' in db_venc and pdf_ano in db_venc:
+                                db_venc = str(pr[1])
+                                if (pr_valor > 0 and total_pago > pr_valor
+                                        and f'-{pdf_mes}-' in db_venc
+                                        and (not pdf_ano or pdf_ano in db_venc)):
+                                    diff_rate = (total_pago - pr_valor) / pr_valor
+                                    valor_raiz_bate = valor_raiz and abs(valor_raiz - pr_valor) < 5.0
+                                    if diff_rate < 0.30 or valor_raiz_bate:
                                         match_perfeito = pr_tuple
                                         mat_type = "CUB_PROJETADA_DATA_EXATA"
                                         break
-                                        
+
+                    # FASE CUB-B: Sem data — exige diamante (CPF) para evitar false-positives
+                    if not match_perfeito and diamante_no_grupo:
+                        for p_tuple in pool_abertas:
+                            p, cand, is_prazo = p_tuple
+                            p_valor = float(p[2] or 0)
+                            if p_valor > 0 and total_pago > p_valor and (abs(total_pago - p_valor) / p_valor) < 2.0:
+                                match_perfeito = p_tuple
+                                mat_type = "CUB_RECEBER"
+                                break
+                                
                         if not match_perfeito:
                             for pr_tuple in pool_prazos:
                                 pr, cand, is_prazo = pr_tuple
@@ -5861,7 +5916,87 @@ def preview_baixas(data: PreviewBaixasInput):
                     melhor_match_final = { 'type': mat_type, 'lista': lista_multipla }
                     break
                     
+            # ── FASE CROSS-GROUP: Co-proprietários (múltiplas vendas mesma unidade) ──────────
+            # Caso: David + esposa têm 2 vendas separadas; extrato tem 1 linha = soma das 2.
+            # FIX bugs: break→continue; pool pré-filtrado para mês alvo (performance + precisão).
+            if not melhor_match_final:
+                from itertools import combinations as _combs
+                _all_q_cg = []   # quitadas do mês alvo, cross-group
+                _all_a_cg = []   # abertas do mês alvo, cross-group
+                _seen_cg = set()
+                for _gk, _gv in grupos_unidades.items():
+                    for _gc in _gv:
+                        _gv_id = int(_gc['v_row'][0])
+                        if _gv_id in _seen_cg:
+                            continue
+                        _seen_cg.add(_gv_id)
+                        for _ra in _cache_receber.get(_gv_id, []):
+                            if _ra[0] in reserved_ids_receber:
+                                continue
+                            # Pré-filtro de mês: só inclui parcelas do mês alvo do PDF
+                            _ra_data = str(_ra[1])
+                            if pdf_mes and f'-{pdf_mes}-' not in _ra_data:
+                                continue
+                            if pdf_ano and pdf_ano not in _ra_data:
+                                continue
+                            _tup = (_ra, _gc, False)
+                            if float(_ra[3] or 0) > 0:
+                                _all_q_cg.append(_tup)
+                            else:
+                                _all_a_cg.append(_tup)
+                        for _pr in _cache_prazos.get(_gv_id, []):
+                            if _pr[0] in reserved_ids_prazos:
+                                continue
+                            _pr_data = str(_pr[1])
+                            if pdf_mes and f'-{pdf_mes}-' not in _pr_data:
+                                continue
+                            if pdf_ano and pdf_ano not in _pr_data:
+                                continue
+                            _tup = (_pr, _gc, True)
+                            if float(_pr[4] or 0) > 0:
+                                _all_q_cg.append(_tup)
+                            else:
+                                _all_a_cg.append(_tup)
+
+                logging.warning(f"  [CROSS-GROUP BUILD] '{comprador_nome}' unid='{unidade}' all_q={len(_all_q_cg)} all_a={len(_all_a_cg)}")
+
+                # FIX: continue (não break) para tentar abertas quando quitadas falham
+                for _pool_cg, _mat_cg in [(_all_q_cg, "MULTIPLO_JA_PAGO_CO_PROP"), (_all_a_cg, "MULTIPLO_RECEBER_CO_PROP")]:
+                    if melhor_match_final:
+                        break
+                    if len(_pool_cg) < 2:
+                        continue   # ← FIX: era 'break', ignorava o próximo pool
+                    for _sz in [2, 3, 4]:
+                        if melhor_match_final or len(_pool_cg) < _sz:
+                            break
+                        for _combo in _combs(_pool_cg, _sz):
+                            # OBRIGATÓRIO: combo deve cruzar vendas diferentes
+                            _vids_cb = set(_c[1]['v_row'][0] for _c in _combo)
+                            if len(_vids_cb) < 2:
+                                continue
+                            # FIX: para quitadas usa TOTALPAGO (índice 3 para RECEBER, índice 4 para PRAZO)
+                            # Para abertas usa VALORPARCELA/VALOR (índice 2)
+                            def _val_item(it):
+                                d, _, is_pr = it
+                                if _mat_cg == "MULTIPLO_JA_PAGO_CO_PROP":
+                                    return float(d[4] or d[2] or 0) if is_pr else float(d[3] or d[2] or 0)
+                                return float(d[2] or 0)
+                            _soma = sum(_val_item(_c) for _c in _combo)
+                            if _soma <= 0:
+                                continue
+                            _dr = abs(total_pago - _soma) / _soma
+                            if _dr >= 0.10:   # 10% — mais generoso que intra-grupo (5%)
+                                continue
+                            melhor_match_final = {'type': _mat_cg, 'lista': list(_combo)}
+                            logging.warning(f"  [CROSS-GROUP HIT] '{comprador_nome}' unid='{unidade}' → {_mat_cg} sz={_sz} vids={_vids_cb} soma={_soma:.2f}")
+                            break
+                    if melhor_match_final:
+                        break
+
+
+
             if melhor_match_final:
+
                 if 'MULTIPLO' in melhor_match_final['type']:
                     lista = melhor_match_final['lista']
                     
