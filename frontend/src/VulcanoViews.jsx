@@ -640,7 +640,10 @@ export const VendasView = ({ selectedEmpresa }) => {
                           </td>
                           <td className="p-3 text-center">
                               {v.distrato === 'S' ? (
-                                  <span className="text-[var(--v-text-red)] text-[9px] uppercase font-bold px-2 py-0.5 bg-[var(--v-text-red)]/10 rounded">Anulado</span>
+                                  <button onClick={() => openCondicoes(v)} className="flex flex-col items-center gap-1 hover:scale-105 transition-transform" title="Ver detalhes do distrato">
+                                      <span className="text-[var(--v-text-red)] text-[9px] uppercase font-bold px-2 py-0.5 bg-[var(--v-text-red)]/10 border border-[var(--v-text-red)]/20 rounded cursor-pointer">Anulado</span>
+                                      {v.data_distrato && <span className="text-[8px] text-[var(--v-text-red)] font-mono tracking-widest">{v.data_distrato}</span>}
+                                  </button>
                               ) : (
                                   <button onClick={() => setDistratoModal(v)} className="text-[var(--v-text-muted)] border border-[var(--v-border)] hover:border-[var(--v-text-red)] hover:text-[var(--v-text-red)] transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Distratar</button>
                               )}
@@ -757,7 +760,29 @@ export const VendasView = ({ selectedEmpresa }) => {
                        </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full min-h-0">
+                    {condicoesModal.payload.distratos && condicoesModal.payload.distratos.length > 0 && (
+                        <div className="magma-card border-l-4 border-l-[var(--v-text-red)] p-5 mt-2 bg-[var(--v-text-red)]/5">
+                            <h4 className="text-[var(--v-text-red)] font-black text-xs uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle size={14}/> Contrato Distratado</h4>
+                            <div className="grid grid-cols-3 gap-5">
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Data do Distrato</span>
+                                    <span className="text-sm font-bold font-mono text-[var(--v-text-red)]">{condicoesModal.payload.distratos[0].data}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Receita Caixa (Paga)</span>
+                                    <span className="text-sm font-bold font-mono text-[var(--v-text-bold)]">
+                                        {formatCurrency((condicoesModal.payload.parcelas || []).reduce((acc, p) => acc + (p.total_pago || 0), 0))}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Valor a Devolver</span>
+                                    <span className="text-sm font-bold font-mono text-[var(--v-text-red)]">{formatCurrency(condicoesModal.payload.distratos[0].valor_devolvido)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full min-h-0 mt-6">
                        {/* FORMAS DE PAGAMENTO */}
                        <div className="flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden bg-[var(--v-surface-container)]">
                           <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)]">

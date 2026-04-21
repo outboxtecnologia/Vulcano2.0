@@ -3255,7 +3255,7 @@ def get_vulcano_vendas(empresa_id: int):
     try:
         conn = get_conn("vulcano")
         query_vendas = """
-            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID, v.DATADISTRATO
             FROM VENDA v
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
@@ -3281,6 +3281,7 @@ def get_vulcano_vendas(empresa_id: int):
                 df[col] = df[col].map(safe_dec)
 
         df['DTOPER'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+        df['DATADISTRATO'] = pd.to_datetime(df['DATADISTRATO'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['TOTALVENDA'] = df['TOTALVENDA'].fillna(0).astype(float)
 
         df_mapped = df.rename(columns={
@@ -3292,13 +3293,14 @@ def get_vulcano_vendas(empresa_id: int):
             'CLIENTE_NOME': 'cliente_nome',
             'TOTALVENDA': 'total',
             'DISTRATO': 'distrato',
+            'DATADISTRATO': 'data_distrato',
             'PERMUTA': 'permuta',
             'EMPREENDIMENTO': 'empreendimento',
             'EMPREENDIMENTO_ID': 'empreendimento_id',
             'UNIDADE_ID': 'unidade_id'
         })
 
-        return df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
+        return df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
 
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()

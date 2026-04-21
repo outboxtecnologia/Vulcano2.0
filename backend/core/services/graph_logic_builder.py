@@ -28,7 +28,7 @@ class AccountingGraphPipeline:
             # configurada (CONTAESTAND ou CONTAESTCON), independente de ter CC.
             # - COM CC: gastos de obra vem do LCTOGER filtrado pelo CC
             # - SEM CC: gastos de obra vem do LCTOCTB filtrado pela conta de estoque
-            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO, CODIGO_HIST_ESTORNO_CUSTO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
+            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO, CODIGO_HIST_ESTORNO_CUSTO, CODIGOHISTDISTRATO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
             params = [empresa_id]
             if empreendimento_id:
                 query += f" AND ID = {int(empreendimento_id)}"
@@ -62,6 +62,7 @@ class AccountingGraphPipeline:
                     "hist_aprcusto": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
                     "conta_variacao": int(r[18]) if r[18] else 0,
                     "hist_estorno_custo": hist_questor.get(r[19] if r[19] else 0, "ESTORNO CUSTO UNID"),
+                    "hist_distrato": hist_questor.get(r[20] if len(r) > 20 and r[20] else 0, "DISTRATO UNID"),
                 })
     
             # Caching Global Vulcano (Receitas e Tributos)
@@ -261,6 +262,10 @@ class AccountingGraphPipeline:
                     contas_fisicas_empresa[conta]["movimento_liquido"] -= v
                     
                 override = memoria_arraste.get(str(chave).strip())
+                contrapartida_id = ccred if nat == 1 else cdeb
+                copt_nome = plano.get(contrapartida_id, {}).get("nome", "") if contrapartida_id else ""
+                contrapartida_str = f"{contrapartida_id} - {copt_nome}" if copt_nome else str(contrapartida_id or "")
+
                 contas_fisicas_empresa[conta]["detalhes"].append({
                     "chave": chave,
                     "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
@@ -268,6 +273,7 @@ class AccountingGraphPipeline:
                     "natureza": "D" if nat == 1 else "C",
                     "valor": v,
                     "origem": "QUESTOR_MANUAL" if not chave_origem else str(chave_origem).strip(),
+                    "contrapartida": contrapartida_str,
                     **({"override_apto": override} if override else {})
                 })
     
@@ -338,6 +344,10 @@ class AccountingGraphPipeline:
                     contas_fisicas_empresa[conta]["movimento_liquido"] -= v
                 
                 override = memoria_arraste.get(str(chave).strip())
+                contrapartida_id = ccred if nat == 1 else cdeb
+                copt_nome = plano.get(contrapartida_id, {}).get("nome", "") if contrapartida_id else ""
+                contrapartida_str = f"{contrapartida_id} - {copt_nome}" if copt_nome else str(contrapartida_id or "")
+
                 contas_fisicas_empresa[conta]["detalhes"].append({
                     "chave": chave,
                     "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
@@ -345,6 +355,7 @@ class AccountingGraphPipeline:
                     "natureza": "D" if nat == 1 else "C",
                     "valor": v,
                     "origem": "ZZ_ARE" if not chave_origem else str(chave_origem).strip(),
+                    "contrapartida": contrapartida_str,
                     **({"override_apto": override} if override else {})
                 })
 
@@ -434,10 +445,15 @@ class AccountingGraphPipeline:
                             contas_fisicas_empresa[cid_est]["movimento_debito"]  += v_e
                             contas_fisicas_empresa[cid_est]["movimento_liquido"] += v_e
                             nat_str = "D"
+                            contrapartida_id = ccred_e
                         else:
                             contas_fisicas_empresa[cid_est]["movimento_credito"] += v_e
                             contas_fisicas_empresa[cid_est]["movimento_liquido"] -= v_e
                             nat_str = "C"
+                            contrapartida_id = cdeb_e
+
+                        copt_nome = plano.get(contrapartida_id, {}).get("nome", "") if contrapartida_id else ""
+                        contrapartida_str = f"{contrapartida_id} - {copt_nome}" if copt_nome else str(contrapartida_id or "")
 
                         contas_fisicas_empresa[cid_est]["detalhes"].append({
                             "chave": chave_e,
@@ -445,7 +461,8 @@ class AccountingGraphPipeline:
                             "historico": hist_txt,
                             "natureza": nat_str,
                             "valor": v_e,
-                            "origem": "QUESTOR_ESTOQUE_DIRETO"
+                            "origem": "QUESTOR_ESTOQUE_DIRETO",
+                            "contrapartida": contrapartida_str
                         })
 
                     print(f"[FISICO-ESTOQUE] conta={cid_est} | "
@@ -499,11 +516,15 @@ class AccountingGraphPipeline:
 
                         str_chv_or = str(chave_origem).strip() if chave_origem else ""
                         override = memoria_arraste.get(str_chv_or)
+                        contrapartida_id = ccred if natura == 'D' else cdeb
+                        copt_nome = plano.get(contrapartida_id, {}).get("nome", "") if contrapartida_id else ""
+                        contrapartida_str = f"{contrapartida_id} - {copt_nome}" if copt_nome else str(contrapartida_id or "")
 
                         contas_legado_empresa[cid]["detalhes"].append({
                             "chave": str_chv_or, "data": dt.strftime('%d/%m/%Y') if hasattr(dt, 'strftime') else str(dt),
                             "historico": hist_legado, "natureza": natura,
                             "valor": v, "origem": "VU",
+                            "contrapartida": contrapartida_str,
                             **({"override_apto": override} if override else {})
                         })
                     if cdeb: add_legado(cdeb, 'D')
@@ -520,7 +541,7 @@ class AccountingGraphPipeline:
                 
                 # --- INJEÇÃO VIRTUAL EXTRACONTÁBIL (VULCANO) ---
                 contas_virtuais = {}
-                def inject_virtual_entry(conta_id, valor, natureza, historico, logica="", saldo_ant=0.0):
+                def inject_virtual_entry(conta_id, valor, natureza, historico, logica="", saldo_ant=0.0, lote_id="Geral"):
                     v_float = float(valor or 0)
                     s_ant = float(saldo_ant or 0)
                     if not conta_id: return
@@ -568,6 +589,7 @@ class AccountingGraphPipeline:
                         
                         contas_virtuais[conta_id]["detalhes"].append({
                             "chave": chave_v2,
+                            "lote_id": str(lote_id).strip(),
                             "data": f"{last_day:02d}/{int(mes):02d}/{ano} (Sim)",
                             "historico": historico,
                             "natureza": natureza,
@@ -770,7 +792,15 @@ class AccountingGraphPipeline:
                         c_estoque, mov_debito_mes, 'D',
                         f"Gastos Incorridos {nome_emp} ({fonte_str} - Débitos)",
                         logica=f"Débitos brutos da obra.",
-                        saldo_ant=custo_gasto_anterior if not injected_any else 0.0
+                        saldo_ant=custo_gasto_anterior if not injected_any else 0.0,
+                        lote_id=f"FISICO_{emp['id']}"
+                    )
+                    inject_virtual_entry(
+                        int(emp.get("conta_caixa") or 99999), mov_debito_mes, 'C',
+                        f"Contrapartida Gastos Incorridos {nome_emp} ({fonte_str})",
+                        logica="Contrapartida (Saída de Caixa/Bancos ou Fornecedores)",
+                        saldo_ant=0.0,
+                        lote_id=f"FISICO_{emp['id']}"
                     )
                     injected_any = True
                     print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} nat=D mov={abs(mov_debito_mes):,.0f}")
@@ -780,7 +810,15 @@ class AccountingGraphPipeline:
                         c_estoque, mov_credito_mes, 'C',
                         f"Gastos Incorridos {nome_emp} ({fonte_str} - Estornos/Créditos)",
                         logica=f"Créditos brutos da obra.",
-                        saldo_ant=custo_gasto_anterior if not injected_any else 0.0
+                        saldo_ant=custo_gasto_anterior if not injected_any else 0.0,
+                        lote_id=f"FISICO_{emp['id']}"
+                    )
+                    inject_virtual_entry(
+                        int(emp.get("conta_caixa") or 99999), mov_credito_mes, 'D',
+                        f"Contrapartida Gastos Incorridos {nome_emp} ({fonte_str} - Estornos)",
+                        logica="Contrapartida (Entrada de Caixa/Bancos ou Fornecedores)",
+                        saldo_ant=0.0,
+                        lote_id=f"FISICO_{emp['id']}"
                     )
                     print(f"[ESTOQUE-INJECT] {nome_emp[:35]} -> conta={c_estoque} nat=C mov={abs(mov_credito_mes):,.0f}")
 
@@ -1057,8 +1095,8 @@ class AccountingGraphPipeline:
                                  hist_estoque = "BAIXA ESTOQUE"
                                  
                              logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}{'  [DISTRATO MÊS ALVO]' if is_novo_distrato_mes_alvo else ''}"
-                             inject_virtual_entry(c_custo, abs(mov_custo_u), nat_custo, f"{hist_base} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
-                             inject_virtual_entry(c_estoque, abs(mov_custo_u), nat_est, f"{hist_estoque} UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+                             inject_virtual_entry(c_custo, abs(mov_custo_u), nat_custo, f"{hist_base} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant, lote_id=f"CUSTO_{uni_nome}")
+                             inject_virtual_entry(c_estoque, abs(mov_custo_u), nat_est, f"{hist_estoque} UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant, lote_id=f"CUSTO_{uni_nome}")
     
                         # ── RECEBIMENTOS: Split Principal vs Variação Monetária ─────────────────────────
                         caixa_acum = uni_data["caixa_acumulado"]
@@ -1067,7 +1105,7 @@ class AccountingGraphPipeline:
                         
                         if abs(caixa_mes) > 0.01:
                              logica_caixa = f"Unid {uni_nome}: Integralização de Caixa/Banco no mês = {caixa_mes:,.2f}"
-                             inject_virtual_entry(c_caixa_banco, abs(caixa_mes), 'D' if caixa_mes > 0 else 'C', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
+                             inject_virtual_entry(c_caixa_banco, abs(caixa_mes), 'D' if caixa_mes > 0 else 'C', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0, lote_id=f"CAIXA_{uni_nome}")
 
                         if is_venda_futura:
                              rec_auferida_atual = 0.0
@@ -1084,8 +1122,10 @@ class AccountingGraphPipeline:
                         if abs(mov_receita_auferida) > 0.01 or abs(rec_auferida_ant) > 0.01:
                              nat_rec = 'C' if mov_receita_auferida >= 0 else 'D'
                              nat_cli_rec = 'D' if mov_receita_auferida >= 0 else 'C'
-                             inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"{emp.get('hist_venda', 'Receita POC')} UNID {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
-                             inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"{emp.get('hist_venda', 'Faturamento')} UNID {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
+                             hist_rec_to_use = emp.get('hist_distrato', 'Distrato') if is_novo_distrato_mes_alvo else emp.get('hist_venda', 'Receita POC')
+                             hist_cli_to_use = emp.get('hist_distrato', 'Distrato') if is_novo_distrato_mes_alvo else emp.get('hist_venda', 'Faturamento')
+                             inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"{hist_rec_to_use} UNID {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant, lote_id=f"RECEITA_{uni_nome}")
+                             inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"{hist_cli_to_use} UNID {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant, lote_id=f"RECEITA_{uni_nome}")
                         # -----------------
                         
                         acrescimo_acum = uni_data.get("acrescimo_acumulado", 0.0)
@@ -1119,11 +1159,11 @@ class AccountingGraphPipeline:
 
                         if abs(mov_cli) > 0.01 or abs(cli_ant) > 0.01:
                              nat_cli = 'C' if mov_cli > 0 else 'D'
-                             inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"{emp.get('hist_rec', 'Baixa Cliente')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
+                             inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"{emp.get('hist_rec', 'Baixa Cliente')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant, lote_id=f"CAIXA_{uni_nome}")
                         
                         if abs(mov_adi) > 0.01 or abs(adi_ant) > 0.01:
                              nat_adi = 'C' if mov_adi > 0 else 'D'
-                             inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"{emp.get('hist_adi', 'Reconhecimento Adiantamento')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
+                             inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"{emp.get('hist_adi', 'Reconhecimento Adiantamento')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant, lote_id=f"CAIXA_{uni_nome}")
                              
                         # --- Variação Monetária: D Clientes/Adi (par completo) + C CONTAVARIACAO ---
                         # Ambas só são geradas JUNTAS (mesma condição) → garante par na Auditoria.
@@ -1134,10 +1174,10 @@ class AccountingGraphPipeline:
                              conta_deb_var = c_cli if caixa_principal_acum <= rec_auferida_atual + 0.01 else c_adi
                              inject_virtual_entry(c_variacao, acrescimo_mes, 'C',
                                  f"{emp.get('hist_var', 'Variação Monetária')} UNID {uni_nome}",
-                                 logica=logica_var, saldo_ant=0.0)
+                                 logica=logica_var, saldo_ant=0.0, lote_id=f"VARIACAO_{uni_nome}")
                              inject_virtual_entry(conta_deb_var, acrescimo_mes, 'D',
                                  f"{emp.get('hist_var', 'Variação Monetária')} UNID {uni_nome}",
-                                 logica=logica_var, saldo_ant=0.0)
+                                 logica=logica_var, saldo_ant=0.0, lote_id=f"VARIACAO_{uni_nome}")
                              
                         # TRIBUTOS
                         trib_caixa_atual = uni_data["tributos_caixa_acumulado"]
@@ -1242,8 +1282,8 @@ class AccountingGraphPipeline:
                                 v_base = abs(bVal) if not (is_trimestral and not is_quarter_end) else 0.0
                                 nat_d = 'D' if bVal >= 0 else 'C'
                                 nat_c = 'C' if bVal >= 0 else 'D'
-                                inject_virtual_entry(c_deb, v_base, nat_d, f"Despesa Tributária DRE (Base Faturamento) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_trib_caixa_ant * peso_imp))
-                                inject_virtual_entry(c_cred, v_base, nat_c, f"Passivo/DARF Exigível (Faturamento) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_trib_caixa_ant * peso_imp))
+                                inject_virtual_entry(c_deb, v_base, nat_d, f"Despesa Tributária DRE (Base Faturamento) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_trib_caixa_ant * peso_imp), lote_id=f"TRIB_DARF_{desc.strip()}_{uni_nome}")
+                                inject_virtual_entry(c_cred, v_base, nat_c, f"Passivo/DARF Exigível (Faturamento) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_trib_caixa_ant * peso_imp), lote_id=f"TRIB_DARF_{desc.strip()}_{uni_nome}")
                             
                             # 2. Ajuste Diferido (DRE Avançou > Caixa recebido = Criar Passivo Extra)
                             if abs(m_dif) > 0.01:
@@ -1251,8 +1291,8 @@ class AccountingGraphPipeline:
                                 c_cred = cfg.get("CONTA_CRED_IMP_REC_PASSIVO_SOC") or 99999
                                 nat_d = 'D' if m_dif > 0 else 'C'
                                 nat_c = 'C' if m_dif > 0 else 'D'
-                                inject_virtual_entry(c_deb, abs(m_dif), nat_d, f"Provisão Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_dif_ant * peso_imp))
-                                inject_virtual_entry(c_cred, abs(m_dif), nat_c, f"Passivo Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_dif_ant * peso_imp))
+                                inject_virtual_entry(c_deb, abs(m_dif), nat_d, f"Provisão Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_dif_ant * peso_imp), lote_id=f"TRIB_DIF_{desc.strip()}_{uni_nome}")
+                                inject_virtual_entry(c_cred, abs(m_dif), nat_c, f"Passivo Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_dif_ant * peso_imp), lote_id=f"TRIB_DIF_{desc.strip()}_{uni_nome}")
                                 
                             # 3. Ajuste Antecipado (Caixa recebido > DRE Avançou = Reduzir Despesa via Ativo)
                             if abs(m_ant) > 0.01:
@@ -1260,8 +1300,8 @@ class AccountingGraphPipeline:
                                 c_cred = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999 # <-- Correção vital! Creditar a DESPESA para anular o excesso, preservar o DARF físico!
                                 nat_d = 'D' if m_ant > 0 else 'C'
                                 nat_c = 'C' if m_ant > 0 else 'D'
-                                inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_ant_ant * peso_imp))
-                                inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Estorno Excesso Despesa Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_ant_ant * peso_imp))
+                                inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(_t_ant_ant * peso_imp), lote_id=f"TRIB_ANT_{desc.strip()}_{uni_nome}")
+                                inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Estorno Excesso Despesa Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(_t_ant_ant * peso_imp), lote_id=f"TRIB_ANT_{desc.strip()}_{uni_nome}")
 
                         # ── ESTORNO DE RET NO DISTRATO ────────────────────────────────────
                         # Se a unidade foi distratada NESTE mês-alvo e o empreendimento usa RET,
@@ -1291,8 +1331,8 @@ class AccountingGraphPipeline:
                                                        f"R${trib_acum_ant:,.2f} base R${caixa_real_acumulado:,.2f}. Obra: {obra_conc}. "
                                                        f"D:{c_deb_est} / C:{c_cred_est}.")
                                         
-                                        inject_virtual_entry(c_deb_est,  trib_acum_ant, 'D', hist_dist, logica=logica_dist, saldo_ant=0.0)
-                                        inject_virtual_entry(c_cred_est, trib_acum_ant, 'C', hist_dist, logica=logica_dist, saldo_ant=0.0)
+                                        inject_virtual_entry(c_deb_est,  trib_acum_ant, 'D', hist_dist, logica=logica_dist, saldo_ant=0.0, lote_id=f"DISTRATO_{desc.strip()}_{uni_nome}")
+                                        inject_virtual_entry(c_cred_est, trib_acum_ant, 'C', hist_dist, logica=logica_dist, saldo_ant=0.0, lote_id=f"DISTRATO_{desc.strip()}_{uni_nome}")
                                         print(f"[{desc}-DISTRATO] {uni_nome} | D:{c_deb_est} C:{c_cred_est} | R${trib_acum_ant:,.2f} | {dt_dis_str}")
                             except Exception as _e_ret_dist:
                                 print(f"[{desc}-DISTRATO] Erro no estorno para {uni_nome}: {_e_ret_dist}")
@@ -1525,6 +1565,28 @@ class AccountingGraphPipeline:
                 except Exception as e:
                     print("Aviso processando Locações Virtuais:", e)
                 
+            # --- POST-PROCESSING: Contrapartidas para Contas Virtuais ---
+            for res in resultados:
+                lotes_v = {}
+                for cv in res.get("contas_virtuais", []):
+                    for det in cv.get("detalhes", []):
+                        lid = det.get("lote_id")
+                        if not lid or lid == "Geral": continue
+                        if lid not in lotes_v: lotes_v[lid] = {"D": [], "C": []}
+                        lotes_v[lid][det["natureza"]].append(cv["conta"])
+                
+                for cv in res.get("contas_virtuais", []):
+                    for det in cv.get("detalhes", []):
+                        lid = det.get("lote_id")
+                        if not lid or lid == "Geral": continue
+                        nat = det["natureza"]
+                        oposto = "C" if nat == "D" else "D"
+                        copts = lotes_v.get(lid, {}).get(oposto, [])
+                        if copts:
+                            copt_id = copts[0]
+                            copt_nome = plano.get(copt_id, {}).get("nome", "") if copt_id else ""
+                            det["contrapartida"] = f"{copt_id} - {copt_nome}" if copt_nome else str(copt_id or "")
+
             # ATRIBUICAO FINAL DAS CONTAS FISICAS GLOBAIS
             # O frontend precisa de todas as contas fisicas (LCTOGER/LCTOCTB + injeções de CC)
             # agrupadas na primeira posicao do resultado. Como os empreendimentos podem

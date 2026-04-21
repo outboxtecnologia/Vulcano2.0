@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, Plus, Edit, Trash2, Search, X, Check, Loader2, 
   Settings, Database, Construction, Layers, Home, Ruler,
@@ -52,7 +52,12 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     hist_recebimento: 0,
     hist_variacao: 0,
     hist_distrato: 0,
-    hist_estorno: 0
+    hist_baixaadi: 0,
+    hist_estorno_saldo: 0,
+    hist_adiantamento: 0,
+    hist_aprcusto: 0,
+    hist_despesa: 0,
+    hist_estorno_custo: 0
   });
 
   useEffect(() => {
@@ -124,7 +129,9 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
         conta_caixa: 0, conta_clientes: 0, conta_adi_cli: 0,
         conta_estand: 0, conta_estcon: 0, conta_despesa: 0, conta_rec: 0, 
         conta_variacao: 0, conta_devolucao: 0, centro_custo: 0,
-        hist_venda: 0, hist_recebimento: 0, hist_variacao: 0, hist_distrato: 0, hist_estorno: 0
+        hist_venda: 0, hist_recebimento: 0, hist_variacao: 0, hist_distrato: 0,
+        hist_baixaadi: 0, hist_estorno_saldo: 0, hist_adiantamento: 0, hist_aprcusto: 0,
+        hist_despesa: 0, hist_estorno_custo: 0
       });
       setBlocos([]);
       setUnidades([]);
@@ -159,7 +166,12 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
         hist_recebimento: parseInt(formData.hist_recebimento || 0),
         hist_variacao: parseInt(formData.hist_variacao || 0),
         hist_distrato: parseInt(formData.hist_distrato || 0),
-        hist_estorno: parseInt(formData.hist_estorno || 0)
+        hist_baixaadi: parseInt(formData.hist_baixaadi || 0),
+        hist_estorno_saldo: parseInt(formData.hist_estorno_saldo || 0),
+        hist_adiantamento: parseInt(formData.hist_adiantamento || 0),
+        hist_aprcusto: parseInt(formData.hist_aprcusto || 0),
+        hist_despesa: parseInt(formData.hist_despesa || 0),
+        hist_estorno_custo: parseInt(formData.hist_estorno_custo || 0)
     };
 
     try {
@@ -233,13 +245,24 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const renderAccountInput = (label, name, prefix) => {
     const filtered = planoContas.filter(c => c.classificacao.startsWith(prefix));
     const listId = `list-${name}`;
+    const selected = planoContas.find(c => String(c.id) === String(formData[name]));
+
+    const displayValue = (() => {
+        const val = String(formData[name] || '');
+        if (/^\d+$/.test(val)) {
+            const matched = planoContas.find(c => String(c.id) === val);
+            if (matched) return `${matched.id} - ${matched.descricao}`;
+        }
+        return val;
+    })();
+
     return (
       <div className="space-y-1">
         <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">{label}</label>
         <div className="relative group">
             <input
                 list={listId}
-                value={formData[name] || ''}
+                value={displayValue}
                 onChange={(e) => setFormData({ ...formData, [name]: e.target.value })}
                 className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50 transition-all font-mono"
                 placeholder={loadingQuestor ? "Carregando..." : "Digite ou selecione..."}
@@ -253,7 +276,9 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                 <Search size={12} className="text-[var(--v-accent)]" />
             </div>
         </div>
-        <p className="text-[9px] text-[var(--v-text-faint)] font-medium">Questor ID: {formData[name] || '0'}</p>
+        <p className="text-[9px] text-[var(--v-text-faint)] font-medium truncate" title={selected ? selected.descricao : ''}>
+            Questor ID: {formData[name] || '0'} {selected ? `— ${selected.descricao}` : ''}
+        </p>
       </div>
     );
   };
@@ -345,7 +370,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
-          <div className="relative w-full max-w-4xl bg-[var(--v-deep)] border border-white/10 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+          <div className="relative w-[95vw] max-w-[1600px] h-[95vh] bg-[var(--v-deep)] border border-white/10 shadow-2xl flex flex-col overflow-hidden">
             
             {/* Header Modal */}
             <div className="p-6 border-b border-white/5 flex justify-between items-center bg-black/40">
@@ -472,31 +497,90 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                         {renderAccountInput("Conta Despesa Tributária", "conta_despesa", "3")}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6 pt-6 border-t border-white/5">
-                        <div className="space-y-1">
+                    <div className="pt-6 border-t border-white/5 space-y-6">
+                        <div className="w-1/3 space-y-1">
                             <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Centro de Custo Questor</label>
                             <select value={formData.centro_custo} onChange={(e) => setFormData({...formData, centro_custo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
                                 <option value="0">Sem mapeamento</option>
                                 {centrosCusto.map(cc => <option key={cc.id} value={cc.id}>{cc.id} - {cc.descricao}</option>)}
                             </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="border-t border-white/5 pt-6">
+                            <h4 className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest mb-4">Mapeamento de Históricos</h4>
+                            <div className="grid grid-cols-4 gap-4">
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Venda</label>
-                                <select value={formData.hist_venda} onChange={(e) => setFormData({...formData, hist_venda: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
+                                <select value={formData.hist_venda} onChange={(e) => setFormData({...formData, hist_venda: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
                                     <option value="0">Selecione...</option>
                                     {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
                                 </select>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Receb.</label>
-                                <select value={formData.hist_recebimento} onChange={(e) => setFormData({...formData, hist_recebimento: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Recebimento</label>
+                                <select value={formData.hist_recebimento} onChange={(e) => setFormData({...formData, hist_recebimento: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Distrato</label>
+                                <select value={formData.hist_distrato} onChange={(e) => setFormData({...formData, hist_distrato: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none border-[#ff4d00]/30 bg-[#ff4d00]/5 hover:border-[#ff4d00]">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Variação</label>
+                                <select value={formData.hist_variacao} onChange={(e) => setFormData({...formData, hist_variacao: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Adiantamento</label>
+                                <select value={formData.hist_adiantamento} onChange={(e) => setFormData({...formData, hist_adiantamento: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Baixa Adi.</label>
+                                <select value={formData.hist_baixaadi} onChange={(e) => setFormData({...formData, hist_baixaadi: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Apr. Custo</label>
+                                <select value={formData.hist_aprcusto} onChange={(e) => setFormData({...formData, hist_aprcusto: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Hist. Despesa Trib.</label>
+                                <select value={formData.hist_despesa} onChange={(e) => setFormData({...formData, hist_despesa: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Estorno Saldo/Rec.</label>
+                                <select value={formData.hist_estorno_saldo} onChange={(e) => setFormData({...formData, hist_estorno_saldo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
+                                    <option value="0">Selecione...</option>
+                                    {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Estorno Custo</label>
+                                <select value={formData.hist_estorno_custo} onChange={(e) => setFormData({...formData, hist_estorno_custo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2 text-xs text-[var(--v-text-bold)] outline-none">
                                     <option value="0">Selecione...</option>
                                     {historicos.map(h => <option key={h.id} value={h.id}>{h.id} - {h.descricao}</option>)}
                                 </select>
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
               )}
 
