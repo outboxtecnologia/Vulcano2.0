@@ -1,19 +1,14 @@
-﻿import sys, os
-sys.path.insert(0, os.path.abspath('backend'))
-import firebirdsql
-import dotenv
-dotenv.load_dotenv('backend/.env')
-try:
-    conn = firebirdsql.connect(
-        host='localhost',
-        database=r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\Vulcano 2025\VULCANO 2025.fdb",
-        port=3050,
-        user='SYSDBA',
-        password='masterkey',
-        charset='WIN1252'
-    )
-    cur = conn.cursor()
-    cur.execute("SELECT FIRST 1 v.DESCUNIDIMOB, r.DATA, r.TOTALPAGO FROM VENDA v JOIN RECEBER r ON r.IDVENDA = v.ID WHERE r.TOTALPAGO > 0")
-    print("Massa Vulcano viva:", cur.fetchone())
-except Exception as e:
-    pass
+import sys
+import os
+sys.path.append('backend')
+from core.database import get_conn
+conn = get_conn('vulcano')
+cur = conn.cursor()
+cur.execute("SELECT v.ID, c.NOME, v.DESCUNIDIMOB FROM VENDA v JOIN CLIENTE c ON v.ID_CLIENTE = c.ID WHERE c.NOME LIKE '%GILBERTO PACHECO%' OR c.NOME LIKE '%EDSON LUIS HOSANG%'")
+r = cur.fetchall()
+print(r)
+for row in r:
+    print(row)
+    cur.execute("SELECT ID, DATA, VALORPARCELA, TOTALPAGO FROM RECEBER WHERE IDVENDA = ?", (row[0],))
+    recs = cur.fetchall()
+    print("Recs:", len(recs), "Sample:", recs[:3] if recs else [])
