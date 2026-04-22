@@ -2505,27 +2505,7 @@ class QuestorLotePayload(BaseModel):
     
 # Rotas e Implementações
 
-@app.post("/api/templates")
-def save_template(template: TemplateInput):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
-    c = conn.cursor()
-    c.execute('INSERT INTO import_templates (nome, target_table, mapping_json) VALUES (?, ?, ?)',
-              (template.nome, template.target_table, template.mapping_json))
-    conn.commit()
-    conn.close()
-    return {"success": True}
 
-@app.get("/api/templates")
-def get_templates(target_table: str = None):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
-    c = conn.cursor()
-    if target_table:
-        c.execute('SELECT id, nome, target_table, mapping_json, data_criacao FROM import_templates WHERE target_table = ? ORDER BY id DESC', (target_table,))
-    else:
-        c.execute('SELECT id, nome, target_table, mapping_json, data_criacao FROM import_templates ORDER BY id DESC')
-    rows = c.fetchall()
-    conn.close()
-    return [{"id": r[0], "nome": r[1], "target_table": r[2], "mapping_json": r[3], "data_criacao": r[4]} for r in rows]
 
 @app.get("/api/poc")
 def get_poc():
