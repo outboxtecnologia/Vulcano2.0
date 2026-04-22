@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
@@ -6784,6 +6784,128 @@ def api_agentes_resumir(req: AuditResumeReq):
         "state": _serialize_agent_state(res)
     }
 
+class PreviewMatchRequest(BaseModel):
+    rows: list
+    mapping: dict
+    target_table: str
+    empresa_id: int | None = None
+
+
+@app.post("/api/smart-importer/preview-match")
+async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
+    import re as _re
+    from datetime import datetime as _dt
+
+    inv = {v: k for k, v in payload.mapping.items() if v and v != "null"}
+
+    def _get(row, campo):
+        col = inv.get(campo)
+        return row.get(col) if col else None
+
+    def _parse_valor(v):
+        if v is None:
+            return None
+        try:
+            s = _re.sub(r"[^\d,\.]", "", str(v)).replace(".", "").replace(",", ".")
+            return float(s) if s else None
+        except Exception:
+            return None
+
+    def _parse_data(v):
+        if not v:
+            return None
+        v = str(v).strip()[:10]
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return _dt.strptime(v, fmt).date()
+            except ValueError:
+                pass
+        return None
+
+    resultados = []
+
+    if payload.target_table == "RECEBIMENTOS":
+        conn_v = get_conn("vulcano")
+        try:
+            cur = conn_v.cursor()
+            empresa_filter = "AND V.CODIGOEMPRESA = ?" if payload.empresa_id else ""
+            params = [payload.empresa_id] if payload.empresa_id else []
+            cur.execute(f"""
+                SELECT R.ID, R.PARCELA, R.VENCIMENTO, R.VALOR, R.TOTALPAGO,
+                       P.NOME, U.DENOMINACAO
+                FROM RECEBER R
+                LEFT JOIN VENDA V ON V.ID = R.IDVENDA
+                LEFT JOIN PESSOA P ON P.ID = V.IDPESSOA
+                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID AND VU.PRINCIPAL = 'S'
+                LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
+                WHERE 1=1 {empresa_filter}
+                ORDER BY R.VENCIMENTO DESC
+            """, params)
+            parcelas = cur.fetchall()
+            quitadas = [p for p in parcelas if (p[4] or 0) > 0]
+            abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
+            TOLE = 1.0
+
+            for row in payload.rows:
+                valor_pl    = _parse_valor(_get(row, "VALOR_PAGO")) or _parse_valor(_get(row, "VALOR_PARCELA"))
+                dt_venc_pl  = _parse_data(_get(row, "DATA_VENCIMENTO"))
+                dt_pago_pl  = _parse_data(_get(row, "DATA_PAGAMENTO"))
+                cliente_pl  = _get(row, "CLIENTE_NOME") or ""
+                contrato_pl = _get(row, "CONTRATO") or ""
+                unidade_pl  = _get(row, "UNIDADE") or ""
+
+                status = "SEM_MATCH"
+                valor_v = cliente_v = dt_venc_v = unidade_v = None
+
+                for lista, st in [(quitadas, "JA_QUITADO"), (abertas, "MATCH_PERFEITO")]:
+                    for p in lista:
+                        pv    = float(p[4] if st == "JA_QUITADO" else p[3] or 0)
+                        pvenc = p[2]
+                        match_val  = valor_pl is not None and abs(pv - valor_pl) <= TOLE
+                        match_venc = dt_venc_pl and pvenc and str(pvenc)[:10] == str(dt_venc_pl)
+                        if match_val or match_venc:
+                            status    = st
+                            valor_v   = pv
+                            cliente_v = str(p[5] or "")
+                            dt_venc_v = str(pvenc)[:10] if pvenc else None
+                            unidade_v = str(p[6] or "") if p[6] else None
+                            break
+                    if status != "SEM_MATCH":
+                        break
+
+                resultados.append({
+                    "status":           status,
+                    "cliente_planilha": cliente_pl or cliente_v or "",
+                    "dt_vencimento":    str(dt_venc_pl) if dt_venc_pl else dt_venc_v,
+                    "dt_pagamento":     str(dt_pago_pl) if dt_pago_pl else None,
+                    "valor_planilha":   valor_pl,
+                    "valor_vulcano":    valor_v,
+                    "unidade":          unidade_pl or unidade_v or "",
+                    "contrato":         contrato_pl,
+                    "obs":              _get(row, "OBSERVACOES") or "",
+                })
+        finally:
+            conn_v.close()
+    else:
+        for row in payload.rows:
+            resultados.append({
+                "status": "SEM_MATCH",
+                "cliente_planilha": "",
+                "dt_vencimento": None, "dt_pagamento": None,
+                "valor_planilha": None, "valor_vulcano": None,
+                "unidade": "", "contrato": "",
+                "obs": f"Match para {payload.target_table} em desenvolvimento.",
+            })
+
+    counts = {
+        "total":          len(resultados),
+        "ja_quitados":    sum(1 for r in resultados if r["status"] == "JA_QUITADO"),
+        "match_perfeito": sum(1 for r in resultados if r["status"] == "MATCH_PERFEITO"),
+        "sem_match":      sum(1 for r in resultados if r["status"] == "SEM_MATCH"),
+    }
+    return {"resultados": resultados, "counts": counts}
+
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -7052,124 +7174,3 @@ def api_templates_create(payload: TemplateCreateRequest):
         return {"success": True, "message": f"Template '{payload.nome}' salvo com sucesso."}
     finally:
         conn.close()
-
-class PreviewMatchRequest(BaseModel):
-    rows: list
-    mapping: dict
-    target_table: str
-    empresa_id: int = None
-
-
-@app.post("/api/smart-importer/preview-match")
-async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
-    import re as _re
-    from datetime import datetime as _dt
-
-    inv = {v: k for k, v in payload.mapping.items() if v and v != "null"}
-
-    def _get(row, campo):
-        col = inv.get(campo)
-        return row.get(col) if col else None
-
-    def _parse_valor(v):
-        if v is None:
-            return None
-        try:
-            s = _re.sub(r"[^\d,\.]", "", str(v)).replace(".", "").replace(",", ".")
-            return float(s) if s else None
-        except Exception:
-            return None
-
-    def _parse_data(v):
-        if not v:
-            return None
-        v = str(v).strip()[:10]
-        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
-            try:
-                return _dt.strptime(v, fmt).date()
-            except ValueError:
-                pass
-        return None
-
-    resultados = []
-
-    if payload.target_table == "RECEBIMENTOS":
-        conn_v = get_conn("vulcano")
-        try:
-            cur = conn_v.cursor()
-            empresa_filter = "AND V.CODIGOEMPRESA = ?" if payload.empresa_id else ""
-            params = [payload.empresa_id] if payload.empresa_id else []
-            cur.execute(f"""
-                SELECT R.ID, R.PARCELA, R.VENCIMENTO, R.VALOR, R.TOTALPAGO,
-                       P.NOME, U.DENOMINACAO
-                FROM RECEBER R
-                LEFT JOIN VENDA V ON V.ID = R.IDVENDA
-                LEFT JOIN PESSOA P ON P.ID = V.IDPESSOA
-                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID AND VU.PRINCIPAL = 'S'
-                LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
-                WHERE 1=1 {empresa_filter}
-                ORDER BY R.VENCIMENTO DESC
-            """, params)
-            parcelas = cur.fetchall()
-            quitadas = [p for p in parcelas if (p[4] or 0) > 0]
-            abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
-            TOLE = 1.0
-
-            for row in payload.rows:
-                valor_pl    = _parse_valor(_get(row, "VALOR_PAGO")) or _parse_valor(_get(row, "VALOR_PARCELA"))
-                dt_venc_pl  = _parse_data(_get(row, "DATA_VENCIMENTO"))
-                dt_pago_pl  = _parse_data(_get(row, "DATA_PAGAMENTO"))
-                cliente_pl  = _get(row, "CLIENTE_NOME") or ""
-                contrato_pl = _get(row, "CONTRATO") or ""
-                unidade_pl  = _get(row, "UNIDADE") or ""
-
-                status = "SEM_MATCH"
-                valor_v = cliente_v = dt_venc_v = unidade_v = None
-
-                for lista, st in [(quitadas, "JA_QUITADO"), (abertas, "MATCH_PERFEITO")]:
-                    for p in lista:
-                        pv    = float(p[4] if st == "JA_QUITADO" else p[3] or 0)
-                        pvenc = p[2]
-                        match_val  = valor_pl is not None and abs(pv - valor_pl) <= TOLE
-                        match_venc = dt_venc_pl and pvenc and str(pvenc)[:10] == str(dt_venc_pl)
-                        if match_val or match_venc:
-                            status    = st
-                            valor_v   = pv
-                            cliente_v = str(p[5] or "")
-                            dt_venc_v = str(pvenc)[:10] if pvenc else None
-                            unidade_v = str(p[6] or "") if p[6] else None
-                            break
-                    if status != "SEM_MATCH":
-                        break
-
-                resultados.append({
-                    "status":           status,
-                    "cliente_planilha": cliente_pl or cliente_v or "",
-                    "dt_vencimento":    str(dt_venc_pl) if dt_venc_pl else dt_venc_v,
-                    "dt_pagamento":     str(dt_pago_pl) if dt_pago_pl else None,
-                    "valor_planilha":   valor_pl,
-                    "valor_vulcano":    valor_v,
-                    "unidade":          unidade_pl or unidade_v or "",
-                    "contrato":         contrato_pl,
-                    "obs":              _get(row, "OBSERVACOES") or "",
-                })
-        finally:
-            conn_v.close()
-    else:
-        for row in payload.rows:
-            resultados.append({
-                "status": "SEM_MATCH",
-                "cliente_planilha": "",
-                "dt_vencimento": None, "dt_pagamento": None,
-                "valor_planilha": None, "valor_vulcano": None,
-                "unidade": "", "contrato": "",
-                "obs": f"Match para {payload.target_table} em desenvolvimento.",
-            })
-
-    counts = {
-        "total":          len(resultados),
-        "ja_quitados":    sum(1 for r in resultados if r["status"] == "JA_QUITADO"),
-        "match_perfeito": sum(1 for r in resultados if r["status"] == "MATCH_PERFEITO"),
-        "sem_match":      sum(1 for r in resultados if r["status"] == "SEM_MATCH"),
-    }
-    return {"resultados": resultados, "counts": counts}
