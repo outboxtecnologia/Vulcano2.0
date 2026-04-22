@@ -4572,7 +4572,8 @@ async def upload_planilha(file: UploadFile = File(...)):
         return {
             "filename": file.filename,
             "columns": columns,
-            "preview": data_preview
+            "preview": data_preview,
+            "all_rows": df.to_dict(orient='records')
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
@@ -6796,7 +6797,7 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
     import re as _re
     from datetime import datetime as _dt
 
-    inv = {v: k for k, v in payload.mapping.items() if v and v != "null"}
+    inv = {str(v): k for k, v in payload.mapping.items() if v and v != "null" and isinstance(v, str)}
 
     def _get(row, campo):
         col = inv.get(campo)

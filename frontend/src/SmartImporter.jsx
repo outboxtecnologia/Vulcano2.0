@@ -127,7 +127,6 @@ export default function SmartImporter({ selectedEmpresa }) {
         normalized[k] = (v === null || v === undefined || v === '' || v === 'null') ? 'null' : v;
       }
       setMapping(normalized);
-      setStep(3);
     } catch(err) {
       alert("Erro ao chamar o Gemini (schema). Verifique GEMINI_API_KEY e o backend.");
     } finally {
@@ -185,12 +184,37 @@ export default function SmartImporter({ selectedEmpresa }) {
       if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro no preview'); }
       const data = await res.json();
       setMatchData(data.resultados || []);
-      setStep(4);
+      setStep(3);
     } catch(err) {
       alert('Erro ao gerar preview de match: ' + err.message);
     } finally {
       setMatchLoading(false);
     }
+  };
+
+  const handleDownloadTxt = () => {
+    if (!matchData || matchData.length === 0) return;
+    const headers = ["Status", "Cliente_Planilha", "Dt_Vencimento", "Dt_Pagamento", "Valor_Planilha", "Valor_Vulcano", "Unidade_Contrato", "Observacao"];
+    const rows = matchData.map(r => [
+      r.status,
+      r.cliente_planilha || '',
+      r.dt_vencimento || '',
+      r.dt_pagamento || '',
+      r.valor_planilha || '',
+      r.valor_vulcano || '',
+      String(r.unidade || r.contrato || '').replace(/\r?\n|\r/g, " "),
+      r.obs || ''
+    ]);
+    const txtContent = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
+    const blob = new Blob([txtContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smart_importer_match_${new Date().getTime()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const STATUS_META = {
@@ -215,9 +239,8 @@ export default function SmartImporter({ selectedEmpresa }) {
       <div className="flex items-center justify-between bg-[var(--v-card)] border border-[var(--v-border)] p-6 rounded-[var(--v-radius)]">
         {[
           { num: 1, label: 'Upload de Planilha' },
-          { num: 2, label: 'Análise de Contexto' },
-          { num: 3, label: 'Validação DE-PARA' },
-          { num: 4, label: 'Preview de Match' }
+          { num: 2, label: 'Validação DE-PARA' },
+          { num: 3, label: 'Preview de Match' }
         ].map((s, idx) => (
           <React.Fragment key={s.num}>
             <div className={`flex flex-col items-center gap-2 ${step >= s.num ? 'opacity-100' : 'opacity-40'}`}>
@@ -226,7 +249,7 @@ export default function SmartImporter({ selectedEmpresa }) {
               </div>
               <span className={`text-[10px] uppercase font-bold tracking-widest ${step >= s.num ? 'text-[var(--v-text)]' : 'text-[var(--v-text-faint)]'}`}>{s.label}</span>
             </div>
-            {idx < 3 && <div className={`flex-1 h-px ${step > s.num ? 'bg-[#a259ff]' : 'bg-[#333]'}`} />}
+            {idx < 2 && <div className={`flex-1 h-px ${step > s.num ? 'bg-[#a259ff]' : 'bg-[#333]'}`} />}
           </React.Fragment>
         ))}
       </div>
@@ -257,75 +280,60 @@ export default function SmartImporter({ selectedEmpresa }) {
         </div>
       )}
 
-      {/* Step 2: Análise de Contexto */}
+      {/* Step 2: Validação Humana / Mapping */}
       {step === 2 && (
-        <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-8">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[var(--v-border)]">
-            <Sparkles className="text-[var(--v-accent-5)]" size={32} />
-            <div>
-              <h3 className="text-xl font-bold text-[var(--v-text-bold)] uppercase tracking-widest">Configuração da Inteligência Artificial</h3>
-              <p className="text-[var(--v-text-muted)] text-sm">Defina o destino para o Gemini mapear colunas automaticamente (schema matching).</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            <div>
-              <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold block mb-2">Entidade Destino (Vulcano/Questor)</label>
-              <select 
-                value={targetTable} 
-                onChange={(e) => setTargetTable(e.target.value)}
-                className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text-bold)] p-4 rounded-[var(--v-radius)] outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
-              >
-                <option value="VENDAS">Vendas (Contratos)</option>
-                <option value="RECEBIMENTOS">Recebimentos (Baixas)</option>
-                <option value="EMPREENDIMENTOS">Empreendimentos</option>
-                <option value="CLIENTES">Clientes / Fornecedores</option>
-              </select>
-            </div>
-            <div className="bg-[#0b0b0b] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col justify-between">
+        <div className="flex flex-col gap-6">
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-8">
+            <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[var(--v-border)]">
+              <Sparkles className="text-[var(--v-accent-5)]" size={32} />
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-2">Aplicar Template Salvo</p>
+                <h3 className="text-xl font-bold text-[var(--v-text-bold)] uppercase tracking-widest">Configuração do Destino</h3>
+                <p className="text-[var(--v-text-muted)] text-sm">Defina o destino e mapeie as colunas. Se precisar, peça para a IA sugerir o mapeamento.</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold block mb-2">Entidade Destino (Vulcano/Questor)</label>
                 <select 
-                  onChange={(e) => handleApplyTemplate(e.target.value)}
-                  className="w-full bg-[var(--v-card)] border border-[var(--v-border)] text-[var(--v-text-bold)] p-3 rounded-[var(--v-radius)] outline-none text-xs font-bold tracking-widest uppercase transition-colors"
+                  value={targetTable} 
+                  onChange={(e) => setTargetTable(e.target.value)}
+                  className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text-bold)] p-4 rounded-[var(--v-radius)] outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
                 >
-                  <option value="">-- Selecione (Opcional) --</option>
-                  {templates.filter(t => t.target_table === targetTable).map(t => (
-                    <option key={t.id} value={t.mapping_json}>{t.nome}</option>
-                  ))}
+                  <option value="VENDAS">Vendas (Contratos)</option>
+                  <option value="RECEBIMENTOS">Recebimentos (Baixas)</option>
+                  <option value="EMPREENDIMENTOS">Empreendimentos</option>
+                  <option value="CLIENTES">Clientes / Fornecedores</option>
                 </select>
               </div>
-              <div className="flex gap-6 mt-4 pt-4 border-t border-[var(--v-border)]">
+              <div className="bg-[#0b0b0b] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col justify-between">
                 <div>
-                  <p className="text-2xl font-black text-[var(--v-accent-5)]">{columns.length}</p>
-                  <p className="text-xs text-[var(--v-text-muted)]">Colunas Identificadas</p>
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-2">Aplicar Template Salvo</p>
+                  <select 
+                    onChange={(e) => handleApplyTemplate(e.target.value)}
+                    className="w-full bg-[var(--v-card)] border border-[var(--v-border)] text-[var(--v-text-bold)] p-3 rounded-[var(--v-radius)] outline-none text-xs font-bold tracking-widest uppercase transition-colors"
+                  >
+                    <option value="">-- Selecione (Opcional) --</option>
+                    {templates.filter(t => t.target_table === targetTable).map(t => (
+                      <option key={t.id} value={t.mapping_json}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-6 mt-4 pt-4 border-t border-[var(--v-border)] items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-black text-[var(--v-accent-5)]">{columns.length}</p>
+                    <p className="text-xs text-[var(--v-text-muted)]">Colunas Identificadas</p>
+                  </div>
+                  <button 
+                    onClick={callGeminiMatching} 
+                    disabled={loading}
+                    className="bg-[var(--v-card)] border border-[#a259ff] text-[#a259ff] px-4 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#a259ff]/10 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {loading ? 'Rodando Inferência...' : 'Sugerir Mapeamento (IA)'}
+                  </button>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-4">
-            <button onClick={() => setStep(1)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
-            <button 
-              onClick={callGeminiMatching} 
-              disabled={loading}
-              className="bg-[#a259ff] text-[var(--v-text-bold)] px-8 py-3 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#8e45e6] transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              {loading ? 'Rodando Inferência...' : 'Gerar De-Para (IA)'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Validação Humana / Mapping */}
-      {step === 3 && (
-        <div className="flex flex-col gap-6">
-          <div className="bg-[var(--v-hover)] border border-[#ffcc00]/30 p-4 rounded-[var(--v-radius)] flex items-start gap-4 shadow-lg">
-            <AlertCircle className="text-[var(--v-accent-6)] shrink-0" size={24} />
-            <div>
-              <h4 className="text-[var(--v-accent-6)] font-bold uppercase tracking-widest text-sm mb-1">Revisão Humana Necessária</h4>
-              <p className="text-[var(--v-text-muted)] text-xs leading-relaxed">A IA sugeriu os seguintes mapeamentos. Revise-os e faça os ajustes necessários antes de importar. Deixe o destino como "Não Importar" se a coluna for irrelevante.</p>
             </div>
           </div>
 
@@ -372,7 +380,7 @@ export default function SmartImporter({ selectedEmpresa }) {
               <Save size={14} /> Salvar como Template
             </button>
             <div className="flex gap-4">
-              <button onClick={() => setStep(2)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
+              <button onClick={() => setStep(1)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
               <button
                 onClick={handlePreviewMatch}
                 disabled={matchLoading}
@@ -386,8 +394,8 @@ export default function SmartImporter({ selectedEmpresa }) {
         </div>
       )}
 
-      {/* Step 4: Preview de Match */}
-      {step === 4 && (
+      {/* Step 3: Preview de Match */}
+      {step === 3 && (
         <div className="flex flex-col gap-6">
           {/* KPIs */}
           {(() => {
@@ -453,12 +461,22 @@ export default function SmartImporter({ selectedEmpresa }) {
             </div>
           </div>
 
-          <div className="flex justify-between items-center">
-            <button onClick={() => setStep(3)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar ao DE-PARA</button>
-            <div className="flex items-center gap-3 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest">
-              <span>{matchData.filter(r=>r.status==='MATCH_PERFEITO').length} pronto(s) para efetivar</span>
-              <span className="text-[var(--v-border)]">|</span>
-              <span>{matchData.filter(r=>r.status==='JA_QUITADO').length} já quitado(s) (ignorar)</span>
+          <div className="flex justify-between items-center bg-[var(--v-card)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)]">
+            <div className="flex items-center gap-4">
+              <button onClick={handleSaveTemplate} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[var(--v-accent-4)] transition-colors text-[10px] font-bold uppercase tracking-widest">
+                <Save size={14} /> Salvar Template
+              </button>
+              <button onClick={handleDownloadTxt} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[#007aff] transition-colors text-[10px] font-bold uppercase tracking-widest">
+                <Download size={14} /> Baixar TXT
+              </button>
+            </div>
+            <div className="flex gap-4 items-center">
+              <button onClick={() => setStep(2)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar ao DE-PARA</button>
+              <div className="flex items-center gap-3 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest ml-4">
+                <span>{matchData.filter(r=>r.status==='MATCH_PERFEITO').length} pronto(s)</span>
+                <span className="text-[var(--v-border)]">|</span>
+                <span>{matchData.filter(r=>r.status==='JA_QUITADO').length} quitado(s)</span>
+              </div>
             </div>
           </div>
         </div>
