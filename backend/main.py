@@ -6790,8 +6790,18 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
     def _parse_valor(v):
         if v is None:
             return None
+        if isinstance(v, (int, float)):
+            return float(v)
         try:
-            s = _re.sub(r"[^\d,\.]", "", str(v)).replace(".", "").replace(",", ".")
+            s = str(v).strip()
+            s = _re.sub(r"[^\d,\.]", "", s)
+            if '.' in s and ',' in s:
+                if s.rfind(',') > s.rfind('.'):
+                    s = s.replace(".", "").replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            elif ',' in s:
+                s = s.replace(",", ".")
             return float(s) if s else None
         except Exception:
             return None
