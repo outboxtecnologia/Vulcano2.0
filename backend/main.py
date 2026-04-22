@@ -6773,6 +6773,7 @@ class PreviewMatchRequest(BaseModel):
     mapping: dict
     target_table: str
     empresa_id: int | None = None
+    empreendimento_id: int | None = None
 
 
 @app.post("/api/smart-importer/preview-match")
@@ -6812,8 +6813,17 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
         conn_v = get_conn("vulcano")
         try:
             cur = conn_v.cursor()
-            empresa_filter = "AND V.CODIGOEMPRESA = ?" if payload.empresa_id else ""
-            params = [payload.empresa_id] if payload.empresa_id else []
+            where_clauses = ["1=1"]
+            params = []
+            if payload.empresa_id:
+                where_clauses.append("V.CODIGOEMPRESA = ?")
+                params.append(payload.empresa_id)
+            if payload.empreendimento_id:
+                where_clauses.append("B.IDEMPREENDIMENTO = ?")
+                params.append(payload.empreendimento_id)
+            
+            where_sql = " AND ".join(where_clauses)
+            
             cur.execute(f"""
                 SELECT R.ID, R.PARCELA, R.DATA, R.VALORPARCELA, R.TOTALPAGO,
                        C.NOME, U.DESCRICAO
@@ -6822,7 +6832,8 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 LEFT JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
                 LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
                 LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
-                WHERE 1=1 {empresa_filter}
+                LEFT JOIN BLOCO B ON B.ID = U.IDBLOCO
+                WHERE {where_sql}
                 ORDER BY R.DATA DESC
             """, params)
             parcelas = cur.fetchall()
@@ -6840,7 +6851,7 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 unidade_pl  = _get(row, "UNIDADE") or ""
 
                 status = "SEM_MATCH"
-                valor_v = cliente_v = dt_venc_v = unidade_v = None
+                valor_v = cliente_v = dt_venc_v = unidade_v = num_parcela = id_parcela = acrescimos = descontos = None
 
                 for lista, st in [(quitadas, "JA_QUITADO"), (abertas, "MATCH_PERFEITO")]:
                     for p in lista:
@@ -6850,16 +6861,32 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                         match_venc = dt_venc_pl and pvenc and str(pvenc)[:10] == str(dt_venc_pl)
                         if match_val or match_venc:
                             status    = st
+                            id_parcela = p[0]
+                            num_parcela = p[1]
                             valor_v   = pv
-                            cliente_v = str(p[5] or "")  # CLIENTE.NOME
-                            dt_venc_v = str(pvenc)[:10] if pvenc else None
+                            cliente_v = str(p[5] or "")
+                            dt_venc_v = str(pvenc)
                             unidade_v = str(p[6] or "") if p[6] else None
+                            
+                            if valor_pl and valor_v:
+                                diff = round(valor_pl - valor_v, 2)
+                                if diff > TOLE:
+                                    acrescimos = diff
+                                    descontos = 0
+                                elif diff < -TOLE:
+                                    descontos = abs(diff)
+                                    acrescimos = 0
+                                else:
+                                    acrescimos = 0
+                                    descontos = 0
+                            
                             break
                     if status != "SEM_MATCH":
                         break
 
                 resultados.append({
                     "status":           status,
+                    "id_parcela":       id_parcela,
                     "cliente_planilha": cliente_pl or cliente_v or "",
                     "dt_vencimento":    str(dt_venc_pl) if dt_venc_pl else dt_venc_v,
                     "dt_pagamento":     str(dt_pago_pl) if dt_pago_pl else None,
@@ -6867,8 +6894,24 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                     "valor_vulcano":    valor_v,
                     "unidade":          unidade_pl or unidade_v or "",
                     "contrato":         contrato_pl,
+                    "numero_parcela":   num_parcela,
+                    "acrescimos":       acrescimos,
+                    "descontos":        descontos,
                     "obs":              _get(row, "OBSERVACOES") or "",
                 })
+            
+            # Formatar parcelas em aberto para envio ao frontend (para HitL)
+            abertas_front = []
+            for a in abertas:
+                abertas_front.append({
+                    "id": a[0],
+                    "numero_parcela": a[1],
+                    "data_vencimento": str(a[2])[:10] if a[2] else None,
+                    "valor_parcela": float(a[3] or 0),
+                    "cliente_nome": str(a[5] or ""),
+                    "descricao_unidade": str(a[6] or "")
+                })
+
         finally:
             conn_v.close()
     else:

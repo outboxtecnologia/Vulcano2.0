@@ -360,7 +360,7 @@ return (
                       {currentView === 'recebimentos' && <RecebimentosView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'receitas' && <DashboardMeta selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'conciliador' && <ConciliadorView selectedEmpresa={selectedEmpresa} />}
-                      {currentView === 'importer' && <SmartImporter dbPath="poc_database.sqlite" />}
+                      {currentView === 'importer' && <SmartImporter dbPath="poc_database.sqlite" selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'custos' && <CustosView selectedEmpresa={selectedEmpresa} />}
                       
                       {currentView === 'fiscal' && <FiscalSpedView selectedEmpresa={selectedEmpresa} />}
