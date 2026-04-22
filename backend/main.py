@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
+﻿from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
