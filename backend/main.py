@@ -3549,10 +3549,10 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
 class BaixaInput(BaseModel):
     id_receber: int
     valor_pago: float
-    data_pagamento: str 
-    acrescimos: float 
-    descontos: float
-    empresa_id: int
+    data_pagamento: str | None = None
+    acrescimos: float = 0.0
+    descontos: float = 0.0
+    empresa_id: int | None = None
 
 @app.post("/api/vulcano/recebimentos/baixa")
 def baixa_recebimento(data: BaixaInput):
@@ -3561,6 +3561,9 @@ def baixa_recebimento(data: BaixaInput):
     try:
         s_conn = sqlite3.connect(POC_DATABASE_FILE)
         s_curr = s_conn.cursor()
+        import datetime
+        data_pgto = data.data_pagamento if data.data_pagamento else datetime.date.today().isoformat()
+        emp_id = data.empresa_id if data.empresa_id else 0
         s_curr.execute("""
             INSERT INTO operacoes_baixas (id_receber, empresa_id, data_pagamento, valor_pago, descontos, acrescimos) 
             VALUES (?, ?, ?, ?, ?, ?)
@@ -3569,7 +3572,7 @@ def baixa_recebimento(data: BaixaInput):
                valor_pago=excluded.valor_pago, 
                descontos=excluded.descontos, 
                acrescimos=excluded.acrescimos
-        """, (data.id_receber, data.empresa_id, data.data_pagamento, data.valor_pago, data.descontos, data.acrescimos))
+        """, (data.id_receber, emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
         s_conn.commit()
         return {"success": True, "message": "Baixada no sistema auxiliar SQLite com sucesso"}
     except Exception as e:

@@ -868,6 +868,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const [dateTo, setDateTo] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showConferencia, setShowConferencia] = useState(false);
+  const [baixaModal, setBaixaModal] = useState({ open: false, parcela: null, valor: 0, data: '', acrescimos: 0, descontos: 0 });
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -934,18 +935,35 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const handleDarBaixa = async (r) => {
+  const handleDarBaixa = (r) => {
     if (!r.id) return alert("Parcela não possui ID vinculado.");
-    const valorInput = prompt(`Dar baixa na parcela ${r.num_parcela} de ${formatCurrency(r.parcela)}?\nDigite o valor pago:`, r.parcela);
-    if (!valorInput) return;
-    const valorPago = parseFloat(valorInput.replace(',', '.'));
-    if (isNaN(valorPago) || valorPago <= 0) return alert("Valor inválido");
+    setBaixaModal({
+      open: true,
+      parcela: r,
+      valor: r.parcela || 0,
+      data: new Date().toISOString().split('T')[0],
+      acrescimos: 0,
+      descontos: 0
+    });
+  };
 
+  const confirmBaixa = async () => {
+    const { parcela, valor, data, acrescimos, descontos } = baixaModal;
+    if (!valor || valor <= 0) return alert("Valor inválido");
+    
     try {
       setLoading(true);
+      setBaixaModal({ ...baixaModal, open: false });
       await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_receber: r.id, valor_pago: valorPago })
+        body: JSON.stringify({ 
+          id_receber: parcela.id, 
+          empresa_id: parseInt(selectedEmpresa, 10),
+          valor_pago: parseFloat(valor),
+          data_pagamento: data,
+          acrescimos: parseFloat(acrescimos || 0),
+          descontos: parseFloat(descontos || 0)
+        })
       });
       fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
         .then(res => res.json()).then(d => { setData(d); setLoading(false); });
@@ -1211,6 +1229,40 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
            </div>
          </div>
       )}
+
+      {/* Modal de Baixa */}
+      {baixaModal.open && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] animate-in fade-in">
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-[var(--v-text-bold)] mb-4">Confirmar Baixa</h3>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Data Pagamento</label>
+                <input type="date" value={baixaModal.data} onChange={e => setBaixaModal({...baixaModal, data: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text)] rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Valor Recebido (R$)</label>
+                <input type="number" step="0.01" value={baixaModal.valor} onChange={e => setBaixaModal({...baixaModal, valor: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text)] rounded p-2 text-sm" />
+              </div>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Acréscimos (R$)</label>
+                  <input type="number" step="0.01" value={baixaModal.acrescimos} onChange={e => setBaixaModal({...baixaModal, acrescimos: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[#ff4d00] rounded p-2 text-sm" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Descontos (R$)</label>
+                  <input type="number" step="0.01" value={baixaModal.descontos} onChange={e => setBaixaModal({...baixaModal, descontos: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[#34c759] rounded p-2 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setBaixaModal({ ...baixaModal, open: false })} className="px-4 py-2 text-xs font-bold uppercase border border-[var(--v-border)] text-[var(--v-text-muted)] rounded hover:bg-[var(--v-hover)] transition-colors">Cancelar</button>
+              <button onClick={confirmBaixa} className="px-4 py-2 text-xs font-bold uppercase bg-[var(--v-accent)] text-black rounded hover:bg-[#00e699] transition-colors">Confirmar Baixa</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
