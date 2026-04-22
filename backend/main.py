@@ -6891,24 +6891,6 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
     return {"resultados": resultados, "counts": counts}
 
 
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
-
-import sys
-if getattr(sys, 'frozen', False):
-    frontend_dist = os.path.join(sys._MEIPASS, "dist")
-else:
-    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-if os.path.exists(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
-
-    @app.exception_handler(404)
-    async def custom_404_handler(request, exc):
-        index_file = os.path.join(frontend_dist, "index.html")
-        if os.path.exists(index_file):
-            return FileResponse(index_file)
-        return {"error": "Frontend build not found"}
 
 @app.get('/api/debug/venda')
 def api_debug_venda():
@@ -7159,3 +7141,22 @@ def api_templates_create(payload: TemplateCreateRequest):
         return {"success": True, "message": f"Template '{payload.nome}' salvo com sucesso."}
     finally:
         conn.close()
+
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+import sys
+if getattr(sys, 'frozen', False):
+    frontend_dist = os.path.join(sys._MEIPASS, "dist")
+else:
+    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+    @app.exception_handler(404)
+    async def custom_404_handler(request, exc):
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"error": "Frontend build not found"}
