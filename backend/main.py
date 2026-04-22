@@ -6879,3 +6879,177 @@ def api_sindicatos_status():
     return _sa.get_status_agente()
 
 
+# ── Smart Importer ─────────────────────────────────────────────────────────────
+
+# Schemas de destino conhecidos para o Smart Importer (DE-PARA)
+_SMART_IMPORTER_SCHEMAS = {
+    "VENDAS": [
+        "DATA_VENDA", "NUMERO_CONTRATO", "CLIENTE_NOME", "CLIENTE_CPF_CNPJ",
+        "EMPREENDIMENTO", "UNIDADE", "BLOCO", "VGV", "AREA", "FORMA_PAGAMENTO",
+        "CORRETOR", "STATUS", "OBSERVACOES"
+    ],
+    "RECEBIMENTOS": [
+        "DATA_PAGAMENTO", "DATA_VENCIMENTO", "VALOR_PAGO", "VALOR_PARCELA",
+        "ACRESCIMOS", "DESCONTOS", "NUMERO_PARCELA", "DESCRICAO",
+        "CLIENTE_NOME", "CLIENTE_CPF_CNPJ",
+        "EMPREENDIMENTO", "UNIDADE", "CONTRATO", "FORMA_PAGAMENTO",
+        "BANCO", "AGENCIA", "CONTA", "NOSSO_NUMERO", "OBSERVACOES"
+    ],
+    "EMPREENDIMENTOS": [
+        "NOME", "CODIGO_CC", "DATA_INICIO", "DATA_PREVISTA_ENTREGA",
+        "CONTA_ESTOQUE", "CONTA_CUSTO", "CUSTO_ORCADO", "AREA_TOTAL", "CNPJ"
+    ],
+    "CLIENTES": [
+        "NOME", "CPF_CNPJ", "EMAIL", "TELEFONE", "ENDERECO",
+        "CIDADE", "ESTADO", "CEP", "OBSERVACOES"
+    ],
+}
+
+# SQLite para persistência de templates do Smart Importer
+import sqlite3 as _sqlite3
+
+def _get_smart_importer_db() -> _sqlite3.Connection:
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_database.sqlite")
+    conn = _sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS smart_importer_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            target_table TEXT NOT NULL,
+            mapping_json TEXT NOT NULL,
+            criado_em TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+@app.post("/api/upload-planilha")
+async def api_upload_planilha(file: UploadFile = File(...)):
+    """Recebe planilha XLS/XLSX/CSV e retorna colunas + prévia de dados."""
+    import io
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    try:
+        if filename.endswith(".csv"):
+            import csv as _csv
+            text = content.decode("utf-8-sig", errors="replace")
+            reader = _csv.DictReader(io.StringIO(text))
+            rows = [row for row in reader]
+            columns = list(rows[0].keys()) if rows else []
+            preview = rows[:5]
+        else:
+            # XLS / XLSX via openpyxl
+            try:
+                import openpyxl
+                wb = await asyncio.to_thread(openpyxl.load_workbook, io.BytesIO(content), read_only=True, data_only=True)
+                ws = wb.active
+                all_rows = list(ws.iter_rows(values_only=True))
+                wb.close()
+                if not all_rows:
+                    raise HTTPException(status_code=422, detail="Planilha vazia.")
+                headers = [str(c).strip() if c is not None else f"Col_{i}" for i, c in enumerate(all_rows[0])]
+                columns = headers
+                data_rows = []
+                preview = []
+                for row in all_rows[1:]:
+                    row_dict = {headers[i]: (str(v) if v is not None else "") for i, v in enumerate(row)}
+                    data_rows.append(row_dict)
+                    if len(preview) < 5:
+                        preview.append(row_dict)
+            except ImportError:
+                raise HTTPException(status_code=500, detail="openpyxl não instalado. Rode: pip install openpyxl")
+
+        return {"columns": columns, "preview": preview, "all_rows": data_rows if not filename.endswith('.csv') else rows, "total_colunas": len(columns)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Erro ao processar planilha: {str(e)}")
+
+
+class SchemaMatchRequest(BaseModel):
+    columns: list
+    target_table: str
+
+
+@app.post("/api/schema-match")
+async def api_schema_match(payload: SchemaMatchRequest):
+    """Usa Gemini para fazer DE-PARA automático entre colunas da planilha e campos destino."""
+    _require_gemini_key()
+
+    target_fields = _SMART_IMPORTER_SCHEMAS.get(payload.target_table, [])
+    if not target_fields:
+        raise HTTPException(status_code=400, detail=f"Entidade '{payload.target_table}' não reconhecida.")
+
+    cols_str = ", ".join(payload.columns)
+    dest_str = ", ".join(target_fields)
+
+    schema_json = '{"mapping": {"COLUNA_ORIGEM": "CAMPO_DESTINO_OU_null"}}'
+    prompt = (
+        f"Você é um especialista em integração de dados para ERPs imobiliários.\n"
+        f"Faça o mapeamento (DE-PARA) entre as colunas de uma planilha e os campos do sistema destino.\n\n"
+        f"COLUNAS DA PLANILHA:\n{cols_str}\n\n"
+        f"CAMPOS DESTINO ({payload.target_table}):\n{dest_str}\n\n"
+        f"Retorne APENAS JSON no formato:\n{schema_json}\n\n"
+        f"Regras:\n"
+        f"- Para cada coluna da planilha, mapeie para o campo destino mais semanticamente próximo.\n"
+        f"- Se não houver correspondência, use null.\n"
+        f"- As chaves do JSON de saída devem ser EXATAMENTE as colunas da planilha fornecidas.\n"
+        f"- Os valores devem ser EXATAMENTE um dos campos destino listados acima, ou null.\n"
+        f"- Não invente campos. Só use campos da lista destino."
+    )
+
+    result = await _gemini_generate_json_async(prompt)
+
+    # Normaliza: garante que todas as colunas estejam no mapping
+    mapping = result.get("mapping", {})
+    for col in payload.columns:
+        if col not in mapping:
+            mapping[col] = None
+
+    return {"mapping": mapping, "target_table": payload.target_table}
+
+
+@app.get("/api/templates")
+def api_templates_list(target_table: str = None):
+    """Retorna templates salvos do Smart Importer."""
+    conn = _get_smart_importer_db()
+    try:
+        if target_table:
+            rows = conn.execute(
+                "SELECT id, nome, target_table, mapping_json, criado_em FROM smart_importer_templates WHERE target_table = ? ORDER BY id DESC",
+                (target_table,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, nome, target_table, mapping_json, criado_em FROM smart_importer_templates ORDER BY id DESC"
+            ).fetchall()
+        return [
+            {"id": r[0], "nome": r[1], "target_table": r[2], "mapping_json": r[3], "criado_em": r[4]}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+class TemplateCreateRequest(BaseModel):
+    nome: str
+    target_table: str
+    mapping_json: str
+
+
+@app.post("/api/templates")
+def api_templates_create(payload: TemplateCreateRequest):
+    """Salva um template de mapeamento do Smart Importer."""
+    conn = _get_smart_importer_db()
+    try:
+        conn.execute(
+            "INSERT INTO smart_importer_templates (nome, target_table, mapping_json) VALUES (?, ?, ?)",
+            (payload.nome, payload.target_table, payload.mapping_json)
+        )
+        conn.commit()
+        return {"success": True, "message": f"Template '{payload.nome}' salvo com sucesso."}
+    finally:
+        conn.close()
+
