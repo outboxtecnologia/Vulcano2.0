@@ -138,7 +138,7 @@ export default function SmartImporter({ selectedEmpresa }) {
     const nome = prompt("Digite um nome para o template:");
     if (!nome) return;
     try {
-      await fetch(`${API_BASE}/api/templates`, {
+      const res = await fetch(`${API_BASE}/api/templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -147,12 +147,15 @@ export default function SmartImporter({ selectedEmpresa }) {
           mapping_json: JSON.stringify(mapping)
         })
       });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Falha ao salvar");
       alert("Template salvo com sucesso!");
       fetch(`${API_BASE}/api/templates`)
-        .then(res => res.json())
-        .then(data => setTemplates(data));
+        .then(r => r.json())
+        .then(d => setTemplates(d));
     } catch(err) {
-      alert("Erro ao salvar template");
+      console.error(err);
+      alert("Erro ao salvar template. Tente novamente.");
     }
   };
 
