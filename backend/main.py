@@ -6831,17 +6831,18 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
             empresa_filter = "AND V.CODIGOEMPRESA = ?" if payload.empresa_id else ""
             params = [payload.empresa_id] if payload.empresa_id else []
             cur.execute(f"""
-                SELECT R.ID, R.PARCELA, R.VENCIMENTO, R.VALOR, R.TOTALPAGO,
-                       P.NOME, U.DENOMINACAO
+                SELECT R.ID, R.PARCELA, R.DATA, R.VALORPARCELA, R.TOTALPAGO,
+                       C.NOME, U.DESCRICAO
                 FROM RECEBER R
                 LEFT JOIN VENDA V ON V.ID = R.IDVENDA
-                LEFT JOIN PESSOA P ON P.ID = V.IDPESSOA
-                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID AND VU.PRINCIPAL = 'S'
+                LEFT JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
+                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
                 LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
                 WHERE 1=1 {empresa_filter}
-                ORDER BY R.VENCIMENTO DESC
+                ORDER BY R.DATA DESC
             """, params)
             parcelas = cur.fetchall()
+            # idx: 0=ID, 1=PARCELA, 2=DATA(vencimento), 3=VALORPARCELA, 4=TOTALPAGO, 5=C.NOME, 6=U.DESCRICAO
             quitadas = [p for p in parcelas if (p[4] or 0) > 0]
             abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
             TOLE = 1.0
@@ -6866,7 +6867,7 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                         if match_val or match_venc:
                             status    = st
                             valor_v   = pv
-                            cliente_v = str(p[5] or "")
+                            cliente_v = str(p[5] or "")  # CLIENTE.NOME
                             dt_venc_v = str(pvenc)[:10] if pvenc else None
                             unidade_v = str(p[6] or "") if p[6] else None
                             break
