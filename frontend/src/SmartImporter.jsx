@@ -335,7 +335,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                 >
                   <option value="">TODOS</option>
                   {empreendimentos.map(e => (
-                    <option key={e.id} value={e.id}>{e.id} - {e.descricao}</option>
+                    <option key={e.id} value={e.id}>{e.id} - {e.nome}</option>
                   ))}
                 </select>
               </div>
