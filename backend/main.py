@@ -6854,6 +6854,11 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
 
             for row in payload.rows:
                 valor_pl    = _parse_valor(_get(row, "VALOR_PAGO")) or _parse_valor(_get(row, "VALOR_PARCELA"))
+                valor_nominal_pl = _parse_valor(_get(row, "VALOR_PARCELA"))
+                acrescimos_pl = _parse_valor(_get(row, "ACRESCIMOS"))
+                descontos_pl = _parse_valor(_get(row, "DESCONTOS"))
+                num_parcela_pl = _get(row, "NUMERO_PARCELA") or ""
+                
                 dt_venc_pl  = _parse_data(_get(row, "DATA_VENCIMENTO"))
                 dt_pago_pl  = _parse_data(_get(row, "DATA_PAGAMENTO"))
                 cliente_pl  = _get(row, "CLIENTE_NOME") or ""
@@ -6893,8 +6898,10 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                             cliente_v = str(p[5] or "")
                             dt_venc_v = str(pvenc)
                             unidade_v = str(p[6] or "") if p[6] else None
-                            
-                            if valor_pl and valor_v:
+                            if acrescimos_pl is not None or descontos_pl is not None:
+                                acrescimos = acrescimos_pl or 0
+                                descontos = descontos_pl or 0
+                            elif valor_pl and valor_v:
                                 diff = round(valor_pl - valor_v, 2)
                                 if diff > TOLE:
                                     acrescimos = diff
@@ -6921,6 +6928,7 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                     "unidade":          unidade_pl or unidade_v or "",
                     "contrato":         contrato_pl,
                     "numero_parcela":   num_parcela,
+                    "num_parcela_planilha": str(num_parcela_pl),
                     "acrescimos":       acrescimos,
                     "descontos":        descontos,
                     "obs":              _get(row, "OBSERVACOES") or "",

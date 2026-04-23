@@ -478,7 +478,14 @@ export default function SmartImporter({ selectedEmpresa }) {
                         <td className="p-3">
                           <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${meta.cls}`}>{meta.label}</span>
                         </td>
-                        <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.numero_parcela || '-'}</td>
+                        <td className="p-3 text-[var(--v-text-muted)] font-mono">
+                          {r.numero_parcela || '-'}
+                          {r.num_parcela_planilha && (
+                            <span className="block mt-1 text-[9px] text-[var(--v-accent)] opacity-80" title="Número da Parcela na Planilha">
+                              Planilha: {r.num_parcela_planilha}
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 font-bold text-[var(--v-text)] truncate max-w-[150px]">{r.cliente_planilha || '-'}</td>
                         <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.dt_vencimento || '-'}</td>
                         <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.dt_pagamento || '-'}</td>
