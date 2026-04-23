@@ -3391,6 +3391,40 @@ def get_vulcano_venda_condicoes(venda_id: int):
                 }
             )
 
+        # GERAÇÃO DAS PARCELAS ABERTAS (PREVISTAS NA VENDAFORMAPAGTOPRAZO E NÃO EFETIVADAS NA RECEBER)
+        cur.execute(
+            """
+            SELECT p.ID, p.DATA, p.REFERENCIA, p.VALOR, p.IDVENDAFORMAPAGTO
+            FROM VENDAFORMAPAGTOPRAZO p
+            JOIN VENDAFORMAPAGTO f ON f.ID = p.IDVENDAFORMAPAGTO
+            WHERE f.IDVENDA = ? AND p.ID NOT IN (
+                SELECT r.IDVENDAFORMAPAGTOPRAZO FROM RECEBER r 
+                WHERE r.IDVENDA = ? AND r.IDVENDAFORMAPAGTOPRAZO IS NOT NULL
+            )
+            ORDER BY p.DATA, p.ID
+            """,
+            (int(venda_id), int(venda_id)),
+        )
+        for p in cur.fetchall():
+            forma_id = p[4]
+            parcelas.append(
+                {
+                    "id": f"prazo_{p[0]}",
+                    "data": p[1].strftime("%Y-%m-%d") if hasattr(p[1], "strftime") else dec(p[1]),
+                    "parcela": dec(p[2]),
+                    "valor_parcela": float(p[3] or 0),
+                    "variacao": 0.0,
+                    "desconto": 0.0,
+                    "total_pago": 0.0,
+                    "obs": "Prevista (Em aberto)",
+                    "forma_pagto_id": int(forma_id) if forma_id is not None else None,
+                    "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
+                }
+            )
+            
+        # Reordena o array combinado de parcelas (recebidas e previstas) pela data
+        parcelas.sort(key=lambda x: (x["data"] or "", str(x["id"])))
+
         # Distrato (quando houver)
         cur.execute(
             """
@@ -6850,6 +6884,26 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
             # idx: 0=ID, 1=PARCELA, 2=DATA(vencimento), 3=VALORPARCELA, 4=TOTALPAGO, 5=C.NOME, 6=U.DESCRICAO
             quitadas = [p for p in parcelas if (p[4] or 0) > 0]
             abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
+            
+            # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO PRAZO
+            cur.execute(f"""
+                SELECT P.ID, P.REFERENCIA, P.DATA, P.VALOR, 0.0,
+                       C.NOME, U.DESCRICAO
+                FROM VENDAFORMAPAGTOPRAZO P
+                JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
+                JOIN VENDA V ON V.ID = F.IDVENDA
+                JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
+                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
+                LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
+                LEFT JOIN BLOCO B ON B.ID = U.IDBLOCO
+                WHERE {where_sql} AND P.ID NOT IN (
+                    SELECT R.IDVENDAFORMAPAGTOPRAZO FROM RECEBER R 
+                    WHERE R.IDVENDAFORMAPAGTOPRAZO IS NOT NULL
+                )
+            """, params)
+            prazo_abertas = cur.fetchall()
+            # idx para prazo_abertas é o mesmo: 0=ID, 1=PARCELA(ref), 2=DATA, 3=VALORPARCELA, 4=TOTALPAGO(0.0), 5=NOME, 6=UNIDADE
+            abertas.extend(prazo_abertas)
             TOLE = 1.0
 
             for row in payload.rows:
