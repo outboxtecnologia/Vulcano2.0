@@ -6869,7 +6869,23 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                         pvenc = p[2]
                         match_val  = valor_pl is not None and abs(pv - valor_pl) <= TOLE
                         match_venc = dt_venc_pl and pvenc and str(pvenc)[:10] == str(dt_venc_pl)
-                        if match_val or match_venc:
+                        
+                        nome_db = str(p[5] or "").upper().strip()
+                        nome_pl = str(cliente_pl).upper().strip()
+                        
+                        match_nome = False
+                        if not nome_pl or not nome_db:
+                            match_nome = True
+                        else:
+                            if nome_db in nome_pl or nome_pl in nome_db:
+                                match_nome = True
+                            else:
+                                tokens_db = set([t for t in nome_db.split() if len(t) > 2])
+                                tokens_pl = set([t for t in nome_pl.split() if len(t) > 2])
+                                if len(tokens_db.intersection(tokens_pl)) >= 1:
+                                    match_nome = True
+
+                        if match_nome and (match_val or match_venc):
                             status    = st
                             id_parcela = p[0]
                             num_parcela = p[1]

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Download, RefreshCw, Upload, Play, CheckCircle2, CheckCircle, ChevronDown, Layers, Activity,
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
@@ -711,7 +712,7 @@ export const VendasView = ({ selectedEmpresa }) => {
       )}
 
       {/* CONDICOES MODAL (STITCH) */}
-      {condicoesModal && (
+      {condicoesModal && createPortal(
         <div className="fixed inset-0 bg-[#000000CC] backdrop-blur-sm flex items-center justify-center z-[99999] animate-in fade-in p-6">
           <div className="magma-card border border-[var(--v-accent)] p-6 rounded-[var(--v-radius)] w-full max-w-[1400px] h-full max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(52,199,89,0.1)]">
             <div className="flex justify-between items-start border-b border-[var(--v-border)] pb-4 mb-5 shrink-0">
@@ -852,7 +853,8 @@ export const VendasView = ({ selectedEmpresa }) => {
                )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
