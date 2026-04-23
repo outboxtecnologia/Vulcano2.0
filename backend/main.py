@@ -3391,36 +3391,35 @@ def get_vulcano_venda_condicoes(venda_id: int):
                 }
             )
 
-        # GERAÇÃO DAS PARCELAS ABERTAS (PREVISTAS NA VENDAFORMAPAGTOPRAZO E NÃO EFETIVADAS NA RECEBER)
-        cur.execute(
+        # GERAÇÃO DAS PARCELAS ABERTAS (A partir do SQLite Vulcano 2.0)
+        conn_sq = get_conn("sqlite")
+        cur_sq = conn_sq.cursor()
+        cur_sq.execute(
             """
-            SELECT p.ID, p.DATA, p.REFERENCIA, p.VALOR, p.IDVENDAFORMAPAGTO
-            FROM VENDAFORMAPAGTOPRAZO p
-            JOIN VENDAFORMAPAGTO f ON f.ID = p.IDVENDAFORMAPAGTO
-            WHERE f.IDVENDA = ? AND p.ID NOT IN (
-                SELECT r.IDVENDAFORMAPAGTOPRAZO FROM RECEBER r 
-                WHERE r.IDVENDA = ? AND r.IDVENDAFORMAPAGTOPRAZO IS NOT NULL
-            )
-            ORDER BY p.DATA, p.ID
+            SELECT prazo_id, data_venc, parcela_ref, valor, forma_pagto_id
+            FROM parcelas_abertas_projetadas
+            WHERE venda_id = ?
+            ORDER BY data_venc, prazo_id
             """,
-            (int(venda_id), int(venda_id)),
+            (int(venda_id),),
         )
-        for p in cur.fetchall():
+        for p in cur_sq.fetchall():
             forma_id = p[4]
             parcelas.append(
                 {
                     "id": f"prazo_{p[0]}",
-                    "data": p[1].strftime("%Y-%m-%d") if hasattr(p[1], "strftime") else dec(p[1]),
-                    "parcela": dec(p[2]),
+                    "data": p[1],
+                    "parcela": p[2],
                     "valor_parcela": float(p[3] or 0),
                     "variacao": 0.0,
                     "desconto": 0.0,
                     "total_pago": 0.0,
-                    "obs": "Prevista (Em aberto)",
+                    "obs": "Prevista (Em aberto - Vulcano 2.0)",
                     "forma_pagto_id": int(forma_id) if forma_id is not None else None,
                     "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
                 }
             )
+        conn_sq.close()
             
         # Reordena o array combinado de parcelas (recebidas e previstas) pela data
         parcelas.sort(key=lambda x: (x["data"] or "", str(x["id"])))
@@ -6885,25 +6884,29 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
             quitadas = [p for p in parcelas if (p[4] or 0) > 0]
             abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
             
-            # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO PRAZO
-            cur.execute(f"""
-                SELECT P.ID, P.REFERENCIA, P.DATA, P.VALOR, 0.0,
-                       C.NOME, U.DESCRICAO
-                FROM VENDAFORMAPAGTOPRAZO P
-                JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
-                JOIN VENDA V ON V.ID = F.IDVENDA
-                JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
-                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
-                LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
-                LEFT JOIN BLOCO B ON B.ID = U.IDBLOCO
-                WHERE {where_sql} AND P.ID NOT IN (
-                    SELECT R.IDVENDAFORMAPAGTOPRAZO FROM RECEBER R 
-                    WHERE R.IDVENDAFORMAPAGTOPRAZO IS NOT NULL
-                )
-            """, params)
-            prazo_abertas = cur.fetchall()
-            # idx para prazo_abertas é o mesmo: 0=ID, 1=PARCELA(ref), 2=DATA, 3=VALORPARCELA, 4=TOTALPAGO(0.0), 5=NOME, 6=UNIDADE
-            abertas.extend(prazo_abertas)
+            # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO SQLITE VULCANO 2.0
+            conn_sq = get_conn("sqlite")
+            cur_sq = conn_sq.cursor()
+            sq_where = ["1=1"]
+            sq_params = []
+            if payload.empreendimento_id:
+                sq_where.append("empreendimento_id = ?")
+                sq_params.append(payload.empreendimento_id)
+                
+            cur_sq.execute(f"""
+                SELECT prazo_id, parcela_ref, data_venc, valor, 0.0,
+                       cliente_nome, unidade_descricao
+                FROM parcelas_abertas_projetadas
+                WHERE {" AND ".join(sq_where)}
+            """, sq_params)
+            
+            for row in cur_sq.fetchall():
+                try:
+                    dt_venc = datetime.datetime.strptime(row[2], "%Y-%m-%d").date() if row[2] else None
+                except:
+                    dt_venc = None
+                abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
+            conn_sq.close()
             TOLE = 1.0
 
             for row in payload.rows:
