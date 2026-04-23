@@ -2438,6 +2438,10 @@ def init_sqlite():
 init_sqlite()
 
 def get_conn(db_name="vulcano", empresa_id=None):
+    if db_name == "sqlite":
+        import sqlite3
+        return sqlite3.connect(POC_DATABASE_FILE)
+
     questor_db = DB_PATH_QUESTOR
     if db_name == "questor" and empresa_id is not None:
         import os
@@ -3374,14 +3378,19 @@ def get_vulcano_venda_condicoes(venda_id: int):
             (int(venda_id),),
         )
         parcelas = []
+        assinaturas_receber = set()
         for rr in cur.fetchall():
             forma_id = rr[8]
+            data_str = rr[1].strftime("%Y-%m-%d") if hasattr(rr[1], "strftime") else dec(rr[1])
+            valor = float(rr[3] or 0)
+            assinaturas_receber.add((data_str, round(valor, 2)))
+            
             parcelas.append(
                 {
                     "id": rr[0],
-                    "data": rr[1].strftime("%Y-%m-%d") if hasattr(rr[1], "strftime") else dec(rr[1]),
+                    "data": data_str,
                     "parcela": dec(rr[2]),
-                    "valor_parcela": float(rr[3] or 0),
+                    "valor_parcela": valor,
                     "variacao": float(rr[4] or 0),
                     "desconto": float(rr[5] or 0),
                     "total_pago": float(rr[6] or 0),
@@ -3404,13 +3413,19 @@ def get_vulcano_venda_condicoes(venda_id: int):
             (int(venda_id),),
         )
         for p in cur_sq.fetchall():
+            data_str = p[1]
+            valor = float(p[3] or 0)
+            # Evita duplicar se a parcela já foi efetivada no Firebird (RECEBER)
+            if (data_str, round(valor, 2)) in assinaturas_receber:
+                continue
+                
             forma_id = p[4]
             parcelas.append(
                 {
                     "id": f"prazo_{p[0]}",
-                    "data": p[1],
+                    "data": data_str,
                     "parcela": p[2],
-                    "valor_parcela": float(p[3] or 0),
+                    "valor_parcela": valor,
                     "variacao": 0.0,
                     "desconto": 0.0,
                     "total_pago": 0.0,
@@ -6884,6 +6899,12 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
             quitadas = [p for p in parcelas if (p[4] or 0) > 0]
             abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
             
+            assinaturas_fb = set()
+            for p in parcelas:
+                dt_str = str(p[2])[:10] if p[2] else ""
+                val = round(float(p[3] or 0), 2)
+                assinaturas_fb.add((dt_str, val))
+            
             # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO SQLITE VULCANO 2.0
             conn_sq = get_conn("sqlite")
             cur_sq = conn_sq.cursor()
@@ -6905,6 +6926,13 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                     dt_venc = datetime.datetime.strptime(row[2], "%Y-%m-%d").date() if row[2] else None
                 except:
                     dt_venc = None
+                    
+                dt_str = str(dt_venc)[:10] if dt_venc else ""
+                val = round(float(row[3] or 0), 2)
+                # Evita duplicidade se o Firebird já tem essa parcela
+                if (dt_str, val) in assinaturas_fb:
+                    continue
+                    
                 abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
             conn_sq.close()
             TOLE = 1.0
