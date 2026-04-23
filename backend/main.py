@@ -6868,7 +6868,8 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 status = "SEM_MATCH"
                 valor_v = cliente_v = dt_venc_v = unidade_v = num_parcela = id_parcela = acrescimos = descontos = None
 
-                for lista, st in [(quitadas, "JA_QUITADO"), (abertas, "MATCH_PERFEITO")]:
+                candidatos = []
+                for lista, st in [(abertas, "MATCH_PERFEITO"), (quitadas, "JA_QUITADO")]:
                     for p in lista:
                         pv    = float(p[4] if st == "JA_QUITADO" else p[3] or 0)
                         pvenc = p[2]
@@ -6891,31 +6892,51 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                                     match_nome = True
 
                         if match_nome and (match_val or match_venc):
-                            status    = st
-                            id_parcela = p[0]
-                            num_parcela = p[1]
-                            valor_v   = pv
-                            cliente_v = str(p[5] or "")
-                            dt_venc_v = str(pvenc)
-                            unidade_v = str(p[6] or "") if p[6] else None
-                            if acrescimos_pl is not None or descontos_pl is not None:
-                                acrescimos = acrescimos_pl or 0
-                                descontos = descontos_pl or 0
-                            elif valor_pl and valor_v:
-                                diff = round(valor_pl - valor_v, 2)
-                                if diff > TOLE:
-                                    acrescimos = diff
-                                    descontos = 0
-                                elif diff < -TOLE:
-                                    descontos = abs(diff)
-                                    acrescimos = 0
-                                else:
-                                    acrescimos = 0
-                                    descontos = 0
+                            score = 0
+                            if match_val and match_venc: score += 100
+                            elif match_val: score += 50
+                            elif match_venc: score += 20
                             
-                            break
-                    if status != "SEM_MATCH":
-                        break
+                            if st == "MATCH_PERFEITO": score += 10 # Prioriza abertas
+                            
+                            candidatos.append({
+                                'score': score,
+                                'status': st,
+                                'id_parcela': p[0],
+                                'num_parcela': p[1],
+                                'valor_v': pv,
+                                'cliente_v': str(p[5] or ""),
+                                'dt_venc_v': str(pvenc),
+                                'unidade_v': str(p[6] or "") if p[6] else None
+                            })
+
+                if candidatos:
+                    # Pega o melhor candidato
+                    candidatos.sort(key=lambda x: x['score'], reverse=True)
+                    best = candidatos[0]
+                    
+                    status = best['status']
+                    id_parcela = best['id_parcela']
+                    num_parcela = best['num_parcela']
+                    valor_v = best['valor_v']
+                    cliente_v = best['cliente_v']
+                    dt_venc_v = best['dt_venc_v']
+                    unidade_v = best['unidade_v']
+                    
+                    if acrescimos_pl is not None or descontos_pl is not None:
+                        acrescimos = acrescimos_pl or 0
+                        descontos = descontos_pl or 0
+                    elif valor_pl and valor_v:
+                        diff = round(valor_pl - valor_v, 2)
+                        if diff > TOLE:
+                            acrescimos = diff
+                            descontos = 0
+                        elif diff < -TOLE:
+                            descontos = abs(diff)
+                            acrescimos = 0
+                        else:
+                            acrescimos = 0
+                            descontos = 0
 
                 resultados.append({
                     "status":           status,
