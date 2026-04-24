@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Activity, ShieldCheck, AlertCircle, RefreshCw, Layers } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -34,6 +34,7 @@ export const SeroView = ({ selectedEmpresa }) => {
             const endpoint = selectedObraId ? 
                  `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}&cno=${selectedObraId}` : 
                  `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`;
+            const res = await fetch(endpoint);
             if (!res.ok) throw new Error("Apuracao CNO/SERO falhou.");
             const data = await res.json();
             setSeroData(data);
@@ -101,10 +102,19 @@ export const SeroView = ({ selectedEmpresa }) => {
 
             {seroData && (
                 <>
-                    <div className="grid grid-cols-4 gap-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="magma-card p-6 border-l-4 border-[var(--v-accent-2)]">
-                            <span className="text-[10px] font-bold text-[var(--v-text-faint)] uppercase tracking-widest">Base de Mão de Obra Fiscal</span>
+                            <span className="text-[10px] font-bold text-[var(--v-text-faint)] uppercase tracking-widest">Base Mão de Obra Total</span>
                             <h3 className="text-2xl font-black text-[var(--v-text-bold)] mt-2">{formatCurrency(seroData.resumo?.mao_de_obra || 0)}</h3>
+                            <p className="text-[10px] text-[var(--v-text-faint)] mt-1">Folha + Terceiros/GPS</p>
+                        </div>
+                        <div className="magma-card p-6 border-l-4 border-[#60a5fa]">
+                            <span className="text-[10px] font-bold text-[#60a5fa] uppercase tracking-widest">↳ Folha (CALCULORATEIO)</span>
+                            <h3 className="text-xl font-black text-[#60a5fa] mt-2">{formatCurrency(seroData.resumo?.mao_de_obra_folha || 0)}</h3>
+                        </div>
+                        <div className="magma-card p-6 border-l-4 border-[#34d399]">
+                            <span className="text-[10px] font-bold text-[#34d399] uppercase tracking-widest">↳ Terceiros/GPS (VALORORIGEMGPS)</span>
+                            <h3 className="text-xl font-black text-[#34d399] mt-2">{formatCurrency(seroData.resumo?.mao_de_obra_terceiros_gps || 0)}</h3>
                         </div>
                         <div className="magma-card p-6 border-l-4 border-[var(--v-accent-5)] bg-[var(--v-accent-5)]/10">
                             <span className="text-[10px] font-bold text-[var(--v-accent-5)] uppercase tracking-widest">Apuração INSS A Recolher</span>
@@ -121,6 +131,37 @@ export const SeroView = ({ selectedEmpresa }) => {
                             </h3>
                         </div>
                     </div>
+
+                    {/* Tabela Terceiros/GPS */}
+                    {seroData.alocacoes_terceiros?.length > 0 && (
+                        <div className="magma-card p-5 border border-[var(--v-border)]">
+                            <h4 className="text-[10px] tracking-widest uppercase font-bold text-[#34d399] mb-3">
+                                Mão de Obra Alocada — Terceiros GPS ({seroData.alocacoes_terceiros.length} registros)
+                            </h4>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b border-[var(--v-border)] text-[var(--v-text-faint)]">
+                                            <th className="text-left pb-2 pr-4">Competência</th>
+                                            <th className="text-left pb-2 pr-4">Tomador/Obra</th>
+                                            <th className="text-left pb-2 pr-4">CNO/CNPJ</th>
+                                            <th className="text-right pb-2">VALORORIGEMGPS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {seroData.alocacoes_terceiros.slice(0, 50).map((t, i) => (
+                                            <tr key={i} className="border-b border-[var(--v-border)]/30 hover:bg-white/5">
+                                                <td className="py-1.5 pr-4 font-mono text-[var(--v-text-faint)]">{t.compet}</td>
+                                                <td className="py-1.5 pr-4 text-[var(--v-text-bold)]">{t.nome_obra}</td>
+                                                <td className="py-1.5 pr-4 font-mono text-[var(--v-text-faint)]">{t.cno}</td>
+                                                <td className="py-1.5 text-right font-bold text-[#34d399]">{formatCurrency(t.valor_recolhido)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex-1 min-h-[300px] magma-card p-6 border border-[var(--v-border)] relative">
                         <h4 className="text-[10px] tracking-widest uppercase font-bold text-[var(--v-text-faint)] mb-4">Avanço Físico-Financeiro (% de Obra)</h4>

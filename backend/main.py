@@ -6428,7 +6428,8 @@ def get_sero_maodeobra(
     try:
         conn = get_conn("questor")
         cur = conn.cursor()
-        
+
+        # --- FONTE 1: Folha de Pagamentos via CALCULORATEIO (evento 5041) ---
         q = """
             SELECT 
                 p.COMPET, 
@@ -6445,6 +6446,27 @@ def get_sero_maodeobra(
         """
         cur.execute(q, (empresa_id,))
         rows = cur.fetchall()
+
+        # --- FONTE 2: Terceiros/GPS via TERCEIROPGTO.VALORORIGEMGPS ---
+        q_terc = """
+            SELECT
+                t.COMPET,
+                t.CODIGOOUTEMP,
+                o.NOMEOUTEMP,
+                o.INSCRFEDERAL,
+                SUM(t.VALORORIGEMGPS) as VALOR_GPS
+            FROM TERCEIROPGTO t
+            LEFT JOIN OUTRAEMPRESA o ON t.CODIGOOUTEMP = o.CODIGOOUTEMP
+            WHERE t.CODIGOEMPRESA = ?
+              AND t.VALORORIGEMGPS > 0
+            GROUP BY t.COMPET, t.CODIGOOUTEMP, o.NOMEOUTEMP, o.INSCRFEDERAL
+            ORDER BY t.COMPET DESC
+        """
+        try:
+            cur.execute(q_terc, (empresa_id,))
+            rows_terc = cur.fetchall()
+        except Exception:
+            rows_terc = []
         
         cno_dados = {}
         cub_vigente = 0.0
@@ -6518,7 +6540,8 @@ def get_sero_maodeobra(
                 "codigo_obra": cod_out,
                 "nome_obra": nome_str,
                 "cno": inscr_str,
-                "valor_recolhido": val
+                "valor_recolhido": val,
+                "fonte": "folha"
             })
             
         for k, v in obras.items():
@@ -6534,7 +6557,48 @@ def get_sero_maodeobra(
             obras[k]["data_inicio"] = dt_ini
             obras[k]["data_fim"] = dt_fim
 
-        mao_de_obra = sum(o["alocado_total"] for o in obras.values())
+        # --- Integra Terceiros/GPS na base de mão de obra ---
+        import re as _re
+        alocacoes_terceiros = []
+        gps_total = 0.0
+        for row_t in rows_terc:
+            compet_dt_t, cod_out_t, nome_out_t, inscr_t, valor_t = row_t
+            compet_str_t = compet_dt_t.strftime("%Y-%m") if hasattr(compet_dt_t, 'strftime') else str(compet_dt_t)[:7]
+            nome_str_t = nome_out_t.decode('win1252', 'ignore') if isinstance(nome_out_t, bytes) else str(nome_out_t or "Terceiro")
+            inscr_str_t = str(inscr_t or "")
+            clean_inscr_t = _re.sub(r'\D', '', inscr_str_t)
+
+            # Filtro CNO (se selecionado)
+            if cno and cno not in ("undefined", "null", "All", ""):
+                clean_target_cno_t = _re.sub(r'\D', '', cno)
+                if clean_inscr_t != clean_target_cno_t:
+                    continue
+
+            val_t = float(valor_t or 0)
+            if compet_str_t <= target_compet:
+                gps_total += val_t
+
+            alocacoes_terceiros.append({
+                "compet": compet_str_t,
+                "codigo_obra": cod_out_t,
+                "nome_obra": nome_str_t,
+                "cno": inscr_str_t,
+                "valor_recolhido": val_t,
+                "fonte": "terceiros_gps"
+            })
+            # Acumula no mensal para curva_s
+            if compet_str_t <= target_compet:
+                alocacoes.append({
+                    "compet": compet_str_t,
+                    "codigo_obra": cod_out_t,
+                    "nome_obra": nome_str_t,
+                    "cno": inscr_str_t,
+                    "valor_recolhido": val_t,
+                    "fonte": "terceiros_gps"
+                })
+
+        mao_de_obra_folha = sum(o["alocado_total"] for o in obras.values())
+        mao_de_obra = mao_de_obra_folha + gps_total
         area_total = sum(o.get("metragem", 0) for o in obras.values())
         custo_obra_estimado = area_total * cub_vigente
         inss_devido = custo_obra_estimado * 0.20
@@ -6636,13 +6700,16 @@ def get_sero_maodeobra(
         return {
             "resumo": {
                 "mao_de_obra": mao_de_obra,
+                "mao_de_obra_folha": mao_de_obra_folha,
+                "mao_de_obra_terceiros_gps": gps_total,
                 "total_inss": total_inss,
                 "cub_vigente": cub_vigente,
                 "area_total": area_total
             },
             "curva_s": curva_s[-48:] if curva_s else [],
             "obras": [{"codigo": k, **v} for k, v in obras.items()],
-            "alocacoes": alocacoes
+            "alocacoes": alocacoes,
+            "alocacoes_terceiros": alocacoes_terceiros
         }
     except Exception as e:
         import traceback; traceback.print_exc()
