@@ -3234,6 +3234,105 @@ def get_vulcano_clientes(empresa_id: int):
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/vulcano/dashboard-lancamentos")
+def api_dashboard_lancamentos(empresa_id: int, data_ini: str = None, data_fim: str = None):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        date_filter_venda = ""
+        date_filter_rec = ""
+        params_venda = [empresa_id]
+        params_rec = [empresa_id]
+
+        if data_ini:
+            date_filter_venda += " AND v.DTOPER >= ?"
+            date_filter_rec += " AND r.DATA >= ?"
+            params_venda.append(f"{data_ini}-01")
+            params_rec.append(f"{data_ini}-01")
+            
+        if data_fim:
+            date_filter_venda += " AND v.DTOPER <= ?"
+            date_filter_rec += " AND r.DATA <= ?"
+            import calendar
+            try:
+                y, m = data_fim.split("-")
+                last_day = calendar.monthrange(int(y), int(m))[1]
+                params_venda.append(f"{data_fim}-{last_day}")
+                params_rec.append(f"{data_fim}-{last_day}")
+            except Exception:
+                pass
+        
+        # Últimas Vendas
+        cur.execute(f"""
+            SELECT FIRST 10 v.ID, v.DTOPER, v.DESCUNIDIMOB, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, e.NOME AS EMPREENDIMENTO
+            FROM VENDA v
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE v.CODIGOEMPRESA = ?
+              {date_filter_venda}
+              AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
+              AND COALESCE(c.CNPJ, '') <> '000.000.000-00'
+              AND COALESCE(v.TOTALVENDA, 0) > 0.01
+              AND COALESCE(v.DISTRATO, 'N') <> 'S'
+            ORDER BY v.DTOPER DESC, v.ID DESC
+        """, tuple(params_venda))
+        vendas = []
+        for r in cur.fetchall():
+            try:
+                cli_nome = r[3].decode('win1252', 'ignore') if isinstance(r[3], (bytes, bytearray)) else r[3]
+                desc_unid = r[2].decode('win1252', 'ignore') if isinstance(r[2], (bytes, bytearray)) else r[2]
+                emp_nome = r[5].decode('win1252', 'ignore') if isinstance(r[5], (bytes, bytearray)) else r[5]
+            except Exception:
+                cli_nome, desc_unid, emp_nome = str(r[3]), str(r[2]), str(r[5])
+            
+            vendas.append({
+                "id": r[0],
+                "data": r[1].strftime('%d/%m/%Y') if hasattr(r[1], 'strftime') else str(r[1]),
+                "unidade": desc_unid,
+                "cliente": cli_nome,
+                "total": float(r[4] or 0),
+                "empreendimento": emp_nome
+            })
+            
+        # Últimos Recebimentos
+        cur.execute(f"""
+            SELECT FIRST 10 r.ID, r.DATA, r.TOTALPAGO, v.DESCUNIDIMOB, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO
+            FROM RECEBER r
+            JOIN VENDA v ON r.IDVENDA = v.ID
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE v.CODIGOEMPRESA = ?
+              {date_filter_rec}
+              AND r.TOTALPAGO > 0
+              AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
+            ORDER BY r.DATA DESC, r.ID DESC
+        """, tuple(params_rec))
+        recebimentos = []
+        for r in cur.fetchall():
+            try:
+                cli_nome = r[4].decode('win1252', 'ignore') if isinstance(r[4], (bytes, bytearray)) else r[4]
+                desc_unid = r[3].decode('win1252', 'ignore') if isinstance(r[3], (bytes, bytearray)) else r[3]
+                emp_nome = r[5].decode('win1252', 'ignore') if isinstance(r[5], (bytes, bytearray)) else r[5]
+            except Exception:
+                cli_nome, desc_unid, emp_nome = str(r[4]), str(r[3]), str(r[5])
+            
+            recebimentos.append({
+                "id": r[0],
+                "data": r[1].strftime('%d/%m/%Y') if hasattr(r[1], 'strftime') else str(r[1]),
+                "total_pago": float(r[2] or 0),
+                "unidade": desc_unid,
+                "cliente": cli_nome,
+                "empreendimento": emp_nome
+            })
+            
+        conn.close()
+        return {"vendas": vendas, "recebimentos": recebimentos}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/vulcano/vendas")
 def get_vulcano_vendas(empresa_id: int):
     try:

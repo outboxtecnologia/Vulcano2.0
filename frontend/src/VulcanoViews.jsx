@@ -24,6 +24,7 @@ const formatCurrency = (val) => {
 
 export const DashboardMeta = ({ selectedEmpresa }) => {
     const [data, setData] = useState(null);
+    const [lancamentos, setLancamentos] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [dataIniFilter, setDataIniFilter] = useState(`${new Date().getFullYear()}-01`);
@@ -40,21 +41,21 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
         setError(null);
 
         // Fetching the vectorized Pandas data (Limited to filters)
-        fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIniFilter ? `&data_ini=${dataIniFilter}` : ''}${dataFimFilter ? `&data_fim=${dataFimFilter}` : ''}`)
-            .then(res => {
-                if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
-                return res.json();
-            })
-            .then(json => {
-                setData(json);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Dashboard Fetch Error:", err);
-                setError(err.message);
-                setLoading(false);
-            });
-    }, [selectedEmpresa, fetchTrigger]);
+        Promise.all([
+            fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIniFilter ? `&data_ini=${dataIniFilter}` : ''}${dataFimFilter ? `&data_fim=${dataFimFilter}` : ''}`).then(res => res.json()),
+            fetch(`${API_BASE}/api/vulcano/dashboard-lancamentos?empresa_id=${selectedEmpresa}`).then(res => res.json()).catch((err) => ({ error: err.message }))
+        ])
+        .then(([caixaJson, lancJson]) => {
+            setData(caixaJson);
+            setLancamentos(lancJson);
+            setLoading(false);
+        })
+        .catch(err => {
+            console.error("Dashboard Fetch Error:", err);
+            setError(err.message);
+            setLoading(false);
+        });
+    }, [selectedEmpresa, fetchTrigger, dataIniFilter, dataFimFilter]);
 
     const stats = useMemo(() => {
         if (!data || !data.dashboard_meta) return null;
@@ -129,17 +130,17 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                             value={empreendimentoFilter}
                             onChange={(e) => setEmpreendimentoFilter(e.target.value)}
                             placeholder="Buscar res./cond. ..."
-                            className="bento-input w-full pl-9"
+                            className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono pl-9 py-1.5 rounded outline-none placeholder-[#444] transition-colors"
                         />
                     </div>
                 </div>
                 <div>
                     <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Mês Inicial</label>
-                    <input type="month" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bento-input min-w-[140px]" />
+                    <input type="month" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
                 </div>
                 <div>
                     <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Mês Final</label>
-                    <input type="month" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bento-input min-w-[140px]" />
+                    <input type="month" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
                 </div>
                 <div className="flex-1 flex justify-end">
                     <button 
@@ -174,6 +175,84 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                         </div>
                     </div>
                 ))}
+            </div>
+
+            {/* Marcadores de Delay da Escrituração */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 mb-6">
+                {!lancamentos ? (
+                    <div className="col-span-2 magma-card p-6 flex items-center justify-center text-[var(--v-text-muted)] animate-pulse">
+                        <RefreshCw className="animate-spin mr-3" size={16} /> 
+                        <span className="text-[10px] uppercase font-bold tracking-widest">Carregando indicadores de escrituração...</span>
+                    </div>
+                ) : (
+                    (() => {
+                        if (lancamentos.error) {
+                            return (
+                                <div className="col-span-2 magma-card p-6 flex items-center justify-center text-[var(--v-error)]">
+                                    <AlertCircle className="mr-3" size={16} /> 
+                                    <span className="text-[10px] uppercase font-bold tracking-widest">Erro na busca: {lancamentos.error}</span>
+                                </div>
+                            );
+                        }
+                        
+                        const renderDelayMarker = (items, label, icon) => {
+                            if (!items || items.length === 0) return (
+                                <div className="magma-card p-4 flex items-center gap-4">
+                                    <div className="p-3 bg-[var(--v-surface-container)] rounded-full text-[var(--v-text-muted)]">
+                                        {icon}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-faint)]">{label}</h4>
+                                        <p className="text-sm font-bold text-[var(--v-error)]">Sem resposta do servidor</p>
+                                    </div>
+                                </div>
+                            );
+                            
+                            const lastDateStr = items[0].data; // DD/MM/YYYY
+                            const [d, m, y] = lastDateStr.split('/');
+                            const lastDate = new Date(y, m - 1, d);
+                            const now = new Date();
+                            const diffTime = Math.abs(now - lastDate);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            const diffMonths = (now.getFullYear() - lastDate.getFullYear()) * 12 + (now.getMonth() - lastDate.getMonth());
+                            
+                            let statusColor = "var(--v-accent-3)";
+                            let statusText = "Em Dia";
+                            
+                            if (diffMonths > 1) {
+                                statusColor = "var(--v-error)";
+                                statusText = `Atraso (${diffMonths} meses)`;
+                            } else if (diffDays > 15) {
+                                statusColor = "var(--v-accent-2)";
+                                statusText = `Atenção (${diffDays} dias)`;
+                            }
+
+                            return (
+                                <div className="magma-card p-4 flex items-center gap-4 border-l-[3px]" style={{ borderLeftColor: statusColor }}>
+                                    <div className="p-3 bg-[var(--v-surface-container)] rounded-full" style={{ color: statusColor }}>
+                                        {icon}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">{label}</h4>
+                                        <div className="flex justify-between items-end mt-1">
+                                            <span className="text-xl font-black text-[var(--v-text-bold)]">{lastDateStr}</span>
+                                            <span className="text-[9px] uppercase font-black tracking-widest px-2 py-1 rounded" style={{ backgroundColor: `${statusColor}22`, color: statusColor }}>
+                                                {statusText}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        };
+
+                        return (
+                            <>
+                                {renderDelayMarker(lancamentos.vendas, 'Status Escrituração de Vendas', <ShoppingCart size={20} />)}
+                                {renderDelayMarker(lancamentos.recebimentos, 'Status Contas a Receber (Baixas)', <Database size={20} />)}
+                            </>
+                        );
+                    })()
+                )}
             </div>
 
             {/* Charts Row */}
@@ -317,6 +396,8 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                     </table>
                 </div>
             </div>
+
+
         </div>
     );
 };
