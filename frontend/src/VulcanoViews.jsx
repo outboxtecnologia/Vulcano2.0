@@ -871,6 +871,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const [showForm, setShowForm] = useState(false);
   const [showConferencia, setShowConferencia] = useState(false);
   const [baixaModal, setBaixaModal] = useState({ open: false, parcela: null, valor: 0, data: '', acrescimos: 0, descontos: 0 });
+  const [syncModal, setSyncModal] = useState({ open: false, loading: false, preview: null, error: null, dataInicio: '2022-01-01' });
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -987,6 +988,9 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Industrial Master-Detail Ledger</p>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={() => setSyncModal(s => ({ ...s, open: true, preview: null, error: null }))} className="bento-button flex items-center gap-2 border-[#34d399] text-[#34d399] hover:bg-[#34d399] hover:text-black">
+            <RefreshCw size={14}/> Sincronizar Parcelas
+          </button>
           <button onClick={() => setShowConferencia(true)} className="bento-button flex items-center gap-2">
             <CheckCircle2 size={16}/> Modo Conferência
           </button>
@@ -1261,6 +1265,114 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
               <button onClick={() => setBaixaModal({ ...baixaModal, open: false })} className="px-4 py-2 text-xs font-bold uppercase border border-[var(--v-border)] text-[var(--v-text-muted)] rounded hover:bg-[var(--v-hover)] transition-colors">Cancelar</button>
               <button onClick={confirmBaixa} className="px-4 py-2 text-xs font-bold uppercase bg-[var(--v-accent)] text-black rounded hover:bg-[#00e699] transition-colors">Confirmar Baixa</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SINCRONIZAR PARCELAS EM ABERTO */}
+      {syncModal.open && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[99999] animate-in fade-in p-6">
+          <div className="magma-card border border-[#34d399]/40 p-7 rounded-[var(--v-radius)] max-w-lg w-full shadow-[0_0_60px_rgba(52,211,153,0.1)]">
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <h3 className="text-sm uppercase tracking-widest text-[#34d399] font-black flex items-center gap-2">
+                  <RefreshCw size={16}/> Sincronizar Parcelas em Aberto
+                </h3>
+                <p className="text-[10px] text-[var(--v-text-faint)] mt-1 uppercase tracking-widest">
+                  VENDAFORMAPAGTOPRAZO → RECEBER (TOTALPAGO = 0)
+                </p>
+              </div>
+              <button onClick={() => setSyncModal(s => ({ ...s, open: false }))} className="text-[var(--v-text-faint)] hover:text-white p-1"><X size={18}/></button>
+            </div>
+
+            <div className="flex gap-4 mb-5 items-end">
+              <div className="flex-1">
+                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Data Início (vencimento ≥)</label>
+                <input type="date" value={syncModal.dataInicio}
+                  onChange={e => setSyncModal(s => ({ ...s, dataInicio: e.target.value, preview: null }))}
+                  className="bento-input w-full" />
+              </div>
+              <button disabled={syncModal.loading} onClick={async () => {
+                setSyncModal(s => ({ ...s, loading: true, error: null, preview: null }));
+                try {
+                  const res = await fetch(`${API_BASE}/api/vulcano/popular-receber-abertas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ empresa_id: selectedEmpresa ? parseInt(selectedEmpresa) : null, data_inicio: syncModal.dataInicio || null, dry_run: true })
+                  });
+                  const d = await res.json();
+                  if (!res.ok) throw new Error(d.detail || 'Erro');
+                  setSyncModal(s => ({ ...s, loading: false, preview: d }));
+                } catch(err) { setSyncModal(s => ({ ...s, loading: false, error: err.message })); }
+              }} className="bento-button flex items-center gap-2 border-[#34d399] text-[#34d399] hover:bg-[#34d399] hover:text-black whitespace-nowrap">
+                {syncModal.loading ? <RefreshCw size={13} className="animate-spin"/> : <RefreshCw size={13}/>} Simular
+              </button>
+            </div>
+
+            {syncModal.error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{syncModal.error}</div>
+            )}
+
+            {syncModal.preview && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#34d399]/10 border border-[#34d399]/30 p-4 rounded-[var(--v-radius)]">
+                    <p className="text-[10px] uppercase tracking-widest text-[#34d399] font-bold mb-1">Parcelas Órfãs</p>
+                    <p className="text-2xl font-black text-[#34d399]">{syncModal.preview.total_orfas.toLocaleString('pt-BR')}</p>
+                  </div>
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-[var(--v-radius)]">
+                    <p className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-1">Valor Total</p>
+                    <p className="text-xl font-black text-amber-400">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(syncModal.preview.valor_total)}</p>
+                  </div>
+                </div>
+                {syncModal.preview.total_orfas === 0 ? (
+                  <p className="text-[#34d399] text-sm font-bold text-center py-2">✅ Banco completo. Nenhuma parcela faltante.</p>
+                ) : (
+                  <>
+                    <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
+                      <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold p-2 border-b border-[var(--v-border)]">
+                        Preview — primeiras {Math.min(5, syncModal.preview.preview.length)} de {syncModal.preview.total_orfas}
+                      </p>
+                      <table className="w-full text-[10px] font-mono">
+                        <thead><tr className="border-b border-[var(--v-border)] text-[var(--v-text-faint)]">
+                          <th className="p-2 text-left">Emp.</th><th className="p-2 text-left">Venda</th>
+                          <th className="p-2 text-left">Venc.</th><th className="p-2 text-right">Valor</th>
+                        </tr></thead>
+                        <tbody>
+                          {syncModal.preview.preview.slice(0,5).map((r,i) => (
+                            <tr key={i} className="border-b border-[var(--v-border)]/30">
+                              <td className="p-2 text-[var(--v-text-faint)]">{r.empresa}</td>
+                              <td className="p-2">#{r.idvenda}</td>
+                              <td className="p-2 text-[var(--v-text-faint)]">{r.data}</td>
+                              <td className="p-2 text-right text-[#34d399] font-bold">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(r.valor)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button disabled={syncModal.loading} onClick={async () => {
+                      if (!window.confirm(`Confirmar inserção de ${syncModal.preview.total_orfas.toLocaleString('pt-BR')} parcelas em RECEBER?`)) return;
+                      setSyncModal(s => ({ ...s, loading: true, error: null }));
+                      try {
+                        const res = await fetch(`${API_BASE}/api/vulcano/popular-receber-abertas`, {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ empresa_id: selectedEmpresa ? parseInt(selectedEmpresa) : null, data_inicio: syncModal.dataInicio || null, dry_run: false })
+                        });
+                        const d = await res.json();
+                        if (!res.ok) throw new Error(d.detail || 'Erro na execução');
+                        alert(`✅ ${d.inseridos.toLocaleString('pt-BR')} parcelas inseridas! Erros: ${d.erros ?? 0}`);
+                        setSyncModal(s => ({ ...s, open: false, loading: false, preview: null }));
+                        setLoading(true);
+                        fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
+                          .then(r => r.json()).then(dd => { setData(Array.isArray(dd) ? dd : []); setLoading(false); });
+                      } catch(err) { setSyncModal(s => ({ ...s, loading: false, error: err.message })); }
+                    }} className="w-full py-3 bg-[#34d399] text-black text-[11px] font-black uppercase tracking-widest rounded-[var(--v-radius)] hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-50">
+                      {syncModal.loading ? <RefreshCw size={14} className="animate-spin"/> : null}
+                      ⚡ Executar — Inserir {syncModal.preview.total_orfas.toLocaleString('pt-BR')} Parcelas
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

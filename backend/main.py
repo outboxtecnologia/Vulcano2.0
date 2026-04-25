@@ -3609,6 +3609,188 @@ def baixa_recebimento(data: BaixaInput):
     finally:
         if s_conn: s_conn.close()
 
+# ──────────────────────────────────────────────────────────────────────────────
+# SINCRONIZAR PARCELAS EM ABERTO — VENDAFORMAPAGTOPRAZO → RECEBER
+# Popula RECEBER com parcelas projetadas que ainda não possuem linha efetiva.
+# ──────────────────────────────────────────────────────────────────────────────
+class PopularReceberInput(BaseModel):
+    empresa_id: int | None = None       # None = todas as empresas
+    data_inicio: str | None = None      # "YYYY-MM-DD", None = sem filtro
+    dry_run: bool = True                # True = só preview, False = grava
+    limite: int | None = None           # None = sem limite (testes: 10)
+
+@app.post("/api/vulcano/popular-receber-abertas")
+def popular_receber_abertas(data: PopularReceberInput):
+    """
+    Cruza VENDAFORMAPAGTOPRAZO (parcelas projetadas) com RECEBER (efetivas).
+    Insere as que ainda não possuem registro em RECEBER com TOTALPAGO = 0 (em aberto).
+
+    Regras de inclusão:
+    - VENDAFORMAPAGTO.ATIVA = 'S'
+    - VENDA.DISTRATO <> 'S'
+    - VENDAFORMAPAGTOPRAZO.VALOR_PAGO = 0 (ainda não quitadas)
+    - NOT EXISTS em RECEBER por IDVENDAFORMAPAGTOPRAZO
+    """
+    conn_v = None
+    try:
+        conn_v = get_conn("vulcano")
+        cur = conn_v.cursor()
+
+        # 1. Próximo ID disponível
+        cur.execute("SELECT MAX(ID) FROM RECEBER")
+        max_id = cur.fetchone()[0] or 0
+        next_id = max_id + 1
+
+        # 2. Montar condicionais
+        empresa_cond  = f"AND v.CODIGOEMPRESA = {data.empresa_id}" if data.empresa_id else ""
+        data_ini_cond = f"AND vpp.DATA >= '{data.data_inicio}'" if data.data_inicio else ""
+        limite_cond   = f"ROWS 1 TO {data.limite}" if data.limite else ""
+
+        query = f"""
+            SELECT
+                vpp.ID             AS prazo_id,
+                vpp.DATA           AS vencimento,
+                vpp.VALOR          AS valor_parcela,
+                vpp.REFERENCIA,
+                vfp.ID             AS idvendaformapagto,
+                vfp.IDVENDA,
+                vfp.DESCRICAO      AS obs_descricao,
+                v.ID_CLIENTE,
+                v.CODIGOEMPRESA
+            FROM VENDAFORMAPAGTOPRAZO vpp
+            JOIN VENDAFORMAPAGTO vfp ON vfp.ID = vpp.IDVENDAFORMAPAGTO
+            JOIN VENDA v ON v.ID = vfp.IDVENDA
+            WHERE NOT EXISTS (
+                SELECT 1 FROM RECEBER r
+                WHERE r.IDVENDAFORMAPAGTOPRAZO = vpp.ID
+            )
+            AND vfp.ATIVA = 'S'
+            AND (v.DISTRATO IS NULL OR v.DISTRATO <> 'S')
+            AND (vpp.VALOR_PAGO = 0 OR vpp.VALOR_PAGO IS NULL)
+            {empresa_cond}
+            {data_ini_cond}
+            ORDER BY v.CODIGOEMPRESA, vfp.IDVENDA, vpp.DATA
+            {limite_cond}
+        """
+        cur.execute(query)
+        cols = [d[0] for d in cur.description]
+        orfas = [dict(zip(cols, row)) for row in cur.fetchall()]
+
+        if not orfas:
+            return {
+                "modo": "dry_run" if data.dry_run else "execucao",
+                "empresa": data.empresa_id,
+                "data_inicio": data.data_inicio,
+                "total_orfas": 0,
+                "valor_total": 0.0,
+                "preview": [],
+                "inseridos": 0,
+                "mensagem": "Nenhuma parcela orfã encontrada. Banco já está completo."
+            }
+
+        # 3. Preparar inserts
+        from datetime import datetime as _dt
+        insercoes = []
+        for row in orfas:
+            venc = row["VENCIMENTO"]
+            if hasattr(venc, 'strftime'):
+                parcela_str = venc.strftime("%m/%Y")
+                data_ins = venc
+            else:
+                parcela_str = "00/0000"
+                data_ins = _dt.now()
+
+            insercoes.append({
+                "id":                     next_id,
+                "idvenda":                row["IDVENDA"],
+                "idcliente":              row["ID_CLIENTE"],
+                "data":                   data_ins,
+                "valorparcela":           float(row["VALOR_PARCELA"] or 0),
+                "valorvariacao":          0.0,
+                "totalpago":              0.0,
+                "parcela":                parcela_str,
+                "obs":                    (str(row["OBS_DESCRICAO"] or "PARCELA"))[:50],
+                "idvendaformapagto":      row["IDVENDAFORMAPAGTO"],
+                "desconto":               0.0,
+                "idvendaformapagtoprazo": row["PRAZO_ID"],
+            })
+            next_id += 1
+
+        valor_total = sum(r["valorparcela"] for r in insercoes)
+        preview = [
+            {
+                "prazo_id":  ins["idvendaformapagtoprazo"],
+                "idvenda":   ins["idvenda"],
+                "data":      ins["data"].strftime("%Y-%m-%d") if hasattr(ins["data"], 'strftime') else str(ins["data"])[:10],
+                "valor":     ins["valorparcela"],
+                "parcela":   ins["parcela"],
+                "obs":       ins["obs"],
+                "empresa":   orfas[i].get("CODIGOEMPRESA"),
+            }
+            for i, ins in enumerate(insercoes[:20])
+        ]
+
+        if data.dry_run:
+            return {
+                "modo": "dry_run",
+                "empresa": data.empresa_id,
+                "data_inicio": data.data_inicio,
+                "total_orfas": len(insercoes),
+                "valor_total": valor_total,
+                "preview": preview,
+                "inseridos": 0,
+                "mensagem": f"Simulação: {len(insercoes)} parcelas seriam inseridas totalizando R$ {valor_total:,.2f}. Envie dry_run=false para gravar."
+            }
+
+        # 4. EXECUÇÃO REAL
+        insert_sql = """
+            INSERT INTO RECEBER
+                (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO,
+                 TOTALPAGO, PARCELA, OBS, IDVENDAFORMAPAGTO, DESCONTO,
+                 IDVENDAFORMAPAGTOPRAZO)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        inseridos = 0
+        erros_detalhe = []
+        cur2 = conn_v.cursor()
+        for ins in insercoes:
+            try:
+                cur2.execute(insert_sql, (
+                    ins["id"], ins["idvenda"], ins["idcliente"], ins["data"],
+                    ins["valorparcela"], ins["valorvariacao"], ins["totalpago"],
+                    ins["parcela"], ins["obs"], ins["idvendaformapagto"],
+                    ins["desconto"], ins["idvendaformapagtoprazo"],
+                ))
+                inseridos += 1
+                if inseridos % 200 == 0:
+                    conn_v.commit()
+            except Exception as e_ins:
+                erros_detalhe.append({"id": ins["id"], "erro": str(e_ins)[:120]})
+
+        conn_v.commit()
+
+        return {
+            "modo": "execucao",
+            "empresa": data.empresa_id,
+            "data_inicio": data.data_inicio,
+            "total_orfas": len(insercoes),
+            "valor_total": valor_total,
+            "preview": preview,
+            "inseridos": inseridos,
+            "erros": len(erros_detalhe),
+            "erros_detalhe": erros_detalhe[:10],
+            "mensagem": f"{inseridos} parcelas inseridas em RECEBER com TOTALPAGO=0 (em aberto)."
+        }
+
+    except Exception as e:
+        if conn_v:
+            try: conn_v.rollback()
+            except: pass
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn_v: conn_v.close()
+
 import pandas as pd
 import re
 
