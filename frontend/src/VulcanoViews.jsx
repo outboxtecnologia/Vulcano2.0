@@ -1169,21 +1169,21 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
 
           {/* FILTER STRIP */}
           <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
-            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">De</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bento-input w-full"/></div>
-            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Até</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bento-input w-full"/></div>
+            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">De</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
+            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Até</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
             <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Unidade</label>
-              <select value={unidadeFilter} onChange={e => setUnidadeFilter(e.target.value)} className="bento-select w-full">
+              <select value={unidadeFilter} onChange={e => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                  <option value="">TODAS AS UNIDADES</option>
                  {uniqueUnidades.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Comprador</label>
-              <select value={clienteFilter} onChange={e => setClienteFilter(e.target.value)} className="bento-select w-full">
+              <select value={clienteFilter} onChange={e => setClienteFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                  <option value="">TODOS COMPRADORES</option>
                  {uniqueClientes.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <button onClick={() => { setDateFrom(''); setDateTo(''); setUnidadeFilter(''); setClienteFilter(''); }} className="bento-button py-3">LIMPAR</button>
+            <button onClick={() => { setDateFrom(''); setDateTo(''); setUnidadeFilter(''); setClienteFilter(''); }} className="bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30] hover:text-white border border-[#ff3b30]/30 transition-all font-black text-[10px] tracking-widest uppercase rounded px-6 py-2 h-[32px]">LIMPAR</button>
           </div>
 
           {/* TABLE DATA GRID (PAGINATED) */}

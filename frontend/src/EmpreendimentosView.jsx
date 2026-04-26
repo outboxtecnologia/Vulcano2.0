@@ -37,6 +37,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     endereco: '',
     ret: 'N',
     ativo: 'S',
+    obra_concluida: 'N',
     data_conclusao: '',
     conta_caixa: 0,
     conta_clientes: 0,
@@ -118,14 +119,15 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
       setFormData({
         ...emp,
         ret: emp.ret || 'N',
-        ativo: emp.ativo || 'S'
+        ativo: emp.ativo || 'S',
+        obra_concluida: emp.obra_concluida || 'N'
       });
       fetchEstrutura(emp.id);
     } else {
       setEditingEmp(null);
       setFormData({
         nome: '', cnpj: '', cno: '', metragem: 0, custo: 0, endereco: '',
-        ret: 'N', ativo: 'S', data_conclusao: '',
+        ret: 'N', ativo: 'S', obra_concluida: 'N', data_conclusao: '',
         conta_caixa: 0, conta_clientes: 0, conta_adi_cli: 0,
         conta_estand: 0, conta_estcon: 0, conta_despesa: 0, conta_rec: 0, 
         conta_variacao: 0, conta_devolucao: 0, centro_custo: 0,
@@ -149,6 +151,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     // Ensure numeric fields are correctly typed
     const payload = {
         ...formData,
+        obra_concluida: formData.obra_concluida || 'N',
         empresa_id: parseInt(selectedEmpresa),
         metragem: parseFloat(formData.metragem || 0),
         custo: parseFloat(formData.custo || 0),
@@ -344,7 +347,8 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
               <div className="mt-auto pt-4 flex items-center justify-between">
                  <div className="flex gap-2">
                     {emp.ret === 'S' && <span className="text-[8px] bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[#ff4d00]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">RET</span>}
-                    {emp.ativo === 'N' ? 
+                    {emp.ativo === 'N' && <span className="text-[8px] bg-[#ff3b30]/10 text-[#ff3b30] border border-[#ff3b30]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">Inativo</span>}
+                    {emp.obra_concluida === 'S' ? 
                        <span className="text-[8px] bg-[#34c759]/10 text-[var(--v-accent-3)] border border-[#34c759]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">Concluído</span> :
                        <span className="text-[8px] bg-[#007aff]/10 text-[var(--v-accent-4)] border border-[#007aff]/20 px-1.5 py-0.5 rounded-[var(--v-radius)] font-black uppercase">Em Obras</span>
                     }
@@ -456,14 +460,22 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                     <option value="S">Sim</option>
                                 </select>
                             </div>
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Controle Status</label>
-                                <select value={formData.ativo} onChange={(e) => setFormData({...formData, ativo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
-                                    <option value="S">Ativo (Em Obras)</option>
-                                    <option value="N">Concluído</option>
-                                    <option value="I">Inativo</option>
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Status da Obra</label>
+                                <select value={formData.obra_concluida} onChange={(e) => setFormData({...formData, obra_concluida: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
+                                    <option value="N">Em Obras</option>
+                                    <option value="S">Concluído</option>
                                 </select>
                             </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Cadastro Ativo</label>
+                                <select value={formData.ativo} onChange={(e) => setFormData({...formData, ativo: e.target.value})} className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50">
+                                    <option value="S">Ativo (Permite Vendas)</option>
+                                    <option value="N">Inativo (Bloqueado)</option>
+                                </select>
+                            </div>
+                        </div>
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Data de Conclusão</label>

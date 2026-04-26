@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Layers, RefreshCw, AlertCircle, TrendingUp, ChevronDown, Plus } from 'lucide-react';
 
@@ -70,11 +70,11 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                 <div className="flex gap-4 p-3 bg-[var(--v-surface-container)] rounded-[var(--v-radius)] border border-[var(--v-border)] items-end">
                     <div>
                         <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Competência Inicial</label>
-                        <input type="month" value={dataIni} onChange={e => setDataIni(e.target.value)} className="bento-input min-w-[140px]" />
+                        <input type="month" value={dataIni} onChange={e => setDataIni(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-4)] text-white text-[11px] font-mono px-3 py-1.5 rounded-[var(--v-radius)] outline-none transition-colors dark-calendar" />
                     </div>
                     <div>
                         <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Competência Final</label>
-                        <input type="month" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bento-input min-w-[140px]" />
+                        <input type="month" value={dataFim} onChange={e => setDataFim(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-4)] text-white text-[11px] font-mono px-3 py-1.5 rounded-[var(--v-radius)] outline-none transition-colors dark-calendar" />
                     </div>
                     <div className="flex-1 flex justify-end">
                         <button 

@@ -72,24 +72,24 @@ export const SeroView = ({ selectedEmpresa }) => {
             <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
                 <div className="flex-1 min-w-[200px]">
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Obra (CEI/CNO)</label>
-                    <select value={selectedObraId} onChange={e => setSelectedObraId(e.target.value)} className="bento-select w-full">
+                    <select value={selectedObraId} onChange={e => setSelectedObraId(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                         <option value="">Todas as Obras (Consolidado)</option>
                         {obras.map(o => <option key={o.id} value={o.cno}>{o.cno} - {o.nome}</option>)}
                     </select>
                 </div>
                 <div className="w-24">
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Ano</label>
-                    <select value={ano} onChange={e => setAno(e.target.value)} className="bento-select w-full">
+                    <select value={ano} onChange={e => setAno(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                         {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
                 <div className="w-24">
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Mês</label>
-                    <select value={mes} onChange={e => setMes(e.target.value)} className="bento-select w-full">
+                    <select value={mes} onChange={e => setMes(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                         {Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0')).map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                 </div>
-                <button onClick={fetchSero} disabled={loading} className="bento-button flex items-center gap-2 border-[var(--v-accent-2)] text-[var(--v-accent-2)] hover:bg-[var(--v-accent-2)] hover:text-black">
+                <button onClick={fetchSero} disabled={loading} className="flex items-center gap-2 bg-[var(--v-accent-2)]/10 border border-[var(--v-accent-2)]/30 text-[var(--v-accent-2)] hover:bg-[var(--v-accent-2)] hover:text-black transition-all font-black text-[10px] tracking-widest uppercase rounded px-6 py-2 h-[34px]">
                     {loading ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14}/>} Processar Auditoria INSS
                 </button>
             </div>
