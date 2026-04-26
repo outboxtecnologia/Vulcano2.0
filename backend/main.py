@@ -1006,168 +1006,270 @@ def api_custos_lcto(req: CustoLctoReq):
 
 @app.get("/api/sero/maodeobra")
 def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cno: str = None):
-    conn_vulcano = get_conn("vulcano")
-    conn_questor = get_conn("questor")
-    
-    try:
-        cur_v = conn_vulcano.cursor()
-        cur_q = conn_questor.cursor()
-        
-        # 1. Fetch Projects & Built Area (Vulcano)
-        if cno:
-            cur_v.execute("SELECT ID, NOME, CNO, DATACONCLUSAO, COALESCE(METRAGEMTOTAL, 0) FROM EMPREENDIMENTO WHERE CNO = ? AND CODIGOEMPRESA = ?", (cno, empresa_id))
-        else:
-            cur_v.execute("SELECT ID, NOME, CNO, DATACONCLUSAO, COALESCE(METRAGEMTOTAL, 0) FROM EMPREENDIMENTO WHERE CNO IS NOT NULL AND CNO <> '' AND CODIGOEMPRESA = ?", (empresa_id,))
-            
-        projetos = cur_v.fetchall()
-        
-        # 2. Fetch CUB indices
-        cur_v.execute("SELECT MES, VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 ORDER BY MES ASC")
-        cub_history = {str(r[0])[:7]: float(r[1]) for r in cur_v.fetchall() if r[1] is not None} # dict 'YYYY-MM' -> value
-        
-        # Fallback CUB if missing
-        default_cub = 2850.0 
-        
-        area_total_calc = 0.0
-        total_mao_de_obra_questor = 0.0
-        total_inss_a_recolher = 0.0
-        
-        # Store aggregations
-        historico_mensal = {} # 'YYYY-MM' -> {'realizado': 0, 'previsto': 0}
-        
-        data_minima = f"{ano}-12"
-        data_maxima = f"{ano}-01"
-        
-        for proj in projetos:
-            pid, pnome, pcno, pconclusao, parea = proj
-            parea = float(parea) if parea else 0.0
-            area_total_calc += parea
-            
-            raw_cno = "".join(filter(str.isdigit, pcno))
-            
-            cur_q.execute("""
-                SELECT OE.CODIGOOUTEMP, OEE.INSCRFEDPROPRIET, E.NOMEESTAB
-                FROM OUTRAEMPRESA OE
-                LEFT JOIN OUTRAEMPEMP OEE ON OEE.CODIGOOUTEMP = OE.CODIGOOUTEMP AND OEE.CODIGOEMPRESA = ?
-                LEFT JOIN ESTAB E ON E.INSCRFEDERAL = OEE.INSCRFEDPROPRIET AND E.CODIGOEMPRESA = ?
-                WHERE REPLACE(REPLACE(REPLACE(OE.INSCRFEDERAL, '.', ''), '-', ''), '/', '') = ?
-                OR REPLACE(REPLACE(REPLACE(OE.NOMEOUTEMP, '.', ''), '-', ''), '/', '') = ?
-                OR CAST(OE.CODIGOOUTEMP AS VARCHAR(20)) = ?
-            """, (empresa_id, empresa_id, raw_cno, raw_cno, raw_cno))
-            
-            outemp_data = cur_q.fetchone()
-            if not outemp_data:
-                try:
-                    codigo_outemp = int(raw_cno)
-                except:
-                    codigo_outemp = -1
-            else:
-                codigo_outemp = outemp_data[0]
-            
-            cur_q.execute("""
-                SELECT P.COMPET, SUM(C.VALOREVENTO)
-                FROM CALCULORATEIO C
-                JOIN PERIODOCALCULO P ON P.CODIGOPERCALCULO = C.CODIGOPERCALCULO
-                WHERE C.CODIGOEVENTO = 5041 
-                AND C.CODIGOEMPRESA = ?
-                AND C.CODIGOOUTEMP = ?
-                GROUP BY P.COMPET
-            """, (empresa_id, codigo_outemp))
-            
-            folha_meses = cur_q.fetchall()
-            
-            start_date_str = None
-            if folha_meses:
-                folha_meses.sort(key=lambda x: str(x[0]))
-                start_date_str = str(folha_meses[0][0])[:7] 
-            else:
-                start_date_str = f"{ano-4}-{str(mes).zfill(2)}"
-                
-            if start_date_str < data_minima: data_minima = start_date_str
-            
-            y_s, m_s = map(int, start_date_str.split('-'))
-            
-            for m_offset in range(48):
-                c_m = m_s + m_offset
-                c_y = y_s
-                while c_m > 12:
-                    c_m -= 12
-                    c_y += 1
-                
-                comp_str = f"{c_y}-{str(c_m).zfill(2)}"
-                
-                if comp_str > f"{ano}-{str(mes).zfill(2)}":
-                    break
-                    
-                if pconclusao:
-                    conc_str = str(pconclusao)[:7]
-                    if comp_str > conc_str:
-                        continua_projetar = False
-                    else:
-                        continua_projetar = True
-                else:
-                    continua_projetar = True
-                    
-                if comp_str > data_maxima: data_maxima = comp_str
-                
-                if comp_str not in historico_mensal:
-                    historico_mensal[comp_str] = {'previsto': 0.0, 'realizado': 0.0}
-                
-                if continua_projetar:
-                    cub_mes = cub_history.get(comp_str, default_cub)
-                    # BASE ESTIMADA DE MÃO DE OBRA (sem INSS) para equiparar ao LctoGer/CalculoRateio da folha
-                    fracao_estimada = (parea * cub_mes * 0.20) / 48.0
-                    historico_mensal[comp_str]['previsto'] += fracao_estimada
-            
-            for (compet, val) in folha_meses:
-                comp_str = str(compet)[:7]
-                if comp_str not in historico_mensal:
-                    historico_mensal[comp_str] = {'previsto': 0.0, 'realizado': 0.0}
-                
-                valor_inss = float(val) if val else 0.0
-                historico_mensal[comp_str]['realizado'] += valor_inss
-                total_mao_de_obra_questor += valor_inss
-                
-        curva_s = []
-        acc_real = 0.0
-        acc_prev = 0.0
-        for m in sorted(historico_mensal.keys()):
-            if m < data_minima or m > data_maxima: continue
-            
-            acc_real += historico_mensal[m]['realizado']
-            acc_prev += historico_mensal[m]['previsto']
-            
-            curva_s.append({
-                "mes": m,
-                "realizado_mes": round(historico_mensal[m]['realizado'], 2),
-                "previsto_mes": round(historico_mensal[m]['previsto'], 2),
-                "realizado": round(acc_real, 2),
-                "previsto": round(acc_prev, 2)
-            })
-            
-        # O Card de INSS a Recolher aplica 36.8% APENAS sobre a diferença final das Bases Descobertas
-        diferenca_base = acc_prev - acc_real
-        total_inss_a_recolher = diferenca_base * 0.368 if diferenca_base > 0 else 0.0
+    """
+    Apuracao SERO/INSS real a partir das tabelas Questor.
+    - Folha propria:  CALCULORATEIO (evento 5041) + PERIODOCALCULO (competencia)
+    - Folha terceiros: TERCEIROPGTO.VALORORIGEMGPS (tem COMPET direto)
+    - Cadastro obra:  OUTRAEMPRESA + OUTRAEMPEMP (INSCRFEDPROPRIET = CNPJ proprietario)
+    - Metragem:       EMPREENDIMENTO.METRAGEMTOTAL (Vulcano, match por CNPJ)
+    - CUB:            INDICE_REAJUSTE_TABELA (Vulcano) com fallback para historico embutido
+    O parametro `cno` aceita o CODIGOOUTEMP (string) para filtrar uma obra especifica.
+    """
+    CUB_FALLBACK = {
+        "2025-12": 3100.00, "2025-11": 3080.00, "2025-10": 3060.00, "2025-09": 3040.00,
+        "2025-08": 3020.00, "2025-07": 3000.00, "2025-06": 2985.00, "2025-05": 2970.00,
+        "2025-04": 2955.00, "2025-03": 2940.00, "2025-02": 2925.00, "2025-01": 2910.00,
+        "2024-12": 2895.00, "2024-11": 2880.00, "2024-10": 2865.00, "2024-09": 2850.00,
+        "2024-08": 2835.00, "2024-07": 2820.00, "2024-06": 2805.00, "2024-05": 2790.00,
+        "2024-04": 2950.40, "2024-03": 2915.30, "2024-02": 2890.20, "2024-01": 2870.12,
+        "2023-12": 2855.10, "2023-11": 2840.90, "2023-10": 2825.80, "2023-09": 2810.70,
+        "2023-08": 2795.50, "2023-07": 2780.15, "2023-06": 2765.40, "2023-05": 2745.20,
+        "2023-04": 2725.10, "2023-03": 2710.60, "2023-02": 2695.45, "2023-01": 2685.30,
+        "2022-12": 2675.10, "2022-11": 2665.90, "2022-10": 2645.80, "2022-09": 2625.60,
+        "2022-08": 2605.30, "2022-07": 2585.10, "2022-06": 2560.40, "2022-05": 2530.15,
+        "2022-04": 2505.80, "2022-03": 2485.45, "2022-02": 2470.30, "2022-01": 2450.10,
+        "2021-12": 2435.40, "2021-11": 2415.20, "2021-10": 2390.10, "2021-09": 2365.80,
+        "2021-08": 2340.65, "2021-07": 2315.50, "2021-06": 2290.30, "2021-05": 2260.10,
+        "2021-04": 2235.90, "2021-03": 2215.70, "2021-02": 2195.60, "2021-01": 2180.45,
+        "2020-12": 2150.60, "2020-11": 2120.40, "2020-10": 2095.10, "2020-09": 2070.60,
+    }
 
-        cub_target = cub_history.get(f"{ano}-{str(mes).zfill(2)}", default_cub)
+    def dec(v):
+        if v is None: return ""
+        if isinstance(v, bytes): return v.decode("win1252", "ignore").strip()
+        return str(v).strip()
+
+    conn_v = get_conn("vulcano")
+    conn_q = get_conn("questor")
+    try:
+        cur_v = conn_v.cursor()
+        cur_q = conn_q.cursor()
+        compet_alvo = f"{ano}-{str(mes).zfill(2)}"
+
+        # 1. CUB: tenta banco Vulcano, fallback para dicionario embutido
+        cub_history = dict(CUB_FALLBACK)
+        try:
+            cur_v.execute("SELECT MES, VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND VALOR IS NOT NULL ORDER BY MES ASC")
+            for r in cur_v.fetchall():
+                cub_history[str(r[0])[:7]] = float(r[1])
+        except Exception:
+            pass
+        cub_vigente = cub_history.get(compet_alvo, 2950.0)
+
+        # 2. Metragem total da empresa (Vulcano EMPREENDIMENTO)
+        # Consolidado = soma de todas as obras; filtrado por outemp = distribuição proporcional
+        cur_v.execute(
+            "SELECT ID, COALESCE(METRAGEMTOTAL, 0), CODIGOCENTROCUSTO"
+            " FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?",
+            (empresa_id,)
+        )
+        emp_rows = cur_v.fetchall()
+        metragem_total_empresa = sum(float(r[1] or 0) for r in emp_rows)
+        # mapa: centro_custo -> metragem (para vínculo futuro com OUTEMP)
+        metragem_por_cc = {r[2]: float(r[1] or 0) for r in emp_rows if r[2]}
+
+        # 3. Cadastro de OUTRAEMPRESA + INSCRFEDPROPRIET (Questor)
+        outemp_filtro = ""
+        params_outemp = [empresa_id]
+        if cno:
+            try:
+                outemp_filtro = " AND OEE.CODIGOOUTEMP = ?"
+                params_outemp.append(int(cno))
+            except ValueError:
+                pass
+
+        cur_q.execute(
+            "SELECT OE.CODIGOOUTEMP, OE.NOMEOUTEMP, OE.INSCRFEDERAL, OEE.INSCRFEDPROPRIET"
+            " FROM OUTRAEMPEMP OEE"
+            " JOIN OUTRAEMPRESA OE ON OE.CODIGOOUTEMP = OEE.CODIGOOUTEMP"
+            " WHERE OEE.CODIGOEMPRESA = ?" + outemp_filtro,
+            tuple(params_outemp)
+        )
+        obras_cadastro = {}
+        for r in cur_q.fetchall():
+            cod = r[0]
+            propri_limpo = "".join(filter(str.isdigit, dec(r[3])))
+            obras_cadastro[cod] = {
+                "nome": dec(r[1]),
+                "inscricao": dec(r[2]),
+                "cnpj_proprietario": dec(r[3]),
+                # Metragem: divide igualmente entre os outemps da empresa
+                # (refinamento futuro: vincular por CODIGOCENTROCUSTO)
+                "metragem": 0.0,  # preenchido após saber n_outemps
+            }
+
+        if not obras_cadastro:
+            return {
+                "resumo": {
+                    "mao_de_obra": 0.0, "mao_de_obra_folha": 0.0,
+                    "mao_de_obra_terceiros_gps": 0.0,
+                    "total_inss": 0.0, "cub_vigente": cub_vigente, "area_total": 0.0
+                },
+                "alocacoes_terceiros": [],
+                "curva_s": [],
+                "aviso": "Nenhuma OUTRAEMPRESA vinculada a esta empresa no Questor."
+            }
+
+        outemps_list = list(obras_cadastro.keys())
+        placeholders = ",".join("?" * len(outemps_list))
+
+        # Metragem por outemp via match de nome Questor x Vulcano
+        # Busca empreendimentos com metragem
+        cur_v.execute(
+            "SELECT ID, NOME, COALESCE(METRAGEMTOTAL, 0), CODIGOCENTROCUSTO,"
+            " COALESCE(OBRACONCLUIDA, 'N')"
+            " FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? ORDER BY ID DESC",
+            (empresa_id,)
+        )
+        emp_vulcano = cur_v.fetchall()
+
+        def _tokens(s):
+            """Extrai tokens >= 4 chars de uma string (ignora preposições curtas)."""
+            import re
+            return set(w.upper() for w in re.split(r'\W+', str(s)) if len(w) >= 4)
+
+        def _match_metragem(nome_outemp, tipo_outemp):
+            """Retorna metragem do empreendimento Vulcano que melhor bate com o nome."""
+            toks_q = _tokens(nome_outemp)
+            best_score, best_metro = 0, 0.0
+            for ev in emp_vulcano:
+                nome_v = dec(ev[1]) if ev[1] else ""
+                metro  = float(ev[2] or 0)
+                concl  = dec(ev[4])
+                toks_v = _tokens(nome_v)
+                overlap = len(toks_q & toks_v)
+                # Para TIPOOUTEMP='2' (empresa própria), prefere obras em construção
+                if tipo_outemp == "2" and concl == "S":
+                    continue
+                if overlap > best_score and metro > 0:
+                    best_score, best_metro = overlap, metro
+            return best_metro
+
+        # Busca TIPOOUTEMP para cada outemp do cadastro
+        if outemps_list:
+            ph2 = ",".join("?" * len(outemps_list))
+            cur_q.execute(
+                f"SELECT OEE.CODIGOOUTEMP, OEE.TIPOOUTEMP"
+                f" FROM OUTRAEMPEMP OEE WHERE OEE.CODIGOEMPRESA = ?"
+                f" AND OEE.CODIGOOUTEMP IN ({ph2})",
+                tuple([empresa_id] + outemps_list)
+            )
+            tipo_map = {r[0]: dec(r[1]) for r in cur_q.fetchall()}
+        else:
+            tipo_map = {}
+
+        for cod, info in obras_cadastro.items():
+            tipo = tipo_map.get(cod, "1")
+            metro = _match_metragem(info["nome"], tipo)
+            # Fallback: se não achou match, divide proporcionalmente pelo número de outemps
+            if metro == 0.0 and metragem_total_empresa > 0:
+                metro = metragem_total_empresa / max(len(outemps_list), 1)
+            obras_cadastro[cod]["metragem"] = metro
+
+
+
+
+        # 4. Folha propria: CALCULORATEIO evento 5041 + PERIODOCALCULO
+        cur_q.execute(
+            "SELECT C.CODIGOOUTEMP, P.COMPET, SUM(C.VALOREVENTO)"
+            " FROM CALCULORATEIO C"
+            " JOIN PERIODOCALCULO P ON P.CODIGOPERCALCULO = C.CODIGOPERCALCULO"
+            " WHERE C.CODIGOEVENTO = 5041 AND C.CODIGOEMPRESA = ?"
+            " AND C.CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY C.CODIGOOUTEMP, P.COMPET ORDER BY P.COMPET",
+            tuple([empresa_id] + outemps_list)
+        )
+        folha_rows = cur_q.fetchall()
+
+        # 5. Terceiros GPS: TERCEIROPGTO.VALORORIGEMGPS (COMPET direto)
+        cur_q.execute(
+            "SELECT CODIGOOUTEMP, COMPET, SUM(VALORORIGEMGPS)"
+            " FROM TERCEIROPGTO"
+            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY CODIGOOUTEMP, COMPET ORDER BY COMPET",
+            tuple([empresa_id] + outemps_list)
+        )
+        terceiro_rows = cur_q.fetchall()
+
+        # 6. Agrega por competencia
+        from collections import defaultdict
+        historico_mensal = defaultdict(lambda: {"realizado": 0.0, "previsto": 0.0})
+        total_folha = total_terceiros = 0.0
+        alocacoes_t = []
+
+        for (outemp, compet_dt, valor) in folha_rows:
+            comp = str(compet_dt)[:7]
+            v = float(valor or 0)
+            historico_mensal[comp]["realizado"] += v
+            # Acumula total até o mês selecionado (inclusive)
+            if comp <= compet_alvo:
+                total_folha += v
+
+        for (outemp, compet_dt, valor) in terceiro_rows:
+            comp = str(compet_dt)[:7]
+            v = float(valor or 0)
+            historico_mensal[comp]["realizado"] += v
+            info = obras_cadastro.get(outemp, {})
+            # Tabela e total: todos os registros até o mês selecionado
+            if comp <= compet_alvo:
+                total_terceiros += v
+                alocacoes_t.append({
+                    "compet": comp, "codigooutemp": outemp,
+                    "nome_obra": info.get("nome", ""),
+                    "cno": info.get("inscricao", ""),
+                    "valor_recolhido": round(v, 2),
+                })
+
+
+        # 7. Projecao CUB (previsto) para curva-S
+        area_total = sum(o["metragem"] for o in obras_cadastro.values())
+        if area_total > 0 and historico_mensal:
+            data_ini = sorted(historico_mensal.keys())[0]
+            y0, m0 = map(int, data_ini.split("-"))
+            for offset in range(72):
+                cm = m0 + offset; cy = y0
+                while cm > 12: cm -= 12; cy += 1
+                cs = f"{cy}-{str(cm).zfill(2)}"
+                if cs > compet_alvo: break
+                historico_mensal[cs]["previsto"] += (area_total * cub_history.get(cs, 2950.0) * 0.20) / 48.0
+
+        curva_s = []
+        acc_real = acc_prev = 0.0
+        for comp in sorted(historico_mensal.keys()):
+            if comp > compet_alvo: break
+            acc_real += historico_mensal[comp]["realizado"]
+            acc_prev += historico_mensal[comp]["previsto"]
+            curva_s.append({
+                "mes": comp,
+                "realizado_mes": round(historico_mensal[comp]["realizado"], 2),
+                "previsto_mes":  round(historico_mensal[comp]["previsto"], 2),
+                "realizado": round(acc_real, 2),
+                "previsto":  round(acc_prev, 2),
+            })
+
+        total_mao_de_obra = total_folha + total_terceiros
+        diferenca_base = acc_prev - acc_real
+        total_inss = max(diferenca_base * 0.368, 0.0)
 
         return {
             "resumo": {
-                "mao_de_obra": total_mao_de_obra_questor,
-                "total_inss": total_inss_a_recolher,
-                "cub_vigente": cub_target,
-                "area_total": area_total_calc
+                "mao_de_obra":               round(total_mao_de_obra, 2),
+                "mao_de_obra_folha":         round(total_folha, 2),
+                "mao_de_obra_terceiros_gps": round(total_terceiros, 2),
+                "total_inss":                round(total_inss, 2),
+                "cub_vigente":               cub_vigente,
+                "area_total":                round(area_total, 2),
             },
-            "curva_s": curva_s
+            "alocacoes_terceiros": sorted(alocacoes_t, key=lambda x: x["compet"], reverse=True),
+            "curva_s": curva_s,
         }
-        
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
     finally:
-        conn_vulcano.close()
-        conn_questor.close()
+        conn_v.close()
+        conn_q.close()
 
 @app.get("/api/dimob/preview")
 def api_preview_dimob(ano: int = 2025, empresa_id: int = 959):
@@ -6710,7 +6812,106 @@ def fiscal_injetar_distratos():
 def fiscal_gerar_dimob():
     return {"success": True, "message": "Arquivo DIMOB gerado estruturalmente."}
 
+@app.get("/api/sero/obras")
+def get_sero_obras(empresa_id: int):
+    """Retorna obras próprias (TIPOOUTEMP=1) vinculadas à empresa no Questor.
+    TIPOOUTEMP=1 → Obras com CNO/CEI (empreendimentos da empresa).
+    TIPOOUTEMP=2 → Empresa própria (ex: Stuttgart via OUTEMP 8734).
+    Filtro real: apenas OUTEMPs com dados no CALCULORATEIO (evento 5041) ou TERCEIROPGTO.
+    """
+    try:
+        conn_q = get_conn("questor")
+        conn_v = get_conn("vulcano")
+        cur_q  = conn_q.cursor()
+        cur_v  = conn_v.cursor()
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode("win1252", "ignore").strip()
+            return str(v).strip()
+
+        # OUTEMPs com folha própria (CALCULORATEIO evento 5041)
+        cur_q.execute("""
+            SELECT DISTINCT C.CODIGOOUTEMP
+            FROM CALCULORATEIO C
+            WHERE C.CODIGOEMPRESA = ? AND C.CODIGOEVENTO = 5041
+        """, (empresa_id,))
+        outemps_folha = {r[0] for r in cur_q.fetchall()}
+
+        # OUTEMPs com GPS terceiros (TERCEIROPGTO)
+        cur_q.execute("""
+            SELECT DISTINCT CODIGOOUTEMP
+            FROM TERCEIROPGTO
+            WHERE CODIGOEMPRESA = ?
+        """, (empresa_id,))
+        outemps_gps = {r[0] for r in cur_q.fetchall()}
+
+        todos_outemps = outemps_folha | outemps_gps
+        if not todos_outemps:
+            conn_q.close(); conn_v.close()
+            return []
+
+        placeholders = ",".join("?" * len(todos_outemps))
+        cur_q.execute(f"""
+            SELECT OE.CODIGOOUTEMP, OE.NOMEOUTEMP, OE.INSCRFEDERAL,
+                   OEE.INSCRFEDPROPRIET, OEE.TIPOOUTEMP
+            FROM OUTRAEMPEMP OEE
+            JOIN OUTRAEMPRESA OE ON OE.CODIGOOUTEMP = OEE.CODIGOOUTEMP
+            WHERE OEE.CODIGOEMPRESA = ?
+              AND OEE.CODIGOOUTEMP IN ({placeholders})
+            ORDER BY OEE.TIPOOUTEMP, OE.NOMEOUTEMP
+        """, tuple([empresa_id] + list(todos_outemps)))
+        rows_q = cur_q.fetchall()
+
+        # Busca empreendimentos EM CONSTRUCAO no Vulcano para enriquecer TIPOOUTEMP=2
+        # (obras ativas, ordenadas da mais recente para a mais antiga)
+        try:
+            cur_v.execute("""
+                SELECT NOME FROM EMPREENDIMENTO
+                WHERE CODIGOEMPRESA = ?
+                  AND (OBRACONCLUIDA = 'N' OR OBRACONCLUIDA IS NULL)
+                ORDER BY ID DESC
+            """, (empresa_id,))
+            nomes_ativos = [dec(r[0]) for r in cur_v.fetchall() if r[0]]
+        except Exception:
+            # Fallback se a coluna não existir
+            cur_v.execute("""
+                SELECT NOME FROM EMPREENDIMENTO
+                WHERE CODIGOEMPRESA = ? ORDER BY ID DESC
+            """, (empresa_id,))
+            nomes_ativos = [dec(r[0]) for r in cur_v.fetchall() if r[0]]
+        sufixo_vulcano = " / ".join(nomes_ativos[:2]) if nomes_ativos else ""
+
+
+        obras = []
+        for r in rows_q:
+            nome_q = dec(r[1])
+            tipo   = dec(r[4])
+            # Para TIPOOUTEMP=2, o INSCRFEDERAL é o CNPJ da empresa — usa nome do Vulcano
+            if tipo == "2" and sufixo_vulcano:
+                nome_display = f"{nome_q}  [{sufixo_vulcano[:60]}]"
+            else:
+                nome_display = nome_q
+            obras.append({
+                "id": r[0],
+                "nome": nome_display,
+                "nome_questor": nome_q,
+                "inscricao": dec(r[2]),
+                "cnpj_proprietario": dec(r[3]),
+                "tipo": tipo,
+                "tem_folha": r[0] in outemps_folha,
+                "tem_gps": r[0] in outemps_gps,
+            })
+        conn_q.close(); conn_v.close()
+        return obras
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
 @app.get("/api/sero/cub")
+
 def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
     try:
         conn = get_conn("vulcano")

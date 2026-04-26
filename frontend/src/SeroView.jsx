@@ -10,8 +10,8 @@ const formatCurrency = (val) => {
 };
 
 export const SeroView = ({ selectedEmpresa }) => {
-    const [ano, setAno] = useState(new Date().getFullYear().toString());
-    const [mes, setMes] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
+    const [ano, setAno] = useState((new Date().getFullYear() - (new Date().getMonth() < 3 ? 1 : 0)).toString());
+    const [mes, setMes] = useState(new Date().getMonth() < 3 ? '12' : (new Date().getMonth()).toString().padStart(2, '0'));
     const [seroData, setSeroData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -20,42 +20,59 @@ export const SeroView = ({ selectedEmpresa }) => {
 
     useEffect(() => {
         if (!selectedEmpresa) return;
-        fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
-           .then(res => res.json())
-           .then(data => setObras(Array.isArray(data) ? data : []))
-           .catch(console.error);
+        console.log('[SeroView] Carregando obras para empresa:', selectedEmpresa);
+        fetch(`${API_BASE}/api/sero/obras?empresa_id=${selectedEmpresa}`, { cache: 'no-cache' })
+           .then(res => {
+               const ct = res.headers.get('content-type') || '';
+               if (!ct.includes('application/json')) {
+                   console.error('[SeroView] Obras endpoint retornou não-JSON:', res.status, ct);
+                   return [];
+               }
+               return res.json();
+           })
+           .then(data => {
+               const lista = Array.isArray(data) ? data : [];
+               console.log('[SeroView] Obras carregadas:', lista.length);
+               setObras(lista);
+           })
+           .catch(err => console.error('[SeroView] Erro obras:', err));
     }, [selectedEmpresa]);
 
+
     const fetchSero = async () => {
-        if (!selectedEmpresa || !ano || !mes) return;
+        if (!selectedEmpresa || !ano || !mes) {
+            console.warn('[SeroView] fetchSero bloqueado:', { selectedEmpresa, ano, mes });
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
-            const endpoint = selectedObraId ? 
-                 `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}&cno=${selectedObraId}` : 
-                 `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`;
+            const endpoint = selectedObraId 
+                ? `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}&cno=${selectedObraId}` 
+                : `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`;
+            console.log('[SeroView] Chamando:', endpoint);
             const res = await fetch(endpoint);
-            if (!res.ok) throw new Error("Apuracao CNO/SERO falhou.");
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`HTTP ${res.status}: ${txt}`);
+            }
             const data = await res.json();
+            console.log('[SeroView] Dados recebidos:', data?.resumo);
             setSeroData(data);
         } catch (err) {
+            console.error('[SeroView] Erro:', err);
             setError(err.message);
-            // Mock data for UI recovery if endpoint is failing due to DB limits
-            setSeroData({
-                resumo: { total_inss: 15420.50, mao_de_obra: 250000.00, cub_vigente: 2950.40 },
-                curva_s: [
-                    { mes: '01', realizado: 5, previsto: 6 },
-                    { mes: '02', realizado: 10, previsto: 12 },
-                    { mes: '03', realizado: 18, previsto: 18 }
-                ],
-                detalhamento: [
-                    { cno: '12345678901', obra: 'Edíficio Nexus', mao_de_obra: 120000, inss_recolhido: 10500 }
-                ]
-            });
+            setSeroData(null);
         } finally {
             setLoading(false);
         }
     };
+
+    // Auto-dispara quando empresa/obra/ano/mes mudam
+    useEffect(() => {
+        if (selectedEmpresa && ano && mes) fetchSero();
+    }, [selectedEmpresa, selectedObraId, ano, mes]);
+
 
     return (
         <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
@@ -74,13 +91,17 @@ export const SeroView = ({ selectedEmpresa }) => {
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Obra (CEI/CNO)</label>
                     <select value={selectedObraId} onChange={e => setSelectedObraId(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                         <option value="">Todas as Obras (Consolidado)</option>
-                        {obras.map(o => <option key={o.id} value={o.cno || o.id}>{o.cno ? `${o.cno} - ${o.nome}` : o.nome}</option>)}
+                        {obras.map(o => (
+                            <option key={o.id} value={String(o.id)}>
+                                {o.inscricao ? `${o.inscricao} — ${o.nome}` : o.nome}
+                            </option>
+                        ))}
                     </select>
                 </div>
                 <div className="w-24">
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Ano</label>
                     <select value={ano} onChange={e => setAno(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
-                        {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+                        {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={String(y)}>{y}</option>)}
                     </select>
                 </div>
                 <div className="w-24">
