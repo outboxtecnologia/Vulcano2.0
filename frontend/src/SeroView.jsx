@@ -22,7 +22,7 @@ export const SeroView = ({ selectedEmpresa }) => {
         if (!selectedEmpresa) return;
         fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
            .then(res => res.json())
-           .then(data => setObras(data.filter(o => o.cno)))
+           .then(data => setObras(Array.isArray(data) ? data : []))
            .catch(console.error);
     }, [selectedEmpresa]);
 
@@ -74,7 +74,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                     <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Obra (CEI/CNO)</label>
                     <select value={selectedObraId} onChange={e => setSelectedObraId(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                         <option value="">Todas as Obras (Consolidado)</option>
-                        {obras.map(o => <option key={o.id} value={o.cno}>{o.cno} - {o.nome}</option>)}
+                        {obras.map(o => <option key={o.id} value={o.cno || o.id}>{o.cno ? `${o.cno} - ${o.nome}` : o.nome}</option>)}
                     </select>
                 </div>
                 <div className="w-24">

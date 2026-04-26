@@ -2996,17 +2996,43 @@ def get_vulcano_empreendimentos(empresa_id: int):
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        query = """SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO, CNO, 
-                   CONTACAIXA, CONTACLI, CODIGOCENTROCUSTO, CONTAESTAND, CONTAESTCON,
-                   CONTADESPESA, CONTAREC, CONTAVARIACAO, CONTALUCROACUM,
-                   CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI,
-                   ENDERECO, CONTADEVOLUCAO, CODIGO_HIST_ESTORNO_SALDO, CONTAADICLI, OBRACONCLUIDA,
-                   CEP, SIGLAESTADO, CODIGOMUNIC, CODIGOESTAB, CODIGOFILIAL, CODIGOMATRIZ,
-                   CONTACUSTO, CONTA_ESTORNO_DEVOLUCAO,
-                   DATAINICIORET, ALIQRET, CODIGOIMPOSTO, VARIACAOIMPOSTO, TRIBUTARNORMALAPOSCONCLUSAO,
-                   AJUSTEFINALPOC, REAJUSTAR_PELO_CUB, ADQUIRIDO_TERCEIROS, SEM_CUSTOS, CONSIDERAR_POC_RECEITA,
-                   CODIGOHISTADIANTAMENTO, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CODIGO_HIST_ESTORNO_CUSTO
-                   FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?"""
+        # Detecta colunas reais da tabela para montar query defensiva
+        cur.execute("""
+            SELECT TRIM(RDB$FIELD_NAME)
+            FROM RDB$RELATION_FIELDS
+            WHERE RDB$RELATION_NAME = 'EMPREENDIMENTO'
+        """)
+        existing_cols = {r[0] for r in cur.fetchall()}
+
+        def col_or(name, default='NULL'):
+            return name if name in existing_cols else f"{default} AS {name}"
+
+        query = f"""SELECT
+            ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO,
+            {col_or('CNO', 'NULL')},
+            {col_or('CONTACAIXA', '0')}, {col_or('CONTACLI', '0')},
+            {col_or('CODIGOCENTROCUSTO', '0')}, {col_or('CONTAESTAND', '0')},
+            {col_or('CONTAESTCON', '0')}, {col_or('CONTADESPESA', '0')},
+            {col_or('CONTAREC', '0')}, {col_or('CONTAVARIACAO', '0')},
+            {col_or('CONTALUCROACUM', '0')},
+            {col_or('CODIGOHISTVENDA', '0')}, {col_or('CODIGOHISTRECEBIMENTO', '0')},
+            {col_or('CODIGOHISTVARIACAO', '0')}, {col_or('CODIGOHISTBAIXAADI', '0')},
+            {col_or('ENDERECO', "''" )}, {col_or('CONTADEVOLUCAO', '0')},
+            {col_or('CODIGO_HIST_ESTORNO_SALDO', '0')}, {col_or('CONTAADICLI', '0')},
+            {col_or('OBRACONCLUIDA', "'N'")},
+            {col_or('CEP', "''")}, {col_or('SIGLAESTADO', "''")},
+            {col_or('CODIGOMUNIC', "''")}, {col_or('CODIGOESTAB', "''")},
+            {col_or('CODIGOFILIAL', "''")}, {col_or('CODIGOMATRIZ', "''")},
+            {col_or('CONTACUSTO', '0')}, {col_or('CONTA_ESTORNO_DEVOLUCAO', '0')},
+            {col_or('DATAINICIORET', 'NULL')}, {col_or('ALIQRET', '0')},
+            {col_or('CODIGOIMPOSTO', '0')}, {col_or('VARIACAOIMPOSTO', '0')},
+            {col_or('TRIBUTARNORMALAPOSCONCLUSAO', "'N'")},
+            {col_or('AJUSTEFINALPOC', "'N'")}, {col_or('REAJUSTAR_PELO_CUB', "'N'")},
+            {col_or('ADQUIRIDO_TERCEIROS', "'N'")}, {col_or('SEM_CUSTOS', "'N'")},
+            {col_or('CONSIDERAR_POC_RECEITA', "'N'")},
+            {col_or('CODIGOHISTADIANTAMENTO', '0')}, {col_or('CODIGOHISTAPRCUSTO', '0')},
+            {col_or('CODIGOHISTDESPESA', '0')}, {col_or('CODIGO_HIST_ESTORNO_CUSTO', '0')}
+            FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?"""
         cur.execute(query, (empresa_id,))
         
         def dec(v):
