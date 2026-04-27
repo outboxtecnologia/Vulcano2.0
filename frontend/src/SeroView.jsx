@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler } from 'lucide-react';
+import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler, UploadCloud } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -56,6 +56,8 @@ export const SeroView = ({ selectedEmpresa }) => {
     const [error, setError] = useState(null);
     const [obras, setObras] = useState([]);
     const [selectedObraId, setSelectedObraId] = useState('');
+    const [importingPdf, setImportingPdf] = useState(false);
+    const [pdfData, setPdfData] = useState(null);
 
     useEffect(() => {
         if (!selectedEmpresa) return;
@@ -82,6 +84,35 @@ export const SeroView = ({ selectedEmpresa }) => {
         } catch (err) {
             setError(err.message); setSeroData(null);
         } finally { setLoading(false); }
+    };
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportingPdf(true);
+        setError(null);
+        setPdfData(null);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            const res = await fetch(`${API_BASE}/api/sero/importar-pdf`, {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) {
+                const t = await res.text();
+                throw new Error(`HTTP ${res.status}: ${t}`);
+            }
+            const data = await res.json();
+            setPdfData(data);
+        } catch (err) {
+            setError(`Erro ao ler PDF: ${err.message}`);
+        } finally {
+            setImportingPdf(false);
+            e.target.value = ''; // reseta input
+        }
     };
 
     useEffect(() => {
@@ -184,6 +215,26 @@ export const SeroView = ({ selectedEmpresa }) => {
                         : <ShieldCheck size={12} />}
                     {loading ? 'Processando...' : 'Apurar INSS'}
                 </button>
+
+                {/* Botão Upload PDF */}
+                <div className="relative">
+                    <input 
+                        type="file" 
+                        accept="application/pdf" 
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                        disabled={importingPdf}
+                    />
+                    <button
+                        disabled={importingPdf}
+                        className="flex items-center gap-2 bg-[#222]/50 border border-[#333] text-[#aaa] hover:bg-[#333] hover:text-white transition-all duration-200 font-black text-[9px] tracking-[0.2em] uppercase rounded-lg px-5 py-2 h-[34px] disabled:opacity-40"
+                    >
+                        {importingPdf 
+                            ? <RefreshCw size={12} className="animate-spin" /> 
+                            : <UploadCloud size={12} />}
+                        {importingPdf ? 'Lendo PDF...' : 'Importar PDF SERO'}
+                    </button>
+                </div>
 
                 {/* Competência ativa */}
                 <div className="ml-auto text-right hidden sm:block">
@@ -307,45 +358,62 @@ export const SeroView = ({ selectedEmpresa }) => {
                     </div>
 
                     {/* ── Tabela Terceiros GPS ── */}
-                    {seroData.alocacoes_terceiros?.length > 0 && (
-                        <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
+                    {(seroData.alocacoes_terceiros?.length > 0 || pdfData?.length > 0) && (
+                        <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden mt-6">
                             <div className="flex items-center justify-between px-5 py-3 border-b border-[#161616]">
                                 <div className="flex items-center gap-2">
                                     <div className="w-1.5 h-4 rounded-full bg-[#34d399]" />
                                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#34d399]">
-                                        Terceiros GPS
+                                        {pdfData ? 'Terceiros SERO (Fonte: PDF)' : 'Terceiros GPS (Questor)'}
                                     </h4>
                                     <span className="text-[9px] text-[#444] font-mono">
-                                        {seroData.alocacoes_terceiros.length} registros
+                                        {pdfData ? pdfData.length : seroData.alocacoes_terceiros.length} registros
                                     </span>
                                 </div>
-                                <span className="text-[9px] text-[#555] uppercase tracking-widest">TERCEIROPGTO · VALORORIGEMGPS</span>
+                                <span className="text-[9px] text-[#555] uppercase tracking-widest">
+                                    {pdfData ? 'DADOS EXTRAÍDOS DO PDF ORIGINAL' : 'TERCEIROPGTO · VALORORIGEMGPS'}
+                                </span>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-[11px]">
                                     <thead>
                                         <tr className="border-b border-[#161616]">
-                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Competência</th>
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
+                                                {pdfData ? 'Competência / Mês' : 'Competência'}
+                                            </th>
                                             <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Tomador / Obra</th>
                                             <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">CNO / CNPJ</th>
                                             <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">GPS Recolhido</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {seroData.alocacoes_terceiros.slice(0, 60).map((t, i) => (
-                                            <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.compet}</td>
-                                                <td className="px-5 py-2 text-[#888] max-w-[260px] truncate">{t.nome_obra}</td>
-                                                <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.cno}</td>
-                                                <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor_recolhido)}</td>
-                                            </tr>
-                                        ))}
+                                        {pdfData ? (
+                                            pdfData.map((t, i) => (
+                                                <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
+                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">Alocação SERO</td>
+                                                    <td className="px-5 py-2 text-white max-w-[260px] truncate">{t.nome}</td>
+                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.cnpj_cpf}</td>
+                                                    <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor)}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            seroData.alocacoes_terceiros.slice(0, 60).map((t, i) => (
+                                                <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
+                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.compet}</td>
+                                                    <td className="px-5 py-2 text-[#888] max-w-[260px] truncate">{t.nome_obra}</td>
+                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.cno}</td>
+                                                    <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor_recolhido)}</td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t border-[#1e1e1e] bg-[#0e0e0e]">
                                             <td colSpan={3} className="px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#444] font-bold">Total GPS</td>
                                             <td className="px-5 py-2.5 text-right font-black text-[#34d399]">
-                                                {fmt(seroData.alocacoes_terceiros.reduce((s, t) => s + (t.valor_recolhido || 0), 0))}
+                                                {pdfData 
+                                                    ? fmt(pdfData.reduce((s, t) => s + (t.valor || 0), 0))
+                                                    : fmt(seroData.alocacoes_terceiros.reduce((s, t) => s + (t.valor_recolhido || 0), 0))}
                                             </td>
                                         </tr>
                                     </tfoot>

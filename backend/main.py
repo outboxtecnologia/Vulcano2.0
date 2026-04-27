@@ -1027,12 +1027,78 @@ def api_custos_lcto(req: CustoLctoReq):
         conn_vulcano.close()
         conn_questor.close()
 
+@app.post("/api/sero/importar-pdf")
+async def api_sero_importar_pdf(file: UploadFile = File(...)):
+    """
+    Importa e processa o PDF do extrato SERO utilizando Vertex AI para extrair 
+    as alocações de empresas terceirizadas.
+    """
+    import io
+    import pdfplumber
+    import asyncio
+    from fastapi import HTTPException
+    
+    _require_gemini_key()
+    
+    try:
+        content = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao ler arquivo: {e}")
+        
+    def _extract_pages(raw: bytes) -> list[str]:
+        result = []
+        max_pages = 20
+        max_chars = 4500
+        with pdfplumber.open(io.BytesIO(raw)) as pdf:
+            for i, page in enumerate(pdf.pages):
+                if i >= max_pages: break
+                extracted = page.extract_text() or page.extract_text(layout=True) or ""
+                if extracted.strip():
+                    result.append(f"--- Página {i + 1} ---\n{extracted[:max_chars]}")
+        return result
+
+    try:
+        chunks = await asyncio.to_thread(_extract_pages, content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao extrair texto do PDF: {e}")
+
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.")
+
+    schema = '{"registros":[{"nome":"","cnpj_cpf":"","valor":0.0}]}'
+    
+    async def process_chunk(chunk_text: str):
+        prompt = f"Extraia as empresas terceirizadas (Mão de Obra / Retenção) listadas neste extrato do SERO. Retorne NOME, CNPJ/CPF e o VALOR da alocação/retenção. Retorne apenas JSON no formato indicado:\n{schema}\n\nTexto:\n{chunk_text}"
+        try:
+            return await _gemini_generate_json_async(prompt)
+        except Exception as e:
+            print(f"Erro no chunk SERO: {e}")
+            return {"registros": []}
+
+    # Dispara páginas em paralelo conforme regra do AGENTS.md
+    tasks = [process_chunk(chunk) for chunk in chunks]
+    results = await asyncio.gather(*tasks)
+
+    # Consolida os registros
+    todas_empresas = []
+    for res in results:
+        regs = res.get("registros", [])
+        for r in regs:
+            # Filtra registros inválidos ou vazios
+            if r.get("nome") and r.get("valor"):
+                todas_empresas.append(r)
+
+    # Ordena por valor decrescente
+    todas_empresas.sort(key=lambda x: float(x.get("valor") or 0), reverse=True)
+    return todas_empresas
+
+
 @app.get("/api/sero/maodeobra")
 def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cno: str = None):
     """
     Apuracao SERO/INSS real a partir das tabelas Questor.
     - Folha propria:  CALCULORATEIO (evento 5041) + PERIODOCALCULO (competencia)
-    - Folha terceiros: TERCEIROPGTO.VALORORIGEMGPS (tem COMPET direto)
+    - Folha terceiros: TERCEIROPGTO.VALORORIGEMGPS ou TERCEIROPGTOSERVICO.VALOR (tem COMPET direto)
     - Cadastro obra:  OUTRAEMPRESA + OUTRAEMPEMP (INSCRFEDPROPRIET = CNPJ proprietario)
     - Metragem:       EMPREENDIMENTO.METRAGEMTOTAL (Vulcano, match por CNPJ)
     - CUB:            INDICE_REAJUSTE_TABELA (Vulcano) com fallback para historico embutido
@@ -1223,12 +1289,16 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
         )
         folha_rows = cur_q.fetchall()
 
-        # 5. Terceiros GPS: TERCEIROPGTO.VALORORIGEMGPS (COMPET direto)
+        # 5. Terceiros GPS: TERCEIROPGTO.VALORORIGEMGPS ou TERCEIROPGTOSERVICO.VALOR (COMPET direto)
         cur_q.execute(
-            "SELECT CODIGOOUTEMP, COMPET, SUM(VALORORIGEMGPS)"
-            " FROM TERCEIROPGTO"
-            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
-            " GROUP BY CODIGOOUTEMP, COMPET",
+            "SELECT T.CODIGOOUTEMP, T.COMPET, SUM(COALESCE("
+            "   (SELECT SUM(S.VALOR) FROM TERCEIROPGTOSERVICO S "
+            "    WHERE S.CODIGOEMPRESA = T.CODIGOEMPRESA AND S.CODIGOTERC = T.CODIGOTERC AND S.COMPET = T.COMPET AND S.SEQ = T.SEQ),"
+            "   T.VALORORIGEMGPS"
+            "))"
+            " FROM TERCEIROPGTO T"
+            " WHERE T.CODIGOEMPRESA = ? AND T.CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY T.CODIGOOUTEMP, T.COMPET",
             tuple([empresa_id] + outemps_list)
         )
         terceiro_rows = cur_q.fetchall()

@@ -949,7 +949,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const [clienteFilter, setClienteFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('aberto');
   const [showConferencia, setShowConferencia] = useState(false);
   const [baixaModal, setBaixaModal] = useState({ open: false, parcela: null, valor: 0, data: '', acrescimos: 0, descontos: 0 });
   const [syncModal, setSyncModal] = useState({ open: false, loading: false, preview: null, error: null, dataInicio: '2022-01-01' });
@@ -994,22 +994,25 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
     return true;
   };
 
-  const filtered = filteredBase.filter(r =>
-    inDateRange(r.vencimento_iso || r.data) &&
+  const filtered = filteredBase.filter(r => {
+    const isAberto = !r.total || r.total <= 0;
+    const passStatus = statusFilter === 'todos' ? true : (statusFilter === 'aberto' ? isAberto : !isAberto);
+    return inDateRange(r.vencimento_iso || r.data) &&
     (!unidadeFilter || r.descricao_venda === unidadeFilter) &&
-    (!clienteFilter || r.cliente === clienteFilter)
-  );
+    (!clienteFilter || r.cliente === clienteFilter) &&
+    passStatus;
+  });
 
   useEffect(() => {
     setUnidadeFilter(''); setClienteFilter('');
-    setDateFrom(''); setDateTo('');
+    setDateFrom(''); setDateTo(''); setStatusFilter('aberto');
     setCurrentPage(1); // Reset pagination on master filter change
   }, [empreendimentoFilter]);
   
   // When sub-filters change, reset page
   useEffect(() => {
      setCurrentPage(1);
-  }, [unidadeFilter, clienteFilter, dateFrom, dateTo]);
+  }, [unidadeFilter, clienteFilter, dateFrom, dateTo, statusFilter]);
 
   const totalPago = filtered.reduce((acc, curr) => acc + ((curr.total > 0) ? curr.total : 0), 0);
   const totalParcela = filtered.reduce((acc, curr) => acc + (curr.parcela || 0), 0);
@@ -1087,32 +1090,8 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           }} className="bento-button flex items-center gap-2">
             <Download size={16}/> Baixar CSV
           </button>
-          <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity flex items-center gap-2">
-            <Plus size={16}/> Lançar Manual
-          </button>
         </div>
       </div>
-
-      {showForm && (
-        <div className="magma-card border border-[var(--v-accent)]/30 rounded-[var(--v-radius)] p-5 animate-in slide-in-from-top-4">
-          <h3 className="text-xs uppercase tracking-widest text-[var(--v-accent)] font-bold mb-4">Novo Recebimento (Bypass Caixa)</h3>
-          <form className="flex flex-wrap gap-4 items-end" onSubmit={async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            try {
-              await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(fd)) });
-              alert("Recebimento cadastrado!"); e.target.reset(); setShowForm(false);
-            } catch (err) { alert("Erro ao cadastrar."); }
-          }}>
-            <input type="hidden" name="empresa_id" value={selectedEmpresa} />
-            <div className="w-24"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">ID Venda</label><input name="id_venda" type="number" required className="bento-input" /></div>
-            <div className="w-28"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Parcela</label><input name="parcela" type="number" required className="bento-input" /></div>
-            <div className="w-32"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Valor Venda</label><input name="valor" type="number" step="0.01" required className="bento-input" /></div>
-            <div className="w-40"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Data Pagto</label><input name="data" type="date" required className="bento-input" /></div>
-            <button type="submit" className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-[var(--v-radius)] hover:opacity-90">Confirmar</button>
-          </form>
-        </div>
-      )}
 
       {/* STITCH MASTER-DETAIL LAYOUT */}
       <div className="flex gap-6 h-[calc(100vh-280px)] overflow-hidden">
@@ -1171,6 +1150,13 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
             <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">De</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
             <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Até</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
+            <div className="w-40"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Status</label>
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
+                 <option value="todos">TODAS AS PARCELAS</option>
+                 <option value="aberto">EM ABERTO</option>
+                 <option value="baixado">BAIXADAS</option>
+              </select>
+            </div>
             <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Unidade</label>
               <select value={unidadeFilter} onChange={e => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                  <option value="">TODAS AS UNIDADES</option>
@@ -1183,7 +1169,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                  {uniqueClientes.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <button onClick={() => { setDateFrom(''); setDateTo(''); setUnidadeFilter(''); setClienteFilter(''); }} className="bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30] hover:text-white border border-[#ff3b30]/30 transition-all font-black text-[10px] tracking-widest uppercase rounded px-6 py-2 h-[32px]">LIMPAR</button>
+            <button onClick={() => { setDateFrom(''); setDateTo(''); setStatusFilter('aberto'); setUnidadeFilter(''); setClienteFilter(''); }} className="bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30] hover:text-white border border-[#ff3b30]/30 transition-all font-black text-[10px] tracking-widest uppercase rounded px-6 py-2 h-[32px]">LIMPAR</button>
           </div>
 
           {/* TABLE DATA GRID (PAGINATED) */}
