@@ -415,6 +415,29 @@ from pydantic import BaseModel
 class RawQuery(BaseModel):
     query: str
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/api/auth/login")
+def api_auth_login(payload: LoginRequest):
+    conn = get_conn("vulcano")
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT FIRST 1 ID, USUARIOID, NOMECOMPLETO, TIPOPERMISSAO, EMAIL 
+            FROM USUARIO 
+            WHERE (UPPER(EMAIL) = UPPER(?) OR UPPER(USUARIOID) = UPPER(?)) 
+              AND SENHA = ? 
+              AND ATIVO = 'T'
+        """, (payload.email, payload.email, payload.password))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
+        return {"success": True, "user": {"id": row[0], "usuarioId": row[1], "nome": row[2], "tipoPermissao": row[3], "email": row[4]}}
+    finally:
+        conn.close()
+
 @app.post("/api/explorer/query")
 def api_explorer_query(payload: RawQuery):
     conn = get_conn("vulcano")

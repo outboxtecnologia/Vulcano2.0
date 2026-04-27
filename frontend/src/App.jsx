@@ -12,6 +12,7 @@ import { ContabilizacoesView } from './ContabilizacoesView';
 import { AuditoriaERPView } from './AuditoriaERPView';
 import { SindicatosView } from './SindicatosView';
 import { JanitorView } from './JanitorView';
+import LoginView from './LoginView';
 import './index.css';
 import {
   Building2, Database, TableProperties, Fingerprint, PieChart, Construction,
@@ -43,6 +44,9 @@ const API_BASE = "http://127.0.0.1:8000";
 
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+
   const [selectedEmpresa, setSelectedEmpresa] = useState('');
   const [empresaConfirmed, setEmpresaConfirmed] = useState(false);
   const [globalEmpresas, setGlobalEmpresas] = useState([]);
@@ -79,6 +83,10 @@ export default function App() {
 
 
   const handleRunSQL = () => alert('SQL Execution triggered for environment: ' + selectedEmpresa);
+
+  if (!isAuthenticated) {
+    return <LoginView onLogin={(userData) => { setUser(userData); setIsAuthenticated(true); }} />;
+  }
 
   if (!empresaConfirmed) {
     const filteredEmpresas = globalEmpresas.filter(e => 
