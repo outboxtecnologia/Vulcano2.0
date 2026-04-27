@@ -1,0 +1,21 @@
+{
+	"nodes":[
+		{"id":"n1","type":"file","file":"docs/MOCs/Deep_Dives/Fluxo_Auditoria/1_Visao_Geral.md","x":-500,"y":-150,"width":400,"height":470,"color":"4"},
+		{"id":"n3","type":"file","file":"docs/MOCs/Deep_Dives/Fluxo_Auditoria/3_Pandas_Vetores.md","x":500,"y":-150,"width":400,"height":400,"color":"2"},
+		{"id":"n4","type":"file","file":"docs/MOCs/Deep_Dives/Fluxo_Auditoria/4_RapidFuzz_Heuristica.md","x":1000,"y":-1380,"width":400,"height":1430,"color":"6"},
+		{"id":"n5","type":"file","file":"docs/MOCs/Deep_Dives/Fluxo_Auditoria/5_Splink_DuckDB.md","x":1000,"y":100,"width":400,"height":1360,"color":"6"},
+		{"id":"n2","type":"file","file":"docs/MOCs/Deep_Dives/Fluxo_Auditoria/2_Vertex_AI.md","x":-20,"y":-175,"width":400,"height":1875,"color":"1"},
+		{"id":"n6","type":"file","file":"docs/MOCs/Deep_Dives/Fluxo_Auditoria/6_LangGraph_Mentes.md","x":2040,"y":-175,"width":580,"height":1055,"color":"3"},
+		{"id":"t1","type":"text","text":"## Recebimento Auditado ✅\nLançado no Vulcano via SQLite/Firebird e reflete puramente as Colunas Comparativas no ERP Auditoria (4910 vs 230).","x":2040,"y":980,"width":400,"height":200,"color":"5"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"n1","fromSide":"right","toNode":"n2","toSide":"left"},
+		{"id":"e2","fromNode":"n2","fromSide":"right","toNode":"n3","toSide":"left"},
+		{"id":"e3","fromNode":"n3","fromSide":"right","toNode":"n4","toSide":"left"},
+		{"id":"e4","fromNode":"n3","fromSide":"right","toNode":"n5","toSide":"left"},
+		{"id":"e5","fromNode":"n4","fromSide":"right","toNode":"n6","toSide":"left","label":"No Match (Órfão)"},
+		{"id":"e6","fromNode":"n5","fromSide":"right","toNode":"n6","toSide":"left","label":"No Match (Órfão)"},
+		{"id":"e7","fromNode":"n4","fromSide":"right","toNode":"t1","toSide":"top","label":"Match Diamante"},
+		{"id":"e8","fromNode":"n5","fromSide":"right","toNode":"t1","toSide":"left","label":"Prob > 99.8%"}
+	]
+}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Layers, RefreshCw, AlertCircle, TrendingUp, ChevronDown, Plus } from 'lucide-react';
 
-const API_BASE = "http://127.0.0.1:6000";
+const API_BASE = "http://127.0.0.1:8000";
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';
@@ -67,19 +67,19 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     </h2>
                     <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Apur. Presumido (Pis 0.65%, Cofins 3%, CSLL 1.08%, IRPJ 1.2% + 10%) vs RET (4%)</p>
                 </div>
-                <div className="flex gap-4 p-3 bg-[var(--v-surface-container)] rounded-sm border border-[var(--v-border)] items-end">
+                <div className="flex gap-4 p-3 bg-[var(--v-surface-container)] rounded-[var(--v-radius)] border border-[var(--v-border)] items-end">
                     <div>
                         <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Competência Inicial</label>
-                        <input type="month" value={dataIni} onChange={e => setDataIni(e.target.value)} className="bento-input min-w-[140px]" />
+                        <input type="month" value={dataIni} onChange={e => setDataIni(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-4)] text-white text-[11px] font-mono px-3 py-1.5 rounded-[var(--v-radius)] outline-none transition-colors dark-calendar" />
                     </div>
                     <div>
                         <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Competência Final</label>
-                        <input type="month" value={dataFim} onChange={e => setDataFim(e.target.value)} className="bento-input min-w-[140px]" />
+                        <input type="month" value={dataFim} onChange={e => setDataFim(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-4)] text-white text-[11px] font-mono px-3 py-1.5 rounded-[var(--v-radius)] outline-none transition-colors dark-calendar" />
                     </div>
                     <div className="flex-1 flex justify-end">
                         <button 
                             onClick={() => setFetchTrigger(prev => prev + 1)}
-                            className="bg-[var(--v-accent-4)] text-black font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-2"
+                            className="bg-[var(--v-accent-4)] text-black font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-[var(--v-radius)] hover:opacity-80 transition-opacity flex items-center gap-2"
                         >
                             <RefreshCw size={14} /> Atualizar Matriz
                         </button>
@@ -96,7 +96,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
             )}
 
             {error && !loading && (
-                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-sm flex items-center gap-3">
+                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
                     <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
                 </div>
             )}
@@ -106,7 +106,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     <div className="grid grid-cols-3 gap-6">
                         <div className="magma-card p-6 flex flex-col justify-center border-l-4 border-l-[var(--v-accent-4)] relative overflow-hidden group">
                             <span className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Base Acum. Faturamento (Soc)</span>
-                            <h4 className="text-3xl font-black text-white mt-2 drop-shadow-lg">{formatCurrency(totalSocAcumulado)}</h4>
+                            <h4 className="text-3xl font-black text-[var(--v-text-bold)] mt-2 drop-shadow-lg">{formatCurrency(totalSocAcumulado)}</h4>
                         </div>
                         <div className="magma-card p-6 flex flex-col justify-center border-l-4 border-l-[var(--v-accent-5)] relative overflow-hidden group">
                             <span className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Total Acum. p/ Recolher (Caixa)</span>
@@ -119,19 +119,19 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         </div>
                     </div>
 
-                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-sm">
+                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-[var(--v-radius)]">
                         <table className="w-full text-left text-[11px] border-collapse">
-                            <thead className="bg-[#111] sticky top-0 border-b border-[var(--v-border)]">
+                            <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
                                 <tr>
-                                    <th className="p-3 tracking-widest text-[#555] uppercase font-bold">Obras / Empreendimentos</th>
-                                    <th className="p-3 tracking-widest text-[#555] uppercase font-bold text-center">Regime</th>
-                                    <th className="p-3 tracking-widest text-white/50 uppercase font-bold text-right">PIS/COFINS</th>
-                                    <th className="p-3 tracking-widest text-white/50 uppercase font-bold text-right">CSLL + IRPJ Base</th>
+                                    <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Obras / Empreendimentos</th>
+                                    <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-center">Regime</th>
+                                    <th className="p-3 tracking-widest text-[var(--v-text-bold)]/50 uppercase font-bold text-right">PIS/COFINS</th>
+                                    <th className="p-3 tracking-widest text-[var(--v-text-bold)]/50 uppercase font-bold text-right">CSLL + IRPJ Base</th>
                                     <th className="p-3 tracking-widest text-[var(--v-accent-5)] uppercase font-bold text-right">Adicional IR (10%)</th>
                                     <th className="p-3 tracking-widest text-[var(--v-accent-3)] uppercase font-bold text-right">RET 4%</th>
                                     <th className="p-3 tracking-widest text-[var(--v-accent-2)] uppercase font-black text-right">TRIB. SOC.</th>
                                     <th className="p-3 tracking-widest text-[var(--v-accent-4)] uppercase font-black text-right">TRIB. FISCAL</th>
-                                    <th className="p-3 tracking-widest text-[#aaa] uppercase font-black text-center">STATUS (IR|CS)</th>
+                                    <th className="p-3 tracking-widest text-[var(--v-text-muted)] uppercase font-black text-center">STATUS (IR|CS)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -150,7 +150,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     const mesFiscal = isFiltered ? meta.tributos_caixa_mes : balFiscal;
                                     
                                     let statusLabel = "-";
-                                    let statusColor = "text-[#888]";
+                                    let statusColor = "text-[var(--v-text-muted)]";
                                     if (statusDiff > 10) {
                                         statusLabel = `DIFERIDO PI (${formatCurrency(statusDiff)})`;
                                         statusColor = "text-[var(--v-accent-6)] bg-[var(--v-accent-6)]/10 px-2 py-0.5 rounded";
@@ -163,16 +163,16 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         <React.Fragment key={idx}>
                                             <tr 
                                                 onClick={() => setExpandedRow(expandedRow === idx ? null : idx)}
-                                                className="border-b border-[#222] hover:bg-[#1a1a1c] transition-colors cursor-pointer"
+                                                className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors cursor-pointer"
                                             >
                                                 <td className="p-3 font-bold text-[var(--v-text)] max-w-xs truncate flex items-center gap-2">
                                                     {expandedRow === idx ? <ChevronDown size={14} /> : <Plus size={14} />} {name}
                                                 </td>
                                                 <td className="p-3 text-center">
-                                                    {isRet ? <span className="bg-[var(--v-accent-3)]/20 text-[var(--v-accent-3)] px-2 py-0.5 rounded text-[9px] uppercase font-black">RET</span> : <span className="bg-[var(--v-text-muted)]/20 text-[#aaa] px-2 py-0.5 rounded text-[9px] uppercase font-black">PRES</span>}
+                                                    {isRet ? <span className="bg-[var(--v-accent-3)]/20 text-[var(--v-accent-3)] px-2 py-0.5 rounded text-[9px] uppercase font-black">RET</span> : <span className="bg-[var(--v-text-muted)]/20 text-[var(--v-text-muted)] px-2 py-0.5 rounded text-[9px] uppercase font-black">PRES</span>}
                                                 </td>
-                                                <td className="p-3 text-right font-mono text-[#888]">{formatCurrency(pisCofins)}</td>
-                                                <td className="p-3 text-right font-mono text-[#888]">{formatCurrency(csllIrpj)}</td>
+                                                <td className="p-3 text-right font-mono text-[var(--v-text-muted)]">{formatCurrency(pisCofins)}</td>
+                                                <td className="p-3 text-right font-mono text-[var(--v-text-muted)]">{formatCurrency(csllIrpj)}</td>
                                                 <td className="p-3 text-right font-mono font-bold text-[var(--v-accent-5)]">{formatCurrency(meta.irpj_adicional)}</td>
                                                 <td className="p-3 text-right font-mono font-bold text-[var(--v-accent-3)]">{formatCurrency(ret)}</td>
                                                 <td className="p-3">
@@ -192,20 +192,20 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                                 </td>
                                             </tr>
                                             {expandedRow === idx && meta.unidades && meta.unidades.length > 0 && (
-                                                <tr className="bg-[#111] border-b border-[#333]">
+                                                <tr className="bg-[var(--v-deep)] border-b border-[var(--v-border)]">
                                                     <td colSpan={9} className="p-4">
-                                                        <div className="overflow-x-auto max-h-[300px] custom-scrollbar border border-[#222]">
+                                                        <div className="overflow-x-auto max-h-[300px] custom-scrollbar border border-[var(--v-border)]">
                                                             <table className="w-full text-left text-[10px]">
-                                                                <thead className="bg-[#1a1a1c] sticky top-0">
-                                                                    <tr className="text-[#888] uppercase tracking-widest font-bold">
-                                                                        <th className="p-2 border-b border-[#222]">Unidade</th>
-                                                                        <th className="p-2 border-b border-[#222]">Comprador</th>
-                                                                        <th className="p-2 border-b border-[#222] text-right">VGV</th>
-                                                                        <th className="p-2 border-b border-[#222] text-right">POC Total</th>
-                                                                        <th className="p-2 border-b border-[#222] text-right">Rec. Caixa</th>
-                                                                        <th className="p-2 border-b border-[#222] text-right">Trib. Soc. ({isFiltered ? 'Mês' : 'Total'})</th>
-                                                                        <th className="p-2 border-b border-[#222] text-right">Trib. Fiscal ({isFiltered ? 'Mês' : 'Total'})</th>
-                                                                        <th className="p-2 border-b border-[#222] text-right">Saldo Dif.</th>
+                                                                <thead className="bg-[var(--v-hover)] sticky top-0">
+                                                                    <tr className="text-[var(--v-text-muted)] uppercase tracking-widest font-bold">
+                                                                        <th className="p-2 border-b border-[var(--v-border)]">Unidade</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)]">Comprador</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">VGV</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">POC Total</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Rec. Caixa</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Trib. Soc. ({isFiltered ? 'Mês' : 'Total'})</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Trib. Fiscal ({isFiltered ? 'Mês' : 'Total'})</th>
+                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Saldo Dif.</th>
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody>
@@ -215,15 +215,15 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                                                          const tSocMes = isFiltered ? u.soc_mes * (meta.irpj_adicional > 0 ? 0.0593 : 0.04) : u.tributos_soc_acumulado; // Approx unit rate
                                                                          const tFisMes = isFiltered ? u.tributos_caixa_mes : u.tributos_caixa_acumulado;
                                                                          return (
-                                                                        <tr key={i} className="border-b border-[#222] hover:bg-[#1f1f22]">
+                                                                        <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[#1f1f22]">
                                                                             <td className="p-2 font-bold">{u.unidade}</td>
                                                                             <td className="p-2 max-w-[200px] truncate">{u.comprador}</td>
                                                                             <td className="p-2 text-right font-mono text-[#aa3333]">{formatCurrency(u.vgv)}</td>
-                                                                            <td className="p-2 text-right font-mono text-[#888]">{(meta.poc || 0).toFixed(2)}%</td>
+                                                                            <td className="p-2 text-right font-mono text-[var(--v-text-muted)]">{(meta.poc || 0).toFixed(2)}%</td>
                                                                             <td className="p-2 text-right font-mono text-[var(--v-accent-3)]">{formatCurrency(cxMes)}</td>
                                                                             <td className="p-2 text-right font-mono text-[var(--v-accent-2)]">{formatCurrency(isFiltered ? u.tributos_soc_mes : u.tributos_soc_acumulado)}</td>
                                                                             <td className="p-2 text-right font-mono text-[var(--v-accent-4)]">{formatCurrency(tFisMes)}</td>
-                                                                            <td className={`p-2 text-right font-mono font-bold ${sDiff > 0 ? 'text-[var(--v-accent-6)]' : 'text-[#888]'}`}>{formatCurrency(sDiff)}</td>
+                                                                            <td className={`p-2 text-right font-mono font-bold ${sDiff > 0 ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-text-muted)]'}`}>{formatCurrency(sDiff)}</td>
                                                                         </tr>
                                                                     )})}
                                                                 </tbody>
@@ -236,24 +236,24 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     );
                                 })}
                                 {Object.keys(data.dashboard_meta || {}).length === 0 && (
-                                    <tr><td colSpan="9" className="p-10 text-center text-[#555] uppercase text-[10px] tracking-widest">Sem base faturada</td></tr>
+                                    <tr><td colSpan="9" className="p-10 text-center text-[var(--v-text-faint)] uppercase text-[10px] tracking-widest">Sem base faturada</td></tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
 
-                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-sm mt-6">
+                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-[var(--v-radius)] mt-6">
                         <div className="p-4 bg-[var(--v-surface-container)] border-b border-[var(--v-border)]">
                             <h3 className="text-xs uppercase font-black tracking-widest text-[var(--v-accent-6)] flex items-center gap-2"><TrendingUp size={14} /> Demonstrativo das Contabilizações (Período)</h3>
                         </div>
                         <div className="overflow-x-auto custom-scrollbar">
                             <table className="w-full text-left text-[11px] border-collapse">
-                                <thead className="bg-[#111] sticky top-0 border-b border-[var(--v-border)]">
+                                <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
                                     <tr>
-                                        <th className="p-3 tracking-widest text-[#555] uppercase font-bold">Obras / Empreendimentos</th>
-                                        <th className="p-3 tracking-widest text-[#555] uppercase font-bold">Venda/Faturamento (Competência)</th>
-                                        <th className="p-3 tracking-widest text-[#555] uppercase font-bold">Recebimento (Caixa)</th>
-                                        <th className="p-3 tracking-widest text-[#555] uppercase font-bold">Provisão Diferimento (Ativo)</th>
+                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Obras / Empreendimentos</th>
+                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Venda/Faturamento (Competência)</th>
+                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Recebimento (Caixa)</th>
+                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Provisão Diferimento (Ativo)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -265,28 +265,28 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         const dif = fat - cx;
 
                                         return (
-                                            <tr key={idx} className="border-b border-[#222] hover:bg-[#1a1a1c] transition-colors">
+                                            <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
                                                 <td className="p-3 font-bold text-[var(--v-text)] truncate">{name}</td>
                                                 <td className="p-3 text-[#aa3333] font-mono text-[10px]">
                                                     D - {ct.CONTACLI || 'CLIENTES'} <br/>
                                                     C - {ct.CONTAREC || 'RECEITA DE VENDAS DRE'} <br/>
-                                                    <span className="font-bold text-white/70">{formatCurrency(fat)}</span>
+                                                    <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(fat)}</span>
                                                 </td>
                                                 <td className="p-3 text-[#33aa33] font-mono text-[10px]">
                                                     D - {ct.CONTACAIXA || 'BANCOS'} <br/>
                                                     C - {ct.CONTACLI || 'CLIENTES'} <br/>
-                                                    <span className="font-bold text-white/70">{formatCurrency(cx)}</span>
+                                                    <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(cx)}</span>
                                                 </td>
                                                 <td className="p-3 text-[#aa88aa] font-mono text-[10px]">
-                                                    D - PROVISÃO P/ TRIBUTOS SOBRE LUCRO <br/>
+                                                    D - PROVISÃƒO P/ TRIBUTOS SOBRE LUCRO <br/>
                                                     C - TRIBUTOS DIFERIDOS (PASSIVO) <br/>
-                                                    <span className="font-bold text-white/70">{formatCurrency(meta.tributos_soc_acumulado - meta.tributos_caixa_acumulado)}</span>
+                                                    <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(meta.tributos_soc_acumulado - meta.tributos_caixa_acumulado)}</span>
                                                 </td>
                                             </tr>
                                         );
                                     })}
                                     {Object.keys(data.dashboard_meta || {}).length === 0 && (
-                                        <tr><td colSpan="4" className="p-10 text-center text-[#555] uppercase text-[10px] tracking-widest">Sem contabilizações processadas no período</td></tr>
+                                        <tr><td colSpan="4" className="p-10 text-center text-[var(--v-text-faint)] uppercase text-[10px] tracking-widest">Sem contabilizações processadas no período</td></tr>
                                     )}
                                 </tbody>
                             </table>

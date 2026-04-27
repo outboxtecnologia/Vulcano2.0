@@ -1,16 +1,13 @@
 import sys
-sys.path.append('backend')
-from main import get_receitas_caixa
-import json
+sys.path.append(r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend")
+from main import get_conn
 
-try:
-    res = get_receitas_caixa(empresa_id=1, data_ini="2025-01-01", data_fim="2025-01-31")
-    d1 = res.get("dashboard_data", [])
-    print("Items with dates:", len(d1))
-    
-    res2 = get_receitas_caixa(empresa_id=1, data_ini=None, data_fim=None)
-    d2 = res2.get("dashboard_data", [])
-    print("Items without dates:", len(d2))
-except Exception as e:
-    import traceback
-    traceback.print_exc()
+conn = get_conn("questor")
+cur = conn.cursor()
+query = "SELECT DATALCTOCTB, VALORLCTOCTB FROM LCTOCTB C WHERE CODIGOEMPRESA = 959 AND (CONTACTBDEB = 4910 OR CONTACTBCRED = 4910) AND EXISTS (SELECT 1 FROM LCTOGER G WHERE G.CODIGOEMPRESA = C.CODIGOEMPRESA AND G.CHAVELCTOCTB = C.CHAVELCTOCTB AND G.CODIGOCENTROCUSTO = 19) ORDER BY DATALCTOCTB DESC"
+
+cur.execute(query)
+rows = cur.fetchall()
+print(f"Total rows for CC=19: {len(rows)}")
+for r in rows[:10]:
+    print(r)

@@ -1,17 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, ShieldCheck, AlertCircle, RefreshCw, Layers } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler } from 'lucide-react';
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 const API_BASE = "http://127.0.0.1:6000";
 
-const formatCurrency = (val) => {
-    if (val === null || val === undefined) return 'R$ 0,00';
+const fmt = (val) => {
+    if (val === null || val === undefined || isNaN(val)) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 };
 
+const fmtM2 = (val) =>
+    Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m²';
+
+// ── Card de KPI ──────────────────────────────────────────────────────────────
+const KpiCard = ({ icon: Icon, label, value, sub, accent = 'var(--v-accent-2)', glow = false, large = false }) => (
+    <div style={{ borderTopColor: accent }} className="relative bg-[#0e0e0e] border border-[#1e1e1e] border-t-2 rounded-xl p-5 flex flex-col gap-1 overflow-hidden group hover:border-[#2e2e2e] transition-all duration-300">
+        {glow && <div style={{ background: accent }} className="absolute inset-0 opacity-[0.04] pointer-events-none rounded-xl" />}
+        <div className="flex items-center gap-2 mb-1">
+            <Icon size={12} style={{ color: accent }} />
+            <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: accent }}>{label}</span>
+        </div>
+        <span style={{ color: glow ? accent : 'var(--v-text-bold)' }}
+              className={`${large ? 'text-2xl' : 'text-xl'} font-black leading-tight ${glow ? 'drop-shadow-[0_0_12px_rgba(255,100,50,0.4)]' : ''}`}>
+            {value}
+        </span>
+        {sub && <span className="text-[9px] text-[#444] mt-0.5">{sub}</span>}
+    </div>
+);
+
+// ── Tooltip customizado ───────────────────────────────────────────────────────
+const ChartTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-[#111] border border-[#2a2a2a] rounded-lg p-3 text-[11px] shadow-xl">
+            <p className="text-[#666] font-mono mb-2 text-[10px]">{label}</p>
+            {payload.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+                    <span className="text-[#888]">{p.name === 'previsto' ? 'Previsto' : 'Realizado'}</span>
+                    <span className="font-black text-white ml-auto pl-4">
+                        {fmt(p.value)}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// ── Componente principal ──────────────────────────────────────────────────────
 export const SeroView = ({ selectedEmpresa }) => {
-    const [ano, setAno] = useState(new Date().getFullYear().toString());
-    const [mes, setMes] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
+    const [ano, setAno] = useState((new Date().getFullYear() - (new Date().getMonth() < 3 ? 1 : 0)).toString());
+    const [mes, setMes] = useState(new Date().getMonth() < 3 ? '12' : (new Date().getMonth()).toString().padStart(2, '0'));
     const [seroData, setSeroData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -20,122 +59,309 @@ export const SeroView = ({ selectedEmpresa }) => {
 
     useEffect(() => {
         if (!selectedEmpresa) return;
-        fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
-           .then(res => res.json())
-           .then(data => setObras(data.filter(o => o.cno)))
-           .catch(console.error);
+        fetch(`${API_BASE}/api/sero/obras?empresa_id=${selectedEmpresa}`, { cache: 'no-cache' })
+            .then(res => {
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) return [];
+                return res.json();
+            })
+            .then(data => setObras(Array.isArray(data) ? data : []))
+            .catch(console.error);
     }, [selectedEmpresa]);
 
     const fetchSero = async () => {
         if (!selectedEmpresa || !ano || !mes) return;
-        setLoading(true);
-        setError(null);
+        setLoading(true); setError(null);
         try {
-            const endpoint = selectedObraId ? 
-                 `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}&cno=${selectedObraId}` : 
-                 `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`;
-            if (!res.ok) throw new Error("Apuracao CNO/SERO falhou.");
-            const data = await res.json();
-            setSeroData(data);
+            const ep = selectedObraId
+                ? `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}&cno=${selectedObraId}`
+                : `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`;
+            const res = await fetch(ep);
+            if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t}`); }
+            setSeroData(await res.json());
         } catch (err) {
-            setError(err.message);
-            // Mock data for UI recovery if endpoint is failing due to DB limits
-            setSeroData({
-                resumo: { total_inss: 15420.50, mao_de_obra: 250000.00, cub_vigente: 2950.40 },
-                curva_s: [
-                    { mes: '01', realizado: 5, previsto: 6 },
-                    { mes: '02', realizado: 10, previsto: 12 },
-                    { mes: '03', realizado: 18, previsto: 18 }
-                ],
-                detalhamento: [
-                    { cno: '12345678901', obra: 'Edíficio Nexus', mao_de_obra: 120000, inss_recolhido: 10500 }
-                ]
-            });
-        } finally {
-            setLoading(false);
-        }
+            setError(err.message); setSeroData(null);
+        } finally { setLoading(false); }
     };
 
+    useEffect(() => {
+        if (selectedEmpresa && ano && mes) fetchSero();
+    }, [selectedEmpresa, selectedObraId, ano, mes]);
+
+    const r = seroData?.resumo || {};
+    const obraAtual = obras.find(o => String(o.id) === String(selectedObraId));
+
     return (
-        <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
-            <div className="flex justify-between items-end">
+        <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 pt-4 pb-10">
+
+            {/* ── Cabeçalho ── */}
+            <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                    <h2 className="text-3xl font-black tracking-tighter uppercase mb-1 text-[var(--v-text-bold)] flex items-center gap-3">
-                        <Activity className="text-[var(--v-accent-2)]" size={32}/> 
-                        Painel SERO / INSS
-                    </h2>
-                    <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Auditoria de Mão de Obra e CNO</p>
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="w-8 h-8 rounded-lg bg-[var(--v-accent-2)]/10 border border-[var(--v-accent-2)]/20 flex items-center justify-center">
+                            <Activity size={16} className="text-[var(--v-accent-2)]" />
+                        </div>
+                        <h2 className="text-2xl font-black tracking-tighter uppercase text-[var(--v-text-bold)]">
+                            Painel SERO / INSS
+                        </h2>
+                    </div>
+                    <p className="text-[10px] text-[#444] uppercase tracking-[0.25em] ml-11">
+                        Auditoria de Mão de Obra · CNO · GPS
+                    </p>
                 </div>
+
+                {/* Badge da obra selecionada */}
+                {obraAtual && (
+                    <div className="flex items-center gap-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2">
+                        <HardHat size={12} className="text-[var(--v-accent-2)]" />
+                        <span className="text-[10px] text-[#888] uppercase tracking-widest">Obra filtrada:</span>
+                        <span className="text-[11px] font-black text-white">{obraAtual.nome}</span>
+                        <span className="text-[9px] font-mono text-[#555]">{obraAtual.inscricao}</span>
+                    </div>
+                )}
             </div>
 
-            <div className="magma-card border border-[var(--v-border)] rounded-sm p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
-                <div className="flex-1 min-w-[200px]">
-                    <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Obra (CEI/CNO)</label>
-                    <select value={selectedObraId} onChange={e => setSelectedObraId(e.target.value)} className="bento-select w-full">
-                        <option value="">Todas as Obras (Consolidado)</option>
-                        {obras.map(o => <option key={o.id} value={o.cno}>{o.cno} - {o.nome}</option>)}
+            {/* ── Barra de Filtros ── */}
+            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-4 flex flex-wrap gap-3 items-end">
+
+                {/* Select Obra */}
+                <div className="flex-1 min-w-[240px]">
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">
+                        Obra / CEI / CNO
+                    </label>
+                    <div className="relative">
+                        <Building2 size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#444] pointer-events-none" />
+                        <select
+                            value={selectedObraId}
+                            onChange={e => setSelectedObraId(e.target.value)}
+                            className="w-full bg-[#111] border border-[#222] hover:border-[#333] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono pl-7 pr-3 py-2 rounded-lg outline-none transition-colors appearance-none"
+                        >
+                            <option value="">Todas as Obras (Consolidado)</option>
+                            {obras.map(o => (
+                                <option key={o.id} value={String(o.id)}>
+                                    {o.inscricao ? `${o.inscricao}  ${o.nome}` : o.nome}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                {/* Ano */}
+                <div className="w-20">
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Ano</label>
+                    <select
+                        value={ano}
+                        onChange={e => setAno(e.target.value)}
+                        className="w-full bg-[#111] border border-[#222] hover:border-[#333] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors"
+                    >
+                        {[2022, 2023, 2024, 2025, 2026].map(y => <option key={y} value={String(y)}>{y}</option>)}
                     </select>
                 </div>
-                <div className="w-24">
-                    <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Ano</label>
-                    <select value={ano} onChange={e => setAno(e.target.value)} className="bento-select w-full">
-                        {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+
+                {/* Mês */}
+                <div className="w-20">
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Mês</label>
+                    <select
+                        value={mes}
+                        onChange={e => setMes(e.target.value)}
+                        className="w-full bg-[#111] border border-[#222] hover:border-[#333] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors"
+                    >
+                        {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
+                            <option key={m} value={m}>{m}</option>
+                        ))}
                     </select>
                 </div>
-                <div className="w-24">
-                    <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Mês</label>
-                    <select value={mes} onChange={e => setMes(e.target.value)} className="bento-select w-full">
-                        {Array.from({length: 12}, (_, i) => String(i + 1).padStart(2, '0')).map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                </div>
-                <button onClick={fetchSero} disabled={loading} className="bento-button flex items-center gap-2 border-[var(--v-accent-2)] text-[var(--v-accent-2)] hover:bg-[var(--v-accent-2)] hover:text-black">
-                    {loading ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14}/>} Processar Auditoria INSS
+
+                {/* Botão */}
+                <button
+                    id="btn-processar-inss"
+                    onClick={fetchSero}
+                    disabled={loading}
+                    className="flex items-center gap-2 bg-[var(--v-accent-2)]/10 border border-[var(--v-accent-2)]/25 text-[var(--v-accent-2)] hover:bg-[var(--v-accent-2)] hover:text-black transition-all duration-200 font-black text-[9px] tracking-[0.2em] uppercase rounded-lg px-5 py-2 h-[34px] disabled:opacity-40"
+                >
+                    {loading
+                        ? <RefreshCw size={12} className="animate-spin" />
+                        : <ShieldCheck size={12} />}
+                    {loading ? 'Processando...' : 'Apurar INSS'}
                 </button>
+
+                {/* Competência ativa */}
+                <div className="ml-auto text-right hidden sm:block">
+                    <div className="text-[9px] text-[#444] uppercase tracking-widest">Competência</div>
+                    <div className="text-[13px] font-black font-mono text-[#666]">{ano}-{mes}</div>
+                </div>
             </div>
 
+            {/* ── Erro ── */}
             {error && !seroData && (
-                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-sm flex items-center gap-3">
-                    <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
+                <div className="bg-red-950/30 text-red-400 border border-red-900/40 rounded-xl p-4 flex items-center gap-3 text-sm">
+                    <AlertCircle size={18} /> <span className="font-bold">{error}</span>
                 </div>
             )}
 
+            {/* ── Loading skeleton ── */}
+            {loading && !seroData && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[...Array(6)].map((_, i) => (
+                        <div key={i} className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-xl p-5 h-24 animate-pulse">
+                            <div className="bg-[#1a1a1a] h-2 w-20 rounded mb-3" />
+                            <div className="bg-[#1a1a1a] h-6 w-32 rounded" />
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* ── KPIs ── */}
             {seroData && (
                 <>
-                    <div className="grid grid-cols-4 gap-6">
-                        <div className="magma-card p-6 border-l-4 border-[var(--v-accent-2)]">
-                            <span className="text-[10px] font-bold text-[var(--v-text-faint)] uppercase tracking-widest">Base de Mão de Obra Fiscal</span>
-                            <h3 className="text-2xl font-black text-white mt-2">{formatCurrency(seroData.resumo?.mao_de_obra || 0)}</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <KpiCard
+                            icon={FileBarChart2}
+                            label="Base MO Total"
+                            value={fmt(r.mao_de_obra)}
+                            sub="Folha + GPS acumulado"
+                            accent="var(--v-accent-2)"
+                        />
+                        <KpiCard
+                            icon={TrendingUp}
+                            label="Folha Própria"
+                            value={fmt(r.mao_de_obra_folha)}
+                            sub="CALCULORATEIO ev.5041"
+                            accent="#60a5fa"
+                        />
+                        <KpiCard
+                            icon={Building2}
+                            label="Terceiros GPS"
+                            value={fmt(r.mao_de_obra_terceiros_gps)}
+                            sub="VALORORIGEMGPS"
+                            accent="#34d399"
+                        />
+                        <KpiCard
+                            icon={ShieldCheck}
+                            label="INSS a Recolher"
+                            value={fmt(r.total_inss)}
+                            sub="Passivo apurado"
+                            accent="#f97316"
+                            glow
+                            large
+                        />
+                        <KpiCard
+                            icon={HardHat}
+                            label="CUB Vigente"
+                            value={fmt(r.cub_vigente)}
+                            sub="Índice padrão SC"
+                            accent="#a78bfa"
+                        />
+                        <KpiCard
+                            icon={Ruler}
+                            label="Área da Obra"
+                            value={fmtM2(r.area_total)}
+                            sub="EMPREENDIMENTO Vulcano"
+                            accent="#00ff88"
+                        />
+                    </div>
+
+                    {/* ── Divisor visual ── */}
+                    <div className="flex items-center gap-3">
+                        <div className="h-px flex-1 bg-[#1a1a1a]" />
+                        <span className="text-[9px] uppercase tracking-[0.25em] text-[#333] font-bold">Análise Histórica</span>
+                        <div className="h-px flex-1 bg-[#1a1a1a]" />
+                    </div>
+
+                    {/* ── Gráfico Curva-S ── */}
+                    <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#555]">
+                                    Avanço Físico-Financeiro — Curva-S
+                                </h4>
+                                <p className="text-[9px] text-[#333] mt-0.5">Previsto (CUB × m²) vs Realizado (Folha + GPS)</p>
+                            </div>
+                            <div className="flex items-center gap-4 text-[9px]">
+                                <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-px border-t border-dashed border-[#555]" />Previsto</span>
+                                <span className="flex items-center gap-1.5 text-[var(--v-accent-2)]"><span className="inline-block w-4 h-0.5 bg-[var(--v-accent-2)] rounded" />Realizado</span>
+                            </div>
                         </div>
-                        <div className="magma-card p-6 border-l-4 border-[var(--v-accent-5)] bg-[var(--v-accent-5)]/10">
-                            <span className="text-[10px] font-bold text-[var(--v-accent-5)] uppercase tracking-widest">Apuração INSS A Recolher</span>
-                            <h3 className="text-2xl font-black text-[var(--v-accent-5)] mt-2 drop-shadow-[0_0_10px_rgba(255,166,0,0.5)]">{formatCurrency(seroData.resumo?.total_inss || 0)}</h3>
-                        </div>
-                        <div className="magma-card p-6 border-l-4 border-white/20">
-                            <span className="text-[10px] font-bold text-[var(--v-text-faint)] uppercase tracking-widest">CUB Padrão/Vigente</span>
-                            <h3 className="text-2xl font-black text-white mt-2">{formatCurrency(seroData.resumo?.cub_vigente || 0)}</h3>
-                        </div>
-                        <div className="magma-card p-6 border-l-4 border-[#00ff88]">
-                            <span className="text-[10px] font-bold text-[#00ff88] uppercase tracking-widest">Área Obra (m²) Acumulada</span>
-                            <h3 className="text-2xl font-black text-[#00ff88] mt-2 drop-shadow-[0_0_10px_rgba(0,255,136,0.5)]">
-                                {Number(seroData.resumo?.area_total || (selectedObraId ? obras.find(o => o.cno === selectedObraId)?.metragem : obras.reduce((a,b)=>a+(b.metragem||0),0)) || 0).toLocaleString('pt-BR')} m²
-                            </h3>
+                        <div className="h-52">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={seroData.curva_s || []} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="gradPrev" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#444" stopOpacity={0.15} />
+                                            <stop offset="95%" stopColor="#444" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="gradReal" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="var(--v-accent-2)" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="var(--v-accent-2)" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#181818" vertical={false} />
+                                    <XAxis dataKey="mes" stroke="#333" fontSize={9} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="#333" fontSize={9} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                                    <Tooltip content={<ChartTooltip />} />
+                                    <Area type="monotone" dataKey="previsto" stroke="#444" strokeWidth={1} strokeDasharray="5 5" fill="url(#gradPrev)" dot={false} name="previsto" />
+                                    <Area type="monotone" dataKey="realizado" stroke="var(--v-accent-2)" strokeWidth={2.5} fill="url(#gradReal)" dot={{ fill: 'var(--v-accent-2)', r: 3, strokeWidth: 0 }} name="realizado" />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
 
-                    <div className="flex-1 min-h-[300px] magma-card p-6 border border-[var(--v-border)] relative">
-                        <h4 className="text-[10px] tracking-widest uppercase font-bold text-[var(--v-text-faint)] mb-4">Avanço Físico-Financeiro (% de Obra)</h4>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={seroData.curva_s || []}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                                <XAxis dataKey="mes" stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#131313', border: '1px solid #333' }} />
-                                <Line type="monotone" dataKey="previsto" stroke="#888" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                                <Line type="monotone" dataKey="realizado" stroke="var(--v-accent-2)" strokeWidth={3} dot={{ fill: 'var(--v-accent-2)' }} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
+                    {/* ── Tabela Terceiros GPS ── */}
+                    {seroData.alocacoes_terceiros?.length > 0 && (
+                        <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
+                            <div className="flex items-center justify-between px-5 py-3 border-b border-[#161616]">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-4 rounded-full bg-[#34d399]" />
+                                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#34d399]">
+                                        Terceiros GPS
+                                    </h4>
+                                    <span className="text-[9px] text-[#444] font-mono">
+                                        {seroData.alocacoes_terceiros.length} registros
+                                    </span>
+                                </div>
+                                <span className="text-[9px] text-[#555] uppercase tracking-widest">TERCEIROPGTO · VALORORIGEMGPS</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-[11px]">
+                                    <thead>
+                                        <tr className="border-b border-[#161616]">
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Competência</th>
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Tomador / Obra</th>
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">CNO / CNPJ</th>
+                                            <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">GPS Recolhido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {seroData.alocacoes_terceiros.slice(0, 60).map((t, i) => (
+                                            <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
+                                                <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.compet}</td>
+                                                <td className="px-5 py-2 text-[#888] max-w-[260px] truncate">{t.nome_obra}</td>
+                                                <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.cno}</td>
+                                                <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor_recolhido)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr className="border-t border-[#1e1e1e] bg-[#0e0e0e]">
+                                            <td colSpan={3} className="px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#444] font-bold">Total GPS</td>
+                                            <td className="px-5 py-2.5 text-right font-black text-[#34d399]">
+                                                {fmt(seroData.alocacoes_terceiros.reduce((s, t) => s + (t.valor_recolhido || 0), 0))}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </>
+            )}
+
+            {/* ── Estado vazio ── */}
+            {!seroData && !loading && !error && (
+                <div className="flex flex-col items-center justify-center py-24 text-[#333]">
+                    <ShieldCheck size={48} className="mb-4 opacity-20" />
+                    <p className="text-sm font-bold uppercase tracking-widest">Selecione uma empresa e clique em Apurar INSS</p>
+                </div>
             )}
         </div>
     );

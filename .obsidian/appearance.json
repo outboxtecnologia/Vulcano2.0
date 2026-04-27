@@ -1,0 +1,10 @@
+{
+  "theme": "obsidian",
+  "cssTheme": "Cybertron",
+  "accentColor": "#00ffcc",
+  "translucency": true,
+  "enabledCssSnippets": [
+    "theme",
+    "cyberpunk"
+  ]
+}

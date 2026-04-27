@@ -1,0 +1,24 @@
+{
+	"nodes":[
+		{"id":"upload_pdf","type":"text","text":"# 1. Relatório PDF\nUpload no endpoint `/api/smart-importer`.","x":0,"y":100,"width":250,"height":180,"color":"4"},
+		{"id":"pdfplumber","type":"text","text":"## 2. OCR Veloz\n`pdfplumber` limpa tabelas em bytes.","x":350,"y":100,"width":250,"height":180,"color":"1"},
+		{"id":"vertex_ai","type":"text","text":"# 3. Vertex AI (gemini-2.5)\nConverte o caos para um **Array JSON** fixo contendo:\n`comprador, cpf_cnpj, pagamento`","x":700,"y":100,"width":300,"height":220,"color":"3"},
+		{"id":"pandas","type":"text","text":"## 4. Pandas Vector\nDescarrega NA/Nulos rapidamente e converte as datas dinâmicas para `ISO 8601`.","x":1100,"y":100,"width":250,"height":200,"color":"2"},
+		{"id":"vulcano_db","type":"text","text":"## Vulcano (Firebird DB)\nFornece a malha de Vendas ativas.","x":1100,"y":350,"width":250,"height":100,"color":"5"},
+		{"id":"router","type":"text","text":"## Roteador de Decisão","x":1450,"y":200,"width":200,"height":80,"color":"6"},
+		{"id":"rapidfuzz","type":"text","text":"## Motor RapidFuzz\nHeurística Nominal (Distância de L. / `token_set_ratio`). Acima de 85%, assume como **Match Diamante**.","x":1800,"y":-40,"width":300,"height":240,"color":"6"},
+		{"id":"splink","type":"text","text":"## Motor Splink\nProbabilístico (`Fellegi-Sunter`). Prepara pesos logarítmicos complexos para bases massivas via `DuckDB`.","x":1800,"y":300,"width":300,"height":220,"color":"6"},
+		{"id":"baixa","type":"text","text":"# Gravação Física\nO Sistema Audita (4910) e injeta na interface de Operações.","x":2200,"y":180,"width":250,"height":200,"color":"4"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"upload_pdf","fromSide":"right","toNode":"pdfplumber","toSide":"left","color":"4"},
+		{"id":"e2","fromNode":"pdfplumber","fromSide":"right","toNode":"vertex_ai","toSide":"left","color":"1"},
+		{"id":"e3","fromNode":"vertex_ai","fromSide":"right","toNode":"pandas","toSide":"left","color":"3"},
+		{"id":"e4","fromNode":"pandas","fromSide":"right","toNode":"router","toSide":"left"},
+		{"id":"e5","fromNode":"vulcano_db","fromSide":"right","toNode":"router","toSide":"bottom","color":"5"},
+		{"id":"e6","fromNode":"router","fromSide":"right","toNode":"rapidfuzz","toSide":"left","label":"use_splink = False"},
+		{"id":"e7","fromNode":"router","fromSide":"right","toNode":"splink","toSide":"left","label":"use_splink = True"},
+		{"id":"e8","fromNode":"rapidfuzz","fromSide":"right","toNode":"baixa","toSide":"top"},
+		{"id":"e9","fromNode":"splink","fromSide":"right","toNode":"baixa","toSide":"bottom"}
+	]
+}

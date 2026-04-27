@@ -1,0 +1,21 @@
+{
+	"nodes":[
+		{"id":"db-questor","type":"text","text":"**Banco Questor (LCTOGER)**\nDumping do Custo Incorrido Real Mês a Mês (NAT=1)","x":-600,"y":-380,"width":300,"height":180,"color":"3"},
+		{"id":"db-vulcano","type":"text","text":"**Banco Vulcano (Firebird)**\n- Empreendimento (Orçamento)\n- POC Mês a Mês\n- CUB (Inflação Vigente)\n- RECEBER (Fluxo de Lançamento)","x":-600,"y":-100,"width":300,"height":300,"color":"1"},
+		{"id":"python-extrator","type":"text","text":"#### `IFRS15Analyzer.gerar_dossie_temporal`\nMotor Matemático em Python. \nEsquadrinha as frações das 5 unidades, unifica todos os arrays do Firebird cronologicamente e cruza Custos V1 e V2 com o Fluxo real indexado.\nGera o Dicionário `dossie`.","x":-200,"y":-200,"width":350,"height":300,"color":"4"},
+		{"id":"graph-state","type":"text","text":"#### LangGraph `AuditoriaGraphState`\nRecebe e armazena nativamente a propriedade `dossie_heuristico: dict` associado à Thread_ID do usuário.","x":250,"y":-200,"width":300,"height":280,"color":"5"},
+		{"id":"graph-hitl","type":"text","text":"#### Interrupção do Robô (HITL)\n`interrupt_before=[\"llm_node\"]`\nO Grafo sofre uma parada dura e manda o `status: PAUSED` via API FastAPI devolvendo o Estado inteiro pro Frontend.","x":650,"y":-320,"width":300,"height":260,"color":"2"},
+		{"id":"react-ui","type":"text","text":"#### React `AuditoriaERPView`\nO interceptador dispara uma UI Especial:\n\n1. Rastro de Execução\n2. **Tabela Horizontal Heurística**: Mapeia o dicionário completo num Grid Temporal para o Humano bater o olho.\n3. **TextArea (Prompt Verde)**: Humano manipula o viés do prompt enviando a sua conclusão analítica (Feedback).","x":650,"y":50,"width":400,"height":350,"color":"6"},
+		{"id":"llm-vertex","type":"text","text":"#### Vertex AI (gemini-2.5-flash)\nO botão `APROVAR CONTEXTO` devolve o JSON pro Backend via POST, ativando o Node do LLM (`llm_node`).\nO Robô consome o Payload de Calibração.","x":1150,"y":100,"width":300,"height":300,"color":"1"},
+		{"id":"final","type":"text","text":"🗂️ Retorna JSON Estruturado:\n`{ descricao: \"...\", acao: \"Reclassificar\", conta: 555 }`","x":1550,"y":120,"width":300,"height":160,"color":"4"}
+	],
+	"edges":[
+		{"id":"edge-1","fromNode":"db-questor","fromSide":"right","toNode":"python-extrator","toSide":"left","color":"3"},
+		{"id":"edge-2","fromNode":"db-vulcano","fromSide":"right","toNode":"python-extrator","toSide":"left","color":"1"},
+		{"id":"edge-3","fromNode":"python-extrator","fromSide":"right","toNode":"graph-state","toSide":"left"},
+		{"id":"edge-4","fromNode":"graph-state","fromSide":"right","toNode":"graph-hitl","toSide":"left","label":"Geração do Prompt"},
+		{"id":"edge-5","fromNode":"graph-hitl","fromSide":"bottom","toNode":"react-ui","toSide":"top","color":"4"},
+		{"id":"edge-6","fromNode":"react-ui","fromSide":"right","toNode":"llm-vertex","toSide":"left","color":"6","label":"Click (HITL Approval)"},
+		{"id":"edge-7","fromNode":"llm-vertex","fromSide":"right","toNode":"final","toSide":"left"}
+	]
+}

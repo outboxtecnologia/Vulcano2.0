@@ -108,241 +108,127 @@
 @tailwind components;
 @tailwind utilities;
 
-:root, [data-theme="tecton"] {
-  --v-bg: #0b0b0b;
-  --v-deep: #050505;
-  --v-card: #131313;
-  --v-hover: #1a1a1a;
-  --v-muted: #222222;
-  --v-border: #333333;
+/* ============================================================
+   THEME ROOTS AND COLOR PALETTES
+   ============================================================ */
+
+/* NIGHT THEME (Padrão) - Tectonic Precision */
+:root, [data-theme="night"] {
+  --v-bg: #131314;     /* Surface */
+  --v-deep: #0e0e0f;   /* Surface-container-lowest */
+  --v-card: #18191a;   /* Surface-container-low */
+  --v-hover: #1e1e1f;  /* Interactive hover */
+  --v-muted: #272728;  /* Background dividers */
+  --v-border: #333334; /* Lines */
   
-  --v-text: #e5e2e1;
+  --v-text: #e0e0e0;
   --v-text-bold: #ffffff;
   --v-text-muted: #888888;
-  --v-text-faint: #555555;
+  --v-text-faint: #5d5d5e;
   --v-text-inv: #000000;
   
-  --v-accent: #ff4d00;
-  --v-accent-2: #ff9f0a;
-  --v-accent-3: #34c759;
-  --v-accent-4: #00c2ff;
-  --v-accent-5: #a259ff;
-  --v-accent-6: #ffcc00;
-  --v-magma-glow: rgba(255, 77, 0, 0.3);
+  --v-accent: #ff5625;   /* Primary */
+  --v-accent-2: #ffb5a0; /* Primary container */
+  --v-accent-3: #a3c9ff; /* Tertiary */
+  --v-accent-4: #00c2ff; 
+  --v-accent-5: #ffb4ab; /* Error */
+  --v-accent-6: #ff8a00;
+  
+  --v-radius: 4px; /* sm */
+  --v-ghost-border: rgba(93, 64, 56, 0.2);
+  --v-shadow: 0 16px 32px rgba(255, 181, 160, 0.05);
+  --v-glass: rgba(19, 19, 20, 0.92);
+  --v-blur-bg: rgba(0, 0, 0, 0.45); /* Tectonic glowing shadow */
 }
 
-[data-theme="ashes"] {
-  --v-bg: #ececeb;
-  --v-deep: #e1e1e0;
-  --v-card: #f8f8f8;
-  --v-hover: #ffffff;
-  --v-muted: #dcdcdc;
-  --v-border: #c8c8c7;
+/* LIGHT THEME - The Technical Manuscript */
+[data-theme="light"] {
+  --v-bg: #f9f9f9;     /* Surface */
+  --v-deep: #ffffff;   /* Surface-container-lowest */
+  --v-card: #f3f3f3;   /* Surface-container-low */
+  --v-hover: #eaeaea;  
+  --v-muted: #e2e2e2;  
+  --v-border: #e0e0e0; 
   
-  --v-text: #2c2c2a;
-  --v-text-bold: #131313;
-  --v-text-muted: #555555;
-  --v-text-faint: #777777;
+  --v-text: #323232;
+  --v-text-bold: #1a1a1a;
+  --v-text-muted: #5e5e5e;
+  --v-text-faint: #aaaaaa;
   --v-text-inv: #ffffff;
   
-  --v-accent: #3b3b3a;
-  --v-accent-2: #c67400;
+  --v-accent: #b22e00;   /* Secondary */
+  --v-accent-2: #ff4500; 
   --v-accent-3: #228c3a;
-  --v-accent-4: #0088b3;
-  --v-accent-5: #7b3fb8;
-  --v-accent-6: #b38b00;
-  --v-magma-glow: rgba(50, 50, 50, 0.1);
+  --v-accent-4: #005599;
+  --v-accent-5: #660099;
+  --v-accent-6: #885500;
+  
+  --v-radius: 0px; 
+  --v-ghost-border: rgba(178, 46, 0, 0.15);
+  --v-shadow: 0 10px 30px rgba(50, 50, 50, 0.06);
+  --v-glass: rgba(255, 255, 255, 0.92);
+  --v-blur-bg: rgba(249, 249, 249, 0.4);
 }
 
-[data-theme="magma"] {
-  --v-bg: #ff4d00;
-  --v-deep: #d13d00;
-  --v-card: #ff6a00;
-  --v-hover: #ff8533;
-  --v-muted: #b33200;
-  --v-border: #802300;
+/* NUMB THEME - The Industrial Archive */
+[data-theme="numb"] {
+  --v-bg: #c0c0c0;
+  --v-deep: #d4d0c8;
+  --v-card: #a8a8a8;
+  --v-hover: #dcdcdc;
+  --v-muted: #808080;
+  --v-border: #808080;
   
-  --v-text: #2f0e00;
-  --v-text-bold: #130000;
-  --v-text-muted: #5a1e00;
-  --v-text-faint: #8a2a00;
+  --v-text: #1d1c17;
+  --v-text-bold: #000000;
+  --v-text-muted: #4a4a48;
+  --v-text-faint: #686866;
   --v-text-inv: #ffffff;
   
-  --v-accent: #130000;
-  --v-accent-2: #4d0b00;
-  --v-accent-3: #164f26;
-  --v-accent-4: #00455c;
-  --v-accent-5: #381b5c;
-  --v-accent-6: #805c00;
-  --v-magma-glow: rgba(50, 0, 0, 0.3);
+  --v-accent: #ff4500;   /* Magma Orange */
+  --v-accent-2: #c08000; 
+  --v-accent-3: #287034;
+  --v-accent-4: #0055cc;
+  --v-accent-5: #660099;
+  --v-accent-6: #a07800;
+  
+  --v-radius: 0px;
+  --v-ghost-border: rgba(128, 128, 128, 0.4);
+  --v-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  --v-glass: rgba(189, 189, 189, 0.88);
+  --v-blur-bg: rgba(0, 0, 0, 0.6);
+}
+
+/* ============================================================
+   ARCHITECTURAL AND BEVEL OVERRIDES 
+   ============================================================ */
+
+/* Numb Bevels (Classic Windows style 3D) */
+[data-theme="numb"] .btn-3d {
+  box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #ffffff !important;
+  background-color: var(--v-deep);
+}
+[data-theme="numb"] .input-3d {
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #ffffff !important;
+  background-color: #ffffff;
+  border-radius: 0 !important;
+}
+[data-theme="numb"] .card-3d {
+  box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #ffffff !important;
+}
+
+/* Force zero lines across systems when specified */
+[data-theme="numb"] .border, [data-theme="light"] .border {
+   /* We use tonal hierarchy instead, allowing very faint borders if absolutely necessary */
+   border-color: var(--v-border) !important;
+}
+
+/* Space Grotesk Typographical overrides can be forced naturally by fonts or just let Inter serve as base */
+* {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.1s ease;
 }
 
 body {
-  background-color: var(--v-bg);
-  color: var(--v-text);
-  font-family: 'Space Grotesk', 'Inter', sans-serif;
-  margin: 0;
-  transition: background-color 0.8s ease-in-out, color 0.5s ease-in-out;
-}
-
-/* Animação de Borda Magma Viva */
-@keyframes magma-flow {
-  0% { border-color: #ff4d00; box-shadow: 0 0 15px rgba(255, 77, 0, 0.4); }
-  50% { border-color: #ff8000; box-shadow: 0 0 25px rgba(255, 128, 0, 0.6); }
-  100% { border-color: #ff4d00; box-shadow: 0 0 15px rgba(255, 77, 0, 0.4); }
-}
-
-@keyframes magma-flow-subtle {
-  0% { border-color: #353534; box-shadow: 0 0 2px transparent; }
-  50% { border-color: #ff4d00; box-shadow: 0 0 8px rgba(255, 77, 0, 0.2); }
-  100% { border-color: #353534; box-shadow: 0 0 2px transparent; }
-}
-
-/* Animações de Interação e Overlay de Tela Inteira */
-.transition-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 9999;
-}
-
-/* Tecton Pulse Overlay */
-@keyframes tecton-pulse-anim {
-  0% { background: transparent; }
-  30% { background: rgba(0,0,0,0.8); backdrop-filter: sepia(100%); }
-  70% { background: rgba(0,0,0,0.8); box-shadow: inset 0 0 150px var(--v-accent); }
-  100% { background: transparent; backdrop-filter: none; }
-}
-.tecton-pulse { animation: tecton-pulse-anim 1.5s cubic-bezier(0.8,0,0.2,1) forwards; }
-
-/* Ashes Storm Overlay */
-@keyframes ash-storm-anim {
-  0% { background: transparent; opacity: 0; }
-  50% { background: #fafafa url('data:image/svg+xml,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E'); opacity: 1; mix-blend-mode: multiply; }
-  100% { background: transparent; opacity: 0; }
-}
-.ash-storm { animation: ash-storm-anim 1.5s ease-out forwards; }
-
-/* Magma Flow Overlay */
-@keyframes magma-flow-anim {
-  0% { transform: translateY(-100%); background: #ff4d00; }
-  50% { transform: translateY(0%); background: #ff4d00; border-bottom: 20px solid #cc3e00; }
-  100% { transform: translateY(100%); background: #ff4d00; }
-}
-.magma-flow-fall { animation: magma-flow-anim 1.5s cubic-bezier(0.7,0,0.3,1) forwards; }
-
-.magma-card {
-  background: var(--v-card);
-  border: 1px solid var(--v-border);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  border-radius: 6px;
-}
-
-.magma-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--v-accent);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 15px var(--v-magma-glow);
-  animation: magma-flow 1.5s infinite ease-in-out;
-  z-index: 10;
-}
-
-.bento-input, .bento-select {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #fff;
-  padding: 10px 14px;
-  font-size: 11px;
-  font-family: 'Space Grotesk', monospace;
-  outline: none;
-  transition: all 0.3s ease;
-  width: 100%;
-}
-
-.bento-input:focus, .bento-select:focus {
-  border-color: var(--v-accent);
-  background: rgba(255, 77, 0, 0.05);
-  box-shadow: 0 0 15px rgba(255, 77, 0, 0.1);
-}
-
-.bento-button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #888;
-  padding: 8px 16px;
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  border-radius: 2px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.bento-button:hover:not(:disabled) {
-  border-color: var(--v-accent);
-  color: #fff;
-  background: rgba(255, 77, 0, 0.1);
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.2);
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--v-accent);
-}
-
-.immersive-bg {
-    background-image: linear-gradient(to bottom, rgba(10, 10, 10, 0.6), rgba(10, 10, 10, 0.9)), url('https://images.unsplash.com/photo-1541746972996-4e0b0f43e01a?auto=format&fit=crop&q=80&w=2670');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-}
-.ethereal-glass {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.ethereal-glass:hover {
-    background: rgba(255, 86, 37, 0.05);
-    border-color: rgba(255, 86, 37, 0.4);
-    box-shadow: 0 0 40px rgba(255, 86, 37, 0.1);
-    transform: translatey(-12px);
-}
-.magma-glow {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    transition: opacity 0.6s ease;
-    pointer-events: none;
-    z-index: 0;
-}
-.group:hover .magma-glow {
-    opacity: 1;
-}
-.text-glow {
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
-}
-@keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-    100% { transform: translateY(0px); }
-}
-.floating {
-    animation: float 6s ease-in-out infinite;
+    background-color: var(--v-bg);
+    color: var(--v-text);
 }

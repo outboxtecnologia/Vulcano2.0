@@ -1,10 +1,14 @@
-import fdb
+import sys
+import os
 
+from core.database import get_conn
+
+conn = get_conn('vulcano')
+cur = conn.cursor()
 try:
-    conn = fdb.connect(dsn='localhost:C:/Vulcano/dados/VULCANO.FDB', user='SYSDBA', password='masterkey', charset='WIN1252')
-    cur = conn.cursor()
-    cur.execute("SELECT RDB$FIELD_NAME FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'RECEBER'")
-    fields = [row[0].strip() for row in cur.fetchall()]
-    print(fields)
+    cur.execute('SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTAESTAND FROM EMPREENDIMENTO')
+    rows = cur.fetchall()
+    print("EMPREENDIMENTO TABLE ROWS:")
+    for r in rows: print(r)
 except Exception as e:
-    print(e)
+    print('ERROR:', e)

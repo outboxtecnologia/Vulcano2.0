@@ -1,25 +1,11 @@
-import sys
-import fdb
-
-conn = fdb.connect(
-    dsn='localhost:c:/questor/BD/PRINCIPAL.FDB',
-    user='SYSDBA', password='masterkey'
-)
-cur = conn.cursor()
+from main import get_conn
+conn_q = get_conn('questor')
+cur_q = conn_q.cursor()
 try:
-    cur.execute('SELECT FIRST 5 * FROM TABELACONTABIL')
-    cols = [d[0] for d in cur.description]
-    with open('tabela_contabil_dump.txt', 'w', encoding='utf-8') as f:
-        f.write(str(cols) + '\n')
-        for r in cur.fetchall():
-            f.write(str(r) + '\n')
-            
-    cur.execute('SELECT FIRST 10 MODELOPLANO, CONTA, CLASSIFIC, DESCRICAO, TIPO FROM CTB_CONTA')
-    cols = [d[0] for d in cur.description]
-    with open('ctb_conta_dump.txt', 'w', encoding='utf-8') as f:
-        f.write(str(cols) + '\n')
-        for r in cur.fetchall():
-            f.write(str(r) + '\n')
+    cur_q.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$RELATION_NAME LIKE '%HIST%' AND RDB$SYSTEM_FLAG = 0")
+    print([r[0].strip() for r in cur_q.fetchall()])
+    
+    cur_q.execute("SELECT FIRST 10 L.HISTORICOCTB, L.COMPLLCTOGER, L.CODIGOHISTPADRAO FROM LCTOCTB L WHERE L.CODIGOEMPRESA = 959")
+    print("\nLCTOCTB amostra:", cur_q.fetchall())
 except Exception as e:
-    with open('error_db.txt', 'w') as f: f.write(str(e))
-conn.close()
+    print('Erro:', e)

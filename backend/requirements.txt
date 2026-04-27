@@ -8,3 +8,9 @@ pandas
 openpyxl
 xlrd
 google-generativeai
+apscheduler
+langgraph
+langchain-google-vertexai
+langchain-community
+langgraph-checkpoint-sqlite
+langchain-google-genai

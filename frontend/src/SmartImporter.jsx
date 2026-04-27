@@ -1,7 +1,69 @@
 import React, { useState } from 'react';
-import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Database, AlertCircle, Sparkles, Save } from 'lucide-react';
+import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Database, AlertCircle, Sparkles, Save, ArrowUpRight, Download, X } from 'lucide-react';
 
-const API_BASE = import.meta?.env?.VITE_API_BASE || 'http://127.0.0.1:6000';
+const API_BASE = import.meta?.env?.VITE_API_BASE || 'http://127.0.0.1:8000';
+
+// Campos destino por entidade — devem ser idênticos ao _SMART_IMPORTER_SCHEMAS do backend
+const TARGET_SCHEMAS = {
+  VENDAS: [
+    { value: 'DATA_VENDA',          label: 'Data da Venda' },
+    { value: 'NUMERO_CONTRATO',     label: 'Número do Contrato' },
+    { value: 'CLIENTE_NOME',        label: 'Nome do Cliente' },
+    { value: 'CLIENTE_CPF_CNPJ',    label: 'CPF / CNPJ' },
+    { value: 'EMPREENDIMENTO',      label: 'Empreendimento' },
+    { value: 'UNIDADE',             label: 'Unidade' },
+    { value: 'BLOCO',               label: 'Bloco' },
+    { value: 'VGV',                 label: 'VGV (Valor Geral de Vendas)' },
+    { value: 'AREA',                label: 'Área (m²)' },
+    { value: 'FORMA_PAGAMENTO',     label: 'Forma de Pagamento' },
+    { value: 'CORRETOR',            label: 'Corretor' },
+    { value: 'STATUS',              label: 'Status' },
+    { value: 'OBSERVACOES',         label: 'Observações' },
+  ],
+  RECEBIMENTOS: [
+    { value: 'DATA_PAGAMENTO',      label: 'Data de Pagamento (Recebimento)' },
+    { value: 'DATA_VENCIMENTO',     label: 'Data de Vencimento' },
+    { value: 'VALOR_PAGO',          label: 'Valor Pago' },
+    { value: 'VALOR_PARCELA',       label: 'Valor da Parcela (Nominal)' },
+    { value: 'ACRESCIMOS',          label: 'Acréscimos / Juros / Mora' },
+    { value: 'DESCONTOS',           label: 'Descontos / Abatimentos' },
+    { value: 'NUMERO_PARCELA',      label: 'Número da Parcela' },
+    { value: 'DESCRICAO',           label: 'Descrição / Histórico' },
+    { value: 'CLIENTE_NOME',        label: 'Nome do Cliente' },
+    { value: 'CLIENTE_CPF_CNPJ',    label: 'CPF / CNPJ' },
+    { value: 'EMPREENDIMENTO',      label: 'Empreendimento' },
+    { value: 'UNIDADE',             label: 'Unidade' },
+    { value: 'CONTRATO',            label: 'Contrato / RF' },
+    { value: 'FORMA_PAGAMENTO',     label: 'Forma de Pagamento' },
+    { value: 'BANCO',               label: 'Banco' },
+    { value: 'AGENCIA',             label: 'Agência' },
+    { value: 'CONTA',               label: 'Conta Bancária' },
+    { value: 'NOSSO_NUMERO',        label: 'Nosso Número' },
+    { value: 'OBSERVACOES',         label: 'Observações' },
+  ],
+  EMPREENDIMENTOS: [
+    { value: 'NOME',                    label: 'Nome' },
+    { value: 'CODIGO_CC',               label: 'Código do Centro de Custo' },
+    { value: 'DATA_INICIO',             label: 'Data de Início' },
+    { value: 'DATA_PREVISTA_ENTREGA',   label: 'Data Prevista de Entrega' },
+    { value: 'CONTA_ESTOQUE',           label: 'Conta de Estoque' },
+    { value: 'CONTA_CUSTO',             label: 'Conta de Custo' },
+    { value: 'CUSTO_ORCADO',            label: 'Custo Orçado' },
+    { value: 'AREA_TOTAL',              label: 'Área Total (m²)' },
+    { value: 'CNPJ',                    label: 'CNPJ' },
+  ],
+  CLIENTES: [
+    { value: 'NOME',        label: 'Nome' },
+    { value: 'CPF_CNPJ',   label: 'CPF / CNPJ' },
+    { value: 'EMAIL',       label: 'E-mail' },
+    { value: 'TELEFONE',    label: 'Telefone' },
+    { value: 'ENDERECO',    label: 'Endereço' },
+    { value: 'CIDADE',      label: 'Cidade' },
+    { value: 'ESTADO',      label: 'Estado (UF)' },
+    { value: 'CEP',         label: 'CEP' },
+    { value: 'OBSERVACOES', label: 'Observações' },
+  ],
+};
 
 export default function SmartImporter({ selectedEmpresa }) {
   const [step, setStep] = useState(1);
@@ -9,9 +71,19 @@ export default function SmartImporter({ selectedEmpresa }) {
   const [loading, setLoading] = useState(false);
   const [columns, setColumns] = useState([]);
   const [previewData, setPreviewData] = useState([]);
+  const [allRows, setAllRows] = useState([]);
   const [targetTable, setTargetTable] = useState('VENDAS');
   const [mapping, setMapping] = useState({});
   const [templates, setTemplates] = useState([]);
+  const [matchData, setMatchData] = useState([]);
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [commitLoading, setCommitLoading] = useState(false);
+  
+  // Novos filtros e HitL (Human-in-the-Loop)
+  const [empreendimentos, setEmpreendimentos] = useState([]);
+  const [selectedEmpreendimento, setSelectedEmpreendimento] = useState('');
+  const [parcelasAbertas, setParcelasAbertas] = useState([]);
+  const [manualMatchModal, setManualMatchModal] = useState({ open: false, rowData: null, rowIndex: null });
 
   React.useEffect(() => {
     fetch(`${API_BASE}/api/templates`)
@@ -19,6 +91,16 @@ export default function SmartImporter({ selectedEmpresa }) {
       .then(data => setTemplates(data))
       .catch(err => console.error("Erro ao carregar templates", err));
   }, []);
+
+  React.useEffect(() => {
+    if (selectedEmpresa) {
+      fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
+        .then(res => res.json())
+        .then(data => setEmpreendimentos(data))
+        .catch(err => console.error("Erro ao carregar empreendimentos", err));
+    }
+  }, [selectedEmpresa]);
+
 
   const handleFileUpload = async (e) => {
     e.preventDefault();
@@ -35,6 +117,7 @@ export default function SmartImporter({ selectedEmpresa }) {
       const data = await res.json();
       setColumns(data.columns || []);
       setPreviewData(data.preview || []);
+      setAllRows(data.all_rows || data.preview || []);
       setStep(2);
     } catch (err) {
       alert("Erro ao validar planilha. Verifique se o backend está rodando e o arquivo é válido.");
@@ -53,8 +136,13 @@ export default function SmartImporter({ selectedEmpresa }) {
       });
       if (!res.ok) throw new Error("Falha no mapeamento IA");
       const data = await res.json();
-      setMapping(data.mapping || {});
-      setStep(3);
+      // Normaliza: JSON null → string 'null' para compatibilidade com o <select>
+      const raw = data.mapping || {};
+      const normalized = {};
+      for (const [k, v] of Object.entries(raw)) {
+        normalized[k] = (v === null || v === undefined || v === '' || v === 'null') ? 'null' : v;
+      }
+      setMapping(normalized);
     } catch(err) {
       alert("Erro ao chamar o Gemini (schema). Verifique GEMINI_API_KEY e o backend.");
     } finally {
@@ -66,7 +154,7 @@ export default function SmartImporter({ selectedEmpresa }) {
     const nome = prompt("Digite um nome para o template:");
     if (!nome) return;
     try {
-      await fetch(`${API_BASE}/api/templates`, {
+      const res = await fetch(`${API_BASE}/api/templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -75,12 +163,15 @@ export default function SmartImporter({ selectedEmpresa }) {
           mapping_json: JSON.stringify(mapping)
         })
       });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Falha ao salvar");
       alert("Template salvo com sucesso!");
       fetch(`${API_BASE}/api/templates`)
-        .then(res => res.json())
-        .then(data => setTemplates(data));
+        .then(r => r.json())
+        .then(d => setTemplates(d));
     } catch(err) {
-      alert("Erro ao salvar template");
+      console.error(err);
+      alert("Erro ao salvar template. Tente novamente.");
     }
   };
 
@@ -96,67 +187,113 @@ export default function SmartImporter({ selectedEmpresa }) {
     setMapping(prev => ({ ...prev, [sourceCol]: newTarget }));
   };
 
-  const handleFinalizeImport = async () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      alert("Importação concluída com sucesso! (Simulação)");
-      setStep(1);
-      setFile(null);
-      setColumns([]);
-      setMapping({});
-    }, 1500);
+  const handlePreviewMatch = async () => {
+    setMatchLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/smart-importer/preview-match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: allRows,
+          mapping,
+          target_table: targetTable,
+          empresa_id: selectedEmpresa ? parseInt(selectedEmpresa, 10) : null,
+          empreendimento_id: selectedEmpreendimento ? parseInt(selectedEmpreendimento, 10) : null
+        })
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Erro no preview'); }
+      const data = await res.json();
+      setMatchData(data.resultados || []);
+      setParcelasAbertas(data.abertas || []);
+      setStep(3);
+    } catch(err) {
+      alert('Erro ao gerar preview de match: ' + err.message);
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
+  const handleDownloadTxt = () => {
+    if (!matchData || matchData.length === 0) return;
+    const headers = ["Status", "Cliente_Planilha", "Dt_Vencimento", "Dt_Pagamento", "Valor_Planilha", "Valor_Vulcano", "Unidade_Contrato", "Observacao"];
+    const rows = matchData.map(r => [
+      r.status,
+      r.cliente_planilha || '',
+      r.dt_vencimento || '',
+      r.dt_pagamento || '',
+      r.valor_planilha || '',
+      r.valor_vulcano || '',
+      String(r.unidade || r.contrato || '').replace(/\r?\n|\r/g, " "),
+      r.obs || ''
+    ]);
+    const txtContent = [headers.join(";"), ...rows.map(r => r.join(";"))].join("\n");
+    const blob = new Blob([txtContent], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smart_importer_match_${new Date().getTime()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const STATUS_META = {
+    JA_QUITADO:    { label: 'Já Quitado',    cls: 'bg-[#34c759]/10 text-[#34c759] border-[#34c759]/30' },
+    MATCH_PERFEITO:{ label: 'Match',          cls: 'bg-[#007aff]/10 text-[#007aff] border-[#007aff]/30' },
+    MATCH_MANUAL:  { label: 'Match Manual',   cls: 'bg-[#a259ff]/10 text-[#a259ff] border-[#a259ff]/30' },
+    SEM_MATCH:     { label: 'Sem Match',      cls: 'bg-[#ff4d00]/10 text-[#ff4d00] border-[#ff4d00]/30' },
+    DIVERGENCIA:   { label: 'Divergência',    cls: 'bg-[#ffcc00]/10 text-[#ffcc00] border-[#ffcc00]/30' },
   };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold tracking-tighter text-white uppercase flex items-center gap-3">
-            <Sparkles className="text-[#a259ff]" size={36} /> Smart Importer IA
+          <h2 className="text-3xl font-bold tracking-tighter text-[var(--v-text-bold)] uppercase flex items-center gap-3">
+            <Sparkles className="text-[var(--v-accent-5)]" size={36} /> Smart Importer IA
           </h2>
-          <p className="text-sm text-[#888] mt-2 uppercase tracking-widest font-bold">Importação e de-para guiados por inteligência artificial</p>
+          <p className="text-sm text-[var(--v-text-muted)] mt-2 uppercase tracking-widest font-bold">Importação e de-para guiados por inteligência artificial</p>
         </div>
       </div>
 
       {/* Stepper Header */}
-      <div className="flex items-center justify-between bg-[#131313] border border-[#333] p-6 rounded-sm">
+      <div className="flex items-center justify-between bg-[var(--v-card)] border border-[var(--v-border)] p-6 rounded-[var(--v-radius)]">
         {[
           { num: 1, label: 'Upload de Planilha' },
-          { num: 2, label: 'Análise de Contexto' },
-          { num: 3, label: 'Validação Humana' },
-          { num: 4, label: 'Processamento' }
+          { num: 2, label: 'Validação DE-PARA' },
+          { num: 3, label: 'Preview de Match' }
         ].map((s, idx) => (
           <React.Fragment key={s.num}>
             <div className={`flex flex-col items-center gap-2 ${step >= s.num ? 'opacity-100' : 'opacity-40'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 ${step > s.num ? 'bg-[#a259ff] border-[#a259ff] text-white' : step === s.num ? 'border-[#a259ff] text-[#a259ff]' : 'border-[#444] text-[#888]'}`}>
+              <div className={`w-10 h-10 rounded-[var(--v-radius)] flex items-center justify-center font-bold text-sm border-2 ${step > s.num ? 'bg-[#a259ff] border-[#a259ff] text-[var(--v-text-bold)]' : step === s.num ? 'border-[#a259ff] text-[var(--v-accent-5)]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'}`}>
                 {step > s.num ? <CheckCircle2 size={18} /> : s.num}
               </div>
-              <span className={`text-[10px] uppercase font-bold tracking-widest ${step >= s.num ? 'text-[#e5e2e1]' : 'text-[#666]'}`}>{s.label}</span>
+              <span className={`text-[10px] uppercase font-bold tracking-widest ${step >= s.num ? 'text-[var(--v-text)]' : 'text-[var(--v-text-faint)]'}`}>{s.label}</span>
             </div>
-            {idx < 3 && <div className={`flex-1 h-px ${step > s.num ? 'bg-[#a259ff]' : 'bg-[#333]'}`} />}
+            {idx < 2 && <div className={`flex-1 h-px ${step > s.num ? 'bg-[#a259ff]' : 'bg-[#333]'}`} />}
           </React.Fragment>
         ))}
       </div>
 
       {/* Step 1: Upload */}
       {step === 1 && (
-        <div className="bg-[#131313] border border-[#333] p-8 rounded-sm text-center">
-          <FileSpreadsheet size={64} className="mx-auto text-[#444] mb-6" />
-          <h3 className="text-xl font-bold text-white mb-2 uppercase tracking-widest">Selecione seu arquivo</h3>
-          <p className="text-[#888] text-sm mb-8">Suporte para .XLS, .XLSX e .CSV. O sistema irá ler o cabeçalho automaticamente.</p>
+        <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-8 rounded-[var(--v-radius)] text-center">
+          <FileSpreadsheet size={64} className="mx-auto text-[var(--v-text-faint)] mb-6" />
+          <h3 className="text-xl font-bold text-[var(--v-text-bold)] mb-2 uppercase tracking-widest">Selecione seu arquivo</h3>
+          <p className="text-[var(--v-text-muted)] text-sm mb-8">Suporte para .XLS, .XLSX e .CSV. O sistema irá ler o cabeçalho automaticamente.</p>
           
           <form onSubmit={handleFileUpload} className="max-w-md mx-auto flex flex-col gap-4">
             <input 
               type="file" 
               accept=".csv, .xls, .xlsx"
               onChange={(e) => setFile(e.target.files[0])}
-              className="w-full text-sm text-[#888] file:mr-4 file:py-3 file:px-4 file:rounded-sm file:border-0 file:text-[10px] file:font-bold file:uppercase file:tracking-widest file:bg-[#1a1a1c] file:text-[#007aff] hover:file:bg-[#222] file:cursor-pointer border border-[#333] bg-[#0b0b0b] p-2"
+              className="w-full text-sm text-[var(--v-text-muted)] file:mr-4 file:py-3 file:px-4 file:rounded-[var(--v-radius)] file:border-0 file:text-[10px] file:font-bold file:uppercase file:tracking-widest file:bg-[var(--v-hover)] file:text-[var(--v-accent-4)] hover:file:bg-[var(--v-hover)] file:cursor-pointer border border-[var(--v-border)] bg-[#0b0b0b] p-2"
             />
             <button 
               type="submit" 
               disabled={loading || !file} 
-              className="w-full bg-[#007aff] text-white py-4 rounded-sm font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
+              className="w-full bg-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
               {loading ? 'Analisando Estrutura...' : 'Iniciar Importação'}
@@ -165,112 +302,103 @@ export default function SmartImporter({ selectedEmpresa }) {
         </div>
       )}
 
-      {/* Step 2: Análise de Contexto */}
+      {/* Step 2: Validação Humana / Mapping */}
       {step === 2 && (
-        <div className="bg-[#131313] border border-[#333] rounded-sm p-8">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[#333]">
-            <Sparkles className="text-[#a259ff]" size={32} />
-            <div>
-              <h3 className="text-xl font-bold text-white uppercase tracking-widest">Configuração da Inteligência Artificial</h3>
-              <p className="text-[#888] text-sm">Defina o destino para o Gemini mapear colunas automaticamente (schema matching).</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            <div>
-              <label className="text-[10px] uppercase tracking-widest text-[#555] font-bold block mb-2">Entidade Destino (Vulcano/Questor)</label>
-              <select 
-                value={targetTable} 
-                onChange={(e) => setTargetTable(e.target.value)}
-                className="w-full bg-[#0b0b0b] border border-[#444] text-white p-4 rounded-sm outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
-              >
-                <option value="VENDAS">Vendas (Contratos)</option>
-                <option value="RECEBIMENTOS">Recebimentos (Baixas)</option>
-                <option value="EMPREENDIMENTOS">Empreendimentos</option>
-                <option value="CLIENTES">Clientes / Fornecedores</option>
-              </select>
-            </div>
-            <div className="bg-[#0b0b0b] p-4 border border-[#333] rounded-sm flex flex-col justify-between">
+        <div className="flex flex-col gap-6">
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-8">
+            <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[var(--v-border)]">
+              <Sparkles className="text-[var(--v-accent-5)]" size={32} />
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-[#555] font-bold mb-2">Aplicar Template Salvo</p>
+                <h3 className="text-xl font-bold text-[var(--v-text-bold)] uppercase tracking-widest">Configuração do Destino</h3>
+                <p className="text-[var(--v-text-muted)] text-sm">Defina o destino e mapeie as colunas. Se precisar, peça para a IA sugerir o mapeamento.</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold block mb-2">Entidade Destino (Vulcano/Questor)</label>
                 <select 
-                  onChange={(e) => handleApplyTemplate(e.target.value)}
-                  className="w-full bg-[#131313] border border-[#444] text-white p-3 rounded-sm outline-none text-xs font-bold tracking-widest uppercase transition-colors"
+                  value={targetTable} 
+                  onChange={(e) => setTargetTable(e.target.value)}
+                  className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text-bold)] p-4 rounded-[var(--v-radius)] outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
                 >
-                  <option value="">-- Selecione (Opcional) --</option>
-                  {templates.filter(t => t.target_table === targetTable).map(t => (
-                    <option key={t.id} value={t.mapping_json}>{t.nome}</option>
+                  <option value="VENDAS">Vendas (Contratos)</option>
+                  <option value="RECEBIMENTOS">Recebimentos (Baixas)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold block mb-2">Empreendimento (Filtro)</label>
+                <select 
+                  value={selectedEmpreendimento} 
+                  onChange={(e) => setSelectedEmpreendimento(e.target.value)}
+                  className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text-bold)] p-4 rounded-[var(--v-radius)] outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
+                >
+                  <option value="">TODOS</option>
+                  {empreendimentos.map(e => (
+                    <option key={e.id} value={e.id}>{e.id} - {e.nome}</option>
                   ))}
                 </select>
               </div>
-              <div className="flex gap-6 mt-4 pt-4 border-t border-[#333]">
+              <div className="bg-[#0b0b0b] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col justify-between">
                 <div>
-                  <p className="text-2xl font-black text-[#a259ff]">{columns.length}</p>
-                  <p className="text-xs text-[#888]">Colunas Identificadas</p>
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-2">Aplicar Template Salvo</p>
+                  <select 
+                    onChange={(e) => handleApplyTemplate(e.target.value)}
+                    className="w-full bg-[var(--v-card)] border border-[var(--v-border)] text-[var(--v-text-bold)] p-3 rounded-[var(--v-radius)] outline-none text-xs font-bold tracking-widest uppercase transition-colors"
+                  >
+                    <option value="">-- Selecione (Opcional) --</option>
+                    {templates.filter(t => t.target_table === targetTable).map(t => (
+                      <option key={t.id} value={t.mapping_json}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-6 mt-4 pt-4 border-t border-[var(--v-border)] items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-black text-[var(--v-accent-5)]">{columns.length}</p>
+                    <p className="text-xs text-[var(--v-text-muted)]">Colunas Identificadas</p>
+                  </div>
+                  <button 
+                    onClick={callGeminiMatching} 
+                    disabled={loading}
+                    className="bg-[var(--v-card)] border border-[#a259ff] text-[#a259ff] px-4 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#a259ff]/10 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {loading ? 'Rodando Inferência...' : 'Sugerir Mapeamento (IA)'}
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-4">
-            <button onClick={() => setStep(1)} className="px-6 py-3 rounded-sm text-[#888] border border-[#333] hover:text-white hover:bg-[#1a1a1c] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
-            <button 
-              onClick={callGeminiMatching} 
-              disabled={loading}
-              className="bg-[#a259ff] text-white px-8 py-3 rounded-sm font-bold uppercase tracking-widest text-[10px] hover:bg-[#8e45e6] transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              {loading ? 'Rodando Inferência...' : 'Gerar De-Para (IA)'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Validação Humana / Mapping */}
-      {step === 3 && (
-        <div className="flex flex-col gap-6">
-          <div className="bg-[#1a1a1c] border border-[#ffcc00]/30 p-4 rounded-sm flex items-start gap-4 shadow-lg">
-            <AlertCircle className="text-[#ffcc00] shrink-0" size={24} />
-            <div>
-              <h4 className="text-[#ffcc00] font-bold uppercase tracking-widest text-sm mb-1">Revisão Humana Necessária</h4>
-              <p className="text-[#aaa] text-xs leading-relaxed">A IA sugeriu os seguintes mapeamentos. Revise-os e faça os ajustes necessários antes de importar. Deixe o destino como "Não Importar" se a coluna for irrelevante.</p>
-            </div>
-          </div>
-
-          <div className="bg-[#131313] border border-[#333] rounded-sm overflow-hidden">
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-[#0a0a0a]">
-                  <th className="p-4 border-b border-[#333] text-[10px] font-bold tracking-widest uppercase text-[#555] w-1/2">Coluna Origem (Planilha)</th>
-                  <th className="p-4 border-b border-[#333] text-[10px] font-bold tracking-widest uppercase text-[#a259ff] w-1/2">Campo Destino ({targetTable})</th>
+                <tr className="bg-[var(--v-deep)]">
+                  <th className="p-4 border-b border-[var(--v-border)] text-[10px] font-bold tracking-widest uppercase text-[var(--v-text-faint)] w-1/2">Coluna Origem (Planilha)</th>
+                  <th className="p-4 border-b border-[var(--v-border)] text-[10px] font-bold tracking-widest uppercase text-[var(--v-accent-5)] w-1/2">Campo Destino ({targetTable})</th>
                 </tr>
               </thead>
               <tbody>
                 {columns.map((col, idx) => (
-                  <tr key={idx} className="border-b border-[#222] hover:bg-[#1a1a1a] transition-colors">
-                    <td className="p-4 text-sm font-bold text-[#ccc] flex flex-col gap-1">
+                  <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
+                    <td className="p-4 text-sm font-bold text-[var(--v-text)] flex flex-col gap-1">
                       {col}
-                      <span className="text-[10px] text-[#666] font-normal truncate max-w-sm" title={previewData.length > 0 ? previewData[0][col] : ''}>
+                      <span className="text-[10px] text-[var(--v-text-faint)] font-normal truncate max-w-sm" title={previewData.length > 0 ? previewData[0][col] : ''}>
                         {previewData.length > 0 ? `Ex: ${previewData[0][col]}` : ''}
                       </span>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <ArrowUpRight size={14} className="text-[#444]" />
+                        <ArrowUpRight size={14} className="text-[var(--v-text-faint)]" />
                         <select 
-                          value={mapping[col] || ''} 
+                          value={mapping[col] ?? 'null'} 
                           onChange={(e) => handleMappingChange(col, e.target.value)}
-                          className={`w-full bg-[#0b0b0b] border ${mapping[col] && mapping[col] !== 'null' ? 'border-[#a259ff] text-[#e5e2e1]' : 'border-[#444] text-[#888]'} p-2 rounded-sm outline-none text-xs font-bold uppercase tracking-wider transition-colors`}
+                          className={`w-full bg-[#0b0b0b] border ${mapping[col] && mapping[col] !== 'null' ? 'border-[#a259ff] text-[var(--v-text)]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'} p-2 rounded-[var(--v-radius)] outline-none text-xs font-bold uppercase tracking-wider transition-colors`}
                         >
                           <option value="null">-- Não Importar --</option>
-                          <option value="DATA">DATA</option>
-                          <option value="TOTAL">TOTAL (VALOR)</option>
-                          <option value="DESCRICAO">DESCRICAO</option>
-                          <option value="CLIENTE_CNPJ">CLIENTE/CPF/CNPJ</option>
-                          <option value="CLIENTE_NOME">NOME DO CLIENTE</option>
-                          <option value="EMPREENDIMENTO">EMPREENDIMENTO</option>
-                          <option value="UNIDADE">UNIDADE</option>
-                          <option value="OBSERVACOES">OBSERVACOES</option>
+                          {(TARGET_SCHEMAS[targetTable] || []).map(field => (
+                            <option key={field.value} value={field.value}>{field.label}</option>
+                          ))}
                         </select>
                       </div>
                     </td>
@@ -280,20 +408,245 @@ export default function SmartImporter({ selectedEmpresa }) {
             </table>
           </div>
 
-          <div className="flex justify-between items-center bg-[#131313] p-4 border border-[#333] rounded-sm">
-            <button onClick={handleSaveTemplate} className="flex items-center gap-2 text-[#888] hover:text-[#007aff] transition-colors text-[10px] font-bold uppercase tracking-widest">
+          <div className="flex justify-between items-center bg-[var(--v-card)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)]">
+            <button onClick={handleSaveTemplate} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[var(--v-accent-4)] transition-colors text-[10px] font-bold uppercase tracking-widest">
               <Save size={14} /> Salvar como Template
             </button>
             <div className="flex gap-4">
-              <button onClick={() => setStep(2)} className="px-6 py-3 rounded-sm text-[#888] border border-[#333] hover:text-white hover:bg-[#1a1a1c] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
-              <button 
-                onClick={handleFinalizeImport} 
-                disabled={loading}
-                className="bg-[#34c759] text-black px-8 py-3 rounded-sm font-bold uppercase tracking-widest text-[10px] hover:opacity-80 transition-opacity disabled:opacity-50 flex items-center gap-2"
+              <button onClick={() => setStep(1)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
+              <button
+                onClick={handlePreviewMatch}
+                disabled={matchLoading}
+                className="bg-[#a259ff] text-[var(--v-text-bold)] px-8 py-3 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#8e45e6] transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                {loading ? 'Consolidando...' : 'Confirmar Importação'}
+                {matchLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUpRight size={16} />}
+                {matchLoading ? 'Analisando...' : 'Avançar para Match →'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Preview de Match */}
+      {step === 3 && (
+        <div className="flex flex-col gap-6">
+          {/* KPIs */}
+          {(() => {
+            const total   = matchData.length;
+            const quitados = matchData.filter(r => r.status === 'JA_QUITADO').length;
+            const matches  = matchData.filter(r => r.status === 'MATCH_PERFEITO' || r.status === 'MATCH_MANUAL').length;
+            const semMatch = matchData.filter(r => r.status === 'SEM_MATCH').length;
+            return (
+              <div className="grid grid-cols-4 gap-4">
+                {[{l:'Total Linhas', v:total, c:'border-[var(--v-border)]'},
+                  {l:'Já Quitados', v:quitados, c:'border-[#34c759]'},
+                  {l:'Match / Vinc.', v:matches, c:'border-[#007aff]'},
+                  {l:'Sem Match', v:semMatch, c:'border-[#ff4d00]'}].map(k => (
+                  <div key={k.l} className={`bg-[var(--v-card)] border-l-4 ${k.c} p-5 rounded-[var(--v-radius)]`}>
+                    <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">{k.l}</p>
+                    <p className="text-3xl font-black text-[var(--v-text-bold)]">{k.v}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Tabela */}
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
+            <div className="overflow-x-auto max-h-[55vh] overflow-y-auto custom-scrollbar">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-[var(--v-deep)] sticky top-0 z-10">
+                  <tr>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Status</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Nº Parcela</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Cliente (Planilha)</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Vencimento</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Pagamento</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent-3)] text-right">Valor Pago</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent)] text-right">Valor Vulcano</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[#ffcc00] text-right">Acréscimos</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[#34c759] text-right">Descontos</th>
+                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchData.map((r, idx) => {
+                    const meta = STATUS_META[r.status] || { label: r.status, cls: 'bg-[#333] text-[var(--v-text-muted)] border-[var(--v-border)]' };
+                    const fmt = v => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '-';
+                    return (
+                      <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
+                        <td className="p-3">
+                          <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${meta.cls}`}>{meta.label}</span>
+                        </td>
+                        <td className="p-3 text-[var(--v-text-muted)] font-mono">
+                          {r.numero_parcela || '-'}
+                          {r.num_parcela_planilha && (
+                            <span className="block mt-1 text-[9px] text-[var(--v-accent)] opacity-80" title="Número da Parcela na Planilha">
+                              Planilha: {r.num_parcela_planilha}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 font-bold text-[var(--v-text)] truncate max-w-[150px]">{r.cliente_planilha || '-'}</td>
+                        <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.dt_vencimento || '-'}</td>
+                        <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.dt_pagamento || '-'}</td>
+                        <td className="p-3 text-right font-black text-[var(--v-accent-3)]">{fmt(r.valor_planilha)}</td>
+                        <td className="p-3 text-right font-black text-[var(--v-accent)]">{fmt(r.valor_vulcano)}</td>
+                        <td className="p-3 text-right font-bold text-[#ffcc00]">{r.acrescimos > 0 ? fmt(r.acrescimos) : '-'}</td>
+                        <td className="p-3 text-right font-bold text-[#34c759]">{r.descontos > 0 ? fmt(r.descontos) : '-'}</td>
+                        <td className="p-3">
+                          {r.status === 'SEM_MATCH' && (
+                            <button
+                              onClick={() => setManualMatchModal({ open: true, rowData: r, rowIndex: idx })}
+                              className="px-2 py-1 bg-[var(--v-deep)] border border-[#ff4d00]/30 text-[#ff4d00] hover:bg-[#ff4d00]/10 hover:border-[#ff4d00] rounded text-[9px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1"
+                            >
+                              🔗 Vincular
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {matchData.length === 0 && (
+                    <tr><td colSpan="10" className="p-12 text-center text-[var(--v-text-faint)] uppercase tracking-widest text-[10px]">Nenhum resultado retornado pelo backend.</td></tr>
+                  )}
+                </tbody>
+                <tfoot className="bg-[#0b0b0b] sticky bottom-0 border-t-2 border-[var(--v-border)]">
+                  <tr>
+                    <td colSpan="5" className="p-3 text-right text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">TOTAL FATURAMENTO (Recebido)</td>
+                    <td className="p-3 text-right font-black text-[#a259ff] text-sm">
+                      {(() => {
+                        const sum = matchData.filter(r => r.status === 'MATCH_PERFEITO' || r.status === 'MATCH_MANUAL' || r.status === 'JA_QUITADO').reduce((acc, r) => acc + (r.valor_planilha || 0), 0);
+                        return `R$ ${sum.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
+                      })()}
+                    </td>
+                    <td colSpan="4"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center bg-[var(--v-card)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)]">
+            <div className="flex items-center gap-4">
+              <button onClick={handleSaveTemplate} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[var(--v-accent-4)] transition-colors text-[10px] font-bold uppercase tracking-widest">
+                <Save size={14} /> Salvar Template
+              </button>
+              <button onClick={handleDownloadTxt} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[#007aff] transition-colors text-[10px] font-bold uppercase tracking-widest">
+                <Download size={14} /> Baixar TXT
+              </button>
+            </div>
+            <div className="flex gap-4 items-center">
+              <button onClick={() => setStep(2)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar ao DE-PARA</button>
+              <div className="flex items-center gap-3 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest ml-4">
+                <span>{matchData.filter(r=>r.status==='MATCH_PERFEITO').length} pronto(s)</span>
+                <span className="text-[var(--v-border)]">|</span>
+                <span>{matchData.filter(r=>r.status==='JA_QUITADO').length} quitado(s)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Match Manual */}
+      {manualMatchModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#111] border border-[var(--v-border)] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-[var(--v-border)] flex justify-between items-center bg-[var(--v-deep)]">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-[var(--v-text-bold)] flex items-center gap-2">
+                  🔗 Pareamento Manual
+                </h3>
+                <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] mt-1">Selecione a parcela correspondente do sistema para vincular ao recebimento da planilha.</p>
+              </div>
+              <button onClick={() => setManualMatchModal({open: false, rowData: null, rowIndex: null})} className="text-[var(--v-text-muted)] hover:text-[#ff4d4d] transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 border-b border-[var(--v-border)] bg-[#0b0b0b]">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#a259ff] mb-3">Dados da Planilha (Pagamento Efetuado)</h4>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                  <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Cliente</p>
+                  <p className="text-xs font-bold text-[var(--v-text)] truncate">{manualMatchModal.rowData?.cliente_planilha || '-'}</p>
+                </div>
+                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                  <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Vencimento</p>
+                  <p className="text-xs font-mono text-[var(--v-text-muted)]">{manualMatchModal.rowData?.dt_vencimento || '-'}</p>
+                </div>
+                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                  <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Pagamento</p>
+                  <p className="text-xs font-mono text-[var(--v-text-muted)]">{manualMatchModal.rowData?.dt_pagamento || '-'}</p>
+                </div>
+                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                  <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Valor Pago</p>
+                  <p className="text-sm font-black text-[var(--v-accent-3)]">R$ {Number(manualMatchModal.rowData?.valor_planilha || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 bg-[var(--v-card)]">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-muted)] mb-3">Selecione a Parcela do Questor ({parcelasAbertas.length} em aberto)</h4>
+              
+              {parcelasAbertas.length === 0 ? (
+                <div className="p-8 text-center border border-dashed border-[var(--v-border)] rounded">
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)]">Nenhuma parcela em aberto encontrada para os filtros atuais.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {parcelasAbertas.map(p => {
+                    const rowVal = manualMatchModal.rowData?.valor_planilha || 0;
+                    const diff = Math.round((rowVal - p.valor_parcela) * 100) / 100;
+                    const isAcrescimo = diff > 0;
+                    const isDesconto = diff < 0;
+                    
+                    return (
+                      <div key={p.id} className="flex items-center justify-between p-3 border border-[var(--v-border)] bg-[#0b0b0b] rounded hover:border-[#a259ff] transition-colors group">
+                        <div className="flex items-center gap-4 flex-1">
+                          <div className="bg-[#1a1a1a] px-3 py-1 rounded text-xs font-mono text-[var(--v-text-muted)] w-16 text-center border border-[var(--v-border)]">
+                            Nº {p.numero_parcela}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-[var(--v-text)] truncate">{p.cliente_nome}</p>
+                            <p className="text-[10px] text-[var(--v-text-faint)] truncate">{p.descricao_unidade} | Venc: {p.data_vencimento}</p>
+                          </div>
+                          <div className="text-right px-4">
+                            <p className="text-sm font-black text-[var(--v-accent)]">R$ {p.valor_parcela.toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
+                            {diff !== 0 && (
+                              <p className={`text-[9px] font-bold uppercase tracking-widest ${isAcrescimo ? 'text-[#ffcc00]' : 'text-[#34c759]'}`}>
+                                {isAcrescimo ? '+ Acréscimo' : '- Desconto'}: R$ {Math.abs(diff).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const newData = [...matchData];
+                            const idx = manualMatchModal.rowIndex;
+                            newData[idx] = {
+                              ...newData[idx],
+                              status: 'MATCH_MANUAL',
+                              id_parcela: p.id,
+                              numero_parcela: p.numero_parcela,
+                              cliente_vulcano: p.cliente_nome,
+                              dt_vencimento: p.data_vencimento,
+                              valor_vulcano: p.valor_parcela,
+                              unidade: p.descricao_unidade,
+                              acrescimos: isAcrescimo ? Math.abs(diff) : 0,
+                              descontos: isDesconto ? Math.abs(diff) : 0
+                            };
+                            setMatchData(newData);
+                            setManualMatchModal({open: false, rowData: null, rowIndex: null});
+                          }}
+                          className="px-4 py-2 bg-[var(--v-deep)] border border-[#a259ff]/30 text-[#a259ff] rounded text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 hover:bg-[#a259ff] hover:text-white transition-all ml-4"
+                        >
+                          Vincular
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

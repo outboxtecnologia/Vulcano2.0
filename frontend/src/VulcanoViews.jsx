@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Download, RefreshCw, Upload, Play, CheckCircle2, CheckCircle, ChevronDown, Layers, Activity,
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
     Zap, Link as LinkIcon, Cpu, AlertCircle, FileText, CheckSquare, MessageSquare, Plus, PlusCircle, PenTool, Hash, Filter,
     LayoutGrid, History, ListFilter, ShoppingCart, Users, DollarSign, Building2, Loader2, ShieldAlert,
-    UploadCloud, Send, Save, Trash2, Code, FileSpreadsheet, Minimize, Maximize, Sparkles, ChevronUp
+    UploadCloud, Send, Save, Trash2, Code, FileSpreadsheet, Minimize, Maximize, Sparkles, ChevronUp, Lock
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar,
@@ -14,7 +15,7 @@ import {
 
 
 
-const API_BASE = "http://127.0.0.1:6000";
+const API_BASE = "http://127.0.0.1:8000";
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';
@@ -23,6 +24,7 @@ const formatCurrency = (val) => {
 
 export const DashboardMeta = ({ selectedEmpresa }) => {
     const [data, setData] = useState(null);
+    const [lancamentos, setLancamentos] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [dataIniFilter, setDataIniFilter] = useState(`${new Date().getFullYear()}-01`);
@@ -39,21 +41,21 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
         setError(null);
 
         // Fetching the vectorized Pandas data (Limited to filters)
-        fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIniFilter ? `&data_ini=${dataIniFilter}` : ''}${dataFimFilter ? `&data_fim=${dataFimFilter}` : ''}`)
-            .then(res => {
-                if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
-                return res.json();
-            })
-            .then(json => {
-                setData(json);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Dashboard Fetch Error:", err);
-                setError(err.message);
-                setLoading(false);
-            });
-    }, [selectedEmpresa, fetchTrigger]);
+        Promise.all([
+            fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIniFilter ? `&data_ini=${dataIniFilter}` : ''}${dataFimFilter ? `&data_fim=${dataFimFilter}` : ''}`).then(res => res.json()),
+            fetch(`${API_BASE}/api/vulcano/dashboard-lancamentos?empresa_id=${selectedEmpresa}`).then(res => res.json()).catch((err) => ({ error: err.message }))
+        ])
+        .then(([caixaJson, lancJson]) => {
+            setData(caixaJson);
+            setLancamentos(lancJson);
+            setLoading(false);
+        })
+        .catch(err => {
+            console.error("Dashboard Fetch Error:", err);
+            setError(err.message);
+            setLoading(false);
+        });
+    }, [selectedEmpresa, fetchTrigger, dataIniFilter, dataFimFilter]);
 
     const stats = useMemo(() => {
         if (!data || !data.dashboard_meta) return null;
@@ -102,7 +104,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
             <p className="text-sm opacity-70 mb-6">{error}</p>
             <button 
                 onClick={() => window.location.reload()}
-                className="bg-[var(--v-error)] text-white px-6 py-2 rounded-sm font-bold uppercase text-[10px] tracking-widest"
+                className="bg-[var(--v-error)] text-[var(--v-text-bold)] px-6 py-2 rounded-[var(--v-radius)] font-bold uppercase text-[10px] tracking-widest"
             >
                 Tentar Novamente
             </button>
@@ -128,22 +130,22 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                             value={empreendimentoFilter}
                             onChange={(e) => setEmpreendimentoFilter(e.target.value)}
                             placeholder="Buscar res./cond. ..."
-                            className="bento-input w-full pl-9"
+                            className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono pl-9 py-1.5 rounded outline-none placeholder-[#444] transition-colors"
                         />
                     </div>
                 </div>
                 <div>
                     <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Mês Inicial</label>
-                    <input type="month" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bento-input min-w-[140px]" />
+                    <input type="month" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
                 </div>
                 <div>
                     <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Mês Final</label>
-                    <input type="month" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bento-input min-w-[140px]" />
+                    <input type="month" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
                 </div>
                 <div className="flex-1 flex justify-end">
                     <button 
                         onClick={() => setFetchTrigger(prev => prev + 1)}
-                        className="bg-[var(--v-accent-4)] text-black font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-sm hover:opacity-80 transition-opacity flex items-center gap-2"
+                        className="bg-[var(--v-accent-4)] text-black font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-[var(--v-radius)] hover:opacity-80 transition-opacity flex items-center gap-2"
                     >
                         <RefreshCw size={14} /> Atualizar Matriz
                     </button>
@@ -175,14 +177,92 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                 ))}
             </div>
 
+            {/* Marcadores de Delay da Escrituração */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 mb-6">
+                {!lancamentos ? (
+                    <div className="col-span-2 magma-card p-6 flex items-center justify-center text-[var(--v-text-muted)] animate-pulse">
+                        <RefreshCw className="animate-spin mr-3" size={16} /> 
+                        <span className="text-[10px] uppercase font-bold tracking-widest">Carregando indicadores de escrituração...</span>
+                    </div>
+                ) : (
+                    (() => {
+                        if (lancamentos.error) {
+                            return (
+                                <div className="col-span-2 magma-card p-6 flex items-center justify-center text-[var(--v-error)]">
+                                    <AlertCircle className="mr-3" size={16} /> 
+                                    <span className="text-[10px] uppercase font-bold tracking-widest">Erro na busca: {lancamentos.error}</span>
+                                </div>
+                            );
+                        }
+                        
+                        const renderDelayMarker = (items, label, icon) => {
+                            if (!items || items.length === 0) return (
+                                <div className="magma-card p-4 flex items-center gap-4">
+                                    <div className="p-3 bg-[var(--v-surface-container)] rounded-full text-[var(--v-text-muted)]">
+                                        {icon}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-faint)]">{label}</h4>
+                                        <p className="text-sm font-bold text-[var(--v-error)]">Sem resposta do servidor</p>
+                                    </div>
+                                </div>
+                            );
+                            
+                            const lastDateStr = items[0].data; // DD/MM/YYYY
+                            const [d, m, y] = lastDateStr.split('/');
+                            const lastDate = new Date(y, m - 1, d);
+                            const now = new Date();
+                            const diffTime = Math.abs(now - lastDate);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            const diffMonths = (now.getFullYear() - lastDate.getFullYear()) * 12 + (now.getMonth() - lastDate.getMonth());
+                            
+                            let statusColor = "var(--v-accent-3)";
+                            let statusText = "Em Dia";
+                            
+                            if (diffMonths > 1) {
+                                statusColor = "var(--v-error)";
+                                statusText = `Atraso (${diffMonths} meses)`;
+                            } else if (diffDays > 15) {
+                                statusColor = "var(--v-accent-2)";
+                                statusText = `Atenção (${diffDays} dias)`;
+                            }
+
+                            return (
+                                <div className="magma-card p-4 flex items-center gap-4 border-l-[3px]" style={{ borderLeftColor: statusColor }}>
+                                    <div className="p-3 bg-[var(--v-surface-container)] rounded-full" style={{ color: statusColor }}>
+                                        {icon}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">{label}</h4>
+                                        <div className="flex justify-between items-end mt-1">
+                                            <span className="text-xl font-black text-[var(--v-text-bold)]">{lastDateStr}</span>
+                                            <span className="text-[9px] uppercase font-black tracking-widest px-2 py-1 rounded" style={{ backgroundColor: `${statusColor}22`, color: statusColor }}>
+                                                {statusText}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        };
+
+                        return (
+                            <>
+                                {renderDelayMarker(lancamentos.vendas, 'Status Escrituração de Vendas', <ShoppingCart size={20} />)}
+                                {renderDelayMarker(lancamentos.recebimentos, 'Status Contas a Receber (Baixas)', <Database size={20} />)}
+                            </>
+                        );
+                    })()
+                )}
+            </div>
+
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 magma-card p-6 h-[400px] flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xs uppercase font-black tracking-widest text-[var(--v-text-muted)]">Evolução Financeira (Mensal)</h3>
                         <div className="flex gap-4 text-[9px] uppercase font-bold tracking-widest">
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--v-accent-3)]"></span> Caixa</span>
-                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--v-accent-5)]"></span> Societária</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-3)]"></span> Caixa</span>
+                            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-accent-5)]"></span> Societária</span>
                         </div>
                     </div>
                     <div className="flex-1">
@@ -237,7 +317,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-[#222] text-center">
+                    <div className="mt-4 pt-4 border-t border-[var(--v-border)] text-center">
                         <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest mb-1">Carga Caixa Acumulada</p>
                         <h5 className="text-lg font-bold text-[var(--v-accent-3)]">{formatCurrency(stats.tributos_caixa)}</h5>
                     </div>
@@ -245,7 +325,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
             </div>
 
             {/* Table Detail */}
-            <div className="magma-card rounded-sm overflow-hidden border border-[var(--v-border)]">
+            <div className="magma-card rounded-[var(--v-radius)] overflow-hidden border border-[var(--v-border)]">
                 <div className="p-4 bg-[var(--v-surface-container)] border-b border-[var(--v-border)] flex justify-between items-center">
                     <h3 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">Detalhamento por Empreendimento</h3>
                     <div className="text-[9px] text-[var(--v-text-faint)] uppercase font-bold bg-black/30 px-2 py-1 rounded">Visualização Consolidada Pandas</div>
@@ -283,10 +363,10 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                                     {expandedRow === idx && meta.unidades && meta.unidades.length > 0 && (
                                         <tr className="bg-[var(--v-bg)]/50">
                                             <td colSpan={7} className="p-4">
-                                                <div className="overflow-x-auto max-h-[300px] custom-scrollbar border border-[#222]">
+                                                <div className="overflow-x-auto max-h-[300px] custom-scrollbar border border-[var(--v-border)]">
                                                     <table className="w-full text-left text-[10px]">
-                                                        <thead className="bg-[#111] sticky top-0">
-                                                            <tr className="text-[#888] uppercase tracking-widest font-bold">
+                                                        <thead className="bg-[var(--v-deep)] sticky top-0">
+                                                            <tr className="text-[var(--v-text-muted)] uppercase tracking-widest font-bold">
                                                                 <th className="p-2">Unidade</th>
                                                                 <th className="p-2">Comprador</th>
                                                                 <th className="p-2 text-right">VGV</th>
@@ -296,7 +376,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                                                         </thead>
                                                         <tbody>
                                                             {meta.unidades.map((u, i) => (
-                                                                <tr key={i} className="border-b border-[#222] hover:bg-[#1a1a1c]">
+                                                                <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)]">
                                                                     <td className="p-2">{u.unidade}</td>
                                                                     <td className="p-2 max-w-[200px] truncate">{u.comprador}</td>
                                                                     <td className="p-2 text-right font-mono text-[#aa3333]">{formatCurrency(u.vgv)}</td>
@@ -316,6 +396,8 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                     </table>
                 </div>
             </div>
+
+
         </div>
     );
 };
@@ -446,16 +528,16 @@ export const VendasView = ({ selectedEmpresa }) => {
           </h2>
           <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Unidades Comercializadas e Distratos</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent-3)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-sm hover:opacity-90 transition-opacity flex items-center gap-2">
+        <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent-3)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity flex items-center gap-2">
           <Plus size={16}/> Cadastrar Venda
         </button>
       </div>
       
       {showForm && (
-        <div className="magma-card border border-[var(--v-accent-3)]/30 rounded-sm p-6 animate-in slide-in-from-top-4 overflow-y-auto max-h-[60vh] custom-scrollbar">
+        <div className="magma-card border border-[var(--v-accent-3)]/30 rounded-[var(--v-radius)] p-6 animate-in slide-in-from-top-4 overflow-y-auto max-h-[60vh] custom-scrollbar">
           <div className="flex justify-between items-center mb-6 border-b border-[var(--v-border)] pb-3">
             <h3 className="text-xs uppercase tracking-widest text-[var(--v-accent-3)] font-black">Nova Venda</h3>
-            <button type="button" onClick={() => setShowForm(false)} className="text-[var(--v-text-faint)] hover:text-white text-[10px] uppercase tracking-widest font-bold">FECHAR X</button>
+            <button type="button" onClick={() => setShowForm(false)} className="text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] text-[10px] uppercase tracking-widest font-bold">FECHAR X</button>
           </div>
           
           <form className="flex flex-col gap-6" onSubmit={handleFormSubmit}>
@@ -468,10 +550,10 @@ export const VendasView = ({ selectedEmpresa }) => {
               <div className="w-40"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Data Venda</label><input name="data" type="date" required className="bento-input w-full" /></div>
             </div>
 
-            <div className="border border-[var(--v-border)] bg-[var(--v-surface-container)] p-4 rounded-sm">
+            <div className="border border-[var(--v-border)] bg-[var(--v-surface-container)] p-4 rounded-[var(--v-radius)]">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest font-bold flex items-center gap-2"><Users size={12}/> Compradores / Sociedade</h4>
-                <button type="button" onClick={addComprador} className="text-[var(--v-accent-3)] hover:text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Adicionar Comprador</button>
+                <button type="button" onClick={addComprador} className="text-[var(--v-accent-3)] hover:text-[var(--v-text-bold)] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Adicionar Comprador</button>
               </div>
               <div className="flex flex-col gap-3">
                 {compradores.map((comp, idx) => (
@@ -480,17 +562,17 @@ export const VendasView = ({ selectedEmpresa }) => {
                     <div className="w-40"><label className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest block mb-1">CPF/CNPJ</label><input value={comp.cpf_cnpj} onChange={(e) => updateComprador(comp.id, 'cpf_cnpj', e.target.value)} required className="bento-input w-full" /></div>
                     <div className="w-24"><label className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest block mb-1">% Compra</label><input type="number" step="0.01" value={comp.percentual} onChange={(e) => updateComprador(comp.id, 'percentual', parseFloat(e.target.value) || 0)} required className="bento-input w-full text-right" /></div>
                     {compradores.length > 1 && (
-                      <button type="button" onClick={() => removeComprador(comp.id)} className="bg-[var(--v-text-red)]/10 text-[var(--v-text-red)] border border-[var(--v-text-red)]/30 hover:bg-[var(--v-text-red)] hover:text-white p-2 rounded-sm mb-[1px] transition-colors"><AlertCircle size={14}/></button>
+                      <button type="button" onClick={() => removeComprador(comp.id)} className="bg-[var(--v-text-red)]/10 text-[var(--v-text-red)] border border-[var(--v-text-red)]/30 hover:bg-[var(--v-text-red)] hover:text-[var(--v-text-bold)] p-2 rounded-[var(--v-radius)] mb-[1px] transition-colors"><AlertCircle size={14}/></button>
                     )}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="border border-[var(--v-border)] bg-[var(--v-surface-container)] p-4 rounded-sm overflow-x-auto custom-scrollbar">
+            <div className="border border-[var(--v-border)] bg-[var(--v-surface-container)] p-4 rounded-[var(--v-radius)] overflow-x-auto custom-scrollbar">
               <div className="flex justify-between items-center mb-4 min-w-[700px]">
                 <h4 className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest font-bold flex items-center gap-2"><DollarSign size={12}/> Condições / Projeção</h4>
-                <button type="button" onClick={addCondicao} className="text-[var(--v-accent)] hover:text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Nova Condição</button>
+                <button type="button" onClick={addCondicao} className="text-[var(--v-accent)] hover:text-[var(--v-text-bold)] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Nova Condição</button>
               </div>
               <div className="flex flex-col gap-3 min-w-[700px]">
                 <div className="flex gap-3 px-1">
@@ -520,7 +602,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                       <option value="IPCA">IPCA</option>
                     </select>
                     {condicoes.length > 1 ? (
-                      <button type="button" onClick={() => removeCondicao(cond.id)} className="text-[var(--v-text-red)] hover:text-white w-8 flex justify-center"><AlertCircle size={16}/></button>
+                      <button type="button" onClick={() => removeCondicao(cond.id)} className="text-[var(--v-text-red)] hover:text-[var(--v-text-bold)] w-8 flex justify-center"><AlertCircle size={16}/></button>
                     ) : <span className="w-8"></span>}
                   </div>
                 ))}
@@ -528,7 +610,7 @@ export const VendasView = ({ selectedEmpresa }) => {
             </div>
 
             <div className="flex justify-end mt-2">
-              <button type="submit" className="bg-[var(--v-accent-3)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-sm hover:opacity-90 transition-opacity">Registrar Contrato de Venda</button>
+              <button type="submit" className="bg-[var(--v-accent-3)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity">Registrar Contrato de Venda</button>
             </div>
           </form>
         </div>
@@ -537,15 +619,15 @@ export const VendasView = ({ selectedEmpresa }) => {
       {/* STITCH MASTER-DETAIL LAYOUT */}
       <div className="flex gap-6 h-[calc(100vh-220px)] overflow-hidden">
         {/* SIDEBAR MASTER */}
-        <div className="w-64 magma-card rounded-sm flex flex-col shrink-0 border border-[var(--v-border)]">
+        <div className="w-64 magma-card rounded-[var(--v-radius)] flex flex-col shrink-0 border border-[var(--v-border)]">
           <div className="p-4 border-b border-[var(--v-border)] bg-[var(--v-surface-container)] flex items-center gap-2">
             <Building2 size={16} className="text-[var(--v-text-faint)]"/>
             <h3 className="text-[10px] uppercase font-bold tracking-widest text-[var(--v-text-muted)]">Obras/Empreendimentos</h3>
           </div>
-          <div className="overflow-y-auto flex-1 p-2 space-y-1">
+          <div className="overflow-y-auto flex-1 p-2 space-y-[2px] custom-scrollbar">
             <div 
               onClick={() => setEmpreendimentoFilter('')}
-              className={`p-3 text-xs font-bold cursor-pointer transition-colors rounded-sm ${empreendimentoFilter === '' ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-border)]'}`}
+              className={`px-3 py-1.5 text-[11px] font-bold cursor-pointer transition-colors border-l-[3px] rounded-r-[var(--v-radius)] ${empreendimentoFilter === '' ? 'border-[var(--v-accent-3)] text-[var(--v-accent-3)] bg-[var(--v-hover)]' : 'border-transparent text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`}
             >
               [ CONSOLIDADO GERAL ]
             </div>
@@ -553,7 +635,7 @@ export const VendasView = ({ selectedEmpresa }) => {
               <div 
                 key={i} 
                 onClick={() => setEmpreendimentoFilter(emp)}
-                className={`p-3 text-xs cursor-pointer transition-colors truncate rounded-sm ${empreendimentoFilter === emp ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
+                className={`px-3 py-1.5 text-[11px] cursor-pointer transition-colors truncate border-l-[3px] rounded-r-[var(--v-radius)] ${empreendimentoFilter === emp ? 'border-[var(--v-accent-3)] text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'border-transparent text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
                 title={emp}
               >
                 {emp || 'Indefinido'}
@@ -565,65 +647,65 @@ export const VendasView = ({ selectedEmpresa }) => {
         {/* DETAIL CONTENT */}
         <div className="flex-1 flex flex-col gap-5 overflow-hidden">
           {/* SEARCH FILTERS */}
-          <div className="magma-card p-4 border border-[var(--v-border)] flex gap-4 shrink-0 rounded-sm">
+          <div className="magma-card p-4 border border-[var(--v-border)] flex gap-4 shrink-0 rounded-[var(--v-radius)]">
              <div className="flex-1">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Pesquisar Comprador</label>
-                <input type="text" placeholder="Nome ou Documento..." value={compradorFilter} onChange={(e) => setCompradorFilter(e.target.value)} className="bento-input w-full" />
+                <input type="text" placeholder="Nome ou Documento..." value={compradorFilter} onChange={(e) => setCompradorFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
              <div className="flex-1">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Unidade / Num / Desc</label>
-                <input type="text" placeholder="Ex: Apto 101..." value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="bento-input w-full" />
+                <input type="text" placeholder="Ex: Apto 101..." value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
              <div className="w-32">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Data Inicial</label>
-                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bento-input w-full" />
+                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
              <div className="w-32">
                 <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Data Final</label>
-                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bento-input w-full" />
+                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
              </div>
-             <div className="flex items-end text-[var(--v-text-faint)]">
-                {filtered.length} Vendas
+             <div className="flex items-end text-[var(--v-text-faint)] text-[11px] font-mono whitespace-nowrap pb-1.5">
+                <span className="text-[var(--v-accent-3)] font-black mr-1">{filtered.length}</span> VENDAS
              </div>
           </div>
 
           {/* KPI BENTO GRIDS */}
           <div className="grid grid-cols-2 gap-5 shrink-0">
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-accent-3)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">VGV Lançado (Período / Empresa)</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalVgv)}</h4>
+            <div className="magma-card overflow-hidden relative group p-4 border-l-2 border-l-[var(--v-accent-3)] flex justify-between items-center bg-[#111]">
+               <div className="flex flex-col">
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-muted)] font-black mb-0.5">VGV Lançado (Período/Empresa)</p>
+                  <h4 className="text-3xl font-black text-[var(--v-text-bold)] tabular-nums">{formatCurrency(totalVgv)}</h4>
                </div>
                <ShoppingCart size={40} className="text-[var(--v-accent-3)] opacity-20 absolute -right-2 -bottom-2 group-hover:scale-110 transition-transform"/>
             </div>
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-text-red)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Total de Distratos Realizados</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalDistratos)}</h4>
+            <div className="magma-card overflow-hidden relative group p-4 border-l-2 border-l-[var(--v-text-red)] flex justify-between items-center bg-[#111]">
+               <div className="flex flex-col">
+                  <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-muted)] font-black mb-0.5">Total de Distratos Realizados</p>
+                  <h4 className="text-3xl font-black text-[var(--v-text-bold)] tabular-nums">{formatCurrency(totalDistratos)}</h4>
                </div>
             </div>
           </div>
 
           {/* TABLE DATA GRID (PAGINATED) */}
-          <div className="magma-card border border-[var(--v-border)] rounded-sm flex flex-col flex-1 overflow-hidden relative">
+          <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col flex-1 overflow-hidden relative">
             {loading && (
                <div className="absolute inset-0 bg-[#00000099] backdrop-blur-sm flex flex-col items-center justify-center z-50">
                    <Loader2 className="animate-spin text-[var(--v-accent-3)] mb-3" size={40} />
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-white">Integrando Vendas Vulcano...</span>
+                   <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-bold)]">Integrando Vendas Vulcano...</span>
                </div>
             )}
-            <div className="overflow-auto flex-1">
-               <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-auto flex-1 custom-scrollbar">
+               <table className="w-full text-left text-xs border-collapse font-mono tabular-nums">
                   <thead className="bg-[var(--v-surface-container)] sticky top-0 z-10 shadow-sm border-b border-[var(--v-border)]">
                      <tr>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold w-32 border-b border-[var(--v-border)]">Venda/Contrato</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Data</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Descrição/Unid.</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">CPF/CNPJ</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Cliente</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold border-b border-[var(--v-border)] text-right">Total Venda</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent)] uppercase font-bold border-b border-[var(--v-border)] text-center w-24">Condições</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-red)] uppercase font-bold border-b border-[var(--v-border)] text-center w-24">Distrato</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Contrato</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Data</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Descrição/Unid.</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">CPF/CNPJ</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Cliente</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold border-b border-[var(--v-border)] text-right">Total Venda</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[#888] uppercase font-bold border-b border-[var(--v-border)] text-center w-16" title="Projeção e Condições">Cond</th>
+                       <th className="px-3 py-2 text-[9px] tracking-widest text-[#888] uppercase font-bold border-b border-[var(--v-border)] text-center w-16" title="Averbar Distrato/Cancelamento">Dist</th>
                      </tr>
                   </thead>
                   <tbody>
@@ -636,13 +718,16 @@ export const VendasView = ({ selectedEmpresa }) => {
                           <td className="p-3 text-[var(--v-text-muted)] truncate max-w-[150px]" title={v.cliente_nome}>{v.cliente_nome}</td>
                           <td className={`p-3 text-right font-black text-[13px] ${v.distrato === 'S' ? 'text-[var(--v-text-red)]' : 'text-[var(--v-accent-3)]'}`}>{formatCurrency(v.total)}</td>
                           <td className="p-3 text-center">
-                              <button onClick={() => openCondicoes(v)} className="text-[var(--v-accent)] border border-[var(--v-accent)]/40 hover:bg-[var(--v-accent)] hover:text-black transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-sm">Cond.</button>
+                              <button onClick={() => openCondicoes(v)} className="text-[var(--v-accent)] border border-[var(--v-accent)]/40 hover:bg-[var(--v-accent)] hover:text-black transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Cond.</button>
                           </td>
                           <td className="p-3 text-center">
                               {v.distrato === 'S' ? (
-                                  <span className="text-[var(--v-text-red)] text-[9px] uppercase font-bold px-2 py-0.5 bg-[var(--v-text-red)]/10 rounded">Anulado</span>
+                                  <button onClick={() => openCondicoes(v)} className="flex flex-col items-center gap-1 hover:scale-105 transition-transform" title="Ver detalhes do distrato">
+                                      <span className="text-[var(--v-text-red)] text-[9px] uppercase font-bold px-2 py-0.5 bg-[var(--v-text-red)]/10 border border-[var(--v-text-red)]/20 rounded cursor-pointer">Anulado</span>
+                                      {v.data_distrato && <span className="text-[8px] text-[var(--v-text-red)] font-mono tracking-widest">{v.data_distrato}</span>}
+                                  </button>
                               ) : (
-                                  <button onClick={() => setDistratoModal(v)} className="text-[var(--v-text-muted)] border border-[var(--v-border)] hover:border-[var(--v-text-red)] hover:text-[var(--v-text-red)] transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-sm">Distratar</button>
+                                  <button onClick={() => setDistratoModal(v)} className="text-[var(--v-text-muted)] border border-[var(--v-border)] hover:border-[var(--v-text-red)] hover:text-[var(--v-text-red)] transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Distratar</button>
                               )}
                           </td>
                        </tr>
@@ -672,10 +757,10 @@ export const VendasView = ({ selectedEmpresa }) => {
       {/* DISTRATO MODAL (STITCH) */}
       {distratoModal && (
         <div className="fixed inset-0 bg-[#000000CC] backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
-          <div className="magma-card border border-[var(--v-text-red)] p-7 rounded-sm max-w-md w-full shadow-[0_0_50px_rgba(255,59,48,0.15)]">
+          <div className="magma-card border border-[var(--v-text-red)] p-7 rounded-[var(--v-radius)] max-w-md w-full shadow-[0_0_50px_rgba(255,59,48,0.15)]">
             <h3 className="text-sm uppercase tracking-widest text-[var(--v-text-red)] font-black mb-5">Registrar Distrato/Rescisão</h3>
             
-            <div className="bg-[var(--v-surface-container)] p-4 border border-[var(--v-border)] rounded-sm mb-5">
+            <div className="bg-[var(--v-surface-container)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)] mb-5">
               <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Alvo do Distrato</p>
               <p className="text-sm font-bold text-[var(--v-text-bold)] block truncate mb-1">{distratoModal.descricao}</p>
               <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-muted)] font-bold">Cliente: {distratoModal.cliente_nome}</p>
@@ -700,7 +785,7 @@ export const VendasView = ({ selectedEmpresa }) => {
               
               <div className="flex justify-end gap-3 mt-6">
                 <button type="button" onClick={() => setDistratoModal(null)} className="bento-button border-transparent hover:bg-[var(--v-hover)]">Cancelar</button>
-                <button type="submit" className="bg-[var(--v-text-red)] text-white text-[10px] font-bold uppercase tracking-widest px-6 py-3 rounded-sm hover:opacity-90 transition-opacity">Confirmar Averbação</button>
+                <button type="submit" className="bg-[var(--v-text-red)] text-[var(--v-text-bold)] text-[10px] font-bold uppercase tracking-widest px-6 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity">Confirmar Averbação</button>
               </div>
             </form>
           </div>
@@ -708,9 +793,9 @@ export const VendasView = ({ selectedEmpresa }) => {
       )}
 
       {/* CONDICOES MODAL (STITCH) */}
-      {condicoesModal && (
+      {condicoesModal && createPortal(
         <div className="fixed inset-0 bg-[#000000CC] backdrop-blur-sm flex items-center justify-center z-[99999] animate-in fade-in p-6">
-          <div className="magma-card border border-[var(--v-accent)] p-6 rounded-sm w-full max-w-[1400px] h-full max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(52,199,89,0.1)]">
+          <div className="magma-card border border-[var(--v-accent)] p-6 rounded-[var(--v-radius)] w-full max-w-[1400px] h-full max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(52,199,89,0.1)]">
             <div className="flex justify-between items-start border-b border-[var(--v-border)] pb-4 mb-5 shrink-0">
                <div>
                   <h3 className="text-lg uppercase tracking-widest text-[var(--v-accent)] font-black flex items-center gap-3">
@@ -725,7 +810,7 @@ export const VendasView = ({ selectedEmpresa }) => {
             
             <div className="flex-1 overflow-auto custom-scrollbar flex flex-col gap-6">
                {condicoesModal.loading && (
-                 <div className="flex flex-col items-center justify-center h-40 text-[var(--v-text-muted)] gap-3 bg-[var(--v-surface-container)] rounded-sm border border-[var(--v-border)]">
+                 <div className="flex flex-col items-center justify-center h-40 text-[var(--v-text-muted)] gap-3 bg-[var(--v-surface-container)] rounded-[var(--v-radius)] border border-[var(--v-border)]">
                    <Loader2 className="animate-spin text-[var(--v-accent)]" size={32} />
                    <span className="text-[10px] uppercase tracking-widest font-bold">Resgatando Fluxo Vulcano...</span>
                  </div>
@@ -741,25 +826,47 @@ export const VendasView = ({ selectedEmpresa }) => {
                {!condicoesModal.loading && condicoesModal.payload && (
                   <>
                     <div className="grid grid-cols-3 gap-5">
-                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-sm flex flex-col justify-center">
+                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-[var(--v-radius)] flex flex-col justify-center">
                           <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold">Target VGV</span>
                           <span className="text-xl font-black text-[var(--v-accent-3)]">{formatCurrency(condicoesModal.payload.venda?.total || 0)}</span>
                        </div>
-                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-sm">
+                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-[var(--v-radius)]">
                           <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold">Cliente Base</span>
                           <span className="text-sm font-bold text-[var(--v-text)] block truncate">{condicoesModal.payload.venda?.cliente?.nome || '-'}</span>
                           <span className="text-[10px] uppercase font-mono text-[var(--v-text-muted)]">{condicoesModal.payload.venda?.cliente?.cnpj || ''}</span>
                        </div>
-                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-sm">
+                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-[var(--v-radius)]">
                           <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold">Ref. Data</span>
                           <span className="text-sm font-bold text-[var(--v-text)] block">{condicoesModal.payload.venda?.data || '-'}</span>
                           <span className="text-[10px] uppercase text-[var(--v-text-muted)] truncate block">{condicoesModal.payload.venda?.empreendimento || '-'}</span>
                        </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full min-h-0">
+                    {condicoesModal.payload.distratos && condicoesModal.payload.distratos.length > 0 && (
+                        <div className="magma-card border-l-4 border-l-[var(--v-text-red)] p-5 mt-2 bg-[var(--v-text-red)]/5">
+                            <h4 className="text-[var(--v-text-red)] font-black text-xs uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle size={14}/> Contrato Distratado</h4>
+                            <div className="grid grid-cols-3 gap-5">
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Data do Distrato</span>
+                                    <span className="text-sm font-bold font-mono text-[var(--v-text-red)]">{condicoesModal.payload.distratos[0].data}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Receita Caixa (Paga)</span>
+                                    <span className="text-sm font-bold font-mono text-[var(--v-text-bold)]">
+                                        {formatCurrency((condicoesModal.payload.parcelas || []).reduce((acc, p) => acc + (p.total_pago || 0), 0))}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Valor a Devolver</span>
+                                    <span className="text-sm font-bold font-mono text-[var(--v-text-red)]">{formatCurrency(condicoesModal.payload.distratos[0].valor_devolvido)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full min-h-0 mt-6">
                        {/* FORMAS DE PAGAMENTO */}
-                       <div className="flex flex-col border border-[var(--v-border)] rounded-sm overflow-hidden bg-[var(--v-surface-container)]">
+                       <div className="flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden bg-[var(--v-surface-container)]">
                           <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)]">
                              <h4 className="text-[10px] tracking-widest uppercase font-bold text-[var(--v-text-bold)]">Quadro de Condições Formais</h4>
                           </div>
@@ -789,7 +896,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                        </div>
                        
                        {/* PLANILHA RECEBER (PARCELAS) */}
-                       <div className="flex flex-col border border-[var(--v-border)] rounded-sm overflow-hidden bg-[var(--v-surface-container)]">
+                       <div className="flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden bg-[var(--v-surface-container)]">
                           <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)] flex justify-between items-center">
                              <h4 className="text-[10px] tracking-widest uppercase font-bold text-[var(--v-text-bold)]">Projeção Dinâmica (Contas a Receber)</h4>
                              <span className="text-[10px] text-[var(--v-text-faint)] font-mono">{(condicoesModal.payload.parcelas || []).length} Títulos</span>
@@ -827,7 +934,8 @@ export const VendasView = ({ selectedEmpresa }) => {
                )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -843,6 +951,8 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const [dateTo, setDateTo] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showConferencia, setShowConferencia] = useState(false);
+  const [baixaModal, setBaixaModal] = useState({ open: false, parcela: null, valor: 0, data: '', acrescimos: 0, descontos: 0 });
+  const [syncModal, setSyncModal] = useState({ open: false, loading: false, preview: null, error: null, dataInicio: '2022-01-01' });
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -885,7 +995,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   };
 
   const filtered = filteredBase.filter(r =>
-    inDateRange(r.data) &&
+    inDateRange(r.vencimento_iso || r.data) &&
     (!unidadeFilter || r.descricao_venda === unidadeFilter) &&
     (!clienteFilter || r.cliente === clienteFilter)
   );
@@ -909,18 +1019,35 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const handleDarBaixa = async (r) => {
+  const handleDarBaixa = (r) => {
     if (!r.id) return alert("Parcela não possui ID vinculado.");
-    const valorInput = prompt(`Dar baixa na parcela ${r.num_parcela} de ${formatCurrency(r.parcela)}?\nDigite o valor pago:`, r.parcela);
-    if (!valorInput) return;
-    const valorPago = parseFloat(valorInput.replace(',', '.'));
-    if (isNaN(valorPago) || valorPago <= 0) return alert("Valor inválido");
+    setBaixaModal({
+      open: true,
+      parcela: r,
+      valor: r.parcela || 0,
+      data: new Date().toISOString().split('T')[0],
+      acrescimos: 0,
+      descontos: 0
+    });
+  };
 
+  const confirmBaixa = async () => {
+    const { parcela, valor, data, acrescimos, descontos } = baixaModal;
+    if (!valor || valor <= 0) return alert("Valor inválido");
+    
     try {
       setLoading(true);
+      setBaixaModal({ ...baixaModal, open: false });
       await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id_receber: r.id, valor_pago: valorPago })
+        body: JSON.stringify({ 
+          id_receber: parcela.id, 
+          empresa_id: parseInt(selectedEmpresa, 10),
+          valor_pago: parseFloat(valor),
+          data_pagamento: data,
+          acrescimos: parseFloat(acrescimos || 0),
+          descontos: parseFloat(descontos || 0)
+        })
       });
       fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
         .then(res => res.json()).then(d => { setData(d); setLoading(false); });
@@ -942,6 +1069,9 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Industrial Master-Detail Ledger</p>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={() => setSyncModal(s => ({ ...s, open: true, preview: null, error: null }))} className="bento-button flex items-center gap-2 border-[#34d399] text-[#34d399] hover:bg-[#34d399] hover:text-black">
+            <RefreshCw size={14}/> Sincronizar Parcelas
+          </button>
           <button onClick={() => setShowConferencia(true)} className="bento-button flex items-center gap-2">
             <CheckCircle2 size={16}/> Modo Conferência
           </button>
@@ -957,14 +1087,14 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           }} className="bento-button flex items-center gap-2">
             <Download size={16}/> Baixar CSV
           </button>
-          <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-sm hover:opacity-90 transition-opacity flex items-center gap-2">
+          <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity flex items-center gap-2">
             <Plus size={16}/> Lançar Manual
           </button>
         </div>
       </div>
 
       {showForm && (
-        <div className="magma-card border border-[var(--v-accent)]/30 rounded-sm p-5 animate-in slide-in-from-top-4">
+        <div className="magma-card border border-[var(--v-accent)]/30 rounded-[var(--v-radius)] p-5 animate-in slide-in-from-top-4">
           <h3 className="text-xs uppercase tracking-widest text-[var(--v-accent)] font-bold mb-4">Novo Recebimento (Bypass Caixa)</h3>
           <form className="flex flex-wrap gap-4 items-end" onSubmit={async (e) => {
             e.preventDefault();
@@ -975,11 +1105,11 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
             } catch (err) { alert("Erro ao cadastrar."); }
           }}>
             <input type="hidden" name="empresa_id" value={selectedEmpresa} />
-            <div className="w-24"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">ID Venda</label><input name="id_venda" type="number" required className="bento-input" /></div>
-            <div className="w-28"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Parcela</label><input name="parcela" type="number" required className="bento-input" /></div>
-            <div className="w-32"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Valor Venda</label><input name="valor" type="number" step="0.01" required className="bento-input" /></div>
-            <div className="w-40"><label className="text-[10px] text-[#888] uppercase tracking-widest block mb-1">Data Pagto</label><input name="data" type="date" required className="bento-input" /></div>
-            <button type="submit" className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-sm hover:opacity-90">Confirmar</button>
+            <div className="w-24"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">ID Venda</label><input name="id_venda" type="number" required className="bento-input" /></div>
+            <div className="w-28"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Parcela</label><input name="parcela" type="number" required className="bento-input" /></div>
+            <div className="w-32"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Valor Venda</label><input name="valor" type="number" step="0.01" required className="bento-input" /></div>
+            <div className="w-40"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Data Pagto</label><input name="data" type="date" required className="bento-input" /></div>
+            <button type="submit" className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-[var(--v-radius)] hover:opacity-90">Confirmar</button>
           </form>
         </div>
       )}
@@ -987,7 +1117,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
       {/* STITCH MASTER-DETAIL LAYOUT */}
       <div className="flex gap-6 h-[calc(100vh-280px)] overflow-hidden">
         {/* SIDEBAR MASTER */}
-        <div className="w-64 magma-card rounded-sm flex flex-col shrink-0 border border-[var(--v-border)]">
+        <div className="w-64 magma-card rounded-[var(--v-radius)] flex flex-col shrink-0 border border-[var(--v-border)]">
           <div className="p-4 border-b border-[var(--v-border)] bg-[var(--v-surface-container)] flex items-center gap-2">
             <Building2 size={16} className="text-[var(--v-text-faint)]"/>
             <h3 className="text-[10px] uppercase font-bold tracking-widest text-[var(--v-text-muted)]">Obras/Empreendimentos</h3>
@@ -995,7 +1125,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           <div className="overflow-y-auto flex-1 p-2 space-y-1">
             <div 
               onClick={() => setEmpreendimentoFilter('')}
-              className={`p-3 text-xs font-bold cursor-pointer transition-colors rounded-sm ${empreendimentoFilter === '' ? 'text-[var(--v-accent)] bg-[var(--v-hover)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-border)]'}`}
+              className={`p-3 text-xs font-bold cursor-pointer transition-colors rounded-[var(--v-radius)] ${empreendimentoFilter === '' ? 'text-[var(--v-accent)] bg-[var(--v-hover)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-border)]'}`}
             >
               [ CONSOLIDADO GERAL ]
             </div>
@@ -1003,7 +1133,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
               <div 
                 key={i} 
                 onClick={() => setEmpreendimentoFilter(emp)}
-                className={`p-3 text-xs cursor-pointer transition-colors truncate rounded-sm ${empreendimentoFilter === emp ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
+                className={`p-3 text-xs cursor-pointer transition-colors truncate rounded-[var(--v-radius)] ${empreendimentoFilter === emp ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
                 title={emp}
               >
                 {emp}
@@ -1038,34 +1168,34 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
           </div>
 
           {/* FILTER STRIP */}
-          <div className="magma-card border border-[var(--v-border)] rounded-sm p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
-            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">De</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bento-input w-full"/></div>
-            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Até</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bento-input w-full"/></div>
+          <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
+            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">De</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
+            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Até</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
             <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Unidade</label>
-              <select value={unidadeFilter} onChange={e => setUnidadeFilter(e.target.value)} className="bento-select w-full">
+              <select value={unidadeFilter} onChange={e => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                  <option value="">TODAS AS UNIDADES</option>
                  {uniqueUnidades.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
             <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Comprador</label>
-              <select value={clienteFilter} onChange={e => setClienteFilter(e.target.value)} className="bento-select w-full">
+              <select value={clienteFilter} onChange={e => setClienteFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
                  <option value="">TODOS COMPRADORES</option>
                  {uniqueClientes.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <button onClick={() => { setDateFrom(''); setDateTo(''); setUnidadeFilter(''); setClienteFilter(''); }} className="bento-button py-3">LIMPAR</button>
+            <button onClick={() => { setDateFrom(''); setDateTo(''); setUnidadeFilter(''); setClienteFilter(''); }} className="bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30] hover:text-white border border-[#ff3b30]/30 transition-all font-black text-[10px] tracking-widest uppercase rounded px-6 py-2 h-[32px]">LIMPAR</button>
           </div>
 
           {/* TABLE DATA GRID (PAGINATED) */}
-          <div className="magma-card border border-[var(--v-border)] rounded-sm flex flex-col flex-1 overflow-hidden relative">
+          <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col flex-1 overflow-hidden relative">
             {loading && (
                <div className="absolute inset-0 bg-[#00000099] backdrop-blur-sm flex flex-col items-center justify-center z-50">
                    <Loader2 className="animate-spin text-[var(--v-accent)] mb-3" size={40} />
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-white">Carregando Diário de Caixa...</span>
+                   <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-bold)]">Carregando Diário de Caixa...</span>
                </div>
             )}
-            <div className="overflow-auto flex-1">
-               <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-auto flex-1 custom-scrollbar">
+               <table className="w-full text-left text-xs border-collapse font-mono tabular-nums">
                   <thead className="bg-[var(--v-surface-container)] sticky top-0 z-10 shadow-sm border-b border-[var(--v-border)]">
                      <tr>
                        <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold w-24">Data</th>
@@ -1101,7 +1231,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                             <td className="p-3 text-[10px] uppercase text-[var(--v-text-faint)] truncate max-w-[100px]">{r.obs}</td>
                             <td className="p-3 text-center">
                                {isAberto ? (
-                                   <button onClick={() => handleDarBaixa(r)} className="text-[var(--v-accent)] border border-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-black transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-full">Liquidar</button>
+                                   <button onClick={() => handleDarBaixa(r)} className="text-[var(--v-accent)] border border-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-black transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Liquidar</button>
                                ) : <span className="text-[var(--v-text-muted)] text-[9px] uppercase font-bold flex items-center justify-center gap-1"><CheckCircle size={10}/> Baixado</span>}
                             </td>
                          </tr>
@@ -1140,41 +1270,41 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                  </h3>
                  <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-[0.2em] mt-1">Conferência Tabela de Vendas / Recebimentos ({filtered.length} linhas globais)</p>
                </div>
-               <button onClick={() => setShowConferencia(false)} className="text-[var(--v-text-faint)] hover:text-white transition-colors p-2 bg-[var(--v-hover)] rounded border border-[var(--v-border)]">
+               <button onClick={() => setShowConferencia(false)} className="text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] transition-colors p-2 bg-[var(--v-hover)] rounded border border-[var(--v-border)]">
                  <X size={20}/>
                </button>
              </div>
              
-             <div className="flex-1 overflow-auto bg-[#0a0a0a]">
+             <div className="flex-1 overflow-auto bg-[var(--v-deep)]">
                <table className="w-full text-left text-[11px] border-collapse whitespace-nowrap">
                  <thead className="sticky top-0 bg-[var(--v-surface-container)] z-10 border-b border-[var(--v-border)]">
                    <tr>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">CNPJ/CPF</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Comprador</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Unidade</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Vlr Venda</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Data</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-accent-3)]">Parcela</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-red)]">Desc.</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-accent-6)]">Variação</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-accent)]">Total Pago</th>
-                     <th className="p-3 border-r border-[#222] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">X/Y</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">CNPJ/CPF</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Comprador</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Unidade</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Vlr Venda</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Data</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-accent-3)]">Parcela</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-red)]">Desc.</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-accent-6)]">Variação</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-accent)]">Total Pago</th>
+                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">X/Y</th>
                    </tr>
                  </thead>
                  <tbody>
                    {/* Hard limiter to 1000 in Modal to prevent freeze if user clicks Conferencia without filters */}
                    {filtered.slice(0, 1000).map((r, i) => (
                      <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] text-[var(--v-text)] font-mono">
-                       <td className="p-3 border-r border-[#222] text-[var(--v-text-muted)]">{r.cliente_cnpj || '-'}</td>
-                       <td className="p-3 border-r border-[#222] font-sans truncate max-w-[200px]">{r.cliente}</td>
-                       <td className="p-3 border-r border-[#222] font-sans truncate max-w-[150px]">{r.descricao_venda}</td>
-                       <td className="p-3 border-r border-[#222] text-right text-[var(--v-text-muted)] bg-[#111]">{r.venda_total ? formatCurrency(r.venda_total) : '-'}</td>
-                       <td className="p-3 border-r border-[#222]">{r.data || '-'}</td>
-                       <td className="p-3 border-r border-[#222] text-right text-[var(--v-accent-3)] bg-[var(--v-accent-3)]/5">{formatCurrency(r.parcela)}</td>
-                       <td className="p-3 border-r border-[#222] text-right text-[var(--v-text-red)]">{r.desconto > 0 ? formatCurrency(r.desconto) : '-'}</td>
-                       <td className="p-3 border-r border-[#222] text-right text-[var(--v-accent-6)] font-semibold">{r.variacao > 0 ? formatCurrency(r.variacao) : '-'}</td>
-                       <td className="p-3 border-r border-[#222] text-right text-[var(--v-accent)] font-bold bg-[var(--v-accent)]/10">{formatCurrency(r.total)}</td>
-                       <td className="p-3 border-r border-[#222] text-center">{r.num_parcela || '-'}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-[var(--v-text-muted)]">{r.cliente_cnpj || '-'}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] font-sans truncate max-w-[200px]">{r.cliente}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] font-sans truncate max-w-[150px]">{r.descricao_venda}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-text-muted)] bg-[var(--v-deep)]">{r.venda_total ? formatCurrency(r.venda_total) : '-'}</td>
+                       <td className="p-3 border-r border-[var(--v-border)]">{r.data || '-'}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-accent-3)] bg-[var(--v-accent-3)]/5">{formatCurrency(r.parcela)}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-text-red)]">{r.desconto > 0 ? formatCurrency(r.desconto) : '-'}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-accent-6)] font-semibold">{r.variacao > 0 ? formatCurrency(r.variacao) : '-'}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-accent)] font-bold bg-[var(--v-accent)]/10">{formatCurrency(r.total)}</td>
+                       <td className="p-3 border-r border-[var(--v-border)] text-center">{r.num_parcela || '-'}</td>
                      </tr>
                    ))}
                    {filtered.length > 1000 && (
@@ -1186,6 +1316,148 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
            </div>
          </div>
       )}
+
+      {/* Modal de Baixa */}
+      {baixaModal.open && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] animate-in fade-in">
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-[var(--v-text-bold)] mb-4">Confirmar Baixa</h3>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Data Pagamento</label>
+                <input type="date" value={baixaModal.data} onChange={e => setBaixaModal({...baixaModal, data: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text)] rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Valor Recebido (R$)</label>
+                <input type="number" step="0.01" value={baixaModal.valor} onChange={e => setBaixaModal({...baixaModal, valor: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text)] rounded p-2 text-sm" />
+              </div>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Acréscimos (R$)</label>
+                  <input type="number" step="0.01" value={baixaModal.acrescimos} onChange={e => setBaixaModal({...baixaModal, acrescimos: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[#ff4d00] rounded p-2 text-sm" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Descontos (R$)</label>
+                  <input type="number" step="0.01" value={baixaModal.descontos} onChange={e => setBaixaModal({...baixaModal, descontos: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[#34c759] rounded p-2 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setBaixaModal({ ...baixaModal, open: false })} className="px-4 py-2 text-xs font-bold uppercase border border-[var(--v-border)] text-[var(--v-text-muted)] rounded hover:bg-[var(--v-hover)] transition-colors">Cancelar</button>
+              <button onClick={confirmBaixa} className="px-4 py-2 text-xs font-bold uppercase bg-[var(--v-accent)] text-black rounded hover:bg-[#00e699] transition-colors">Confirmar Baixa</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SINCRONIZAR PARCELAS EM ABERTO */}
+      {syncModal.open && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[99999] animate-in fade-in p-6">
+          <div className="magma-card border border-[#34d399]/40 p-7 rounded-[var(--v-radius)] max-w-lg w-full shadow-[0_0_60px_rgba(52,211,153,0.1)]">
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <h3 className="text-sm uppercase tracking-widest text-[#34d399] font-black flex items-center gap-2">
+                  <RefreshCw size={16}/> Sincronizar Parcelas em Aberto
+                </h3>
+                <p className="text-[10px] text-[var(--v-text-faint)] mt-1 uppercase tracking-widest">
+                  VENDAFORMAPAGTOPRAZO → RECEBER (TOTALPAGO = 0)
+                </p>
+              </div>
+              <button onClick={() => setSyncModal(s => ({ ...s, open: false }))} className="text-[var(--v-text-faint)] hover:text-white p-1"><X size={18}/></button>
+            </div>
+
+            <div className="flex gap-4 mb-5 items-end">
+              <div className="flex-1">
+                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Data Início (vencimento ≥)</label>
+                <input type="date" value={syncModal.dataInicio}
+                  onChange={e => setSyncModal(s => ({ ...s, dataInicio: e.target.value, preview: null }))}
+                  className="bento-input w-full" />
+              </div>
+              <button disabled={syncModal.loading} onClick={async () => {
+                setSyncModal(s => ({ ...s, loading: true, error: null, preview: null }));
+                try {
+                  const res = await fetch(`${API_BASE}/api/vulcano/popular-receber-abertas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ empresa_id: selectedEmpresa ? parseInt(selectedEmpresa) : null, data_inicio: syncModal.dataInicio || null, dry_run: true })
+                  });
+                  const d = await res.json();
+                  if (!res.ok) throw new Error(d.detail || 'Erro');
+                  setSyncModal(s => ({ ...s, loading: false, preview: d }));
+                } catch(err) { setSyncModal(s => ({ ...s, loading: false, error: err.message })); }
+              }} className="bento-button flex items-center gap-2 border-[#34d399] text-[#34d399] hover:bg-[#34d399] hover:text-black whitespace-nowrap">
+                {syncModal.loading ? <RefreshCw size={13} className="animate-spin"/> : <RefreshCw size={13}/>} Simular
+              </button>
+            </div>
+
+            {syncModal.error && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{syncModal.error}</div>
+            )}
+
+            {syncModal.preview && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#34d399]/10 border border-[#34d399]/30 p-4 rounded-[var(--v-radius)]">
+                    <p className="text-[10px] uppercase tracking-widest text-[#34d399] font-bold mb-1">Parcelas Órfãs</p>
+                    <p className="text-2xl font-black text-[#34d399]">{syncModal.preview.total_orfas.toLocaleString('pt-BR')}</p>
+                  </div>
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-[var(--v-radius)]">
+                    <p className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-1">Valor Total</p>
+                    <p className="text-xl font-black text-amber-400">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(syncModal.preview.valor_total)}</p>
+                  </div>
+                </div>
+                {syncModal.preview.total_orfas === 0 ? (
+                  <p className="text-[#34d399] text-sm font-bold text-center py-2">✅ Banco completo. Nenhuma parcela faltante.</p>
+                ) : (
+                  <>
+                    <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
+                      <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold p-2 border-b border-[var(--v-border)]">
+                        Preview — primeiras {Math.min(5, syncModal.preview.preview.length)} de {syncModal.preview.total_orfas}
+                      </p>
+                      <table className="w-full text-[10px] font-mono">
+                        <thead><tr className="border-b border-[var(--v-border)] text-[var(--v-text-faint)]">
+                          <th className="p-2 text-left">Emp.</th><th className="p-2 text-left">Venda</th>
+                          <th className="p-2 text-left">Venc.</th><th className="p-2 text-right">Valor</th>
+                        </tr></thead>
+                        <tbody>
+                          {syncModal.preview.preview.slice(0,5).map((r,i) => (
+                            <tr key={i} className="border-b border-[var(--v-border)]/30">
+                              <td className="p-2 text-[var(--v-text-faint)]">{r.empresa}</td>
+                              <td className="p-2">#{r.idvenda}</td>
+                              <td className="p-2 text-[var(--v-text-faint)]">{r.data}</td>
+                              <td className="p-2 text-right text-[#34d399] font-bold">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(r.valor)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button disabled={syncModal.loading} onClick={async () => {
+                      if (!window.confirm(`Confirmar inserção de ${syncModal.preview.total_orfas.toLocaleString('pt-BR')} parcelas em RECEBER?`)) return;
+                      setSyncModal(s => ({ ...s, loading: true, error: null }));
+                      try {
+                        const res = await fetch(`${API_BASE}/api/vulcano/popular-receber-abertas`, {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ empresa_id: selectedEmpresa ? parseInt(selectedEmpresa) : null, data_inicio: syncModal.dataInicio || null, dry_run: false })
+                        });
+                        const d = await res.json();
+                        if (!res.ok) throw new Error(d.detail || 'Erro na execução');
+                        alert(`✅ ${d.inseridos.toLocaleString('pt-BR')} parcelas inseridas! Erros: ${d.erros ?? 0}`);
+                        setSyncModal(s => ({ ...s, open: false, loading: false, preview: null }));
+                        setLoading(true);
+                        fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
+                          .then(r => r.json()).then(dd => { setData(Array.isArray(dd) ? dd : []); setLoading(false); });
+                      } catch(err) { setSyncModal(s => ({ ...s, loading: false, error: err.message })); }
+                    }} className="w-full py-3 bg-[#34d399] text-black text-[11px] font-black uppercase tracking-widest rounded-[var(--v-radius)] hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-50">
+                      {syncModal.loading ? <RefreshCw size={14} className="animate-spin"/> : null}
+                      ⚡ Executar — Inserir {syncModal.preview.total_orfas.toLocaleString('pt-BR')} Parcelas
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -1219,7 +1491,9 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
   const [viewMode, setViewMode] = useState('raw'); // 'raw', 'preview'
   const [expandedRowIndex, setExpandedRowIndex] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [useSplinkMatch, setUseSplinkMatch] = useState(false); // ⚡ Splink probabilístico
   
+
   const [rawPdfLines, setRawPdfLines] = useState([]);
   const [selectedRawLines, setSelectedRawLines] = useState([]);
   const [chatTab, setChatTab] = useState('chat'); // 'chat', 'pdf_samples'
@@ -1571,7 +1845,8 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           empresa_id: parseInt(selectedEmpresa, 10),
-          extracted_data: extractedData
+          extracted_data: extractedData,
+          use_splink: useSplinkMatch,
         })
       });
       const data = await res.json();
@@ -1659,19 +1934,19 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
     <div className="space-y-6 animate-in fade-in max-w-[1600px] mx-auto w-full h-full flex flex-col pb-4">
       <div className="flex flex-wrap gap-4 justify-between items-end shrink-0">
         <div>
-          <h2 className="text-3xl font-bold tracking-tighter text-white uppercase flex items-center gap-3">
-            <Zap className="text-[#a259ff]" size={36} /> Importador <span className="text-[#007aff]">Multimodal IA</span>
+          <h2 className="text-3xl font-bold tracking-tighter text-[var(--v-text-bold)] uppercase flex items-center gap-3">
+            <Zap className="text-[var(--v-accent-5)]" size={36} /> Importador <span className="text-[var(--v-accent-4)]">Multimodal IA</span>
           </h2>
-          <p className="text-sm text-[#888] mt-2 uppercase tracking-widest font-bold">Lê contratos, extratos e relatórios (PDF ou fotos) via IA Visão.</p>
-          <p className="text-[10px] text-[#444] mt-2 uppercase tracking-widest font-bold">API: {API_BASE}</p>
+          <p className="text-sm text-[var(--v-text-muted)] mt-2 uppercase tracking-widest font-bold">Lê contratos, extratos e relatórios (PDF ou fotos) via IA Visão.</p>
+          <p className="text-[10px] text-[var(--v-text-faint)] mt-2 uppercase tracking-widest font-bold">API: {API_BASE}</p>
         </div>
         <div className="flex flex-col items-end gap-3">
-          <div className="flex bg-[#111] border border-[#333] rounded-sm overflow-hidden p-[2px]">
+          <div className="flex bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden p-[2px]">
              {['vendas', 'recebimentos', 'conciliacao'].map(m => (
                <button 
                  key={m}
                  onClick={() => setImportMode(m)}
-                 className={`px-4 py-2 text-[10px] uppercase font-bold tracking-widest transition-colors ${importMode === m ? 'bg-[#007aff] text-white' : 'text-[#666] hover:text-[#bbb]'}`}
+                 className={`px-4 py-2 text-[10px] uppercase font-bold tracking-widest transition-colors ${importMode === m ? 'bg-[#007aff] text-[var(--v-text-bold)]' : 'text-[var(--v-text-faint)] hover:text-[#bbb]'}`}
                >
                  {m === 'conciliacao' ? 'Conciliação Bancária' : m}
                </button>
@@ -1681,7 +1956,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
             <button
               type="button"
               onClick={handleDownloadCode}
-              className="bg-[#1a1a1c] border border-[#007aff]/50 text-[#007aff] hover:bg-[#007aff] hover:text-white py-2 px-6 rounded-sm font-bold uppercase tracking-widest text-[10px] transition-colors flex items-center gap-2"
+              className="bg-[var(--v-hover)] border border-[#007aff]/50 text-[var(--v-accent-4)] hover:bg-[#007aff] hover:text-[var(--v-text-bold)] py-2 px-6 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] transition-colors flex items-center gap-2"
             >
               <Download size={14} /> Baixar .py
             </button>
@@ -1690,7 +1965,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
             <button
               type="button"
               onClick={resetSession}
-              className="bg-[#131313] border border-[#333] text-[#888] hover:text-white hover:border-[#555] py-2 px-4 rounded-sm font-bold uppercase tracking-widest text-[10px] transition-colors"
+              className="bg-[var(--v-card)] border border-[var(--v-border)] text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)] hover:border-[#555] py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] transition-colors"
             >
               Novo PDF
             </button>
@@ -1698,12 +1973,12 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center bg-[#131313] border border-[#333] p-3 rounded-sm">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#555]">Modelos salvos</span>
+      <div className="flex flex-wrap gap-3 items-center bg-[var(--v-card)] border border-[var(--v-border)] p-3 rounded-[var(--v-radius)]">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Modelos salvos</span>
         <select
           value={pickTemplateId}
           onChange={(e) => setPickTemplateId(e.target.value)}
-          className="bg-[#0a0a0a] border border-[#333] text-xs text-white px-2 py-2 rounded-sm min-w-[200px] outline-none focus:border-[#007aff]"
+          className="bg-[var(--v-deep)] border border-[var(--v-border)] text-xs text-[var(--v-text-bold)] px-2 py-2 rounded-[var(--v-radius)] min-w-[200px] outline-none focus:border-[#007aff]"
         >
           <option value="">— selecione —</option>
           {savedTemplates.map((t) => (
@@ -1728,7 +2003,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                 alert('Falha ao deletar o modelo.');
               }
             }}
-            className="bg-[#1a1a1c] border border-[#ff4d00]/40 text-[#ff4d00] hover:bg-[#ff4d00] hover:text-black p-2 rounded-sm transition-colors flex items-center justify-center"
+            className="bg-[var(--v-hover)] border border-[#ff4d00]/40 text-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-black p-2 rounded-[var(--v-radius)] transition-colors flex items-center justify-center"
             title="Excluir este modelo"
           >
             <Trash2 size={16} />
@@ -1738,7 +2013,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
           type="button"
           onClick={handleLoadSavedTemplate}
           disabled={!pickTemplateId}
-          className="bg-[#1a1a1c] border border-[#a259ff]/40 text-[#a259ff] hover:bg-[#a259ff] hover:text-black py-2 px-4 rounded-sm font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
+          className="bg-[var(--v-hover)] border border-[#a259ff]/40 text-[var(--v-accent-5)] hover:bg-[#a259ff] hover:text-black py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
         >
           Carregar código
         </button>
@@ -1746,7 +2021,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
           type="button"
           onClick={handleSetPadraoLista}
           disabled={!selectedEmpresa || !pickTemplateId}
-          className="bg-[#1a1a1c] border border-[#34c759]/40 text-[#34c759] hover:bg-[#34c759] hover:text-black py-2 px-4 rounded-sm font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
+          className="bg-[var(--v-hover)] border border-[#34c759]/40 text-[var(--v-accent-3)] hover:bg-[#34c759] hover:text-black py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
           title="Marca o modelo escolhido como padrão da empresa selecionada no topo do app"
         >
           Definir padrão empresa
@@ -1754,16 +2029,16 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
       </div>
 
       {errorMsg && (
-        <div className="bg-[#131313] border border-[#ff4d00]/50 p-4 rounded-sm text-[#ff4d00] text-xs font-bold uppercase tracking-widest">
+        <div className="bg-[var(--v-card)] border border-[#ff4d00]/50 p-4 rounded-[var(--v-radius)] text-[var(--v-accent)] text-xs font-bold uppercase tracking-widest">
           {errorMsg}
         </div>
       )}
 
       {!showWorkingView ? (
-        <div className="bg-[#131313] border border-[#333] p-8 rounded-sm text-center max-w-2xl mx-auto w-full mt-10 shadow-xl">
-          <FileText size={64} className="mx-auto text-[#007aff] mb-6" />
-          <h3 className="text-xl font-bold text-white mb-2 uppercase tracking-widest">Extrator + Chat de Ajuste</h3>
-          <p className="text-[#888] text-sm mb-8">Envie o PDF. O sistema extrai os valores, você corrige via chat e depois gera um `.py` para reutilizar nas próximas importações.</p>
+        <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-8 rounded-[var(--v-radius)] text-center max-w-2xl mx-auto w-full mt-10 shadow-xl">
+          <FileText size={64} className="mx-auto text-[var(--v-accent-4)] mb-6" />
+          <h3 className="text-xl font-bold text-[var(--v-text-bold)] mb-2 uppercase tracking-widest">Extrator + Chat de Ajuste</h3>
+          <p className="text-[var(--v-text-muted)] text-sm mb-8">Envie o PDF. O sistema extrai os valores, você corrige via chat e depois gera um `.py` para reutilizar nas próximas importações.</p>
           
           <div className="max-w-md mx-auto flex flex-col gap-4">
             <input 
@@ -1775,11 +2050,11 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
             />
             <button
                onClick={() => fileInputRef.current.click()}
-               className="w-full bg-[#0a0a0a] border border-[#333] hover:border-[#007aff] text-white py-4 rounded-sm font-bold uppercase tracking-widest text-xs transition-colors flex justify-center items-center gap-2"
+               className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] hover:border-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-xs transition-colors flex justify-center items-center gap-2"
             >
               <UploadCloud size={16} /> {pdfFile ? pdfFile.name : `Escolher Arquivo de ${importMode.toUpperCase()} (PDF/Imagem)`}
             </button>
-            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-[#888] cursor-pointer select-none justify-center">
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-[var(--v-text-muted)] cursor-pointer select-none justify-center">
               <input
                 type="checkbox"
                 checked={extractForceAi}
@@ -1788,13 +2063,13 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
               />
               Só IA (ignorar modelo / padrão da empresa)
             </label>
-            <p className="text-[10px] text-[#666] text-center leading-relaxed max-w-md mx-auto">
+            <p className="text-[10px] text-[var(--v-text-faint)] text-center leading-relaxed max-w-md mx-auto">
               Com modelo na barra acima (ou padrão da empresa no topo), a extração roda o Python salvo — sem Gemini.
             </p>
             <button 
               onClick={handleExtract}
               disabled={isProcessing || !pdfFile} 
-              className="w-full bg-[#007aff] text-white py-4 rounded-sm font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_10px_rgba(0,122,255,0.4)]"
+              className="w-full bg-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_10px_rgba(0,122,255,0.4)]"
             >
               {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
               {isProcessing ? 'Extraindo...' : extractForceAi ? 'Extrair com IA (Gemini)' : 'Extrair PDF'}
@@ -1804,36 +2079,36 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
       ) : (
         <div className="flex flex-col flex-1 overflow-hidden relative">
           {isProcessing && (
-            <div className="absolute inset-0 bg-[#0a0a0a]/80 backdrop-blur-md flex flex-col items-center justify-center z-10 rounded-sm border border-[#333]">
-              <Loader2 className="animate-spin text-[#007aff] mb-6" size={48} />
-              <h3 className="text-xl font-bold uppercase tracking-widest text-white mb-2">{extractOverlay.title}</h3>
-              <p className="text-sm font-bold text-[#aaa] tracking-wide text-center max-w-md px-4 leading-relaxed">
+            <div className="absolute inset-0 bg-[var(--v-deep)]/80 backdrop-blur-md flex flex-col items-center justify-center z-10 rounded-[var(--v-radius)] border border-[var(--v-border)]">
+              <Loader2 className="animate-spin text-[var(--v-accent-4)] mb-6" size={48} />
+              <h3 className="text-xl font-bold uppercase tracking-widest text-[var(--v-text-bold)] mb-2">{extractOverlay.title}</h3>
+              <p className="text-sm font-bold text-[var(--v-text-muted)] tracking-wide text-center max-w-md px-4 leading-relaxed">
                 {extractOverlay.subtitle}
               </p>
             </div>
           )}
 
           {extractedData.length > 0 && (
-            <div className={`grid grid-cols-12 gap-6 flex-1 overflow-hidden min-h-[280px] ${isFullscreen ? 'fixed inset-0 z-50 bg-[#050505] p-6' : ''}`}>
-              <div className={`${isFullscreen ? 'col-span-12' : 'col-span-8'} bg-[#131313] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-xl`}>
-                <div className="p-4 bg-[#1a1a1c] border-b border-[#333] space-y-3">
+            <div className={`grid grid-cols-12 gap-6 flex-1 overflow-hidden min-h-[280px] ${isFullscreen ? 'fixed inset-0 z-50 bg-[var(--v-bg)] p-6' : ''}`}>
+              <div className={`${isFullscreen ? 'col-span-12' : 'col-span-8'} bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col overflow-hidden shadow-xl`}>
+                <div className="p-4 bg-[var(--v-hover)] border-b border-[var(--v-border)] space-y-3">
                   <div className="flex flex-wrap gap-3">
                     <input
                       value={templateNome}
                       onChange={(e) => setTemplateNome(e.target.value)}
                       placeholder="Nome do modelo (ex.: Fatura Fornecedor X)"
-                      className="flex-1 min-w-[160px] bg-[#0a0a0a] border border-[#333] p-2 text-[11px] text-white outline-none focus:border-[#ffcc00] transition-colors"
+                      className="flex-1 min-w-[160px] bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-[11px] text-[var(--v-text-bold)] outline-none focus:border-[#ffcc00] transition-colors"
                     />
                     <input
                       value={templateDescricao}
                       onChange={(e) => setTemplateDescricao(e.target.value)}
                       placeholder="Descrição (opcional)"
-                      className="flex-1 min-w-[160px] bg-[#0a0a0a] border border-[#333] p-2 text-[11px] text-white outline-none focus:border-[#ffcc00] transition-colors"
+                      className="flex-1 min-w-[160px] bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-[11px] text-[var(--v-text-bold)] outline-none focus:border-[#ffcc00] transition-colors"
                     />
                     <button
                       onClick={handleGeneratePython}
                       disabled={isSaving}
-                      className="bg-[#222] border border-[#ffcc00]/50 text-[#ffcc00] hover:bg-[#ffcc00] hover:text-black px-6 py-2 font-bold uppercase tracking-widest text-[10px] rounded-sm disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                      className="bg-[var(--v-hover)] border border-[#ffcc00]/50 text-[var(--v-accent-6)] hover:bg-[#ffcc00] hover:text-black px-6 py-2 font-bold uppercase tracking-widest text-[10px] rounded-[var(--v-radius)] disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
                       title="Força a IA a escrever um manifest Python para toda a abstração acima ficar salva pra sempre"
                     >
                       {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Code size={14} />}
@@ -1841,7 +2116,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                     </button>
                   </div>
                   {selectedEmpresa && (
-                    <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-[#888] cursor-pointer select-none">
+                    <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-[var(--v-text-muted)] cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={definirPadrao}
@@ -1853,32 +2128,46 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                   )}
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex bg-[#0a0a0a] rounded-sm p-1 border border-[#333]">
+                      <div className="flex bg-[var(--v-deep)] rounded-[var(--v-radius)] p-1 border border-[var(--v-border)]">
                         <button 
                           onClick={() => setViewMode('raw')} 
-                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-sm transition-colors ${viewMode === 'raw' ? 'bg-[#a259ff] text-white' : 'text-[#888] hover:text-white'}`}
+                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors ${viewMode === 'raw' ? 'bg-[#a259ff] text-[var(--v-text-bold)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)]'}`}
                         >
                           JSON Cru
                         </button>
                         <button 
                           onClick={() => setViewMode('preview')} 
-                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-sm transition-colors flex items-center gap-2 ${viewMode === 'preview' ? 'bg-[#34c759] text-black' : 'text-[#888] hover:text-[#34c759]'}`}
+                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors flex items-center gap-2 ${viewMode === 'preview' ? 'bg-[#34c759] text-black' : 'text-[var(--v-text-muted)] hover:text-[var(--v-accent-3)]'}`}
                         >
                           <ShieldAlert size={12}/> {previewData ? 'Lote Conciliado' : 'Simulação'}
                         </button>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* Toggle Splink */}
+                      <button
+                        id="btn-toggle-splink"
+                        onClick={() => setUseSplinkMatch(v => !v)}
+                        title={useSplinkMatch ? 'Modo: Splink Probabilístico (clique para voltar ao Heurístico)' : 'Modo: Heurístico (clique para usar Splink)'}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${
+                          useSplinkMatch
+                            ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[var(--v-accent-5)] shadow-[0_0_10px_rgba(162,89,255,0.3)]'
+                            : 'bg-[var(--v-hover)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#a259ff]/40'
+                        }`}
+                      >
+                        <Zap size={12} className={useSplinkMatch ? 'text-[var(--v-accent-5)]' : 'text-[var(--v-text-faint)]'}/>
+                        {useSplinkMatch ? 'Splink ON' : 'Splink OFF'}
+                      </button>
                       <button
                         onClick={() => setIsFullscreen(!isFullscreen)}
-                        className="bg-[#1a1a1c] border border-[#333] hover:border-[#a259ff] text-[#888] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
+                        className="bg-[var(--v-hover)] border border-[var(--v-border)] hover:border-[#a259ff] text-[var(--v-text-muted)] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
                       >
                          {isFullscreen ? <><Minimize size={14}/> Ocultar Expansão</> : <><Maximize size={14}/> Expandir Tabela</>}
                       </button>
                       <button
                         onClick={viewMode === 'raw' ? handlePreviewBaixas : handleCommitBaixas}
                         disabled={viewMode === 'raw' ? isSimulating : isCommitting}
-                        className={`px-6 py-3 rounded text-[11px] font-black tracking-widest text-white uppercase disabled:opacity-50 transition-all flex items-center gap-2`}
+                        className={`px-6 py-3 rounded text-[11px] font-black tracking-widest text-[var(--v-text-bold)] uppercase disabled:opacity-50 transition-all flex items-center gap-2`}
                         style={{
                           background: viewMode === 'raw' 
                             ? 'linear-gradient(90deg, #9333ea, #3b82f6)' 
@@ -1906,46 +2195,47 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                 
                 {viewMode === 'raw' ? (
                   <div className="flex-1 overflow-auto p-4 bg-black custom-scrollbar">
-                    <pre className="text-[11px] font-mono text-[#e5e2e1] leading-relaxed">
+                    <pre className="text-[11px] font-mono text-[var(--v-text)] leading-relaxed">
                       <code>{JSON.stringify(extractedData.slice(0, 200), null, 2)}</code>
                     </pre>
                     {extractedData.length > 200 && (
-                      <div className="mt-4 text-[10px] uppercase tracking-widest font-bold text-[#555]">
+                      <div className="mt-4 text-[10px] uppercase tracking-widest font-bold text-[var(--v-text-faint)]">
                         Mostrando apenas 200 primeiras linhas (para não travar o navegador).
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-auto custom-scrollbar bg-[#0a0a0a]">
+                  <div className="flex-1 overflow-auto custom-scrollbar bg-[var(--v-deep)]">
                     {!previewData ? (
-                       <div className="h-full flex items-center justify-center p-8 text-[#555] text-xs font-bold uppercase tracking-widest text-center">
+                       <div className="h-full flex items-center justify-center p-8 text-[var(--v-text-faint)] text-xs font-bold uppercase tracking-widest text-center">
                          Clique em "Conciliar com Banco" para realizar a busca no banco de dados e bater o Arquivo contra o Contas a Receber da empresa selecionada.
                        </div>
                     ) : (
                        <table className="w-full text-left border-collapse text-xs">
                          <thead>
-                           <tr className="bg-[#111] sticky top-0 border-b border-[#333]">
-                             <th className="p-3 text-[10px] uppercase tracking-widest text-[#888]">Linha PDF</th>
-                             <th className="p-3 text-[10px] uppercase tracking-widest text-[#888]">Match Vulcano</th>
-                             <th className="p-3 text-[10px] uppercase tracking-widest text-right text-[#888]">Valor PDF</th>
-                             <th className="p-3 text-[10px] uppercase tracking-widest text-right text-[#888]">Valor Guiado</th>
-                             <th className="p-3 text-[10px] uppercase tracking-widest text-center text-[#888]">Ação Prevista</th>
+                           <tr className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
+                             <th className="p-3 text-[10px] uppercase tracking-widest text-[var(--v-text-muted)]">Linha PDF</th>
+                             <th className="p-3 text-[10px] uppercase tracking-widest text-[var(--v-text-muted)]">Match Vulcano</th>
+                             <th className="p-3 text-[10px] uppercase tracking-widest text-right text-[var(--v-text-muted)]">Valor PDF</th>
+                             <th className="p-3 text-[10px] uppercase tracking-widest text-right text-[var(--v-text-muted)]">Valor Guiado</th>
+                             <th className="p-3 text-[10px] uppercase tracking-widest text-center text-[var(--v-text-muted)]">Ação Prevista</th>
                            </tr>
                          </thead>
                          <tbody>
                            {previewData.map((d, i) => {
                              const isProjetada = d.status === 'PROJETADA_NOVA_LINHA';
-                             const isAcessorio = d.status !== 'MATCH_PERFEITO' && !isProjetada && (d.row.total_pago < 300 || d.row.valor_raiz === 0);
+                             const isJaPago = d.status === 'ALERTA_JA_PAGO';
+                             const isAcessorio = d.status !== 'MATCH_PERFEITO' && !isProjetada && !isJaPago && (d.row.total_pago < 300 || d.row.valor_raiz === 0);
                              const isExpanded = expandedRowIndex === i;
                              return (
                              <React.Fragment key={i}>
-                               <tr className={`border-b border-[#222] ${d.status === 'MATCH_PERFEITO' ? 'hover:bg-[#34c759]/5' : isProjetada ? 'hover:bg-[#007aff]/10 bg-[#007aff]/5' : isAcessorio ? 'hover:bg-[#333]/30 bg-[#111]' : 'hover:bg-[#ff4d00]/5 bg-[#ff4d00]/10'}`}>
-                                 <td className="p-3 text-[#ccc] align-top max-w-[300px]">
-                                    <div className="font-bold text-[#e5e2e1] mb-2">{d.row.comprador || d.row.cpf_cnpj || '---'}</div>
+                               <tr className={`border-b border-[var(--v-border)] ${d.status === 'MATCH_PERFEITO' ? 'hover:bg-[#34c759]/5' : isProjetada ? 'hover:bg-[#007aff]/10 bg-[#007aff]/5' : isJaPago ? 'hover:bg-[#ff9500]/5 bg-[#ff9500]/10' : isAcessorio ? 'hover:bg-[#333]/30 bg-[var(--v-deep)]' : 'hover:bg-[var(--v-accent)]/5 bg-[var(--v-accent)]/10'}`}>
+                                 <td className="p-3 text-[var(--v-text)] align-top max-w-[300px]">
+                                    <div className="font-bold text-[var(--v-text)] mb-2">{d.row.comprador || d.row.cpf_cnpj || '---'}</div>
                                     <div className="flex flex-wrap gap-1.5">
                                       {Object.entries(d.row).filter(([k,v]) => v !== null && v !== '').map(([k, v]) => (
-                                        <div key={k} className="bg-[#1a1a1c] border border-[#333] px-1.5 py-0.5 rounded-[3px] text-[9px] uppercase tracking-widest flex items-center gap-1 shadow-sm">
-                                          <span className="text-[#a259ff] font-bold">{k}:</span>
+                                        <div key={k} className="bg-[var(--v-hover)] border border-[var(--v-border)] px-1.5 py-0.5 rounded-[var(--v-radius)] text-[9px] uppercase tracking-widest flex items-center gap-1 shadow-sm">
+                                          <span className="text-[var(--v-accent-5)] font-bold">{k}:</span>
                                           <span className="text-[#fff]">{String(v)}</span>
                                         </div>
                                       ))}
@@ -1954,76 +2244,96 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                  <td className="p-3 align-top min-w-[200px]">
                                     {d.status === 'MATCH_PERFEITO' ? (
                                       <>
-                                        <div className="font-bold text-[#34c759] flex items-center gap-1"><CheckCircle2 size={12}/> ID: {d.id_receber} - Encontrado</div>
-                                        <div className="text-[10px] text-[#888] mt-1">Vencimento: {d.db_estado_atual.vencimento} (Parc {d.db_estado_atual.parcela})</div>
-                                        <div className="text-[10px] text-[#888]">Status Banco: {d.db_estado_atual.pago_hoje > 0 ? `Pago ${formatCurrency(d.db_estado_atual.pago_hoje)}` : 'Aberto'}</div>
+                                        <div className="font-bold text-[var(--v-accent-3)] flex items-center gap-1"><CheckCircle2 size={12}/> ID: {d.id_receber} - Encontrado</div>
+                                        <div className="text-[10px] text-[var(--v-text-muted)] mt-1">Vencimento: {d.db_estado_atual.vencimento} (Parc {d.db_estado_atual.parcela})</div>
+                                        <div className="text-[10px] text-[var(--v-text-muted)]">Status Banco: {d.db_estado_atual.pago_hoje > 0 ? `Pago ${formatCurrency(d.db_estado_atual.pago_hoje)}` : 'Aberto'}</div>
+                                        {d.match_engine && (
+                                          <div className="mt-1.5 flex items-center gap-1.5">
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${d.match_engine === 'splink' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)] border border-[#a259ff]/30' : 'bg-[var(--v-hover)] text-[var(--v-text-faint)] border border-[var(--v-border)]'}`}>
+                                              {d.match_engine === 'splink' ? 'Splink' : 'Heuristico'}
+                                            </span>
+                                            {d.match_probability != null && <span className="text-[9px] font-mono text-[var(--v-text-faint)]">P={Math.round(d.match_probability*100)}%</span>}
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : isJaPago ? (
+                                      <>
+                                        <div className="font-bold text-[#ff9500] flex items-center gap-1"><Lock size={12}/> ID: {d.id_receber || '—'} — JÁ QUITADA</div>
+                                        <div className="text-[10px] text-[var(--v-text-muted)] mt-1">Vencimento: {d.db_estado_atual?.vencimento} (Parc {d.db_estado_atual?.parcela})</div>
+                                        <div className="text-[10px] text-[#ff9500] mt-1 bg-[#ff9500]/10 px-1 inline-block border border-[#ff9500]/30 rounded">
+                                          Pago no ERP: {formatCurrency(d.db_estado_atual?.pago_hoje)}
+                                        </div>
                                       </>
                                     ) : isProjetada ? (
                                       <>
-                                        <div className="font-bold text-[#007aff] flex items-center gap-1"><Sparkles size={12}/> ⚡ FUTURA (SERÁ GERADA)</div>
-                                        <div className="text-[10px] text-[#888] mt-1">Previsto: {d.db_estado_atual.vencimento} - {d.db_estado_atual.parcela}</div>
-                                        <div className="text-[10px] text-[#007aff] mt-1 bg-[#007aff]/10 px-1 inline-block border border-[#007aff]/30 rounded">Linha será induzida no RECEBER</div>
+                                        <div className="font-bold text-[var(--v-accent-4)] flex items-center gap-1"><Sparkles size={12}/> ⚡ FUTURA (SERÁ GERADA)</div>
+                                        <div className="text-[10px] text-[var(--v-text-muted)] mt-1">Previsto: {d.db_estado_atual.vencimento} - {d.db_estado_atual.parcela}</div>
+                                        <div className="text-[10px] text-[var(--v-accent-4)] mt-1 bg-[#007aff]/10 px-1 inline-block border border-[#007aff]/30 rounded">Linha será induzida no RECEBER</div>
                                       </>
                                     ) : (
                                       <>
-                                        <div className={`font-bold text-[10px] uppercase ${isAcessorio ? 'text-[#ffcc00]' : 'text-[#ff4d00]'}`}>
+                                        <div className={`font-bold text-[10px] uppercase ${isAcessorio ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-accent)]'}`}>
                                           {isAcessorio ? (
                                              <span className="flex items-center gap-1"><AlertCircle size={10} /> Dado Avulso (Multa/Desconto?)</span>
                                           ) : 'Não Localizado / Divergente'}
                                         </div>
-                                        {isAcessorio && <div className="text-[9px] text-[#888] mt-1">Lançamento sem parcela raiz associada.</div>}
+                                        {isAcessorio && <div className="text-[9px] text-[var(--v-text-muted)] mt-1">Lançamento sem parcela raiz associada.</div>}
                                       </>
                                     )}
                                  </td>
-                                 <td className="p-3 align-top text-right text-white font-mono">{formatCurrency(d.row.total_pago)}</td>
-                                 <td className="p-3 align-top text-right text-[#888] font-mono">{d.db_estado_atual ? formatCurrency(d.db_estado_atual.valor_parcela) : '-'}</td>
+                                 <td className="p-3 align-top text-right text-[var(--v-text-bold)] font-mono">{formatCurrency(d.row.total_pago)}</td>
+                                 <td className="p-3 align-top text-right text-[var(--v-text-muted)] font-mono">{d.db_estado_atual ? formatCurrency(d.db_estado_atual.valor_parcela) : '-'}</td>
                                  <td className="p-3 align-top flex flex-col items-center gap-2">
                                    {d.status === 'MATCH_PERFEITO' || isProjetada ? (
-                                     <span className={`${isProjetada ? 'bg-[#007aff] hover:bg-[#005bb5]' : 'bg-[#34c759] hover:bg-[#2da94f]'} text-${isProjetada ? 'white' : 'black'} px-2 py-1 rounded-sm tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center transition-colors`}>
+                                     <span className={`${isProjetada ? 'bg-[#007aff] hover:bg-[#005bb5]' : 'bg-[#34c759] hover:bg-[#2da94f]'} text-${isProjetada ? 'white' : 'black'} px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center transition-colors`}>
                                        {isProjetada ? 'PROJETAR + BAIXAR' : 'BAIXAR'}
                                      </span>
+                                   ) : isJaPago ? (
+                                     <span className="bg-[#ff9500] text-black px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center flex items-center justify-center gap-1">
+                                       <Lock size={10}/> JÁ PAGO
+                                     </span>
                                    ) : (
-                                     <span className={`${isAcessorio ? 'bg-[#333] text-[#fff]' : 'bg-[#ff4d00] text-black'} px-2 py-1 rounded-sm tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center`}>
+                                     <span className={`${isAcessorio ? 'bg-[#333] text-[#fff]' : 'bg-[var(--v-accent)] text-black'} px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center`}>
                                        IGNORAR
                                      </span>
                                    )}
                                    <button 
                                      onClick={() => setExpandedRowIndex(isExpanded ? null : i)}
-                                     className="mt-1 flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold text-[#888] hover:text-[#fff] transition-colors"
+                                     className="mt-1 flex items-center gap-1 text-[9px] uppercase tracking-widest font-bold text-[var(--v-text-muted)] hover:text-[#fff] transition-colors"
                                    >
                                      {isExpanded ? <><ChevronUp size={12} /> Ocultar</> : <><ChevronDown size={12} /> Detalhes</>}
                                    </button>
                                  </td>
                                </tr>
                                {isExpanded && (
-                                 <tr className="bg-[#0a0a0a] border-b border-[#222]">
+                                 <tr className="bg-[var(--v-deep)] border-b border-[var(--v-border)]">
                                    <td colSpan="5" className="p-4">
-                                      <div className="border border-[#333] rounded overflow-hidden">
+                                      <div className="border border-[var(--v-border)] rounded overflow-hidden">
                                         <table className="w-full text-left text-[10px] font-mono">
-                                          <thead className="bg-[#1a1a1c]">
+                                          <thead className="bg-[var(--v-hover)]">
                                             <tr>
-                                              <th className="p-2 border-b border-[#333] text-[#ffcc00] uppercase tracking-widest font-bold w-1/2">Extraído do PDF (Importado)</th>
-                                              <th className="p-2 border-b border-[#333] text-[#007aff] uppercase tracking-widest font-bold w-1/2">Parcela ERP (Em Aberto no Vulcano)</th>
+                                              <th className="p-2 border-b border-[var(--v-border)] text-[var(--v-accent-6)] uppercase tracking-widest font-bold w-1/2">Extraído do PDF (Importado)</th>
+                                              <th className="p-2 border-b border-[var(--v-border)] text-[var(--v-accent-4)] uppercase tracking-widest font-bold w-1/2">Parcela ERP (Em Aberto no Vulcano)</th>
                                             </tr>
                                           </thead>
                                           <tbody>
                                             <tr>
-                                              <td className="p-3 border-r border-[#333] align-top bg-[#111]">
+                                              <td className="p-3 border-r border-[var(--v-border)] align-top bg-[var(--v-deep)]">
                                                 {Object.entries(d.row).map(([k,v]) => (
-                                                  <div key={k} className="flex justify-between border-b border-[#222] py-1">
-                                                    <span className="text-[#888]">{k}</span>
-                                                    <span className="text-white text-right max-w-[200px] break-all">{String(v)}</span>
+                                                  <div key={k} className="flex justify-between border-b border-[var(--v-border)] py-1">
+                                                    <span className="text-[var(--v-text-muted)]">{k}</span>
+                                                    <span className="text-[var(--v-text-bold)] text-right max-w-[200px] break-all">{String(v)}</span>
                                                   </div>
                                                 ))}
                                               </td>
-                                              <td className="p-3 align-top bg-[#111]">
+                                              <td className="p-3 align-top bg-[var(--v-deep)]">
                                                 {d.db_estado_atual ? Object.entries(d.db_estado_atual).map(([k,v]) => (
-                                                  <div key={k} className="flex justify-between border-b border-[#222] py-1">
-                                                    <span className="text-[#888]">{k}</span>
-                                                    <span className="text-white text-right max-w-[200px] break-all">{String(v)}</span>
+                                                  <div key={k} className="flex justify-between border-b border-[var(--v-border)] py-1">
+                                                    <span className="text-[var(--v-text-muted)]">{k}</span>
+                                                    <span className="text-[var(--v-text-bold)] text-right max-w-[200px] break-all">{String(v)}</span>
                                                   </div>
                                                 )) : (
-                                                  <div className="text-[#555] italic mt-2 text-center text-xs">Parcela não localizada para exibir deparamente.</div>
+                                                  <div className="text-[var(--v-text-faint)] italic mt-2 text-center text-xs">Parcela não localizada para exibir deparamente.</div>
                                                 )}
                                               </td>
                                             </tr>
@@ -2044,62 +2354,62 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
               </div>
 
               {!isFullscreen && (
-                <div className="col-span-4 bg-[#131313] border border-[#333] rounded-sm flex flex-col overflow-hidden shadow-xl">
+                <div className="col-span-4 bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col overflow-hidden shadow-xl">
                   {/* TAB HEADER */}
-                  <div className="flex border-b border-[#333] shrink-0">
+                  <div className="flex border-b border-[var(--v-border)] shrink-0">
                     <button
                       onClick={() => setChatTab('chat')}
-                      className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-center transition-colors border-r border-[#333] flex items-center justify-center gap-2 ${chatTab === 'chat' ? 'bg-[#1a1a1c] text-[#a259ff] border-t-2 border-t-[#a259ff]' : 'bg-[#111] text-[#888] hover:bg-[#1a1a1c] border-t-2 border-transparent'}`}
+                      className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-center transition-colors border-r border-[var(--v-border)] flex items-center justify-center gap-2 ${chatTab === 'chat' ? 'bg-[var(--v-hover)] text-[var(--v-accent-5)] border-t-2 border-t-[#a259ff]' : 'bg-[var(--v-deep)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)] border-t-2 border-transparent'}`}
                     >
                       <MessageSquare size={14}/> Chat de Ajustes
                     </button>
                     <button
                       onClick={() => setChatTab('pdf_samples')}
-                      className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-center transition-colors flex items-center justify-center gap-2 ${chatTab === 'pdf_samples' ? 'bg-[#1a1a1c] text-[#007aff] border-t-2 border-t-[#007aff]' : 'bg-[#111] text-[#888] hover:bg-[#1a1a1c] border-t-2 border-transparent'}`}
+                      className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-center transition-colors flex items-center justify-center gap-2 ${chatTab === 'pdf_samples' ? 'bg-[var(--v-hover)] text-[var(--v-accent-4)] border-t-2 border-t-[#007aff]' : 'bg-[var(--v-deep)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)] border-t-2 border-transparent'}`}
                     >
                       <FileText size={14}/> Amostras Limpas
                       {selectedRawLines.length > 0 && (
-                        <span className="bg-[#007aff] text-white px-1.5 py-0.5 rounded-full text-[9px] leading-none ml-1">{selectedRawLines.length}</span>
+                        <span className="bg-[#007aff] text-[var(--v-text-bold)] px-1.5 py-0.5 rounded-[var(--v-radius)] text-[9px] leading-none ml-1">{selectedRawLines.length}</span>
                       )}
                     </button>
                   </div>
 
                   {chatTab === 'chat' ? (
                     <>
-                      <div className="p-3 bg-[#1a1a1c] border-b border-[#333] flex items-center justify-between shrink-0">
-                        <div className="text-[9px] uppercase tracking-widest font-bold text-[#888]">
-                          Status: <span className={isChatting ? 'text-[#ffcc00]' : 'text-[#34c759]'}>{isChatting ? 'processando...' : 'pronto'}</span>
+                      <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)] flex items-center justify-between shrink-0">
+                        <div className="text-[9px] uppercase tracking-widest font-bold text-[var(--v-text-muted)]">
+                          Status: <span className={isChatting ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-accent-3)]'}>{isChatting ? 'processando...' : 'pronto'}</span>
                         </div>
                       </div>
-                      <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a] custom-scrollbar space-y-3 min-h-0">
+                      <div className="flex-1 overflow-y-auto p-4 bg-[var(--v-deep)] custom-scrollbar space-y-3 min-h-0">
                         {chatHistory.map((m, idx) => (
-                          <div key={idx} className={`text-xs leading-relaxed ${m.role === 'user' ? 'text-white' : 'text-[#888]'}`}>
-                            <span className={`text-[10px] font-bold uppercase tracking-widest ${m.role === 'user' ? 'text-[#ffcc00]' : 'text-[#a259ff]'}`}>
+                          <div key={idx} className={`text-xs leading-relaxed ${m.role === 'user' ? 'text-[var(--v-text-bold)]' : 'text-[var(--v-text-muted)]'}`}>
+                            <span className={`text-[10px] font-bold uppercase tracking-widest ${m.role === 'user' ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-accent-5)]'}`}>
                               {m.role === 'user' ? 'Você' : 'IA'}
                             </span>
                             <div className="mt-1 whitespace-pre-wrap break-words">{m.content}</div>
                           </div>
                         ))}
                         {chatHistory.length === 0 && (
-                          <div className="text-[10px] uppercase tracking-widest font-bold text-[#555]">
+                          <div className="text-[10px] uppercase tracking-widest font-bold text-[var(--v-text-faint)]">
                             Ex.: “Remover linhas sem data”, “Corrigir parcela 01/10A para 01/10”, “Trocar vírgula por ponto em valor_parcela”.
                           </div>
                         )}
                       </div>
-                      <div className="p-4 border-t border-[#333] bg-[#111] shrink-0">
+                      <div className="p-4 border-t border-[var(--v-border)] bg-[var(--v-deep)] shrink-0">
                         <div className="flex gap-2">
                           <input
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatAdjust(); } }}
                             placeholder="Diga como corrigir os dados..."
-                            className="flex-1 bg-[#0a0a0a] border border-[#333] p-2 text-xs text-white outline-none focus:border-[#a259ff]"
+                            className="flex-1 bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#a259ff]"
                             disabled={isChatting}
                           />
                           <button
                             onClick={handleChatAdjust}
                             disabled={isChatting || !chatInput.trim()}
-                            className="bg-[#a259ff] text-black px-3 py-2 rounded-sm font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
+                            className="bg-[#a259ff] text-black px-3 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
                           >
                             {isChatting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                             Enviar
@@ -2109,23 +2419,23 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                     </>
                   ) : (
                     <>
-                      <div className="p-3 bg-[#1a1a1c] border-b border-[#333] flex items-center justify-between shrink-0">
-                        <div className="text-[9px] uppercase tracking-widest font-bold text-[#888]">
+                      <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)] flex items-center justify-between shrink-0">
+                        <div className="text-[9px] uppercase tracking-widest font-bold text-[var(--v-text-muted)]">
                           Marque as linhas onde a IA errou (Máx: 5)
                         </div>
-                        <div className="text-[9px] uppercase tracking-widest font-bold text-[#007aff]">
+                        <div className="text-[9px] uppercase tracking-widest font-bold text-[var(--v-accent-4)]">
                           {selectedRawLines.length}/5
                         </div>
                       </div>
-                      <div className="flex-1 overflow-y-auto bg-[#0a0a0a] custom-scrollbar min-h-0">
+                      <div className="flex-1 overflow-y-auto bg-[var(--v-deep)] custom-scrollbar min-h-0">
                         {rawPdfLines.length === 0 ? (
-                          <div className="p-8 text-[#555] text-xs uppercase text-center font-bold tracking-widest">Nenhuma amostra carregada. Extraia um PDF primeiro.</div>
+                          <div className="p-8 text-[var(--v-text-faint)] text-xs uppercase text-center font-bold tracking-widest">Nenhuma amostra carregada. Extraia um PDF primeiro.</div>
                         ) : (
                           <div className="p-2 space-y-1">
                             {rawPdfLines.map((line, idx) => {
                               const isSelected = selectedRawLines.includes(idx);
                               return (
-                                <label key={idx} className={`block p-2 text-[10px] font-mono whitespace-pre-wrap break-all border rounded cursor-pointer transition-colors ${isSelected ? 'bg-[#007aff]/10 border-[#007aff] text-white' : 'bg-[#111] border-[#333] text-[#888] hover:bg-[#1a1a1c]'}`}>
+                                <label key={idx} className={`block p-2 text-[10px] font-mono whitespace-pre-wrap break-all border rounded cursor-pointer transition-colors ${isSelected ? 'bg-[#007aff]/10 border-[#007aff] text-[var(--v-text-bold)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}>
                                   <div className="flex items-start gap-2">
                                     <input type="checkbox" className="mt-0.5 accent-[#007aff]" checked={isSelected}
                                       onChange={(e) => {
@@ -2153,20 +2463,20 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
           )}
 
           {hasCode && (
-            <div className="bg-[#111] border border-[#333] rounded-sm flex flex-col shadow-xl overflow-hidden mt-4 max-h-[min(480px,50vh)]">
-               <div className="p-4 bg-[#1a1a1c] border-b border-[#333] flex flex-wrap items-center justify-between gap-2 shadow-xl z-10">
+            <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col shadow-xl overflow-hidden mt-4 max-h-[min(480px,50vh)]">
+               <div className="p-4 bg-[var(--v-hover)] border-b border-[var(--v-border)] flex flex-wrap items-center justify-between gap-2 shadow-xl z-10">
                  <div className="flex items-center gap-3">
-                   <Code size={18} className="text-[#34c759]" />
-                   <h3 className="text-xs font-bold text-white uppercase tracking-widest leading-none">Script gerado (preview)</h3>
+                   <Code size={18} className="text-[var(--v-accent-3)]" />
+                   <h3 className="text-xs font-bold text-[var(--v-text-bold)] uppercase tracking-widest leading-none">Script gerado (preview)</h3>
                  </div>
-                 <div className="text-[10px] uppercase font-bold tracking-widest text-[#555] flex flex-wrap items-center gap-2">
-                   <CheckCircle2 size={14} className="text-[#34c759]" />
+                 <div className="text-[10px] uppercase font-bold tracking-widest text-[var(--v-text-faint)] flex flex-wrap items-center gap-2">
+                   <CheckCircle2 size={14} className="text-[var(--v-accent-3)]" />
                    {lastTemplateId != null && <span>Registro #{lastTemplateId}</span>}
                    <span>{codeStats.lines} linhas · {codeStats.chars.toLocaleString('pt-BR')} caracteres</span>
                  </div>
                </div>
                <div className="flex-1 overflow-auto p-6 custom-scrollbar bg-black min-h-0">
-                 <pre className="text-[11px] font-mono text-[#a259ff] leading-relaxed whitespace-pre-wrap break-words">
+                 <pre className="text-[11px] font-mono text-[var(--v-accent-5)] leading-relaxed whitespace-pre-wrap break-words">
                    <code>{codePreview}</code>
                  </pre>
                </div>

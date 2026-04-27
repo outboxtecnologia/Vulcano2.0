@@ -1,0 +1,79 @@
+24:             hist_questor = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
+31:             query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO, CODIGO_HIST_ESTORNO_CUSTO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
+57:                     "hist_venda": hist_questor.get(r[11] if r[11] else 0, "VENDA UNID"),
+58:                     "hist_rec": hist_questor.get(r[12] if r[12] else 0, "RECEBIMENTO PARCELA UNID"),
+59:                     "hist_var": hist_questor.get(r[13] if r[13] else 0, "VARIACAO UNID"),
+60:                     "hist_adi": hist_questor.get(r[14] if r[14] else 0, "ADIANTAMENTO UNID"),
+61:                     "hist_baixa_adi": hist_questor.get(r[15] if r[15] else 0, "BAIXA ADIANTAMENTO UNID"),
+62:                     "hist_aprcusto": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
+64:                     "hist_estorno_custo": hist_questor.get(r[19] if r[19] else 0, "ESTORNO CUSTO UNID"),
+193:             def _append_apto_if_matched(hist_str):
+194:                 hist_mod = hist_str
+196:                     m = re.search(rf'{emp_word}\s*-?\s*0*(\d{{1,4}})\b', hist_mod, re.IGNORECASE)
+200:                             hist_mod += f" [APTO {contrato_to_apto[emp_word][c_num]}]"
+202:                 return hist_mod
+222:             for (chave, dt, cdeb, ccred, hist_val, nat, val, chave_origem, descr_hist) in cur_q.fetchall():
+223:                 if isinstance(hist_val, (bytes, bytearray)):
+224:                     compl = hist_val.decode('cp1252', 'ignore')
+226:                     compl = str(hist_val) if hist_val else ""
+307:             for (chave, dt, cdeb, ccred, hist_val, nat, val, chave_origem, descr_hist) in cur_q.fetchall():
+314:                 if isinstance(hist_val, (bytes, bytearray)):
+315:                     compl_zz = hist_val.decode('cp1252', 'ignore')
+317:                     compl_zz = str(hist_val) if hist_val else ""
+319:                 hist_zz = f"{descr_zz} {compl_zz}".strip() or "APURAÇÃO RESULTADO EXERCÍCIO (ARE)"
+320:                 hist_zz = _append_apto_if_matched(hist_zz)
+344:                     "historico": hist_zz,
+422:                     for (chave_e, dt_e, cdeb_e, ccred_e, hist_e, val_e, hist_cod) in rows_est:
+426:                         if isinstance(hist_e, (bytes, bytearray)):
+427:                             compl_e = hist_e.decode('cp1252', 'ignore')
+429:                             compl_e = str(hist_e or "")
+430:                         hn = hist_questor.get(hist_cod, "") if hist_cod else ""
+431:                         hist_txt = f"{hn} {compl_e}".strip()
+445:                             "historico": hist_txt,
+497:                         hist_legado = str(hist).strip() if hist else ""
+498:                         hist_legado = _append_apto_if_matched(hist_legado)
+505:                             "historico": hist_legado, "natureza": natura,
+844:                         for (chave_lc, dt_lc, val_liq, hist_raw_lc, descr_hist_lc, nat_lc) in lctoger_rows:
+846:                             if isinstance(hist_raw_lc, (bytes, bytearray)):
+847:                                 compl_lc = hist_raw_lc.decode("cp1252", "ignore")
+848:                             elif hasattr(hist_raw_lc, "read"):
+849:                                 compl_lc = hist_raw_lc.read().decode("cp1252", "ignore")
+851:                                 compl_lc = str(hist_raw_lc or "")
+852:                             descr_lc = str(descr_hist_lc or "").strip()
+853:                             hist_lc  = f"{descr_lc} {compl_lc}".strip()
+854:                             hist_lc = _append_apto_if_matched(hist_lc)
+870:                                 "historico": hist_lc,
+966:                             SELECT DESCUNIDIMOB, TOTALVENDA, DTOPER, DATADISTRATO, DISTRATO
+978:                         uni_raw, vgv_venda, dt_ven, dt_dis, distrato_flag = v_row[0], v_row[1], v_row[2], v_row[3], v_row[4]
+986:                         distrato_ym = dt_dis_str[:7] if len(dt_dis_str) >= 7 else ""
+987:                         _flag = distrato_flag.decode('win1252','ignore') if isinstance(distrato_flag, bytes) else str(distrato_flag or "N")
+988:                         is_distrato_s = _flag.strip().upper() == "S"
+991:                         if distrato_ym and distrato_ym < target_ym:
+1004:                                 "data_distrato": dt_dis_str,
+1033:                         is_novo_distrato_mes_alvo = bool(distrato_ym) and (distrato_ym == target_ym)
+1043:                         custo_u_atual = 0.0 if is_novo_distrato_mes_alvo else (custo_gasto_vigente * fracao_fisica)
+1052:                              if is_novo_distrato_mes_alvo and mov_custo_u < 0:
+1053:                                  hist_base = emp.get('hist_estorno_custo', 'ESTORNO CUSTO')
+1054:                                  hist_estoque = emp.get('hist_estorno_custo', 'ESTORNO CUSTO')
+1056:                                  hist_base = emp.get('hist_aprcusto', 'Apropriação Custo')
+1057:                                  hist_estoque = "BAIXA ESTOQUE"
+1059:                              logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Fração Área ({fracao_fisica*100:.2f}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]{'  [NOVA VENDA MÊS]' if is_nova_venda_mes_alvo else ''}{'  [DISTRATO MÊS ALVO]' if is_novo_distrato_mes_alvo else ''}"
+1060:                              inject_virtual_entry(c_custo, abs(mov_custo_u), nat_custo, f"{hist_base} UNID {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
+1061:                              inject_virtual_entry(c_estoque, abs(mov_custo_u), nat_est, f"{hist_estoque} UNID {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+1076:                              rec_auferida_atual = 0.0 if (bool(distrato_ym) and distrato_ym <= target_ym) else (vgv_uni * (poc_acumulado_vigente / 100.0))
+1083:                         logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]{'  [NOVA VENDA MÊS / ANT 0]' if is_nova_venda_mes_alvo else ''}{'  [DISTRATO MÊS ALVO]' if is_novo_distrato_mes_alvo else ''}"
+1087:                              inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"{emp.get('hist_venda', 'Receita POC')} UNID {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
+1088:                              inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"{emp.get('hist_venda', 'Faturamento')} UNID {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
+1122:                              inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"{emp.get('hist_rec', 'Baixa Cliente')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
+1126:                              inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"{emp.get('hist_adi', 'Reconhecimento Adiantamento')} UNID {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
+1136:                                  f"{emp.get('hist_var', 'Variação Monetária')} UNID {uni_nome}",
+1139:                                  f"{emp.get('hist_var', 'Variação Monetária')} UNID {uni_nome}",
+1266:                         # ── ESTORNO DE RET NO DISTRATO ────────────────────────────────────
+1271:                         if distrato_ym == target_ym and is_distrato_s:
+1275:                                     # Para o estorno retroativo do distrato, a base real inabalada no modelo de dados
+1289:                                         hist_dist  = f"ESTORNO {desc} DISTRATO UNID {uni_nome}"
+1290:                                         logica_dist = (f"Distrato em {dt_dis_str} — estorno {desc} acumulado até {target_ym}: "
+1294:                                         inject_virtual_entry(c_deb_est,  trib_acum_ant, 'D', hist_dist, logica=logica_dist, saldo_ant=0.0)
+1295:                                         inject_virtual_entry(c_cred_est, trib_acum_ant, 'C', hist_dist, logica=logica_dist, saldo_ant=0.0)
+1296:                                         print(f"[{desc}-DISTRATO] {uni_nome} | D:{c_deb_est} C:{c_cred_est} | R${trib_acum_ant:,.2f} | {dt_dis_str}")
+1298:                                 print(f"[{desc}-DISTRATO] Erro no estorno para {uni_nome}: {_e_ret_dist}")

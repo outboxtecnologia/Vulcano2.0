@@ -1,0 +1,550 @@
+##############################################################################
+# FLUXO DE AUDITORIA ERP — PROCESSO COMPLETO (v2 — Otimizado Deep Think)
+# Sistema: Questor Explorer / Vulcano 2.0 / Auditoria ERP
+# Versão: 2026-04-15 — Incorpora recomendações de raciocínio estendido
+#
+# CHANGES v2:
+#   [OPT-1] Payload ao Vertex: minificação + omissão de nulos + deltas temporais
+#   [OPT-2] Retorno do Vertex: response_schema mandatório + operações array + flags HITL
+#   [OPT-3] Paradoxo thinking_budget: solução híbrida Pseudo-CoT via JSON
+##############################################################################
+
+ciclo_auditoria:
+  descricao: >
+    O sistema opera em ciclo mensal. Para cada competência (ano/mês) e empresa,
+    compara o que o ERP registrou fisicamente com o que o motor societário
+    (IFRS 15) diz que deveria estar registrado. Divergências são classificadas,
+    investigadas e corrigidas com ou sem intervenção humana (HITL).
+  fases:
+    1_coleta:      "Extração dos dados físicos (ERP) e virtuais (Motor Societário)"
+    2_comparacao:  "Comparação conta a conta, lançamento a lançamento"
+    3_diagnostico: "Classificação do tipo e causa da divergência (ML + LLM sem CoT)"
+    4_investigacao: "Aprofundamento via agente ReAct (LLM com Pseudo-CoT forçado)"
+    5_correcao:    "Geração do array de operações correctivas"
+    6_aprovacao:   "Revisão HITL roteada por flags semânticas"
+    7_persistencia: "Gravação no ERP (Questor/LCTOCTB) e Motor (Vulcano)"
+    8_validacao:   "Re-conciliação para confirmar fechamento"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 1 — COLETA DE DADOS
+# ─────────────────────────────────────────────────────────────────────────────
+fase_1_coleta:
+  entrada:
+    parametros: [empresa_id, ano, mes]
+    fontes:
+      - nome: "ERP Questor (Firebird)"
+        tipo: "físico"
+        tabelas: [LCTOCTB, LCTOGER, PLANOESPEC, HISTORICOCTB, LCTOFISSAICFOP]
+      - nome: "Motor Societário Vulcano (Firebird)"
+        tipo: "virtual"
+        tabelas: [EMPREENDIMENTO, VENDA, VENDAUNIDADE, UNIDADE, BLOCO,
+                  RECEBIMENTO, POC, IMPOSTO, POC_CUSTO_MENSAL_REAL]
+      - nome: "Base Auxiliar (SQLite)"
+        tipo: "operacional"
+        tabelas: [evolucao_obras, poc_history]
+
+  dados_extraidos:
+    fisico:
+      contas_fisicas:
+        estrutura_por_conta:
+          conta: int
+          nome: string
+          classif: string
+          saldo_anterior: float
+          movimento_debito: float
+          movimento_credito: float
+          movimento_liquido: float
+          saldo_final: float
+          detalhes: "lista de lançamentos (chave, data, historico, natureza, valor)"
+    virtual:
+      contas_virtuais:
+        mesma_estrutura: "contas_fisicas"
+        campo_extra:
+          virtual: true
+          logica: "string — cálculo que gerou o lançamento"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 2 — COMPARAÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+fase_2_comparacao:
+  logica: >
+    Para cada conta em contas_fisicas OU contas_virtuais, calcula a diferença
+    entre ERP e Motor. Tolerância zero (R$ 0,01).
+  metricas_por_conta:
+    diff_saldo_anterior: float
+    diff_movimento_debito: float
+    diff_movimento_credito: float
+    diff_saldo_final: float
+    n_lanc_fisico: int
+    n_lanc_virtual: int
+  casos:
+    conta_so_no_fisico: "lançamento sem correspondência calculada"
+    conta_so_no_virtual: "motor calculou lançamento ausente no ERP"
+    diff_valor: "existe nos dois mas com valores diferentes"
+    ok: "conciliado — nenhuma ação"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 3 — DIAGNÓSTICO (thinking_budget: 0 — sem CoT)
+# ─────────────────────────────────────────────────────────────────────────────
+fase_3_diagnostico:
+  thinking_budget: 0
+  justificativa: >
+    Diagnóstico é classificação estruturada. O LLM não precisa de CoT —
+    recebe métricas já mastigadas pelo DuckDB e retorna rótulos + score.
+    thinking_budget: 0 economiza 20-60s sem perda de qualidade aqui.
+
+  classificacoes_divergencia:
+    MISSING_ENTRY:        { gravidade: alta,   acao: "Gerar lançamento faltante" }
+    VALUE_MISMATCH:       { gravidade: media_alta, subcasos: [proporcional, absoluta, inversa] }
+    TIMING_MISMATCH:      { gravidade: media,  acao: "Estorno retroativo + relançamento" }
+    ACCUMULATED_ERROR:    { gravidade: critica, acao: "Revisão de premissas (POC/VGV/metragem)" }
+    ACCOUNT_MAPPING_ERROR:{ gravidade: alta,   acao: "Estorno + relançamento na conta correta" }
+    DUPLICATE_ENTRY:      { gravidade: alta,   acao: "Estorno da duplicidade" }
+    ZERO_BALANCE_EXPECTED:{ gravidade: baixa_media, acao: "Investigar e estornar residual" }
+
+  # [OPT-1] DuckDB mastiga a série; LLM recebe apenas CONCLUSÃO matemática
+  pre_processamento_duckdb:
+    descricao: >
+      Antes de chamar o LLM, o DuckDB agrega a série temporal e calcula
+      os indicadores. O LLM nunca recebe saldos absolutos brutos.
+    calcula:
+      onset_period: "primeiro mês com diff_saldo_final > limiar"
+      delta_medio: "média dos incrementos mensais da divergência"
+      trend: "crescente | decrescente | estável | pontual"
+      anomaly_score: "IsolationForest (PyOD) — 0.0 normal → 1.0 anômalo"
+      cluster: "KMeans — padrão de divergência (0..N)"
+
+  # [OPT-2] response_schema mandatório — sem fallback regex
+  schema_resposta_diagnostico:
+    _schema_openapi:
+      type: object
+      required: [anomalias, resumo_executivo]
+      properties:
+        resumo_executivo:
+          type: string
+          description: "3-5 frases de diagnóstico geral do período"
+        anomalias:
+          type: array
+          items:
+            type: object
+            required: [conta_id, nome, tipo_provavel, urgencia, recomendacao]
+            properties:
+              conta_id:    { type: integer }
+              nome:        { type: string }
+              tipo_provavel: { type: string, enum: [MISSING_ENTRY, VALUE_MISMATCH,
+                              TIMING_MISMATCH, ACCUMULATED_ERROR,
+                              ACCOUNT_MAPPING_ERROR, DUPLICATE_ENTRY,
+                              ZERO_BALANCE_EXPECTED] }
+              urgencia:    { type: string, enum: [critica, alta, media, baixa] }
+              recomendacao:{ type: string }
+
+  pipeline_ml:
+    ferramentas: [DuckDB, IsolationForest, KMeans, LevelShift]
+    saida_por_conta:
+      anomaly_score: float
+      cluster: int
+      onset_period: "YYYY-MM"
+      trend: "crescente | decrescente | estável | pontual"
+      delta_medio: float
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 4 — INVESTIGAÇÃO (Agente ReAct — Pseudo-CoT via JSON)
+# ─────────────────────────────────────────────────────────────────────────────
+fase_4_investigacao:
+  thinking_budget: 0   # mantido para velocidade
+
+  # [OPT-3] Pseudo-CoT: forçado via campo no schema de resposta
+  pseudo_cot:
+    descricao: >
+      Em vez de ativar o CoT nativo do Vertex (lento), o campo
+      "1_raciocinio_matematico" é o PRIMEIRO campo do schema de saída.
+      O LLM é obrigado a verbalizar o raciocínio matemático ANTES de
+      preencher conta_debito, valor e operacoes — emulando Chain-of-Thought
+      dentro da extração estruturada, mas com latência do thinking_budget:0.
+    regra: >
+      SEMPRE o primeiro campo no schema da resposta de investigação.
+      Nome com prefixo "1_" para garantir ordenamento e sinalizar ao modelo
+      que deve ser preenchido antes dos campos de ação.
+    efeito_esperado: >
+      Aumento de acurácia nos lançamentos correctivos derivados de lógica
+      IFRS 15 (fração de área, poc, nova venda no mês) sem custo de CoT nativo.
+
+  arquitetura:
+    tipo: "ReAct (Reasoning + Acting)"
+    framework: "LangGraph"
+    modelo: "gemini-2.5-flash (Vertex AI)"
+    checkpoint: "agente_checkpoints.sqlite (SQLite WAL)"
+    max_iteracoes: 10
+    timeout_segundos: 300
+
+  # [OPT-1] Payload ao LLM — minificado, sem nulos, deltas no lugar de séries
+  payload_investigacao:
+    formato: "JSON minificado (sem indentação nem quebras de linha)"
+    regra_nulos: >
+      Remover explicitamente toda chave com valor null, 0 ou lista vazia
+      antes de serializar. Ex: se diff_movimento_credito == 0, não enviar a chave.
+    regra_series_temporais: >
+      NÃO enviar array de saldos mensais absolutos.
+      Enviar apenas: {"onset":"YYYY-MM","delta_medio":X,"trend":"crescente"}.
+      O DuckDB já calculou isso. O LLM só precisa da conclusão matemática.
+    campos_obrigatorios_payload:
+      conta_id: int
+      nome_conta: string
+      classif_conta: string
+      diff_saldo_final: float
+      diff_natureza: "a_mais_no_fisico | a_mais_no_virtual"
+      onset: "YYYY-MM"
+      delta_medio: float
+      trend: "crescente | decrescente | estável | pontual"
+      anomaly_score: float
+      empreendimento_nome: string
+      empreendimento_cc: int
+      obra_concluida: bool
+    campos_omitidos_se_zero_ou_nulo:
+      - diff_movimento_credito
+      - diff_movimento_debito
+      - n_lanc_fisico
+      - n_lanc_virtual
+      - anomaly_score       # omitir se < 0.5 (não anômalo)
+
+  tools:
+
+    consultar_lctoger_por_cc:
+      descricao: >
+        Busca gastos do LCTOGER por Centro de Custo. Obrigatório para contas
+        de Ativo (1.x) de obras em construção.
+      # [OPT-1] Retorno agrupado — NÃO retornar 50 lançamentos brutos
+      retorno_otimizado:
+        total_por_periodo: "soma mensal (ano, mes, total) — sempre"
+        contas_agrupadas:
+          descricao: >
+            Top-N contas debitadas com maior desvio-padrão em relação à média
+            do CC. Identifica qua conta está causando anomalia no padrão.
+          n: 5
+          campos_por_conta: [conta_id, nome, total_periodo, desvio_padrao, pct_do_cc]
+        lancamentos_top_anomalos:
+          descricao: >
+            Apenas os 5 lançamentos individuais com maior distância da média
+            do CC (outliers que podem explicar o pico da divergência).
+          n: 5
+          campos: [data, conta_deb, conta_cred, valor, historico, z_score]
+      parametros: [empresa_id, cc_empreendimento, data_ini, data_fim]
+
+    consultar_lctoctb_conta:
+      descricao: "Lançamentos de uma conta específica no LCTOCTB"
+      retorno_otimizado:
+        saldo_periodo: float
+        count: int
+        maior_lancamento: "{ data, valor, historico } — apenas o maior"
+        media_lancamento: float
+      parametros: [empresa_id, conta_id, data_ini, data_fim]
+
+    consultar_poc_empreendimento:
+      descricao: "Curva de POC histórica — retorna delta, não série completa"
+      retorno_otimizado:
+        poc_vigente: float
+        poc_anterior: float
+        delta_poc_mes: float
+        trend_poc: "crescente | estavel | concluida"
+      parametros: [id_empreendimento, ano, mes]
+
+    consultar_vendas_unidades:
+      descricao: "Vendas e frações físicas de um empreendimento"
+      retorno_otimizado:
+        fracao_vendida_total: float
+        unidades_vendidas_mes: int
+        novas_vendas_mes: "lista de { unidade, vgv, fracao_fisica }"
+      parametros: [id_empreendimento, data_ini, data_fim]
+
+    calcular_ifrs15_unidade:
+      descricao: "Recalcula receita, custo e tributos esperados por unidade"
+      parametros: [vgv, poc_vigente, poc_anterior, custo_total_cc,
+                   fracao_fisica, caixa_acumulado, caixa_mes, eh_nova_venda]
+      retorno:
+        receita_esperada: float
+        custo_esperado: float
+        mov_receita: float
+        mov_custo: float
+
+    verificar_premissas_empreendimento:
+      descricao: "Valida contas configuradas e CC do empreendimento"
+      retorno:
+        alertas: "lista — apenas itens com problema (omitir se vazio)"
+        cc: int
+        obra_concluida: bool
+
+  # [OPT-2] response_schema mandatório na investigação
+  schema_resposta_investigacao:
+    descricao: >
+      Schema OpenAPI injetado na chamada Vertex para garantir 100% de
+      aderência ao JSON. Elimina a necessidade de rotinas de fallback/regex.
+    _schema_openapi:
+      type: object
+      required:
+        - "1_raciocinio_matematico"   # Pseudo-CoT — SEMPRE o primeiro
+        - causa_raiz
+        - tipo_divergencia
+        - operacoes
+        - confianca
+        - requer_estorno_retroativo   # Flag HITL
+        - afeta_apuracao_imposto      # Flag HITL
+      properties:
+        "1_raciocinio_matematico":
+          type: string
+          description: >
+            PREENCHER PRIMEIRO. Descreva passo a passo o raciocínio matemático:
+            quais valores do contexto foram usados, qual fórmula IFRS 15 foi aplicada,
+            e como chegou ao valor do lançamento correctivo. Isso garante precisão.
+        causa_raiz:
+          type: string
+        tipo_divergencia:
+          type: string
+          enum: [MISSING_ENTRY, VALUE_MISMATCH, TIMING_MISMATCH,
+                 ACCUMULATED_ERROR, ACCOUNT_MAPPING_ERROR,
+                 DUPLICATE_ENTRY, ZERO_BALANCE_EXPECTED]
+        operacoes:
+          type: array
+          description: >
+            Array de operações contábeis. Permite rateios e lançamentos múltiplos
+            em uma única iteração. Substitui os campos fixos conta_debito/conta_credito.
+          items:
+            type: object
+            required: [tipo, conta, valor]
+            properties:
+              tipo:   { type: string, enum: [D, C] }
+              conta:  { type: integer, description: "código contábil" }
+              valor:  { type: number, description: "valor em R$ — sempre positivo" }
+              historico: { type: string }
+              competencia: { type: string, description: "YYYY-MM-DD" }
+        confianca:
+          type: string
+          enum: [alta, media, baixa]
+        # [OPT-2] — Flags de roteamento semântico para o pipeline HITL
+        requer_estorno_retroativo:
+          type: boolean
+          description: >
+            true = correção envolve meses anteriores (HITL obrigatório, sem auto-aprovação)
+        afeta_apuracao_imposto:
+          type: boolean
+          description: >
+            true = operacoes tocam contas de tributos (revisão fiscal obrigatória)
+        requer_revisao_premissas:
+          type: boolean
+        premissas_a_revisar:
+          type: array
+          items: { type: string }
+
+  loop_react:
+    passos:
+      THINK: "LLM analisa contexto compacto e decide qual tool usar"
+      ACT: "Tool executada; retorno agrupado/minificado entregue ao LLM"
+      OBSERVE: "LLM interpreta retorno e decide: continuar ou concluir"
+      CONCLUDE: "LLM preenche schema completo (Pseudo-CoT primeiro)"
+    fallback_iteracoes_esgotadas: >
+      Se max_iteracoes for atingido sem confianca >= media:
+      escalar para revisão manual sem proposta automática.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 5 — CORREÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+fase_5_correcao:
+  descricao: >
+    O campo "operacoes" do schema substitui débito/crédito fixo.
+    O backend itera o array e monta cada par de lançamento automaticamente.
+
+  tipos_correcao:
+    lancamento_simples:
+      operacoes_esperadas: 2   # 1 D + 1 C
+    estorno_mais_relancamento:
+      operacoes_esperadas: 4   # 1 D estorno + 1 C estorno + 1 D novo + 1 C novo
+    rateio_por_unidade:
+      operacoes_esperadas: "2 × N unidades"
+      descricao: "O modelo pode propor operações por unidade em uma única resposta"
+    sincronizacao_ods:
+      operacoes_esperadas: 0
+      acao_especial: "Disparar /api/custos/sincronizar_totalizadores antes de relançar"
+
+  validacao_pre_persistencia:
+    partida_dobrada: "sum(op.valor where tipo=='D') == sum(op.valor where tipo=='C')"
+    conta_existente: "toda conta em operacoes deve existir em PLANOESPEC"
+    valor_positivo: "op.valor > 0 para toda operação"
+    competencia_valida: "data dentro do exercício auditado"
+    historico_nao_vazio: "ao menos uma operação com historico preenchido"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 6 — APROVAÇÃO HUMANA (HITL)
+# ─────────────────────────────────────────────────────────────────────────────
+fase_6_aprovacao:
+  descricao: >
+    O backend usa as flags booleanas do schema para rotear o lançamento
+    ANTES de apresentar ao usuário, sem analisar o texto de justificativa.
+
+  # [OPT-2] Roteamento semântico por flags — decisão O(1), sem LLM
+  roteamento_por_flags:
+    requer_estorno_retroativo_true:
+      acao: "HITL obrigatório — bloquear auto-aprovação independente do valor"
+      ui: "Exibir alerta 'Lançamento afeta períodos anteriores — revisão obrigatória'"
+    afeta_apuracao_imposto_true:
+      acao: "Notificar contador fiscal antes de apresentar ao usuário"
+      ui: "Badge 'IMPACTO FISCAL' no card de aprovação"
+    requer_estorno_retroativo_false_afeta_imposto_false:
+      acao: "Pode ser auto-aprovado se valor < limiar e confianca == 'alta'"
+    confianca_baixa:
+      acao: "Sempre HITL — nunca auto-aprovar"
+
+  opcoes_usuario:
+    APROVAR:        "Persistir as operacoes como propostas"
+    EDITAR_APROVAR: "Usuário ajusta valores/contas no array operacoes"
+    REJEITAR:       "Divergência marcada como 'Aguardando Revisão Manual'"
+    ESCALAR:        "Re-executa Fase 4 com prompt adicional do usuário"
+
+  auto_aprovacao:
+    condicoes:
+      - "confianca == alta"
+      - "requer_estorno_retroativo == false"
+      - "afeta_apuracao_imposto == false"
+      - "sum(operacoes.valor) < limiar_auto_aprovacao"
+    limiar_auto_aprovacao: "configurável em .env — padrão R$ 0 (desabilitado)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 7 — PERSISTÊNCIA
+# ─────────────────────────────────────────────────────────────────────────────
+fase_7_persistencia:
+  descricao: >
+    O backend itera o array operacoes e converte em pares D/C do LCTOCTB.
+
+  logica_conversao_operacoes:
+    agrupamento: >
+      Operações com mesma competencia e historico são agrupadas como
+      um único lançamento no LCTOCTB (evita fragmentação desnecessária).
+    validacao_final: "partida dobrada verificada antes de cada INSERT"
+
+  destinos:
+    questor_lctoctb:
+      campos_obrigatorios:
+        CODIGOEMPRESA: empresa_id
+        CHAVELCTOCTB: "timestamp × 10"
+        DATALCTOCTB: "competencia da operação"
+        VALORLCTOCTB: "op.valor"
+        CONTACTBDEB: "conta da operação D"
+        CONTACTBCRED: "conta da operação C"
+        COMPLHIST: "op.historico"
+        CHAVEORIGEM: "VU_CORR"
+      transacao: "BEGIN → batch INSERTs → COMMIT (rollback em falha)"
+    vulcano_poc_custos:
+      condicao: "se operacoes tocam POC_CUSTOS ou POC_CUSTO_MENSAL_REAL"
+
+  rastreabilidade:
+    campo: "CHAVEORIGEM = 'VU_CORR'"
+    log: "causa_raiz + agente_id + timestamp + 1_raciocinio_matematico"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 8 — VALIDAÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+fase_8_validacao:
+  resultados:
+    FECHADO:            "abs(diff_saldo_final) < 0.01 → marcar resolvida"
+    PARCIALMENTE_FECHADO: "diff reduziu mas persiste → nova iteração"
+    REABERTO:           "diff aumentou ou mudou sinal → alerta crítico obrigatório"
+    SEM_MUDANCA:        "diff idêntico → verificar persistência; rollback se necessário"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FLUXO LLM — CONFIGURAÇÃO CONSOLIDADA
+# ─────────────────────────────────────────────────────────────────────────────
+fluxo_llm:
+
+  providers:
+    vertex_ai:    { prioridade: 1, auth: "service account JSON", flag: "HAS_VERTEXAI=True" }
+    google_ai_studio: { prioridade: 2, auth: "GEMINI_API_KEY", flag: "HAS_VERTEXAI=False" }
+
+  # [OPT-3] Tabela de decisão thinking_budget por fase
+  thinking_budget_por_fase:
+    fase_3_diagnostico:
+      thinking_budget: 0
+      justificativa: "Classificação estruturada. DuckDB já entregou conclusões matemáticas."
+    fase_4_investigacao:
+      thinking_budget: 0
+      pseudo_cot: true
+      justificativa: >
+        thinking_budget:0 para manter velocidade. Pseudo-CoT via campo
+        "1_raciocinio_matematico" emula o raciocínio matemático necessário
+        para IFRS 15 sem o custo do CoT nativo do Vertex.
+    outras_fases:
+      thinking_budget: 0
+      pseudo_cot: false
+
+  generation_config_base:
+    response_mime_type: "application/json"
+    max_output_tokens: 8192
+    thinking_config: { thinking_budget: 0 }   # Vertex obrigatório
+
+  # [OPT-2] response_schema — elimina fallback regex
+  structured_outputs:
+    descricao: >
+      O Gemini 2.5 Flash suporta Structured Outputs nativamente no Vertex AI.
+      Injetar o schema OpenAPI exato na chamada garante 100% aderência ao JSON
+      sem rotinas de autocorrecao.erros_json_llm (fallback regex).
+    parametro_api: "response_schema=<dict OpenAPI>"
+    beneficio: "Elimina latência da rotina de parse/fallback após a resposta"
+    compatibilidade: "Vertex AI apenas — Google AI Studio usa response_mime_type"
+
+  chamadas:
+    investigacao_agente:
+      tipo: "async — _gemini_generate_json_async"
+      schema: "schema_resposta_investigacao (com 1_raciocinio_matematico)"
+      payload: "context_divergencia minificado + deltas (OPT-1)"
+    diagnostico_periodo:
+      tipo: "async — _gemini_generate_json_async"
+      schema: "schema_resposta_diagnostico"
+      payload: "top anomalias do DuckDB — sem séries temporais brutas"
+
+  retry_policy:
+    condicoes: ["429 ResourceExhausted", "503 ServiceUnavailable"]
+    max_tentativas: 3
+    backoff_segundos: [2, 4, 6]
+
+  bypass_key:
+    regra: "Se HAS_VERTEXAI=True, _require_gemini_key() retorna imediatamente"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTOCORREÇÃO E RESILIÊNCIA (simplificada com Structured Outputs)
+# ─────────────────────────────────────────────────────────────────────────────
+autocorrecao:
+  erros_json:
+    com_response_schema: >
+      Structured Outputs garante JSON válido — fallback regex não é mais necessário.
+      Mantido apenas como safety net para chamadas sem Vertex (Google AI Studio).
+    safety_net_google_ai_studio:
+      descricao: "Busca {..} ou [..] na resposta e tenta json.loads()"
+      quando: "HAS_VERTEXAI=False apenas"
+
+  tools_com_falha:
+    estrategia:
+      1: "Logar erro e reformular query com parâmetros simplificados"
+      2: "Se falhar novamente, marcar linha de investigação como inconclusiva"
+      3: "Se todas falharem, escalar para revisão manual"
+
+  concorrencia:
+    semaforo_vertex: "asyncio.Semaphore — limita chamadas simultâneas"
+    paralelo_receitas: "ThreadPoolExecutor max_workers=2 (mês atual + trimestre)"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MÉTRICAS DE QUALIDADE
+# ─────────────────────────────────────────────────────────────────────────────
+metricas_qualidade:
+  por_ciclo:
+    taxa_conciliacao: { formula: "fechadas/(fechadas+divergentes)", meta: ">=95%" }
+    valor_total_divergencias: "sum(abs(diff_saldo_final))"
+    divergencias_criticas: "count(anomaly_score >= 0.9)"
+    tempo_fechamento_medio: "dias para fechar divergência aberta"
+  por_lancamento:
+    taxa_aprovacao_automatica: float
+    taxa_rejeicao: float
+    taxa_reabertura: float
+  qualidade_llm:
+    taxa_json_valido: float
+    taxa_confianca_alta: float
+    taxa_correcao_efetiva: "lançamentos que fecharam a divergência / aprovados"
+    accuracy_pseudo_cot: >
+      Medir separadamente a taxa de acerto dos lançamentos com Pseudo-CoT ativo
+      vs sem — para calibrar se o campo 1_raciocinio_matematico está ajudando.

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Construction, RefreshCw, Layers, AlertCircle, Search, Filter, CheckSquare, Square, Building2, Calendar, ChevronDown, ChevronRight, Save } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
-const API_BASE = "http://127.0.0.1:6000";
+const API_BASE = "http://127.0.0.1:8000";
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';
@@ -166,20 +166,20 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
             </div>
 
             {/* Top Filter Block */}
-            <div className="bg-[#111] border border-[#333] rounded-sm p-4 space-y-4 shadow-xl">
+            <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 space-y-4 shadow-xl">
                 <div className="flex flex-col md:flex-row gap-6">
                     {/* Empreendimentos Selector - Ampliado */}
                     <div className="flex-1 space-y-2">
-                        <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-widest text-[#888]">
+                        <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">
                             <span className="flex items-center gap-1"><Building2 size={12}/> Obras Analisadas</span>
-                            <button onClick={toggleAllEmps} className="text-[#007aff] hover:text-[#fff] transition-colors">{selectedEmps.length === empreendimentos.length && empreendimentos.length > 0 ? "Desmarcar Todos" : "Marcar Todos"}</button>
+                            <button onClick={toggleAllEmps} className="text-[var(--v-accent-4)] hover:text-[#fff] transition-colors">{selectedEmps.length === empreendimentos.length && empreendimentos.length > 0 ? "Desmarcar Todos" : "Marcar Todos"}</button>
                         </div>
                         {/* Altura aumentada para melhor visualização: max-h-[300px] */}
-                        <div className="bg-black/50 border border-[#333] rounded-sm max-h-[300px] overflow-y-auto custom-scrollbar p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <div className="bg-black/50 border border-[var(--v-border)] rounded-[var(--v-radius)] max-h-[300px] overflow-y-auto custom-scrollbar p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                             {loadingEmps ? (
-                                <div className="text-center p-2 text-xs text-[#555] uppercase col-span-full">Carregando Obras...</div>
+                                <div className="text-center p-2 text-xs text-[var(--v-text-faint)] uppercase col-span-full">Carregando Obras...</div>
                             ) : empreendimentos.length === 0 ? (
-                                <div className="text-center p-2 text-xs text-[#555] uppercase col-span-full">Nenhuma Obra Ativa</div>
+                                <div className="text-center p-2 text-xs text-[var(--v-text-faint)] uppercase col-span-full">Nenhuma Obra Ativa</div>
                             ) : empreendimentos.map(emp => (
                                 <label 
                                     key={emp.id} 
@@ -187,14 +187,14 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                         e.preventDefault();
                                         setSelectedEmps(prev => prev.includes(emp.id) ? prev.filter(x => x !== emp.id) : [...prev, emp.id]);
                                     }}
-                                    className={`flex items-start gap-2 p-1.5 rounded-sm cursor-pointer border transition-colors select-none ${selectedEmps.includes(emp.id) ? 'border-[#007aff]/30 bg-[#007aff]/5 text-white' : 'border-transparent text-[#aaa] hover:bg-[#222]'}`}
+                                    className={`flex items-start gap-2 p-1.5 rounded-[var(--v-radius)] cursor-pointer border transition-colors select-none ${selectedEmps.includes(emp.id) ? 'border-[#007aff]/30 bg-[#007aff]/5 text-[var(--v-text-bold)]' : 'border-transparent text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}
                                 >
-                                    <div className="mt-0.5 text-[#007aff]">
+                                    <div className="mt-0.5 text-[var(--v-accent-4)]">
                                         {selectedEmps.includes(emp.id) ? <CheckSquare size={14}/> : <Square size={14} className="opacity-50"/>}
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-bold uppercase leading-tight">{emp.nome}</span>
-                                        <span className="text-[8px] tracking-widest text-[#666]">ID: {emp.id}</span>
+                                        <span className="text-[8px] tracking-widest text-[var(--v-text-faint)]">ID: {emp.id}</span>
                                     </div>
                                 </label>
                             ))}
@@ -206,18 +206,18 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                     <div className="w-full md:w-[320px] flex flex-col gap-4">
                         <div className="flex gap-3">
                             <div className="flex-1 space-y-1">
-                                <label className="text-[10px] uppercase font-black tracking-widest text-[#888] flex items-center gap-1"><Calendar size={12}/> Dt. Inicio</label>
-                                <input type="month" value={dataIni} onChange={(e) => setDataIni(e.target.value)} className="w-full bg-black/50 border border-[#333] p-2 text-xs text-white outline-none focus:border-[#007aff] rounded-sm [color-scheme:dark]" />
+                                <label className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)] flex items-center gap-1"><Calendar size={12}/> Dt. Inicio</label>
+                                <input type="month" value={dataIni} onChange={(e) => setDataIni(e.target.value)} className="w-full bg-black/50 border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" />
                             </div>
                             <div className="flex-1 space-y-1">
-                                <label className="text-[10px] uppercase font-black tracking-widest text-[#888] flex items-center gap-1"><Calendar size={12}/> Dt. Fim</label>
-                                <input type="month" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full bg-black/50 border border-[#333] p-2 text-xs text-white outline-none focus:border-[#007aff] rounded-sm [color-scheme:dark]" />
+                                <label className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)] flex items-center gap-1"><Calendar size={12}/> Dt. Fim</label>
+                                <input type="month" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full bg-black/50 border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" />
                             </div>
                         </div>
                         <button 
                             onClick={handleSearch}
                             disabled={loading || selectedEmps.length === 0}
-                            className="bg-[#007aff] hover:bg-[#005bb5] text-white py-3 rounded-sm font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto shadow-[0_0_15px_rgba(0,122,255,0.4)]"
+                            className="bg-[#007aff] hover:bg-[#005bb5] text-[var(--v-text-bold)] py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto shadow-[0_0_15px_rgba(0,122,255,0.4)]"
                         >
                             {loading ? <RefreshCw size={14} className="animate-spin" /> : <Layers size={14} />}
                             {loading ? "Calculando VGV/POC..." : "Processar Evolução POC"}
@@ -228,14 +228,14 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
 
             {/* Empty State */}
             {!hasQueried && !loading && (
-                <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-[#333] rounded-sm opacity-50 space-y-3 mt-4">
-                    <Filter size={40} className="text-[#555]" />
-                    <p className="text-[10px] uppercase tracking-widest font-black text-[#888]">Defina os parâmetros acima e inicie o processamento</p>
+                <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-[var(--v-border)] rounded-[var(--v-radius)] opacity-50 space-y-3 mt-4">
+                    <Filter size={40} className="text-[var(--v-text-faint)]" />
+                    <p className="text-[10px] uppercase tracking-widest font-black text-[var(--v-text-muted)]">Defina os parâmetros acima e inicie o processamento</p>
                 </div>
             )}
 
             {error && !loading && (
-                <div className="bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/30 p-4 rounded-sm flex items-center gap-3">
+                <div className="bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[#ff4d00]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
                     <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
                 </div>
             )}
@@ -243,12 +243,12 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
             {/* Results Block */}
             {!loading && !error && data && hasQueried && (
                 <div className="space-y-6 slide-in-from-bottom-4 animate-in duration-500">
-                    <div className="magma-card p-6 h-[400px] flex flex-col relative overflow-hidden bg-[#111] border border-[#333] rounded-sm">
+                    <div className="magma-card p-6 h-[400px] flex flex-col relative overflow-hidden bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)]">
                         <div className="flex justify-between items-center mb-6 z-10">
-                            <h3 className="text-[10px] uppercase font-black tracking-widest text-[#aaa]">Curva do Portfólio Analisado</h3>
+                            <h3 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">Curva do Portfólio Analisado</h3>
                             <div className="flex gap-4">
                                 <div className="text-right">
-                                    <p className="text-[9px] text-[#888] font-black uppercase tracking-widest">Total Acumulado</p>
+                                    <p className="text-[9px] text-[var(--v-text-muted)] font-black uppercase tracking-widest">Total Acumulado</p>
                                     <p className="text-xs text-[var(--v-accent-3)] font-mono">{formatCurrency(data.totais_gerais?.receita_societaria || 0)}</p>
                                 </div>
                             </div>
@@ -271,14 +271,14 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                         <Construction size={200} className="absolute -bottom-10 -right-10 text-[var(--v-accent-3)] opacity-5" />
                     </div>
 
-                    <div className="magma-card overflow-hidden border border-[#333] rounded-sm bg-[#111]">
+                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-[var(--v-radius)] bg-[var(--v-deep)]">
                         <table className="w-full text-left text-xs border-collapse">
-                            <thead className="bg-[#0a0a0a] sticky top-0 border-b border-[#222]">
+                            <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
                                 <tr>
                                     <th className="p-4 w-8"></th>
-                                    <th className="p-4 text-[10px] tracking-widest text-[#777] uppercase font-bold">Empreendimento</th>
-                                    <th className="p-4 text-[10px] tracking-widest text-[#777] uppercase font-bold text-right">VGV Base</th>
-                                    <th className="p-4 text-[10px] tracking-widest text-[#007aff] uppercase font-bold text-center">Evolutivo Histórico (Último POC)</th>
+                                    <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Empreendimento</th>
+                                    <th className="p-4 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-right">VGV Base</th>
+                                    <th className="p-4 text-[10px] tracking-widest text-[var(--v-accent-4)] uppercase font-bold text-center">Evolutivo Histórico (Ãšltimo POC)</th>
                                     <th className="p-4 text-[10px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold text-right">Acumulado</th>
                                 </tr>
                             </thead>
@@ -287,40 +287,40 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                     <React.Fragment key={idx}>
                                         <tr 
                                             onClick={() => setExpandedEmp(expandedEmp === name ? null : name)}
-                                            className={`border-b border-[#222] cursor-pointer transition-colors ${expandedEmp === name ? 'bg-[#1a1a1c] border-l-4 border-l-[#007aff]' : 'hover:bg-[#151518] border-l-4 border-l-transparent'}`}
+                                            className={`border-b border-[var(--v-border)] cursor-pointer transition-colors ${expandedEmp === name ? 'bg-[var(--v-hover)] border-l-4 border-l-[#007aff]' : 'hover:bg-[#151518] border-l-4 border-l-transparent'}`}
                                         >
-                                            <td className="p-4 text-[#555]">
-                                                {expandedEmp === name ? <ChevronDown size={14} className="text-[#007aff]"/> : <ChevronRight size={14}/>}
+                                            <td className="p-4 text-[var(--v-text-faint)]">
+                                                {expandedEmp === name ? <ChevronDown size={14} className="text-[var(--v-accent-4)]"/> : <ChevronRight size={14}/>}
                                             </td>
-                                            <td className="p-4 font-black text-white uppercase text-[10px] tracking-wider">{name}</td>
-                                            <td className="p-4 text-right font-mono text-[#aaa]">{formatCurrency(meta.vgv)}</td>
-                                            <td className="p-4 text-center font-mono font-black text-[#007aff] bg-[#007aff]/5">{(meta.poc || 0).toFixed(2)}%</td>
+                                            <td className="p-4 font-black text-[var(--v-text-bold)] uppercase text-[10px] tracking-wider">{name}</td>
+                                            <td className="p-4 text-right font-mono text-[var(--v-text-muted)]">{formatCurrency(meta.vgv)}</td>
+                                            <td className="p-4 text-center font-mono font-black text-[var(--v-accent-4)] bg-[#007aff]/5">{(meta.poc || 0).toFixed(2)}%</td>
                                             <td className="p-4 text-right font-mono text-[var(--v-accent-3)] font-bold">{formatCurrency(meta.receita_societaria)}</td>
                                         </tr>
                                         {/* Painel Interno (Drill-Down / Formulário POC) */}
                                         {expandedEmp === name && (
-                                            <tr className="bg-[#0f0f10] border-b border-[#222]">
+                                            <tr className="bg-[#0f0f10] border-b border-[var(--v-border)]">
                                                 <td colSpan="5" className="p-0">
                                                     <div className="p-6 border-l-4 border-[#007aff] flex gap-8 animate-in slide-in-from-top-2 duration-300">
                                                         
                                                         {/* Painel: Lançamento Manual / Adição POC */}
-                                                        <div className="w-[300px] border border-[#222] bg-[#141416] p-4 rounded-sm space-y-4 shadow-inner">
+                                                        <div className="w-[300px] border border-[var(--v-border)] bg-[#141416] p-4 rounded-[var(--v-radius)] space-y-4 shadow-inner">
                                                             <div>
-                                                                <h4 className="text-[10px] font-black text-white uppercase tracking-widest mb-1 flex items-center gap-1.5"><Layers size={12}/> Oficializar POC Mensal</h4>
-                                                                <p className="text-[9px] text-[#666] uppercase">Composição de Diário / Lançamento Base Firebird e SQLite</p>
+                                                                <h4 className="text-[10px] font-black text-[var(--v-text-bold)] uppercase tracking-widest mb-1 flex items-center gap-1.5"><Layers size={12}/> Oficializar POC Mensal</h4>
+                                                                <p className="text-[9px] text-[var(--v-text-faint)] uppercase">Composição de Diário / Lançamento Base Firebird e SQLite</p>
                                                             </div>
                                                             <div className="space-y-3">
                                                                 <div className="space-y-1.5">
-                                                                    <label className="text-[10px] uppercase font-black tracking-widest text-[#888]">Mês Competência</label>
+                                                                    <label className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">Mês Competência</label>
                                                                     <input 
                                                                         type="month" 
                                                                         value={pocFormPeriod} 
                                                                         onChange={(e) => setPocFormPeriod(e.target.value)} 
-                                                                        className="w-full bg-black border border-[#333] p-2 text-xs text-white outline-none focus:border-[#007aff] rounded-sm [color-scheme:dark]" 
+                                                                        className="w-full bg-black border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" 
                                                                     />
                                                                 </div>
                                                                 <div className="space-y-1.5">
-                                                                    <label className="text-[10px] uppercase font-black tracking-widest text-[#888]">Medição Física (%)</label>
+                                                                    <label className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">Medição Física (%)</label>
                                                                     <div className="relative group">
                                                                         <input 
                                                                             type="number" 
@@ -328,15 +328,15 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                             placeholder="Ex: 5.45"
                                                                             value={pocFormPercent} 
                                                                             onChange={(e) => setPocFormPercent(e.target.value)} 
-                                                                            className="w-full bg-black border border-[#333] p-2 text-xs text-white outline-none focus:border-[#007aff] rounded-sm pr-6" 
+                                                                            className="w-full bg-black border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] pr-6" 
                                                                         />
-                                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#555] font-black text-[10px] group-focus-within:text-[#007aff]">%</span>
+                                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--v-text-faint)] font-black text-[10px] group-focus-within:text-[var(--v-accent-4)]">%</span>
                                                                     </div>
                                                                 </div>
                                                                 <button 
                                                                     onClick={() => handleSaveManualPoc(name)}
                                                                     disabled={savingPoc}
-                                                                    className="w-full bg-[#34c759] hover:bg-[#28a745] text-black font-black text-[10px] uppercase tracking-widest py-2.5 flex justify-center items-center gap-2 rounded-sm transition-colors disabled:opacity-50 mt-2"
+                                                                    className="w-full bg-[#34c759] hover:bg-[#28a745] text-black font-black text-[10px] uppercase tracking-widest py-2.5 flex justify-center items-center gap-2 rounded-[var(--v-radius)] transition-colors disabled:opacity-50 mt-2"
                                                                 >
                                                                   {savingPoc ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
                                                                   GRAVAR SISTEMA
@@ -346,47 +346,47 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
 
                                                         {/* Painel: Extrato/Espelho Base */}
                                                         <div className="flex-1 space-y-4">
-                                                             <h4 className="text-[10px] font-black text-[#666] uppercase tracking-[0.2em] border-b border-[#222] pb-2">Espelho de Receitas e Impostos</h4>
+                                                             <h4 className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-[0.2em] border-b border-[var(--v-border)] pb-2">Espelho de Receitas e Impostos</h4>
                                                              <div className="grid grid-cols-3 gap-4 mb-4">
-                                                                 <div className="bg-[#111] p-3 rounded-sm border border-[#222]">
-                                                                     <p className="text-[8px] uppercase tracking-widest text-[#555] font-black mb-1">Recebimentos (Caixa Real)</p>
-                                                                     <p className="text-white font-mono text-sm">{formatCurrency(meta.caixa_acumulado)}</p>
+                                                                 <div className="bg-[var(--v-deep)] p-3 rounded-[var(--v-radius)] border border-[var(--v-border)]">
+                                                                     <p className="text-[8px] uppercase tracking-widest text-[var(--v-text-faint)] font-black mb-1">Recebimentos (Caixa Real)</p>
+                                                                     <p className="text-[var(--v-text-bold)] font-mono text-sm">{formatCurrency(meta.caixa_acumulado)}</p>
                                                                  </div>
-                                                                 <div className="bg-[#111] p-3 rounded-sm border border-[#222]">
-                                                                     <p className="text-[8px] uppercase tracking-widest text-[#555] font-black mb-1">Tributação Sobre Recebimentos</p>
-                                                                     <p className="text-[#ff4d00] font-mono text-sm">{formatCurrency(meta.tributos_caixa_acumulado)}</p>
+                                                                 <div className="bg-[var(--v-deep)] p-3 rounded-[var(--v-radius)] border border-[var(--v-border)]">
+                                                                     <p className="text-[8px] uppercase tracking-widest text-[var(--v-text-faint)] font-black mb-1">Tributação Sobre Recebimentos</p>
+                                                                     <p className="text-[var(--v-accent)] font-mono text-sm">{formatCurrency(meta.tributos_caixa_acumulado)}</p>
                                                                  </div>
-                                                                 <div className="bg-[#111] p-3 rounded-sm border border-[var(--v-accent-3)]/30">
+                                                                 <div className="bg-[var(--v-deep)] p-3 rounded-[var(--v-radius)] border border-[var(--v-accent-3)]/30">
                                                                      <p className="text-[8px] uppercase tracking-widest text-[var(--v-accent-3)] font-black mb-1">Provisão de Tributos (POC)</p>
                                                                      <p className="text-[var(--v-accent-3)] font-mono text-sm">{formatCurrency(meta.tributos_soc_acumulado)}</p>
                                                                  </div>
                                                              </div>
 
-                                                             <div className="bg-[#111] border border-[#222] rounded-sm p-3">
-                                                                 <h4 className="text-[10px] uppercase tracking-widest text-[#555] font-black mb-2">Evolução Mensal Reportada</h4>
+                                                             <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-3">
+                                                                 <h4 className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-black mb-2">Evolução Mensal Reportada</h4>
                                                                  <div className="max-h-[140px] overflow-y-auto custom-scrollbar">
                                                                      <table className="w-full text-left text-[10px]">
-                                                                        <thead className="bg-[#0a0a0a] sticky top-0 border-b border-[#222]">
+                                                                        <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
                                                                             <tr>
-                                                                                <th className="p-2 text-[#777] font-bold">Período (Mês)</th>
+                                                                                <th className="p-2 text-[var(--v-text-faint)] font-bold">Período (Mês)</th>
                                                                                 <th className="p-2 text-right text-[var(--v-accent-3)] font-bold">Medição (POC)</th>
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
                                                                             {meta.historico_poc?.length > 0 ? [...meta.historico_poc].sort((a, b) => b.periodo.localeCompare(a.periodo)).map((h, i) => (
-                                                                                <tr key={i} className="border-b border-[#222]/50 hover:bg-[#1a1a1c] transition-colors">
-                                                                                    <td className="p-2 text-white font-mono">{h.periodo}</td>
+                                                                                <tr key={i} className="border-b border-[var(--v-border)]/50 hover:bg-[var(--v-hover)] transition-colors">
+                                                                                    <td className="p-2 text-[var(--v-text-bold)] font-mono">{h.periodo}</td>
                                                                                     <td className="p-2 text-right font-mono text-[var(--v-accent-3)] font-black">{h.poc.toFixed(2)}%</td>
                                                                                 </tr>
                                                                             )) : (
-                                                                                <tr><td colSpan="2" className="p-4 text-center text-[#555]">Nenhum histórico registrado</td></tr>
+                                                                                <tr><td colSpan="2" className="p-4 text-center text-[var(--v-text-faint)]">Nenhum histórico registrado</td></tr>
                                                                             )}
                                                                         </tbody>
                                                                      </table>
                                                                  </div>
                                                              </div>
                                                              
-                                                             <div className="text-[9px] text-[#444] font-black uppercase tracking-widest">
+                                                             <div className="text-[9px] text-[var(--v-text-faint)] font-black uppercase tracking-widest">
                                                                 Nota: O espelho consolidado resume totais até a competência de filtragem. A inserção manual à esquerda substituirá a tabela mensal.
                                                              </div>
                                                         </div>
@@ -397,7 +397,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                     </React.Fragment>
                                 ))}
                                 {Object.keys(data.dashboard_meta || {}).length === 0 && (
-                                    <tr><td colSpan="5" className="p-8 text-center text-[#555] uppercase text-[10px] tracking-widest">Sem métricas de POC para o filtro selecionado</td></tr>
+                                    <tr><td colSpan="5" className="p-8 text-center text-[var(--v-text-faint)] uppercase text-[10px] tracking-widest">Sem métricas de POC para o filtro selecionado</td></tr>
                                 )}
                             </tbody>
                         </table>

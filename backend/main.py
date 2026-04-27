@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
@@ -9,8 +9,14 @@ import functools
 platform.machine = lambda: 'AMD64'
 platform.win32_ver = lambda *args, **kwargs: ('10', '', '', '')
 class FakeUname:
+    system = 'Windows'
+    node = 'NODE'
+    release = '10'
+    version = '10.0.19041'
     machine = 'AMD64'
+    processor = 'AMD64 Family'
 platform.uname = lambda: FakeUname()
+
 
 try:
     import warnings
@@ -64,7 +70,7 @@ else:
 load_dotenv(dotenv_path=_DOTENV_PATH, override=True)
 
 _DEFAULT_DB_QUESTOR = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\QUESTOR_EMPRESA_959.FDB"
-_DEFAULT_DB_VULCANO = r"C:\Users\dirfe\OneDrive\Documentos\Vulcano\VULCANO.FDB"
+_DEFAULT_DB_VULCANO = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\Vulcano 2025\VULCANO 2025.fdb"
 DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", _DEFAULT_DB_QUESTOR)
 DB_PATH_VULCANO = os.environ.get("DB_PATH_VULCANO", _DEFAULT_DB_VULCANO)
 FIREBIRD_HOST = os.environ.get("FIREBIRD_HOST", "localhost")
@@ -76,13 +82,27 @@ if genai:
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
 # Setup Cloud/Vertex para performance corporativa (JSON)
+_VERTEX_INIT_DONE = False
 try:
     import vertexai
-    from vertexai.generative_models import GenerativeModel as VertexModel, Part
-    # O GOOGLE_APPLICATION_CREDENTIALS carrega a service account automaticamente
-    vertexai.init(project="questor-explorer-prod", location="us-central1")
+    from vertexai.generative_models import GenerativeModel as OriginalVertexModel, Part
+    
+    class VertexModel:
+        def __init__(self, *args, **kwargs):
+            global _VERTEX_INIT_DONE
+            if not _VERTEX_INIT_DONE:
+                vertexai.init(project="questor-explorer-prod", location="us-central1")
+                _VERTEX_INIT_DONE = True
+            self.model = OriginalVertexModel(*args, **kwargs)
+            
+        def generate_content(self, *args, **kwargs):
+            return self.model.generate_content(*args, **kwargs)
+            
+        async def generate_content_async(self, *args, **kwargs):
+            return await self.model.generate_content_async(*args, **kwargs)
+            
     HAS_VERTEXAI = True
-except Exception:
+except ImportError:
     HAS_VERTEXAI = False
 
 # Modelo rápido por padrão; use GEMINI_MODEL no .env (ex.: gemini-2.5-flash) se quiser.
@@ -107,6 +127,7 @@ else:
     POC_DATABASE_FILE = _poc_backend
 
 def _require_gemini_key():
+    if HAS_VERTEXAI: return
     if not os.environ.get("GEMINI_API_KEY"):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
 
@@ -176,11 +197,116 @@ def _ollama_generate_json(prompt: str) -> dict:
     except urllib.error.URLError as e:
         raise HTTPException(status_code=502, detail=f"Erro conectando ao Ollama ({OLLAMA_API_BASE}): {e}")
 
-async def _gemini_generate_json_async(prompt: str, file_data: bytes = None, mime_type: str = None) -> dict:
-    """Chama Gemini e retorna um objeto JSON (assíncrono nativo)."""
+# ── Schemas de Structured Output (Vertex AI) ────────────────────────────────
+# [OPT-2 Deep Think] response_schema injeta schema OpenAPI na chamada Vertex,
+# garantindo 100% aderência ao JSON sem fallback/regex.
+# [OPT-3 Deep Think] Campo "1_raciocinio_matematico" primeiro → Pseudo-CoT:
+# força o LLM a verbalizar o raciocínio ANTES das operações (emula CoT com
+# thinking_budget:0, mantendo velocidade e aumentando precisão no IFRS 15).
+SCHEMA_INVESTIGACAO = {
+    "type": "object",
+    "properties": {
+        "1_raciocinio_matematico": {
+            "type": "string",
+            "description": (
+                "PREENCHER PRIMEIRO. Descreva passo a passo o raciocínio matemático: "
+                "quais valores do contexto foram usados, qual fórmula IFRS 15 foi aplicada "
+                "e como chegou ao valor das operações correctivas."
+            )
+        },
+        "causa_raiz": {"type": "string"},
+        "tipo_divergencia": {
+            "type": "string",
+            "enum": ["MISSING_ENTRY", "VALUE_MISMATCH", "TIMING_MISMATCH",
+                     "ACCUMULATED_ERROR", "ACCOUNT_MAPPING_ERROR",
+                     "DUPLICATE_ENTRY", "ZERO_BALANCE_EXPECTED"]
+        },
+        "operacoes": {
+            "type": "array",
+            "description": "Array de operações D/C — permite rateios e lançamentos múltiplos em uma iteração",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tipo":       {"type": "string", "enum": ["D", "C"]},
+                    "conta":      {"type": "integer"},
+                    "valor":      {"type": "number"},
+                    "historico":  {"type": "string"},
+                    "competencia":{"type": "string"}
+                },
+                "required": ["tipo", "conta", "valor"]
+            }
+        },
+        "confianca": {"type": "string", "enum": ["alta", "media", "baixa"]},
+        "requer_estorno_retroativo":  {"type": "boolean"},
+        "afeta_apuracao_imposto":     {"type": "boolean"},
+        "requer_revisao_premissas":   {"type": "boolean"},
+        "premissas_a_revisar":        {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["1_raciocinio_matematico", "causa_raiz", "tipo_divergencia",
+                 "operacoes", "confianca",
+                 "requer_estorno_retroativo", "afeta_apuracao_imposto"]
+}
+
+SCHEMA_DIAGNOSTICO = {
+    "type": "object",
+    "properties": {
+        "resumo_executivo": {"type": "string"},
+        "anomalias": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "conta_id":      {"type": "integer"},
+                    "nome":          {"type": "string"},
+                    "tipo_provavel": {
+                        "type": "string",
+                        "enum": ["MISSING_ENTRY", "VALUE_MISMATCH", "TIMING_MISMATCH",
+                                 "ACCUMULATED_ERROR", "ACCOUNT_MAPPING_ERROR",
+                                 "DUPLICATE_ENTRY", "ZERO_BALANCE_EXPECTED"]
+                    },
+                    "urgencia":      {"type": "string", "enum": ["critica", "alta", "media", "baixa"]},
+                    "recomendacao":  {"type": "string"}
+                },
+                "required": ["conta_id", "nome", "tipo_provavel", "urgencia", "recomendacao"]
+            }
+        }
+    },
+    "required": ["resumo_executivo", "anomalias"]
+}
+
+
+def _build_compact_context(data: dict) -> str:
+    """
+    [OPT-1 Deep Think] Minifica o payload antes de enviar ao Vertex:
+    - Remove chaves com valor None, 0, 0.0 ou lista vazia
+    - Serializa como JSON compacto (sem indentação)
+    Reduz tokens e remove carga cognitiva desnecessária do LLM.
+    """
+    import json
+    def _strip(obj):
+        if isinstance(obj, dict):
+            return {k: _strip(v) for k, v in obj.items()
+                    if v is not None and v != 0 and v != 0.0 and v != [] and v != {}}
+        if isinstance(obj, list):
+            return [_strip(i) for i in obj]
+        return obj
+    return json.dumps(_strip(data), ensure_ascii=False, separators=(',', ':'))
+
+
+async def _gemini_generate_json_async(
+    prompt: str,
+    file_data: bytes = None,
+    mime_type: str = None,
+    response_schema: dict = None   # [OPT-2] Structured Outputs — Vertex apenas
+) -> dict:
+    """Chama Gemini e retorna um objeto JSON (assíncrono nativo).
+
+    Com response_schema (Vertex AI): garante 100% aderência ao JSON sem fallback/regex.
+    Sem response_schema (Google AI Studio / fallback): usa response_mime_type padrão.
+    """
     _require_gemini_key()
     resp = None
-    
+
     contents = [prompt]
     if file_data and mime_type:
         if HAS_VERTEXAI:
@@ -193,35 +319,47 @@ async def _gemini_generate_json_async(prompt: str, file_data: bytes = None, mime
     for attempt in range(max_retries):
         try:
             model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
-            model = model_cls(
-                GEMINI_MODEL_ID,
-                generation_config={"response_mime_type": "application/json"},
-            )
-            # Descomente o fallback abaixo para forçar json text ou algo do tipo em caso de falha silenciosa.
-            
+            gen_cfg = {
+                "response_mime_type": "application/json",
+                "max_output_tokens": 8192,
+            }
+            if HAS_VERTEXAI:
+                gen_cfg["thinking_config"] = {"thinking_budget": 0}
+                # [OPT-2] Structured Outputs: injeta schema OpenAPI quando disponível
+                if response_schema:
+                    gen_cfg["response_schema"] = response_schema
+            model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
             resp = await model.generate_content_async(contents)
-            break # Success, exit retry loop
+            break
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "ResourceExhausted" in err_str or "Quota" in err_str or "503" in err_str:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 * (attempt + 1))
-                    continue # Retry on next loop
-            
-            # Se não era retry-able ou expirou os tries, tenta fallback mode 1 vez (as vezes MimeType json buga)
+                    continue
+            # Fallback sem schema (às vezes response_schema causa rejeição em modelos mais antigos)
             try:
                 model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
-                model = model_cls(GEMINI_MODEL_ID)
+                gen_cfg_fb = {
+                    "response_mime_type": "application/json",
+                    "max_output_tokens": 8192,
+                }
+                if HAS_VERTEXAI:
+                    gen_cfg_fb["thinking_config"] = {"thinking_budget": 0}
+                model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg_fb)
                 fallback_contents = [prompt + "\n\nResponda somente um objeto JSON válido, sem markdown nem texto fora do JSON."]
                 if mime_type and file_data:
-                    # Nativamente injeta a parte binária
                     fallback_contents.append(
-                        Part.from_data(mime_type=mime_type, data=file_data) if HAS_VERTEXAI else {"mime_type": mime_type, "data": file_data}
+                        Part.from_data(mime_type=mime_type, data=file_data) if HAS_VERTEXAI
+                        else {"mime_type": mime_type, "data": file_data}
                     )
                 resp = await model.generate_content_async(fallback_contents)
-                break # Success on fallback
+                break
             except Exception as ei:
-                raise HTTPException(status_code=429, detail=f"Erro ou Quota Vertex/Gemini excedida após tentativas: {str(e)[:300]} / {str(ei)[:100]}")
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Erro ou Quota Vertex/Gemini após tentativas: {str(e)[:300]} / {str(ei)[:100]}"
+                )
     return _gemini_parse_json_response(resp.text)
 
 def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str = None) -> dict:
@@ -238,10 +376,13 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
 
     try:
         model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
-        model = model_cls(
-            GEMINI_MODEL_ID,
-            generation_config={"response_mime_type": "application/json"},
-        )
+        gen_cfg = {
+            "response_mime_type": "application/json",
+            "max_output_tokens": 8192,
+        }
+        if HAS_VERTEXAI:
+            gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         resp = model.generate_content(contents)
     except Exception:
         model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
@@ -254,11 +395,48 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
                  fallback_contents.append({"mime_type": mime_type, "data": file_data})
         resp = model.generate_content(fallback_contents)
     return _gemini_parse_json_response(resp.text)
+# from contextlib import asynccontextmanager
+# import sindicato_agent as _sa
+
+# @asynccontextmanager
+# async def lifespan(app_):
+#     _sa.start_scheduler()
+#     yield
+#     _sa.stop_scheduler()
+
 app = FastAPI(title="Questor Data Explorer API")
+
+# ── Janitor SRE Agent imports ───────────────────────────────────────────────
+from core.janitor.profiler import JanitorTimingMiddleware, start_profiler, get_performance_report
+from core.janitor.cache    import get_cache_stats, invalidate_cache
+from core.janitor.disk_inspector import run_disk_scan, get_disk_report, move_to_quarantine
 
 from pydantic import BaseModel
 class RawQuery(BaseModel):
     query: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/api/auth/login")
+def api_auth_login(payload: LoginRequest):
+    conn = get_conn("vulcano")
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT FIRST 1 ID, USUARIOID, NOMECOMPLETO, TIPOPERMISSAO, EMAIL 
+            FROM USUARIO 
+            WHERE (UPPER(EMAIL) = UPPER(?) OR UPPER(USUARIOID) = UPPER(?)) 
+              AND SENHA = ? 
+              AND ATIVO = 'T'
+        """, (payload.email, payload.email, payload.password))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
+        return {"success": True, "user": {"id": row[0], "usuarioId": row[1], "nome": row[2], "tipoPermissao": row[3], "email": row[4]}}
+    finally:
+        conn.close()
 
 @app.post("/api/explorer/query")
 def api_explorer_query(payload: RawQuery):
@@ -341,10 +519,54 @@ def api_empreendimentos_basico(empresa_id: int = 959):
     finally:
         conn.close()
 
+def _ensure_poc_custo_mensal_real(conn):
+    """
+    Cria a tabela POC_CUSTO_MENSAL_REAL no Vulcano se não existir.
+    Usa firebirdsql — chamada lazy na primeira vez que o dashboard de custos é acessado.
+    """
+    cur = conn.cursor()
+    try:
+        # Verifica existência via RDB$RELATIONS
+        cur.execute("SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = 'POC_CUSTO_MENSAL_REAL' AND RDB$SYSTEM_FLAG = 0")
+        exists = cur.fetchone()[0]
+        if exists:
+            return  # Já existe, nada a fazer
+
+        # Cria tabela, generator e trigger
+        cur.execute("""
+            CREATE TABLE POC_CUSTO_MENSAL_REAL (
+                ID                INTEGER NOT NULL,
+                ID_EMPREENDIMENTO INTEGER NOT NULL,
+                ANO               INTEGER NOT NULL,
+                MES               INTEGER NOT NULL,
+                COMPETENCIA       VARCHAR(10),
+                CUSTO_TOTAL       DOUBLE PRECISION DEFAULT 0.0,
+                CONSTRAINT PK_POC_CUSTO_MENSAL_REAL PRIMARY KEY (ID)
+            )
+        """)
+        cur.execute("CREATE GENERATOR GEN_POC_CUSTO_MENSAL_REAL_ID")
+        cur.execute("""
+            CREATE TRIGGER TRG_POC_CUSTO_MENSAL_BI
+            FOR POC_CUSTO_MENSAL_REAL
+            ACTIVE BEFORE INSERT POSITION 0
+            AS BEGIN
+                IF (NEW.ID IS NULL) THEN
+                    NEW.ID = GEN_ID(GEN_POC_CUSTO_MENSAL_REAL_ID, 1);
+            END
+        """)
+        conn.commit()
+    except Exception as e:
+        # Se der erro (tabela já existe em concurrent request, etc.), ignora
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
 @app.get("/api/custos/dashboard/{id_emp}")
 def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
     conn_vulcano = get_conn("vulcano")
     try:
+        _ensure_poc_custo_mensal_real(conn_vulcano)  # Cria tabela se não existir
         cur = conn_vulcano.cursor()
         cur.execute("""
             SELECT ID, NOME, CUSTOORCADO, CONTACUSTO, CONTAESTAND, CONTAESTCON, CODIGOCENTROCUSTO
@@ -533,7 +755,7 @@ def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int 
             running_gasto += gasto_mes
             poc_m = get_poc_for_period(per)
             
-            custo_acumulado_req = running_gasto * fracao_vendida * (poc_m / 100.0)
+            custo_acumulado_req = running_gasto * fracao_vendida
             valor_mensal = custo_acumulado_req - prev_custo_acumulado
             
             if abs(valor_mensal) >= 0.01:
@@ -581,6 +803,7 @@ def api_custos_detalhamento(id_emp: int, empresa_id: int = 959):
     conn_vulcano = get_conn("vulcano")
     conn_questor = get_conn("questor")
     try:
+        _ensure_poc_custo_mensal_real(conn_vulcano)  # Cria tabela se não existir
         # Puxar CC e Conta de Custo
         cur_v = conn_vulcano.cursor()
         cur_v.execute("SELECT CONTACUSTO, CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (id_emp,))
@@ -625,11 +848,75 @@ def api_custos_detalhamento(id_emp: int, empresa_id: int = 959):
         conn_vulcano.close()
         conn_questor.close()
 
+@app.get("/api/custos/analitico/{id_emp}")
+def api_custos_analitico(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
+    """
+    Retorna os lançamentos analíticos do LCTOGER para um empreendimento em um mês/ano.
+    Usado para o drill-down na tela de Fechamento de Custos.
+    """
+    conn_vulcano = get_conn("vulcano")
+    conn_questor = get_conn("questor")
+    try:
+        cur_v = conn_vulcano.cursor()
+        cur_v.execute("SELECT CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE ID = ?", (id_emp,))
+        emp_info = cur_v.fetchone()
+        if not emp_info or not emp_info[0]:
+            return {"lancamentos": [], "total": 0.0, "count": 0}
+
+        cc_emp = int(emp_info[0])
+        cur_q = conn_questor.cursor()
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode("win1252", "ignore").strip()
+            return str(v).strip()
+
+        cur_q.execute("""
+            SELECT
+                lctoger.datalctoctb,
+                lctoger.valorlctoger * lctoger.naturlctoctb as valor_liquido,
+                lctoger.contactb,
+                lctoctb.contactbdeb,
+                lctoctb.contactbcred,
+                lctoctb.codigohistctb,
+                lctoctb.complhist,
+                lctoger.chavelctoctb
+            FROM lctoger
+            INNER JOIN lctoctb ON lctoctb.codigoempresa = lctoger.codigoempresa
+                AND lctoctb.chavelctoctb = lctoger.chavelctoctb
+            WHERE lctoger.codigoempresa = ?
+              AND lctoger.codigocentrocusto = ?
+              AND extract(year from lctoger.datalctoctb) = ?
+              AND extract(month from lctoger.datalctoctb) = ?
+              AND NOT (lctoctb.codigohistctb = 370 AND lctoger.naturlctoctb = -1)
+            ORDER BY lctoger.datalctoctb, lctoger.chavelctoctb
+        """, (empresa_id, cc_emp, ano, mes))
+
+        lancamentos = []
+        for r in cur_q.fetchall():
+            lancamentos.append({
+                "data": str(r[0])[:10] if r[0] else "",
+                "valor": float(r[1] or 0),
+                "conta_cc": dec(r[2]),
+                "conta_deb": dec(r[3]),
+                "conta_cred": dec(r[4]),
+                "hist_codigo": dec(r[5]),
+                "historico": dec(r[6]),
+                "chave": dec(r[7]),
+            })
+
+        total = sum(l["valor"] for l in lancamentos)
+        return {"lancamentos": lancamentos, "total": total, "count": len(lancamentos)}
+    finally:
+        conn_vulcano.close()
+        conn_questor.close()
+
 @app.post("/api/custos/sincronizar_totalizadores/{id_emp}")
 def api_custos_sincronizar_totalizadores(id_emp: int, mes: int, ano: int, empresa_id: int = 959):
     conn_vulcano = get_conn("vulcano")
     conn_questor = get_conn("questor")
     try:
+        _ensure_poc_custo_mensal_real(conn_vulcano)  # Cria tabela se não existir
         cur_v = conn_vulcano.cursor()
         cur_q = conn_questor.cursor()
         
@@ -742,168 +1029,300 @@ def api_custos_lcto(req: CustoLctoReq):
 
 @app.get("/api/sero/maodeobra")
 def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cno: str = None):
-    conn_vulcano = get_conn("vulcano")
-    conn_questor = get_conn("questor")
-    
-    try:
-        cur_v = conn_vulcano.cursor()
-        cur_q = conn_questor.cursor()
-        
-        # 1. Fetch Projects & Built Area (Vulcano)
-        if cno:
-            cur_v.execute("SELECT ID, NOME, CNO, DATACONCLUSAO, COALESCE(METRAGEMTOTAL, 0) FROM EMPREENDIMENTO WHERE CNO = ? AND CODIGOEMPRESA = ?", (cno, empresa_id))
-        else:
-            cur_v.execute("SELECT ID, NOME, CNO, DATACONCLUSAO, COALESCE(METRAGEMTOTAL, 0) FROM EMPREENDIMENTO WHERE CNO IS NOT NULL AND CNO <> '' AND CODIGOEMPRESA = ?", (empresa_id,))
-            
-        projetos = cur_v.fetchall()
-        
-        # 2. Fetch CUB indices
-        cur_v.execute("SELECT MES, VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 ORDER BY MES ASC")
-        cub_history = {str(r[0])[:7]: float(r[1]) for r in cur_v.fetchall() if r[1] is not None} # dict 'YYYY-MM' -> value
-        
-        # Fallback CUB if missing
-        default_cub = 2850.0 
-        
-        area_total_calc = 0.0
-        total_mao_de_obra_questor = 0.0
-        total_inss_a_recolher = 0.0
-        
-        # Store aggregations
-        historico_mensal = {} # 'YYYY-MM' -> {'realizado': 0, 'previsto': 0}
-        
-        data_minima = f"{ano}-12"
-        data_maxima = f"{ano}-01"
-        
-        for proj in projetos:
-            pid, pnome, pcno, pconclusao, parea = proj
-            parea = float(parea) if parea else 0.0
-            area_total_calc += parea
-            
-            raw_cno = "".join(filter(str.isdigit, pcno))
-            
-            cur_q.execute("""
-                SELECT OE.CODIGOOUTEMP, OEE.INSCRFEDPROPRIET, E.NOMEESTAB
-                FROM OUTRAEMPRESA OE
-                LEFT JOIN OUTRAEMPEMP OEE ON OEE.CODIGOOUTEMP = OE.CODIGOOUTEMP AND OEE.CODIGOEMPRESA = ?
-                LEFT JOIN ESTAB E ON E.INSCRFEDERAL = OEE.INSCRFEDPROPRIET AND E.CODIGOEMPRESA = ?
-                WHERE REPLACE(REPLACE(REPLACE(OE.INSCRFEDERAL, '.', ''), '-', ''), '/', '') = ?
-                OR REPLACE(REPLACE(REPLACE(OE.NOMEOUTEMP, '.', ''), '-', ''), '/', '') = ?
-                OR CAST(OE.CODIGOOUTEMP AS VARCHAR(20)) = ?
-            """, (empresa_id, empresa_id, raw_cno, raw_cno, raw_cno))
-            
-            outemp_data = cur_q.fetchone()
-            if not outemp_data:
-                try:
-                    codigo_outemp = int(raw_cno)
-                except:
-                    codigo_outemp = -1
-            else:
-                codigo_outemp = outemp_data[0]
-            
-            cur_q.execute("""
-                SELECT P.COMPET, SUM(C.VALOREVENTO)
-                FROM CALCULORATEIO C
-                JOIN PERIODOCALCULO P ON P.CODIGOPERCALCULO = C.CODIGOPERCALCULO
-                WHERE C.CODIGOEVENTO = 5041 
-                AND C.CODIGOEMPRESA = ?
-                AND C.CODIGOOUTEMP = ?
-                GROUP BY P.COMPET
-            """, (empresa_id, codigo_outemp))
-            
-            folha_meses = cur_q.fetchall()
-            
-            start_date_str = None
-            if folha_meses:
-                folha_meses.sort(key=lambda x: str(x[0]))
-                start_date_str = str(folha_meses[0][0])[:7] 
-            else:
-                start_date_str = f"{ano-4}-{str(mes).zfill(2)}"
-                
-            if start_date_str < data_minima: data_minima = start_date_str
-            
-            y_s, m_s = map(int, start_date_str.split('-'))
-            
-            for m_offset in range(48):
-                c_m = m_s + m_offset
-                c_y = y_s
-                while c_m > 12:
-                    c_m -= 12
-                    c_y += 1
-                
-                comp_str = f"{c_y}-{str(c_m).zfill(2)}"
-                
-                if comp_str > f"{ano}-{str(mes).zfill(2)}":
-                    break
-                    
-                if pconclusao:
-                    conc_str = str(pconclusao)[:7]
-                    if comp_str > conc_str:
-                        continua_projetar = False
-                    else:
-                        continua_projetar = True
-                else:
-                    continua_projetar = True
-                    
-                if comp_str > data_maxima: data_maxima = comp_str
-                
-                if comp_str not in historico_mensal:
-                    historico_mensal[comp_str] = {'previsto': 0.0, 'realizado': 0.0}
-                
-                if continua_projetar:
-                    cub_mes = cub_history.get(comp_str, default_cub)
-                    # BASE ESTIMADA DE MÃO DE OBRA (sem INSS) para equiparar ao LctoGer/CalculoRateio da folha
-                    fracao_estimada = (parea * cub_mes * 0.20) / 48.0
-                    historico_mensal[comp_str]['previsto'] += fracao_estimada
-            
-            for (compet, val) in folha_meses:
-                comp_str = str(compet)[:7]
-                if comp_str not in historico_mensal:
-                    historico_mensal[comp_str] = {'previsto': 0.0, 'realizado': 0.0}
-                
-                valor_inss = float(val) if val else 0.0
-                historico_mensal[comp_str]['realizado'] += valor_inss
-                total_mao_de_obra_questor += valor_inss
-                
-        curva_s = []
-        acc_real = 0.0
-        acc_prev = 0.0
-        for m in sorted(historico_mensal.keys()):
-            if m < data_minima or m > data_maxima: continue
-            
-            acc_real += historico_mensal[m]['realizado']
-            acc_prev += historico_mensal[m]['previsto']
-            
-            curva_s.append({
-                "mes": m,
-                "realizado_mes": round(historico_mensal[m]['realizado'], 2),
-                "previsto_mes": round(historico_mensal[m]['previsto'], 2),
-                "realizado": round(acc_real, 2),
-                "previsto": round(acc_prev, 2)
-            })
-            
-        # O Card de INSS a Recolher aplica 36.8% APENAS sobre a diferença final das Bases Descobertas
-        diferenca_base = acc_prev - acc_real
-        total_inss_a_recolher = diferenca_base * 0.368 if diferenca_base > 0 else 0.0
+    """
+    Apuracao SERO/INSS real a partir das tabelas Questor.
+    - Folha propria:  CALCULORATEIO (evento 5041) + PERIODOCALCULO (competencia)
+    - Folha terceiros: TERCEIROPGTO.VALORORIGEMGPS (tem COMPET direto)
+    - Cadastro obra:  OUTRAEMPRESA + OUTRAEMPEMP (INSCRFEDPROPRIET = CNPJ proprietario)
+    - Metragem:       EMPREENDIMENTO.METRAGEMTOTAL (Vulcano, match por CNPJ)
+    - CUB:            INDICE_REAJUSTE_TABELA (Vulcano) com fallback para historico embutido
+    O parametro `cno` aceita o CODIGOOUTEMP (string) para filtrar uma obra especifica.
+    """
+    CUB_FALLBACK = {
+        "2026-12": 3220.00, "2026-11": 3210.00, "2026-10": 3200.00, "2026-09": 3190.00,
+        "2026-08": 3180.00, "2026-07": 3170.00, "2026-06": 3160.00, "2026-05": 3150.00,
+        "2026-04": 3140.00, "2026-03": 3130.00, "2026-02": 3120.00, "2026-01": 3110.00,
+        "2025-12": 3100.00, "2025-11": 3080.00, "2025-10": 3060.00, "2025-09": 3040.00,
+        "2025-08": 3020.00, "2025-07": 3000.00, "2025-06": 2985.00, "2025-05": 2970.00,
+        "2025-04": 2955.00, "2025-03": 2940.00, "2025-02": 2925.00, "2025-01": 2910.00,
+        "2024-12": 2895.00, "2024-11": 2880.00, "2024-10": 2865.00, "2024-09": 2850.00,
+        "2024-08": 2835.00, "2024-07": 2820.00, "2024-06": 2805.00, "2024-05": 2790.00,
+        "2024-04": 2950.40, "2024-03": 2915.30, "2024-02": 2890.20, "2024-01": 2870.12,
+        "2023-12": 2855.10, "2023-11": 2840.90, "2023-10": 2825.80, "2023-09": 2810.70,
+        "2023-08": 2795.50, "2023-07": 2780.15, "2023-06": 2765.40, "2023-05": 2745.20,
+        "2023-04": 2725.10, "2023-03": 2710.60, "2023-02": 2695.45, "2023-01": 2685.30,
+        "2022-12": 2675.10, "2022-11": 2665.90, "2022-10": 2645.80, "2022-09": 2625.60,
+        "2022-08": 2605.30, "2022-07": 2585.10, "2022-06": 2560.40, "2022-05": 2530.15,
+        "2022-04": 2505.80, "2022-03": 2485.45, "2022-02": 2470.30, "2022-01": 2450.10,
+        "2021-12": 2435.40, "2021-11": 2415.20, "2021-10": 2390.10, "2021-09": 2365.80,
+        "2021-08": 2340.65, "2021-07": 2315.50, "2021-06": 2290.30, "2021-05": 2260.10,
+        "2021-04": 2235.90, "2021-03": 2215.70, "2021-02": 2195.60, "2021-01": 2180.45,
+        "2020-12": 2150.60, "2020-11": 2120.40, "2020-10": 2095.10, "2020-09": 2070.60,
+    }
 
-        cub_target = cub_history.get(f"{ano}-{str(mes).zfill(2)}", default_cub)
+    def dec(v):
+        if v is None: return ""
+        if isinstance(v, bytes): return v.decode("win1252", "ignore").strip()
+        return str(v).strip()
+
+    conn_v = get_conn("vulcano")
+    conn_q = get_conn("questor")
+    try:
+        cur_v = conn_v.cursor()
+        cur_q = conn_q.cursor()
+        compet_alvo = f"{ano}-{str(mes).zfill(2)}"
+
+        # 1. CUB: tenta banco Vulcano, fallback para dicionario embutido
+        cub_history = dict(CUB_FALLBACK)
+        try:
+            cur_v.execute("SELECT MES, VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND VALOR IS NOT NULL ORDER BY MES ASC")
+            for r in cur_v.fetchall():
+                cub_history[str(r[0])[:7]] = float(r[1])
+        except Exception:
+            pass
+        cub_vigente = cub_history.get(compet_alvo, 2950.0)
+
+        # 2. Metragem total da empresa (Vulcano EMPREENDIMENTO)
+        # Consolidado = soma de todas as obras; filtrado por outemp = distribuição proporcional
+        cur_v.execute(
+            "SELECT ID, COALESCE(METRAGEMTOTAL, 0), CODIGOCENTROCUSTO"
+            " FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?",
+            (empresa_id,)
+        )
+        emp_rows = cur_v.fetchall()
+        metragem_total_empresa = sum(float(r[1] or 0) for r in emp_rows)
+        # mapa: centro_custo -> metragem (para vínculo futuro com OUTEMP)
+        metragem_por_cc = {r[2]: float(r[1] or 0) for r in emp_rows if r[2]}
+
+        # 3. Cadastro de OUTRAEMPRESA + INSCRFEDPROPRIET (Questor)
+        outemp_filtro = ""
+        params_outemp = [empresa_id]
+        if cno:
+            try:
+                outemp_filtro = " AND OEE.CODIGOOUTEMP = ?"
+                params_outemp.append(int(cno))
+            except ValueError:
+                pass
+
+        cur_q.execute(
+            "SELECT OE.CODIGOOUTEMP, OE.NOMEOUTEMP, OE.INSCRFEDERAL, OEE.INSCRFEDPROPRIET"
+            " FROM OUTRAEMPEMP OEE"
+            " JOIN OUTRAEMPRESA OE ON OE.CODIGOOUTEMP = OEE.CODIGOOUTEMP"
+            " WHERE OEE.CODIGOEMPRESA = ?" + outemp_filtro,
+            tuple(params_outemp)
+        )
+        obras_cadastro = {}
+        for r in cur_q.fetchall():
+            cod = r[0]
+            propri_limpo = "".join(filter(str.isdigit, dec(r[3])))
+            obras_cadastro[cod] = {
+                "nome": dec(r[1]),
+                "inscricao": dec(r[2]),
+                "cnpj_proprietario": dec(r[3]),
+                # Metragem: divide igualmente entre os outemps da empresa
+                # (refinamento futuro: vincular por CODIGOCENTROCUSTO)
+                "metragem": 0.0,  # preenchido após saber n_outemps
+            }
+
+        if not obras_cadastro:
+            return {
+                "resumo": {
+                    "mao_de_obra": 0.0, "mao_de_obra_folha": 0.0,
+                    "mao_de_obra_terceiros_gps": 0.0,
+                    "total_inss": 0.0, "cub_vigente": cub_vigente, "area_total": 0.0
+                },
+                "alocacoes_terceiros": [],
+                "curva_s": [],
+                "aviso": "Nenhuma OUTRAEMPRESA vinculada a esta empresa no Questor."
+            }
+
+        outemps_list = list(obras_cadastro.keys())
+        placeholders = ",".join("?" * len(outemps_list))
+
+        # Metragem por outemp via match de nome Questor x Vulcano
+        # Busca empreendimentos com metragem
+        cur_v.execute(
+            "SELECT ID, NOME, COALESCE(METRAGEMTOTAL, 0), CODIGOCENTROCUSTO,"
+            " COALESCE(OBRACONCLUIDA, 'N')"
+            " FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? ORDER BY ID DESC",
+            (empresa_id,)
+        )
+        emp_vulcano = cur_v.fetchall()
+
+        def _tokens(s):
+            """Extrai tokens >= 4 chars de uma string (ignora preposições curtas)."""
+            import re
+            return set(w.upper() for w in re.split(r'\W+', str(s)) if len(w) >= 4)
+
+        # Pré-calcula metragem dos empreendimentos em construção (para TIPOOUTEMP=2)
+        metragem_em_construcao = sum(
+            float(ev[2] or 0)
+            for ev in emp_vulcano
+            if dec(ev[4]) != "S" and float(ev[2] or 0) > 0
+        )
+
+        def _match_metragem(nome_outemp, tipo_outemp):
+            """Retorna metragem do empreendimento Vulcano que melhor bate com o nome.
+            TIPOOUTEMP=2 (empresa própria, ex: Stuttgart): usa soma dos empreendimentos
+                         em construção — o name match não funciona pois o NOMEOUTEMP é
+                         o nome da empresa construtora, não do empreendimento.
+            TIPOOUTEMP=1 (obra com CNO/CEI próprio): faz match por tokens do nome.
+            """
+            # Para empresa própria (Stuttgart, etc.): metragem das obras em andamento
+            if tipo_outemp == "2":
+                return metragem_em_construcao
+
+            # Para obras com CNO/CEI: match por tokens do nome
+            toks_q = _tokens(nome_outemp)
+            best_score, best_metro = 0, 0.0
+            for ev in emp_vulcano:
+                nome_v = dec(ev[1]) if ev[1] else ""
+                metro  = float(ev[2] or 0)
+                if metro == 0:
+                    continue
+                toks_v = _tokens(nome_v)
+                overlap = len(toks_q & toks_v)
+                if overlap > best_score:
+                    best_score, best_metro = overlap, metro
+            return best_metro
+
+
+        # Busca TIPOOUTEMP para cada outemp do cadastro
+        if outemps_list:
+            ph2 = ",".join("?" * len(outemps_list))
+            cur_q.execute(
+                f"SELECT OEE.CODIGOOUTEMP, OEE.TIPOOUTEMP"
+                f" FROM OUTRAEMPEMP OEE WHERE OEE.CODIGOEMPRESA = ?"
+                f" AND OEE.CODIGOOUTEMP IN ({ph2})",
+                tuple([empresa_id] + outemps_list)
+            )
+            tipo_map = {r[0]: dec(r[1]) for r in cur_q.fetchall()}
+        else:
+            tipo_map = {}
+
+        for cod, info in obras_cadastro.items():
+            tipo = tipo_map.get(cod, "1")
+            metro = _match_metragem(info["nome"], tipo)
+            # Fallback: se não achou match, divide proporcionalmente pelo número de outemps
+            if metro == 0.0 and metragem_total_empresa > 0:
+                metro = metragem_total_empresa / max(len(outemps_list), 1)
+            obras_cadastro[cod]["metragem"] = metro
+
+
+
+
+        # 4. Folha propria: CALCULORATEIO evento 5041 + PERIODOCALCULO
+        cur_q.execute(
+            "SELECT C.CODIGOOUTEMP, P.COMPET, SUM(C.VALOREVENTO)"
+            " FROM CALCULORATEIO C"
+            " JOIN PERIODOCALCULO P ON P.CODIGOPERCALCULO = C.CODIGOPERCALCULO"
+            " WHERE C.CODIGOEVENTO = 5041 AND C.CODIGOEMPRESA = ?"
+            " AND C.CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY C.CODIGOOUTEMP, P.COMPET ORDER BY P.COMPET",
+            tuple([empresa_id] + outemps_list)
+        )
+        folha_rows = cur_q.fetchall()
+
+        # 5. Terceiros GPS: TERCEIROPGTO.VALORORIGEMGPS (COMPET direto)
+        cur_q.execute(
+            "SELECT CODIGOOUTEMP, COMPET, SUM(VALORORIGEMGPS)"
+            " FROM TERCEIROPGTO"
+            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY CODIGOOUTEMP, COMPET",
+            tuple([empresa_id] + outemps_list)
+        )
+        terceiro_rows = cur_q.fetchall()
+
+        # 5.1 Empreiteiras PJ: OUTRAEMPPGTOSERVICO.BASEGPS
+        cur_q.execute(
+            "SELECT CODIGOOUTEMP, COMPET, SUM(BASEGPS)"
+            " FROM OUTRAEMPPGTOSERVICO"
+            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY CODIGOOUTEMP, COMPET",
+            tuple([empresa_id] + outemps_list)
+        )
+        terceiro_rows.extend(cur_q.fetchall())
+        terceiro_rows.sort(key=lambda x: x[1])  # Reordena por COMPET
+
+        # 6. Agrega por competencia
+        from collections import defaultdict
+        historico_mensal = defaultdict(lambda: {"realizado": 0.0, "previsto": 0.0})
+        total_folha = total_terceiros = 0.0
+        alocacoes_t = []
+
+        for (outemp, compet_dt, valor) in folha_rows:
+            comp = str(compet_dt)[:7]
+            v = float(valor or 0)
+            historico_mensal[comp]["realizado"] += v
+            # Acumula total até o mês selecionado (inclusive)
+            if comp <= compet_alvo:
+                total_folha += v
+
+        for (outemp, compet_dt, valor) in terceiro_rows:
+            comp = str(compet_dt)[:7]
+            v = float(valor or 0)
+            historico_mensal[comp]["realizado"] += v
+            info = obras_cadastro.get(outemp, {})
+            # Tabela e total: todos os registros até o mês selecionado
+            if comp <= compet_alvo:
+                total_terceiros += v
+                alocacoes_t.append({
+                    "compet": comp, "codigooutemp": outemp,
+                    "nome_obra": info.get("nome", ""),
+                    "cno": info.get("inscricao", ""),
+                    "valor_recolhido": round(v, 2),
+                })
+
+
+        # 7. Projecao CUB (previsto) para curva-S
+        area_total = sum(o["metragem"] for o in obras_cadastro.values())
+        if area_total > 0 and historico_mensal:
+            data_ini = sorted(historico_mensal.keys())[0]
+            y0, m0 = map(int, data_ini.split("-"))
+            for offset in range(72):
+                cm = m0 + offset; cy = y0
+                while cm > 12: cm -= 12; cy += 1
+                cs = f"{cy}-{str(cm).zfill(2)}"
+                if cs > compet_alvo: break
+                historico_mensal[cs]["previsto"] += (area_total * cub_history.get(cs, 2950.0) * 0.20) / 48.0
+
+        curva_s = []
+        acc_real = acc_prev = 0.0
+        for comp in sorted(historico_mensal.keys()):
+            if comp > compet_alvo: break
+            acc_real += historico_mensal[comp]["realizado"]
+            acc_prev += historico_mensal[comp]["previsto"]
+            curva_s.append({
+                "mes": comp,
+                "realizado_mes": round(historico_mensal[comp]["realizado"], 2),
+                "previsto_mes":  round(historico_mensal[comp]["previsto"], 2),
+                "realizado": round(acc_real, 2),
+                "previsto":  round(acc_prev, 2),
+            })
+
+        total_mao_de_obra = total_folha + total_terceiros
+        diferenca_base = acc_prev - acc_real
+        total_inss = max(diferenca_base * 0.368, 0.0)
 
         return {
             "resumo": {
-                "mao_de_obra": total_mao_de_obra_questor,
-                "total_inss": total_inss_a_recolher,
-                "cub_vigente": cub_target,
-                "area_total": area_total_calc
+                "mao_de_obra":               round(total_mao_de_obra, 2),
+                "mao_de_obra_folha":         round(total_folha, 2),
+                "mao_de_obra_terceiros_gps": round(total_terceiros, 2),
+                "total_inss":                round(total_inss, 2),
+                "cub_vigente":               cub_vigente,
+                "area_total":                round(area_total, 2),
             },
-            "curva_s": curva_s
+            "alocacoes_terceiros": sorted(alocacoes_t, key=lambda x: x["compet"], reverse=True),
+            "curva_s": curva_s,
         }
-        
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
     finally:
-        conn_vulcano.close()
-        conn_questor.close()
+        conn_v.close()
+        conn_q.close()
 
 @app.get("/api/dimob/preview")
 def api_preview_dimob(ano: int = 2025, empresa_id: int = 959):
@@ -938,430 +1357,1041 @@ def api_gerar_dimob(ano: int = 2025, empresa_id: int = 959):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+from core.services.graph_logic_builder import AccountingGraphPipeline
+
 @app.get("/api/questor/contabilizacoes")
-def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendimento_id: str = None):
-    conn_vulcano = get_conn("vulcano")
-    conn_questor = get_conn("questor")
+async def api_contabilizacoes(ano: int, mes: int, empresa_id: int = 959, empreendimento_id: str = None):
+    import asyncio
+    return await asyncio.to_thread(
+        AccountingGraphPipeline.api_contabilizacoes, ano, mes, empresa_id, empreendimento_id
+    )
+
+class DiagnosticoRow(BaseModel):
+    conta_id: int
+    competencia: str
+    saldo_q: float = 0.0
+    saldo_v: float = 0.0
+    n_lanc_q: int = 0
+    n_lanc_v: int = 0
+
+class DiagnosticoInput(BaseModel):
+    empresa_id: int
+    linhas: list[DiagnosticoRow]
+    top_n: int = 20
+
+from typing import Union
+
+class MemoriaArrasteInput(BaseModel):
+    chave: Union[str, int]
+    conta_destino: str
+    origem: str = "QUESTOR"
+
+@app.post("/api/questor/populate_poc")
+async def api_populate_questor(payload: dict):
+    """
+    Roda a matriz de inteligência VU (graph_logic_builder), achata todas as virtual_entries
+    resultantes para a Empresa selecionada e envia o flat bulk para injeção física no LCTOCTB do Questor.
+    Payload: {"ano": int, "mes": int, "empresa_id": int}
+    """
+    ano = int(payload.get("ano"))
+    mes = int(payload.get("mes"))
+    empresa_id = int(payload.get("empresa_id", 959))
+    empreendimento_id = payload.get("empreendimento_id")
     
-    try:
-        cur_v = conn_vulcano.cursor()
-        cur_q = conn_questor.cursor()
-        
-        # 1. Obter Empreendimentos Ativos
-        query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
-        params = [empresa_id]
-        if empreendimento_id:
-            query += f" AND ID = {int(empreendimento_id)}"
+    # 1. Obter snapshot vivo (A mesma memória rodando na tela de Auditoria)
+    import asyncio
+    from core.services.graph_logic_builder import AccountingGraphPipeline
+    
+    # Recomputa o grafo de dependências atualizado (Single Source of Truth)
+    res_list = await asyncio.to_thread(
+        AccountingGraphPipeline().run, str(ano), f"{ano}-{mes:02d}", str(empresa_id), empreendimento_id
+    )
+    
+    flat_entries = []
+    
+    # 2. Descer e Aplainar o grafo
+    for proj in res_list:
+        for cv in proj.get("contas_virtuais", []):
+            conta = cv.get("conta")
+            if not conta or conta == 99999: # Ignora saldenhos sintéticos informativos
+                continue
             
-        cur_v.execute(query, tuple(params))
-        empreendimentos = []
-        for r in cur_v.fetchall():
-            cc = int(r[2]) if r[2] else None
-            if cc:
-                empreendimentos.append({
-                    "id": r[0], "nome": r[1], "cc": cc,
-                    "conta_custo": r[3], "conta_cli": r[4], "conta_adicli": r[5], "conta_caixa": r[6],
-                    "conta_estand": r[7], "conta_estcon": r[8], "obra_concluida": r[9], "conta_rec": r[10]
-                })
-
-        # Caching Global Vulcano (Receitas e Tributos)
-        try:
-            json_resp = get_receitas_caixa(
-                empresa_id=empresa_id, 
-                data_ini=f"{ano}-{str(mes).zfill(2)}", 
-                data_fim=f"{ano}-{str(mes).zfill(2)}"
-            )
-            receitas_meta = json_resp.get("dashboard_meta", {})
-            impostos_config = json_resp.get("impostos_config", [])
-        except Exception as e:
-            print(f"Erro ao obter receitas: {e}")
-            receitas_meta = {}
-            impostos_config = []
-        
-        # Datas de corte
-        data_inicio_mes_atual = f"{ano}-{str(mes).zfill(2)}-01"
-        if int(mes) == 12:
-            data_fim_mes_atual = f"{ano+1}-01-01"
-        else:
-            data_fim_mes_atual = f"{ano}-{str(int(mes)+1).zfill(2)}-01"
-        
-        # Auxiliar: Plano Espec
-        cur_q.execute("SELECT CONTACTB, CLASSIFCONTA, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
-        plano = {r[0]: {"classif": r[1], "nome": r[2]} for r in cur_q.fetchall()}
-            
-        resultados = []
-        for emp in empreendimentos:
-            cc = emp["cc"]
-            
-            # --- SALDO ANTERIOR (Aprovado: LCTOCTB + LCTOGER retrospectivo ou SALDOCTB. Nós implementamos a soma do LCTOGER histórico antes do mês atual para garantir perfeição analítica com o Centro de Custo) ---
-            cur_q.execute("""
-                SELECT 
-                    C.CONTACTBDEB, 
-                    C.CONTACTBCRED, 
-                    G.NATURLCTOCTB, 
-                    SUM(G.VALORLCTOGER) as TOTAL
-                FROM LCTOGER G
-                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
-                WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ? AND C.DATALCTOCTB < CAST(? AS DATE)
-                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1) -- Ignora encerramento patrimonial
-                GROUP BY 1, 2, 3
-            """, (empresa_id, cc, data_inicio_mes_atual))
-            
-            saldo_anterior_por_conta = {} 
-            for (c_deb, c_cred, nat, val) in cur_q.fetchall():
-                v = float(val or 0)
-                if nat == 1 and c_deb:
-                    saldo_anterior_por_conta[c_deb] = saldo_anterior_por_conta.get(c_deb, 0.0) + v
-                elif nat == -1 and c_cred:
-                    saldo_anterior_por_conta[c_cred] = saldo_anterior_por_conta.get(c_cred, 0.0) - v
-            
-            # --- MOVIMENTO DO MÊS ---
-            cur_q.execute("""
-                SELECT 
-                    C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED, CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.NATURLCTOCTB, G.VALORLCTOGER
-                FROM LCTOGER G
-                JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
-                WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ? 
-                AND C.DATALCTOCTB >= CAST(? AS DATE) AND C.DATALCTOCTB < CAST(? AS DATE)
-                AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
-                ORDER BY C.DATALCTOCTB ASC
-            """, (empresa_id, cc, data_inicio_mes_atual, data_fim_mes_atual))
-            
-            contas_fisicas = {}
-            for (chave, dt, cdeb, ccred, hist_val, nat, val) in cur_q.fetchall():
-                
-                # Tratamento de segurança contra sujeira de encode no Firebird (Evita exception no fetch da lib)
-                if isinstance(hist_val, (bytes, bytearray)):
-                    hist = hist_val.decode('cp1252', 'ignore')
-                elif hasattr(hist_val, 'read'):
-                    hist = hist_val.read().decode('cp1252', 'ignore')
-                else:
-                    hist = str(hist_val or "")
-                    
-                v = float(val or 0)
-                conta = cdeb if nat == 1 else ccred
-                if not conta: continue
-                
-                if conta not in contas_fisicas:
-                    contas_fisicas[conta] = {
+            for detalhe in cv.get("detalhes", []):
+                # Só nos importamos com as virtual entries produzidas pela regra VU 
+                if detalhe.get("virtual"):
+                    flat_entries.append({
                         "conta": conta,
-                        "nome": plano.get(conta, {}).get("nome", "Desconhecida"),
-                        "classif": plano.get(conta, {}).get("classif", ""),
-                        "saldo_anterior": saldo_anterior_por_conta.get(conta, 0.0),
-                        "movimento_debito": 0.0,
-                        "movimento_credito": 0.0,
-                        "movimento_liquido": 0.0,
-                        "saldo_final": 0.0,
-                        "detalhes": []
-                    }
-                
-                if nat == 1:
-                    contas_fisicas[conta]["movimento_debito"] += v
-                    contas_fisicas[conta]["movimento_liquido"] += v
-                else:
-                    contas_fisicas[conta]["movimento_credito"] += v
-                    contas_fisicas[conta]["movimento_liquido"] -= v
+                        "mov": detalhe.get("valor", detalhe.get("mov", 0.0)),
+                        "nat": detalhe.get("natureza", detalhe.get("nat", "D")),
+                        "historico": detalhe.get("historico", "")
+                    })
                     
-                contas_fisicas[conta]["detalhes"].append({
-                    "chave": chave,
-                    "data": str(dt),
-                    "historico": hist,
-                    "natureza": "D" if nat == 1 else "C",
-                    "valor": v
-                })
-                
-            # --- INJEÇÃO VIRTUAL EXTRACONTÁBIL (VULCANO) ---
-            contas_virtuais = {}
-            def inject_virtual_entry(conta_id, valor, natureza, historico, logica="", saldo_ant=0.0):
-                v_float = float(valor or 0)
-                if not conta_id or v_float <= 0.01: return
-                conta_id = int(conta_id)
-                if conta_id not in contas_virtuais:
-                    contas_virtuais[conta_id] = {
-                        "conta": conta_id,
-                        "nome": plano.get(conta_id, {}).get("nome", "Desconhecida"),
-                        "classif": plano.get(conta_id, {}).get("classif", ""),
-                        "saldo_anterior": 0.0,
-                        "movimento_debito": 0.0,
-                        "movimento_credito": 0.0,
-                        "movimento_liquido": 0.0,
-                        "saldo_final": 0.0,
-                        "detalhes": []
-                    }
-                
-                contas_virtuais[conta_id]["saldo_anterior"] += float(saldo_ant)
+    # 3. Disparar pro Injector
+    from core.services.questor_injector import inject_batch_to_questor
+    target_ym = f"{ano}-{mes:02d}"
+    resultado_injekao = await asyncio.to_thread(
+        inject_batch_to_questor, empresa_id, target_ym, flat_entries
+    )
 
-                mov = v_float if natureza == 'D' else -v_float
-                if natureza == 'D':
-                    contas_virtuais[conta_id]["movimento_debito"] += v_float
-                else:
-                    contas_virtuais[conta_id]["movimento_credito"] += v_float
-                    
-                contas_virtuais[conta_id]["movimento_liquido"] += mov
-                
-                contas_virtuais[conta_id]["detalhes"].append({
-                    "chave": "VULCANO_SIM",
-                    "data": f"{str(mes).zfill(2)}/{ano} (Sim)",
-                    "historico": historico,
-                    "natureza": natureza,
-                    "valor": v_float,
-                    "virtual": True,
-                    "logica": logica
-                })
+    return resultado_injekao
 
-
-            nome_emp = emp["nome"]
+async def salvar_memoria_arraste(payload: MemoriaArrasteInput):
+    """Salva a preferência de arrastar-e-soltar do Kanban no SQLite"""
+    try:
+        chave = str(payload.chave).strip()
+        conta_destino = str(payload.conta_destino).strip()
+        origem = str(payload.origem).strip()
+        
+        if not chave or not conta_destino:
+            return JSONResponse({"status": "error", "message": "Chave ou destino vazio"}, status_code=400)
             
-            # 1. OBTER CUSTO GASTO GLOBAL NA CONTABILIDADE FÍSICA (QUESTOR)
-            custo_gasto_vigente = 0.0
-            custo_gasto_anterior = 0.0
-            for conta, dt_contabil in contas_fisicas.items():
-                # O saldo das contas de Custo no Questor reflete o total gasto.
-                custo_gasto_anterior += dt_contabil["saldo_anterior"]
-                custo_gasto_vigente += dt_contabil["saldo_final"]
+        import sqlite3
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (
+                chave_lancamento TEXT PRIMARY KEY,
+                conta_destino TEXT,
+                origem TEXT,
+                data_modificacao TIMESTAMP
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO auditoria_memoria_arraste (chave_lancamento, conta_destino, origem, data_modificacao)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(chave_lancamento) DO UPDATE SET 
+                conta_destino=excluded.conta_destino,
+                origem=excluded.origem,
+                data_modificacao=CURRENT_TIMESTAMP
+        ''', (chave, conta_destino, origem))
+        conn.commit()
+        conn.close()
+        return {"status": "ok", "message": f"Mapeado para {conta_destino}"}
+    except Exception as e:
+        print(f"Erro ao salvar memória arraste: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
-            # 2. POC NATIVO (Reaproveitando Último Fechamento se não houver no mês)
-            poc_acumulado_vigente = 0.0
-            poc_acumulado_anterior = 0.0
-            ob_concluida = str(emp.get("obra_concluida", "N")).strip().upper() == 'S'
-            if ob_concluida:
-                poc_acumulado_vigente = 100.0
-                poc_acumulado_anterior = 100.0
+@app.post("/api/auditoria/diagnostico")
+async def api_auditoria_diagnostico(data: DiagnosticoInput):
+    """
+    Analisa divergências entre Questor (LCTOCTB) e Vulcano (contabilizacoes)
+    usando:
+      • DuckDB  — JOIN analítico em DataFrames (sem novo banco)
+      • PyOD    — IsolationForest por conta (anomaly_score 0-1)
+      • LevelShift — detecta QUANDO a divergência começou (numpy nativo)
+      • KMeans  — classifica o PADRÃO da divergência por conta
+      • LLM Gemini — Formulação de causa raiz das principais anomalias
+    """
+    import warnings, logging, asyncio
+    warnings.filterwarnings("ignore")
+
+    try:
+        import pandas as pd
+        import numpy as np
+
+        if not data.linhas:
+            return {"contas": [], "summary": "Nenhum dado enviado para análise."}
+
+        # Nomes das contas (Questor)
+        conn_q = get_conn("questor")
+        cur_q = conn_q.cursor()
+        cur_q.execute("SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (data.empresa_id,))
+        plano = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
+        conn_q.close()
+
+        def _sync_ml_core():
+            import duckdb
+            from sklearn.cluster import KMeans
+            from sklearn.preprocessing import StandardScaler
+            try:
+                from pyod.models.iforest import IForest
+                has_pyod = True
+            except ImportError as e:
+                print(f"PyOD inativo/bloqueado: {e}")
+                has_pyod = False
+
+            df_todas = pd.DataFrame([r.dict() for r in data.linhas])
+            df_q = df_todas[["conta_id", "competencia", "saldo_q", "n_lanc_q"]].copy()
+            df_v = df_todas[["conta_id", "competencia", "saldo_v", "n_lanc_v"]].copy()
+
+            df_q["conta_id"] = pd.to_numeric(df_q["conta_id"], errors="coerce")
+            df_v["conta_id"] = pd.to_numeric(df_v["conta_id"], errors="coerce")
+            df_q = df_q.dropna(subset=["conta_id"])
+            df_v = df_v.dropna(subset=["conta_id"])
+            df_q["conta_id"] = df_q["conta_id"].astype(int)
+            df_v["conta_id"] = df_v["conta_id"].astype(int)
+
+            if df_q.empty and df_v.empty:
+                return [], 0, 0, 0, 0
+
+            ddb = duckdb.connect()
+            delta_df = ddb.execute("""
+                SELECT
+                    COALESCE(q.conta_id, v.conta_id) AS conta_id,
+                    COALESCE(q.competencia, v.competencia) AS competencia,
+                    COALESCE(q.saldo_q, 0.0) AS saldo_q,
+                    COALESCE(v.saldo_v, 0.0) AS saldo_v,
+                    COALESCE(q.saldo_q, 0.0) - COALESCE(v.saldo_v, 0.0) AS delta,
+                    COALESCE(q.n_lanc_q, 0) AS n_lanc_q,
+                    COALESCE(v.n_lanc_v, 0) AS n_lanc_v,
+                    ABS(COALESCE(q.saldo_q, 0.0) - COALESCE(v.saldo_v, 0.0)) AS abs_delta
+                FROM df_q q
+                FULL OUTER JOIN df_v v ON q.conta_id = v.conta_id AND q.competencia = v.competencia
+                ORDER BY conta_id, competencia
+            """).fetchdf()
+
+            if delta_df.empty:
+                return [], 0, 0, 0, 0
+
+            features_df = ddb.execute("""
+                SELECT
+                    conta_id,
+                    AVG(delta)                              AS media_delta,
+                    STDDEV(delta)                           AS std_delta,
+                    MAX(abs_delta)                          AS max_delta_abs,
+                    AVG(abs_delta)                          AS media_abs_delta,
+                    SUM(CASE WHEN abs_delta > 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)
+                                                            AS pct_meses_divergentes,
+                    COUNT(*)                                AS n_meses,
+                    AVG(n_lanc_q)                           AS avg_lanc_questor,
+                    AVG(n_lanc_v)                           AS avg_lanc_vulcano
+                FROM delta_df
+                GROUP BY conta_id
+                HAVING COUNT(*) >= 2
+            """).fetchdf()
+
+            if features_df.empty or len(features_df) < 3:
+                return [], -1, 0, 0, 0
+
+            _feat_cols = ["media_delta", "std_delta", "max_delta_abs", "pct_meses_divergentes", "avg_lanc_questor"]
+            X = features_df[_feat_cols].fillna(0).values
+            X_scaled = StandardScaler().fit_transform(X)
+
+            contamination = min(0.2, max(0.05, 3 / len(X)))
+            iso = IForest(contamination=contamination, random_state=42, n_estimators=100)
+            iso.fit(X_scaled)
+
+            scores_raw = iso.decision_scores_
+            min_s, max_s = scores_raw.min(), scores_raw.max()
+            scores_norm = (scores_raw - min_s) / (max_s - min_s + 1e-9)
+            features_df["anomaly_score"] = scores_norm.round(3)
+            features_df["anomaly_label"] = np.where(iso.labels_ == 1, "ANOMALIA", "NORMAL")
+
+            n_clusters = min(4, max(2, len(features_df) // 2))
+            km = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            features_df["cluster"] = km.fit_predict(X_scaled)
+
+            _CLUSTER_LABELS = {0: "Exato", 1: "Lag Temporal", 2: "Percentual Fixo", 3: "Caótico"}
+            _centroid_stds = km.cluster_centers_[:, 1]
+            _order = np.argsort(_centroid_stds)
+            _label_map = {int(_order[i]): _CLUSTER_LABELS[i] for i in range(n_clusters)}
+            features_df["padrao"] = features_df["cluster"].map(_label_map).fillna("Outro")
+
+            def _detect_level_shift(series: pd.Series, window: int = 3) -> dict | None:
+                if len(series) < window * 2 + 1: return None
+                vals = series.values.astype(float)
+                best_i, best_score = 0, 0.0
+                for i in range(window, len(vals) - window):
+                    score = abs(np.mean(vals[i:i + window]) - np.mean(vals[max(0, i - window):i]))
+                    if score > best_score:
+                        best_score, best_i = score, i
+                if best_score < 1.0: return None
+                return {
+                    "competencia": series.index[best_i] if hasattr(series.index, '__getitem__') else str(best_i),
+                    "delta_antes": round(float(np.mean(vals[:best_i])), 2),
+                    "delta_depois": round(float(np.mean(vals[best_i:])), 2),
+                    "magnitude": round(float(best_score), 2)
+                }
+
+            shifts = {}
+            for conta_id, grp in delta_df.sort_values("competencia").groupby("conta_id"):
+                serie = grp.set_index("competencia")["delta"]
+                sh = _detect_level_shift(serie)
+                if sh: shifts[int(conta_id)] = sh
+            
+            meses_unicos = int(df_todas["competencia"].nunique() if not df_todas.empty else 0)
+
+            top_contas = features_df.sort_values("anomaly_score", ascending=False).head(data.top_n)
+            resultado = []
+            for _, row in top_contas.iterrows():
+                cid = int(row["conta_id"])
+                resultado.append({
+                    "conta_id":               cid,
+                    "conta_nome":             plano.get(cid, f"Conta {cid}"),
+                    "anomaly_score":          round(float(row["anomaly_score"]), 3),
+                    "anomaly_label":          row["anomaly_label"],
+                    "padrao":                 row["padrao"],
+                    "media_delta":            round(float(row["media_delta"]), 2),
+                    "std_delta":              round(float(row.get("std_delta") or 0), 2),
+                    "max_delta_abs":          round(float(row["max_delta_abs"]), 2),
+                    "pct_meses_divergentes":  round(float(row["pct_meses_divergentes"]), 1),
+                    "n_meses_analisados":     int(row["n_meses"]),
+                    "avg_lanc_questor":       round(float(row.get("avg_lanc_questor") or 0), 1),
+                    "avg_lanc_vulcano":       round(float(row.get("avg_lanc_vulcano") or 0), 1),
+                    "level_shift":            shifts.get(cid),
+                })
+            return resultado, int((features_df["anomaly_label"] == "ANOMALIA").sum()), meses_unicos, len(features_df), len(shifts)
+
+        # Executa a parte bloqueante (ML e Processamento de Dados) em thread controlada
+        resultado, n_anomalias, meses_unicos, len_feat, len_shifts = await asyncio.to_thread(_sync_ml_core)
+
+        if len_feat == 0: return {"contas": [], "summary": "Sem cruzamento de dados no período."}
+        if len_feat == -1: return {"contas": [], "summary": "Dados insuficientes para análise ML (mínimo 3 contas, 2 meses)."}
+
+        # ── 9. Investigação Qualitativa Gemini nas Top Anomalias ────────────
+        anomalias = [r for r in resultado if r["anomaly_label"] == "ANOMALIA"][:5] # Top 5 anomalias
+        
+        if anomalias:
+            schema = '{"causas":[{"conta_id":0,"causa_raiz":"","recomendacao":""}]}'
+            prompt = "Você é um auditor contábil sênior diagnosticando as divergências entre o ERP Questor (físico, saldos lançados) e o motor societário Vulcano (virtual, espelho da POC IFRS e impostos gerados). \n"
+            prompt += "Baseado no comportamento quantitativo (Padrão, Delta, Level-Shift), explique a possível causa raiz da anomalia de cada conta e dê uma recomendação de ação.\n\nContas a Analisar:\n"
+            
+            for a in anomalias:
+                cid = a["conta_id"]
+                df_conta = pd.DataFrame([r.dict() for r in data.linhas if r.conta_id == cid]).sort_values("competencia")
+                serie_txt = df_conta[["competencia", "saldo_q", "saldo_v"]].to_csv(index=False, sep="|")
+                
+                sh = a["level_shift"]
+                shift_str = f"Iniciou {sh['competencia']} (Antes: {sh['delta_antes']}, Depois: {sh['delta_depois']})" if sh else "Nenhum"
+                
+                prompt += f"--- CONTA {cid} ({a['conta_nome']}) ---\n"
+                prompt += f"Padrão Algorítmico: {a['padrao']}, Shift de Nível: {shift_str}\nSérie Mensal (Q=Questor vs V=Vulcano):\n{serie_txt}\n\n"
+
+            prompt += f"Retorne **apenas** JSON respeitando estritamente o schema: {schema}"
+            
+            try:
+                resp_ia = await _gemini_generate_json_async(prompt)
+                for causa in resp_ia.get("causas", []) or resp_ia.get("Causas", []):
+                    try:
+                        c_id = int(causa.get("conta_id", 0))
+                    except:
+                        c_id = 0
+                    match = next((r for r in resultado if r["conta_id"] == c_id), None)
+                    if match:
+                        match["causa_raiz"] = str(causa.get("causa_raiz", causa.get("Causa_Raiz", "")))
+                        match["recomendacao"] = str(causa.get("recomendacao", causa.get("Recomendacao", ""))) 
+            except Exception as ml_err:
+                import traceback; open("gemini_error.txt", "w").write(traceback.format_exc())
+
+        return {
+            "contas":    resultado,
+            "total_contas_analisadas": len_feat,
+            "total_anomalias": n_anomalias,
+            "janela_meses": meses_unicos,
+            "summary": (
+                f"{len_feat} contas analisadas ({meses_unicos} meses). "
+                f"{n_anomalias} contas anômalas detectadas. "
+                f"{len_shifts} com mudança de nível identificada."
+            )
+        }
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /api/auditoria/concilia-orfaos  — Fuzzy + probabilistic cross-account match
+# ══════════════════════════════════════════════════════════════════════════════
+from core.services.heuristic_optimizer import OrphansReconciliationService
+
+@app.post("/api/auditoria/concilia-orfaos")
+async def api_concilia_orfaos(data: OrphansReconciliationService.ConciliaOrfaosInput):
+    result = await OrphansReconciliationService.api_concilia_orfaos(data)
+
+    # ── Enriquece com nomes de conta + contrapartida para NAT.INVERTIDA ──────
+    try:
+        conn_q = get_conn("questor")
+        cur_q = conn_q.cursor()
+        cur_q.execute(
+            "SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?",
+            (data.empresa_id,)
+        )
+        plano = {int(r[0]): str(r[1] or "").strip() for r in cur_q.fetchall() if r[0]}
+
+        for m in result.get("matches", []):
+            # Nomes nos itens Questor
+            for item in (m.get("questor_detalhe") or [m.get("questor")] if m.get("questor") else []):
+                if item:
+                    c = int(item.get("conta") or 0)
+                    item["conta_nome"] = plano.get(c, "")
+            # Nomes nos itens Vulcano
+            for item in (m.get("vulcano_detalhe") or [m.get("vulcano")] if m.get("vulcano") else []):
+                if item:
+                    c = int(item.get("conta") or 0)
+                    item["conta_nome"] = plano.get(c, "")
+
+            # Contrapartida para NAT.INVERTIDA: busca o outro lado do lançamento no LCTOCTB
+            if not m.get("nat_match", True):
+                q_items = m.get("questor_detalhe") or ([m["questor"]] if m.get("questor") else [])
+                for q_item in q_items[:1]:  # pega o primeiro
+                    chave = q_item.get("chave")
+                    if not chave:
+                        continue
+                    try:
+                        cur_q.execute(
+                            "SELECT C.CONTACTBDEB, C.CONTACTBCRED, C.VALORLCTOCTB "
+                            "FROM LCTOCTB C "
+                            "WHERE C.CODIGOEMPRESA = ? AND C.CHAVELCTOCTB = ?",
+                            (data.empresa_id, chave)
+                        )
+                        row = cur_q.fetchone()
+                        if row:
+                            cdeb, ccred, val = int(row[0] or 0), int(row[1] or 0), float(row[2] or 0)
+                            q_conta = int(q_item.get("conta") or 0)
+                            contra_conta = ccred if cdeb == q_conta else cdeb
+                            nat_contra   = "C" if cdeb == q_conta else "D"
+                            m["questor_contrapartida"] = {
+                                "conta":      contra_conta,
+                                "conta_nome": plano.get(contra_conta, ""),
+                                "valor":      val,
+                                "natureza":   nat_contra,
+                            }
+                    except Exception:
+                        pass
+        conn_q.close()
+    except Exception:
+        pass
+
+    # ── Override de score baseado no feedback humano ──────────────────────────
+    try:
+        fb = _load_cross_match_feedback(data.empresa_id)
+        rules = _load_cross_match_rules(data.empresa_id)
+        if result.get("matches"):
+            for m in result["matches"]:
+                ov = _feedback_score_override(m, fb, rules)
+                if ov is not None:
+                    m["score"] = ov
+                    m["feedback_veredicto"] = "MATCH" if ov > 0.5 else "NO_MATCH"
+            result["matches"] = [m for m in result["matches"] if m.get("score", 0) > 0.01]
+            result["matches"].sort(key=lambda x: x["score"], reverse=True)
+            result["total_matches"] = len(result["matches"])
+    except Exception:
+        pass
+    return result
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Cross-Match Feedback — Base de Conhecimento (SQLite)
+# ══════════════════════════════════════════════════════════════════════════════
+import json as _json
+
+class CrossMatchFeedbackInput(BaseModel):
+    empresa_id: int
+    veredicto: str          # 'MATCH' | 'NO_MATCH'
+    obs: str = ""
+    score_algoritmo: float = 0.0
+    q_conta: int = 0
+    q_historico: str = ""
+    q_valor: float = 0.0
+    q_data: str = ""
+    q_natureza: str = ""
+    v_conta: int = 0
+    v_historico: str = ""
+    v_valor: float = 0.0
+    v_data: str = ""
+    v_natureza: str = ""
+
+def _ensure_feedback_table():
+    import sqlite3
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cross_match_feedback (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at    TEXT    DEFAULT (datetime('now')),
+            empresa_id    INTEGER,
+            veredicto     TEXT,
+            obs           TEXT,
+            score_algoritmo REAL,
+            q_conta       INTEGER,
+            q_historico   TEXT,
+            q_valor       REAL,
+            q_data        TEXT,
+            q_natureza    TEXT,
+            v_conta       INTEGER,
+            v_historico   TEXT,
+            v_valor       REAL,
+            v_data        TEXT,
+            v_natureza    TEXT,
+            q_tokens      TEXT,
+            v_tokens      TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_ensure_feedback_table()
+
+def _tokenize_hist(text: str) -> set:
+    import re
+    return set(re.findall(r'\d+(?:[,\.]\d+)*|\b[A-ZÁÉÍÓÚ]{2,}\b', (text or "").upper()))
+
+def _load_cross_match_feedback(empresa_id: int) -> list:
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT veredicto, q_conta, q_historico, q_valor, v_conta, v_historico, v_valor, q_tokens, v_tokens "
+            "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
+        ).fetchall()
+        conn.close()
+        return [
+            {"veredicto": r[0], "q_conta": r[1], "q_historico": r[2], "q_valor": r[3],
+             "v_conta": r[4], "v_historico": r[5], "v_valor": r[6],
+             "q_tokens": set(_json.loads(r[7] or "[]")),
+             "v_tokens": set(_json.loads(r[8] or "[]"))}
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+def _feedback_score_override(match: dict, feedback: list, rules: list = None) -> float | None:
+    """Retorna 0.97 para MATCH confirmado, 0.0 para NO_MATCH. None = sem override.
+    Aplica também regras derivadas da análise de padrões (CONTA_PAIR)."""
+    from difflib import SequenceMatcher
+    q = match.get("questor") or {}
+    v = match.get("vulcano") or {}
+    q_val  = float(q.get("valor") or 0)
+    v_val  = float(v.get("valor") or 0)
+    q_hist = (q.get("historico") or "").upper()
+    v_hist = (v.get("historico") or "").upper()
+    q_cnt  = int(q.get("conta") or 0)
+    v_cnt  = int(v.get("conta") or 0)
+
+    # 1. Override exato: par já visto na KB
+    for fb in (feedback or []):
+        fb_qv = float(fb.get("q_valor") or 0)
+        fb_vv = float(fb.get("v_valor") or 0)
+        if fb_qv > 0 and abs(q_val - fb_qv) / fb_qv > 0.01: continue
+        if fb_vv > 0 and abs(v_val - fb_vv) / fb_vv > 0.01: continue
+        sim_q = SequenceMatcher(None, q_hist[:80], (fb.get("q_historico") or "").upper()[:80]).ratio()
+        sim_v = SequenceMatcher(None, v_hist[:80], (fb.get("v_historico") or "").upper()[:80]).ratio()
+        if sim_q >= 0.75 and sim_v >= 0.75:
+            return 0.97 if fb["veredicto"] == "MATCH" else 0.0
+
+    # 2. Regras derivadas: CONTA_PAIR com alta confiança
+    for rule in (rules or []):
+        if rule.get("rule_type") != "CONTA_PAIR": continue
+        if rule.get("q_conta") == q_cnt and rule.get("v_conta") == v_cnt:
+            conf = float(rule.get("confidence") or 0)
+            n    = int(rule.get("n_samples") or 0)
+            if n >= 3 and conf >= 0.90:
+                # confiança alta: boost para 0.93 (abaixo de exact-match 0.97)
+                return max(float(match.get("score") or 0), 0.93)
+            elif n >= 3 and conf <= 0.20:
+                # claramente rejeitado
+                return 0.0
+    return None
+
+# ── Pattern analysis pipeline ────────────────────────────────────────────────
+def _ensure_rules_table():
+    import sqlite3
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cross_match_rules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at  TEXT DEFAULT (datetime('now')),
+            empresa_id  INTEGER,
+            rule_type   TEXT,   -- 'CONTA_PAIR' | 'THRESHOLD' | 'LLM_RULE'
+            q_conta     INTEGER,
+            v_conta     INTEGER,
+            confidence  REAL,
+            n_samples   INTEGER,
+            payload     TEXT    -- JSON com dados adicionais (calibração, regras LLM)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_ensure_rules_table()
+
+def _load_cross_match_rules(empresa_id: int) -> list:
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT rule_type, q_conta, v_conta, confidence, n_samples, payload "
+            "FROM cross_match_rules WHERE empresa_id=? ORDER BY confidence DESC",
+            (empresa_id,)
+        ).fetchall()
+        conn.close()
+        return [{"rule_type": r[0], "q_conta": r[1], "v_conta": r[2],
+                 "confidence": r[3], "n_samples": r[4], "payload": r[5]} for r in rows]
+    except Exception:
+        return []
+
+def _run_pattern_analysis(empresa_id: int):
+    """Deriva regras estruturais da KB. Chamado em thread daemon."""
+    import sqlite3, threading
+    from collections import Counter
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT veredicto, q_conta, v_conta, q_historico, v_historico, score_algoritmo "
+            "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
+        ).fetchall()
+
+        if len(rows) < 50:
+            conn.close()
+            return
+
+        matches_rows = [r for r in rows if r[0] == 'MATCH']
+        reject_rows  = [r for r in rows if r[0] == 'NO_MATCH']
+
+        # 1. Conta-pair mapping
+        pair_match   = Counter((r[1], r[2]) for r in matches_rows)
+        pair_reject  = Counter((r[1], r[2]) for r in reject_rows)
+        all_pairs    = set(pair_match.keys()) | set(pair_reject.keys())
+
+        conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='CONTA_PAIR'", (empresa_id,))
+        for pair in all_pairs:
+            m_cnt = pair_match.get(pair, 0)
+            r_cnt = pair_reject.get(pair, 0)
+            total_pair = m_cnt + r_cnt
+            if total_pair < 2:
+                continue
+            conf = m_cnt / total_pair
+            conn.execute(
+                "INSERT INTO cross_match_rules (empresa_id, rule_type, q_conta, v_conta, confidence, n_samples) "
+                "VALUES (?, 'CONTA_PAIR', ?, ?, ?, ?)",
+                (empresa_id, pair[0], pair[1], round(conf, 3), total_pair)
+            )
+
+        # 2. Score calibration by bucket
+        buckets = {}
+        for r in rows:
+            sc  = float(r[5] or 0)
+            b   = round(int(sc * 10) / 10, 1)
+            if b not in buckets:
+                buckets[b] = {"total": 0, "match": 0}
+            buckets[b]["total"] += 1
+            if r[0] == 'MATCH':
+                buckets[b]["match"] += 1
+        calibracao = {str(k): round(v["match"] / v["total"], 3) for k, v in sorted(buckets.items()) if v["total"] >= 3}
+
+        conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='THRESHOLD'", (empresa_id,))
+        conn.execute(
+            "INSERT INTO cross_match_rules (empresa_id, rule_type, confidence, n_samples, payload) VALUES (?, 'THRESHOLD', 0, ?, ?)",
+            (empresa_id, len(rows), _json.dumps(calibracao))
+        )
+
+        conn.commit()
+        conn.close()
+        print(f"[KB] Análise de padrão OK — {len(matches_rows)} MATCH, {len(reject_rows)} NO_MATCH, {len(all_pairs)} pares conta derivados.")
+
+        # 3. LLM: deriva regras textuais com Gemini (apenas quando >= 100 feedbacks)
+        if len(rows) >= 100:
+            _run_llm_pattern_extraction(empresa_id, matches_rows[:30], reject_rows[:10])
+
+    except Exception as e:
+        print(f"[KB] Erro em _run_pattern_analysis: {e}")
+
+def _run_llm_pattern_extraction(empresa_id: int, matches, rejects):
+    """Usa Gemini para extrair regras contábeis textuais da KB. Síncrono, roda em thread."""
+    try:
+        schema = '{"regras":[{"descricao":"","q_conta":0,"v_conta":0,"confianca":0.0}]}'
+        exemplos_match  = "\n".join(
+            f"Q c/{r[1]}:{r[3][:60]} ↔ V c/{r[2]}:{r[4][:60]}" for r in matches[:20]
+        )
+        exemplos_reject = "\n".join(
+            f"REJEITADO: Q c/{r[1]}:{r[3][:50]} ↔ V c/{r[2]}:{r[4][:50]}" for r in rejects[:5]
+        )
+        prompt = (
+            "Você é um especialista em contabilidade imobiliária (POC/IFRS-15). Analisando os pares "
+            "MATCH confirmados pelo auditor, derive as REGRAS CONTÁBEIS implícitas que explicam por "
+            "que esses lançamentos Questor ↔ Vulcano são equivalentes.\n\n"
+            f"MATCHES CONFIRMADOS:\n{exemplos_match}\n\n"
+            f"REJEITADOS:\n{exemplos_reject}\n\n"
+            f"Retorne APENAS JSON com o schema: {schema}"
+        )
+        resp = _gemini_generate_json(prompt)  # síncrono — OK pq roda em thread
+        regras = resp.get("regras") or []
+
+        if regras:
+            import sqlite3
+            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='LLM_RULE'", (empresa_id,))
+            for reg in regras:
+                conn.execute(
+                    "INSERT INTO cross_match_rules (empresa_id, rule_type, q_conta, v_conta, confidence, payload) "
+                    "VALUES (?, 'LLM_RULE', ?, ?, ?, ?)",
+                    (empresa_id, reg.get("q_conta", 0), reg.get("v_conta", 0),
+                     float(reg.get("confianca") or 0), reg.get("descricao", ""))
+                )
+            conn.commit()
+            conn.close()
+            print(f"[KB] LLM derivou {len(regras)} regras contábeis.")
+    except Exception as e:
+        print(f"[KB LLM] Erro: {e}")
+
+@app.post("/api/auditoria/cross-match-feedback")
+def api_cross_match_feedback_post(data: CrossMatchFeedbackInput):
+    import sqlite3, threading
+    try:
+        q_tok = _json.dumps(list(_tokenize_hist(data.q_historico)))
+        v_tok = _json.dumps(list(_tokenize_hist(data.v_historico)))
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn.execute(
+            "INSERT INTO cross_match_feedback "
+            "(empresa_id, veredicto, obs, score_algoritmo, "
+            " q_conta, q_historico, q_valor, q_data, q_natureza, "
+            " v_conta, v_historico, v_valor, v_data, v_natureza, q_tokens, v_tokens) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (data.empresa_id, data.veredicto, data.obs, data.score_algoritmo,
+             data.q_conta, data.q_historico, data.q_valor, data.q_data, data.q_natureza,
+             data.v_conta, data.v_historico, data.v_valor, data.v_data, data.v_natureza,
+             q_tok, v_tok)
+        )
+        conn.commit()
+        total     = conn.execute("SELECT COUNT(*) FROM cross_match_feedback WHERE empresa_id=?", (data.empresa_id,)).fetchone()[0]
+        matches   = conn.execute("SELECT COUNT(*) FROM cross_match_feedback WHERE empresa_id=? AND veredicto='MATCH'", (data.empresa_id,)).fetchone()[0]
+        nomatches = conn.execute("SELECT COUNT(*) FROM cross_match_feedback WHERE empresa_id=? AND veredicto='NO_MATCH'", (data.empresa_id,)).fetchone()[0]
+        conn.close()
+
+        # Trigger análise de padrão: primeira vez ao atingir 50, depois a cada 10
+        if total >= 50 and (total == 50 or total % 10 == 0):
+            threading.Thread(target=_run_pattern_analysis, args=(data.empresa_id,), daemon=True).start()
+            analise_msg = " 🔬 Análise de padrão disparada!"
+        else:
+            falta = max(0, 50 - total)
+            analise_msg = f" ({falta} para análise de padrão)" if falta > 0 else ""
+
+        return {
+            "ok": True,
+            "total_feedback": total, "total_match": matches, "total_no_match": nomatches,
+            "mensagem": f"Feedback {'✓ MATCH' if data.veredicto == 'MATCH' else '✗ NÃO MATCH'} salvo.{analise_msg}"
+        }
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auditoria/cross-match-rules")
+def api_cross_match_rules_get(empresa_id: int = 959):
+    """Retorna regras derivadas da base de conhecimento."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conta_pairs = conn.execute(
+            "SELECT q_conta, v_conta, confidence, n_samples FROM cross_match_rules "
+            "WHERE empresa_id=? AND rule_type='CONTA_PAIR' ORDER BY confidence DESC",
+            (empresa_id,)
+        ).fetchall()
+        threshold_row = conn.execute(
+            "SELECT payload, n_samples FROM cross_match_rules "
+            "WHERE empresa_id=? AND rule_type='THRESHOLD' ORDER BY created_at DESC LIMIT 1",
+            (empresa_id,)
+        ).fetchone()
+        llm_rules = conn.execute(
+            "SELECT q_conta, v_conta, confidence, payload FROM cross_match_rules "
+            "WHERE empresa_id=? AND rule_type='LLM_RULE' ORDER BY confidence DESC",
+            (empresa_id,)
+        ).fetchall()
+        stats = conn.execute(
+            "SELECT veredicto, COUNT(*) FROM cross_match_feedback WHERE empresa_id=? GROUP BY veredicto",
+            (empresa_id,)
+        ).fetchall()
+        conn.close()
+        return {
+            "conta_pairs": [{"q_conta": r[0], "v_conta": r[1], "confidence": r[2], "n_samples": r[3]} for r in conta_pairs],
+            "calibracao":  _json.loads(threshold_row[0]) if threshold_row else {},
+            "n_total_feedback": (threshold_row[1] if threshold_row else 0),
+            "llm_rules":   [{"q_conta": r[0], "v_conta": r[1], "confidence": r[2], "descricao": r[3]} for r in llm_rules],
+            "feedback_stats": {r[0]: r[1] for r in stats},
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/auditoria/cross-match-feedback")
+def api_cross_match_feedback_get(empresa_id: int = 959, limit: int = 300):
+    import sqlite3
+    try:
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        rows = conn.execute(
+            "SELECT id, created_at, veredicto, obs, score_algoritmo, "
+            "       q_conta, q_historico, q_valor, q_data, "
+            "       v_conta, v_historico, v_valor, v_data "
+            "FROM cross_match_feedback WHERE empresa_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (empresa_id, limit)
+        ).fetchall()
+        stats = {r[0]: r[1] for r in conn.execute(
+            "SELECT veredicto, COUNT(*) FROM cross_match_feedback WHERE empresa_id=? GROUP BY veredicto",
+            (empresa_id,)
+        ).fetchall()}
+        conn.close()
+        return {
+            "data": [{"id": r[0], "created_at": r[1], "veredicto": r[2], "obs": r[3],
+                      "score_algoritmo": r[4], "q_conta": r[5], "q_historico": r[6],
+                      "q_valor": r[7], "q_data": r[8], "v_conta": r[9],
+                      "v_historico": r[10], "v_valor": r[11], "v_data": r[12]} for r in rows],
+            "stats": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/saldo-contas")
+def api_saldo_contas(
+    empresa_id: int = 959,
+    mes: int = None,
+    ano: int = None,
+    contas: str = None,            # CSV de códigos: "4910,4845,4995"
+    empreendimento_id: str = None  # opcional, para filtrar por CC via LCTOGER
+):
+    """
+    Busca movimentos de contas específicas diretamente em LCTOCTB (sem filtro de CC).
+    Usado pela Auditoria ERP para verificar o que está fisicamente registrado no Questor
+    para as contas que o Vulcano vai (ou já) injetar.
+    """
+    conn_q = get_conn("questor")
+    conn_v = get_conn("vulcano")
+    try:
+        if not contas:
+            return {"data": []}
+
+        lista_contas = [int(c.strip()) for c in contas.split(",") if c.strip().isdigit()]
+        if not lista_contas:
+            return {"data": []}
+
+        cur_q = conn_q.cursor()
+        cur_v = conn_v.cursor()
+
+        # Período (se fornecido)
+        data_ini = None
+        data_fim = None
+        if mes and ano:
+            data_ini = f"{ano}-{str(mes).zfill(2)}-01"
+            if int(mes) == 12:
+                data_fim = f"{ano+1}-01-01"
             else:
-                try:
-                    cur_v.execute("SELECT PERIODO, PERCENTUAL FROM POC WHERE ID_EMPREENDIMENTO = ?", (emp["id"],))
-                    pocs_raw = cur_v.fetchall()
-                    
-                    target_per = f"{str(ano).zfill(4)}-{str(mes).zfill(2)}"
-                    pocs_valid = []
-                    for (per, pct) in pocs_raw:
-                        if not per: continue
-                        a, m = 0, 0
-                        per_str = str(per).strip()
-                        if '/' in per_str:
-                            parts = per_str.split('/')
-                            if len(parts) == 2: a, m = int(parts[1]), int(parts[0])
-                            elif len(parts) == 3: a, m = int(parts[2]), int(parts[1])
-                        elif '-' in per_str:
-                            parts = per_str.split('-')
-                            if len(parts) >= 2: a, m = int(parts[0]), int(parts[1])
-                        
-                        if a > 0 and m > 0:
-                            std_per = f"{str(a).zfill(4)}-{str(m).zfill(2)}"
-                            pocs_valid.append((std_per, float(pct or 0)))
-                    
-                    pocs_valid.sort(key=lambda x: x[0])
-                    last_poc = 0.0
-                    for (p, pct) in pocs_valid:
-                        if p < target_per:
-                            poc_acumulado_anterior = pct
-                            last_poc = pct
-                        if p <= target_per:
-                            poc_acumulado_vigente = pct
-                            last_poc = pct
-                    
-                    # Carry forward se não houver atualização no mês alvo
-                    if poc_acumulado_vigente == 0.0 and last_poc > 0.0:
-                        poc_acumulado_vigente = last_poc
-                        poc_acumulado_anterior = last_poc
-                except Exception as e:
-                    print("Erro lendo POC Nativo:", e)
+                data_fim = f"{ano}-{str(int(mes)+1).zfill(2)}-01"
 
-            # 3. RATEIO UNIDADE A UNIDADE (CUSTO, RECEBIMENTOS, E TRIBUTOS)
-            meta_emp = receitas_meta.get(nome_emp, {})
-            if meta_emp:
-                vgv_global = meta_emp.get("vgv", 0.0) or 1.0
-                unidades = meta_emp.get("unidades", [])
-                
-                c_custo = emp.get("conta_custo") or 99999
-                c_estcon = emp.get("conta_estcon") if ob_concluida else emp.get("conta_estand")
-                c_estoque = c_estcon if c_estcon else 99999
-                
-                c_caixa_banco = emp.get("conta_caixa") or 99999
-                c_cli = emp.get("conta_cli") or 99999
-                c_adi = emp.get("conta_adicli") or 99999
-                c_rec = emp.get("conta_rec") or 99999
-                
-                # Identifica se é lucro presumido com RET
-                ret_global = meta_emp.get("ret", 0)
-                pis_cofins_global = meta_emp.get("pis", 0) + meta_emp.get("cofins", 0)
-                isRet = ret_global > 0 and pis_cofins_global == 0
-                valid_confs = [c for c in impostos_config if c.get("RET") == ("S" if isRet else "N")]
-                
-                for uni_data in unidades:
-                    uni_nome = uni_data["unidade"]
-                    vgv_uni = uni_data["vgv"]
-                    if vgv_uni <= 0: continue
-                    
-                    # CUSTO ECONÔMICO (Apenas unidades vendidas)
-                    rateio_venda = vgv_uni / vgv_global
-                    custo_u_atual = custo_gasto_vigente * rateio_venda * (poc_acumulado_vigente / 100.0)
-                    custo_u_ant = custo_gasto_anterior * rateio_venda * (poc_acumulado_anterior / 100.0)
-                    mov_custo_u = custo_u_atual - custo_u_ant
-                    
-                    if abs(mov_custo_u) > 0.01:
-                         logica_custo = f"Unid {uni_nome}: Custo Acum CC ({custo_gasto_vigente:,.2f}) * Peso VGV ({rateio_venda*100:.2f}%) * POC ({poc_acumulado_vigente}%) = {custo_u_atual:,.2f} - Ant [{custo_u_ant:,.2f}]"
-                         inject_virtual_entry(c_custo, mov_custo_u, 'D', f"Custo POC - Unid {uni_nome}", logica=logica_custo, saldo_ant=custo_u_ant)
-                         inject_virtual_entry(c_estoque, mov_custo_u, 'C', f"Contrapartida RecCusto POC - Unid {uni_nome}", logica=logica_custo, saldo_ant=-custo_u_ant)
+        # Plano de contas (para nomes)
+        cur_q.execute("SELECT CONTACTB, DESCRCONTA FROM PLANOESPEC WHERE CODIGOEMPRESA = ?", (empresa_id,))
+        plano = {r[0]: str(r[1] or "").strip() for r in cur_q.fetchall()}
 
-                    # RECEBIMENTOS E RATEIO PASSSIVO
-                    caixa_m = uni_data["caixa_mes"]
-                    if caixa_m > 0:
-                         logica_caixa = f"Unid {uni_nome}: Recebimento Mês = {caixa_m:,.2f}"
-                         inject_virtual_entry(c_caixa_banco, caixa_m, 'D', f"Recebimento Caixa - Unid {uni_nome}", logica=logica_caixa, saldo_ant=0.0)
+        # Mapeamento Global: Conta Estoque -> CC Empreendimento
+        # Se um empreendimento_id foi passado, podemos restringir, mas o ideal é
+        # usar o mapa global para que a visão agregada (sem filtro) da Auditoria
+        # também traga o LCTOGER correto para as contas imobiliárias.
+        cur_v.execute("SELECT CONTAESTAND, CODIGOCENTROCUSTO FROM EMPREENDIMENTO WHERE CONTAESTAND IS NOT NULL AND CODIGOCENTROCUSTO IS NOT NULL")
+        mapa_conta_cc = {}
+        for row in cur_v.fetchall():
+            c_est, cc_cod = str(row[0]).strip(), str(row[1]).strip()
+            if c_est.isdigit() and cc_cod.isdigit():
+                mapa_conta_cc[int(c_est)] = int(cc_cod)
 
-                    caixa_acum = uni_data["caixa_acumulado"]
-                    caixa_ant = caixa_acum - caixa_m
-                    
-                    rec_auferida_atual = vgv_uni * (poc_acumulado_vigente / 100.0)
-                    rec_auferida_ant = vgv_uni * (poc_acumulado_anterior / 100.0)
-                    
-                    
-                    # -----------------
-                    # RECEITA DRE (Econômico)
-                    mov_receita_auferida = rec_auferida_atual - rec_auferida_ant
-                    logica_rec = f"Unid {uni_nome}: VGV ({vgv_uni:,.2f}) * POC ({poc_acumulado_vigente}%) = {rec_auferida_atual:,.2f} - Ant [{rec_auferida_ant:,.2f}]"
-                    if abs(mov_receita_auferida) > 0.01:
-                         nat_rec = 'C' if mov_receita_auferida > 0 else 'D'
-                         nat_cli_rec = 'D' if mov_receita_auferida > 0 else 'C'
-                         inject_virtual_entry(c_rec, abs(mov_receita_auferida), nat_rec, f"Receita Auferida (POC) - Unid {uni_nome}", logica=logica_rec, saldo_ant=-rec_auferida_ant)
-                         inject_virtual_entry(c_cli, abs(mov_receita_auferida), nat_cli_rec, f"Faturamento Direito s/ Venda (POC) - Unid {uni_nome}", logica=logica_rec, saldo_ant=rec_auferida_ant)
-                    # -----------------
-                    
-                    cli_atual = min(caixa_acum, rec_auferida_atual)
-                    adi_atual = max(0, caixa_acum - rec_auferida_atual)
-                    
-                    cli_ant = min(caixa_ant, rec_auferida_ant)
-                    adi_ant = max(0, caixa_ant - rec_auferida_ant)
-                    
-                    mov_cli = cli_atual - cli_ant
-                    mov_adi = adi_atual - adi_ant
-                    logica_cli = f"Unid {uni_nome}: Limite POC = {rec_auferida_atual:,.2f}. CAIXA = {caixa_acum:,.2f}."
-                    
-                    if abs(mov_cli) > 0.01:
-                         nat_cli = 'C' if mov_cli > 0 else 'D'
-                         inject_virtual_entry(c_cli, abs(mov_cli), nat_cli, f"Variação Clientes - Unid {uni_nome}", logica=logica_cli, saldo_ant=-cli_ant)
-                    
-                    if abs(mov_adi) > 0.01:
-                         nat_adi = 'C' if mov_adi > 0 else 'D'
-                         inject_virtual_entry(c_adi, abs(mov_adi), nat_adi, f"Variação Adiantamento - Unid {uni_nome}", logica=logica_cli, saldo_ant=-adi_ant)
-                         
-                    # TRIBUTOS
-                    trib_caixa_atual = uni_data["tributos_caixa_acumulado"]
-                    trib_caixa_ant = trib_caixa_atual - uni_data["tributos_caixa_mes"]
-                    
-                    trib_soc_atual = uni_data["tributos_soc_acumulado"]
-                    trib_soc_ant = trib_soc_atual - uni_data["tributos_soc_mes"]
-                    
-                    t_dif_atual = max(0, trib_soc_atual - trib_caixa_atual)
-                    t_dif_ant = max(0, trib_soc_ant - trib_caixa_ant)
-                    mov_dif = t_dif_atual - t_dif_ant
-                    
-                    t_ant_atual = max(0, trib_caixa_atual - trib_soc_atual)
-                    t_ant_ant = max(0, trib_caixa_ant - trib_soc_ant)
-                    mov_ant = t_ant_atual - t_ant_ant
-                    
-                    trib_det_mes = uni_data.get("trib_detalhe_caixa_mes", {})
-                    
-                    for cfg in valid_confs:
-                        desc = cfg.get("DESCRICAO", "")
-                        
-                        # Pegamos o valor exato no mês (financeiro base caixa) para esse imposto específico
-                        if desc == 'RET': bVal = trib_det_mes.get("ret", 0)
-                        elif desc == 'PIS': bVal = trib_det_mes.get("pis", 0)
-                        elif desc == 'COFINS': bVal = trib_det_mes.get("cofins", 0)
-                        elif desc == 'CSLL': bVal = trib_det_mes.get("csll", 0)
-                        elif desc == 'IRPJ': bVal = trib_det_mes.get("irpj", 0)
-                        elif desc == 'IRPJ Adicional': bVal = trib_det_mes.get("irpj_adicional", 0)
-                        else: bVal = 0
+        # Identificar contas de Imposto a Recolher para considerar apenas Apropriações (Créditos) no confronto de movimento
+        cur_v.execute("SELECT CONTA_CRED_IMP_REC_DARF FROM IMPOSTO")
+        contas_imposto_recolher = {int(r[0]) for r in cur_v.fetchall() if r[0] and str(r[0]).strip().isdigit()}
 
-                        # Qual peso desse imposto na carga tributária toda da unidade?
-                        peso_imp = bVal / uni_data["tributos_caixa_mes"] if uni_data["tributos_caixa_mes"] > 0 else (1.0 / len(valid_confs) if valid_confs else 1.0)
-                        if bVal <= 0 and mov_dif <= 0 and mov_ant <= 0: continue
-                        
-                        logica_imp = f"Unid {uni_nome}: Trib Caixa ({trib_caixa_atual:,.2f}) vs Trib DRE ({trib_soc_atual:,.2f}). Peso {desc}: {peso_imp*100:.1f}%"
-                        
-                        m_dif = mov_dif * peso_imp
-                        m_ant = mov_ant * peso_imp
-                        
-                        # Diferido (A pagar no futuro pq DRE andou mas não geramos caixa)
-                        if abs(m_dif) > 0.01:
-                            c_deb = cfg.get("CONTA_DEB_IMP_REC_PASSIVO_SOC") or 99999
-                            c_cred = cfg.get("CONTA_CRED_IMP_REC_PASSIVO_SOC") or 99999
-                            nat_d = 'D' if m_dif > 0 else 'C'
-                            nat_c = 'C' if m_dif > 0 else 'D'
-                            inject_virtual_entry(c_deb, abs(m_dif), nat_d, f"Provisão Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(t_dif_ant * peso_imp))
-                            inject_virtual_entry(c_cred, abs(m_dif), nat_c, f"Passivo Tributo Diferido - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(t_dif_ant * peso_imp))
-                            
-                        # Antecipado (Pago hoje, mas DRE ainda não auferiu pq POC baixo)
-                        if abs(m_ant) > 0.01:
-                            c_deb = cfg.get("CONTA_DEB_IMP_APROP_ATIVO") or 99999 
-                            c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
-                            nat_d = 'D' if m_ant > 0 else 'C'
-                            nat_c = 'C' if m_ant > 0 else 'D'
-                            inject_virtual_entry(c_deb, abs(m_ant), nat_d, f"Tributo Antecipado (Ativo) - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=(t_ant_ant * peso_imp))
-                            inject_virtual_entry(c_cred, abs(m_ant), nat_c, f"Constituição Adiant Trib - {desc} Unid {uni_nome}", logica=logica_imp, saldo_ant=-(t_ant_ant * peso_imp))
-                            
-                        # Despesa Direta sobre a Receita Real Auferida Mês (A que vai pra DRE)
-                        despesa_dre_mes_imp = (trib_soc_atual - trib_soc_ant) * peso_imp
-                        if abs(despesa_dre_mes_imp) > 0.01:
-                            c_deb = cfg.get("CONTA_DEB_IMP_SOBRE_VENDA") or 99999
-                            c_cred = cfg.get("CONTA_CRED_IMP_REC_DARF") or 99999
-                            nat_d = 'D' if despesa_dre_mes_imp > 0 else 'C'
-                            nat_c = 'C' if despesa_dre_mes_imp > 0 else 'D'
-                            logica_dre = f"Unid {uni_nome}: Despesa DRE pelo Base POC [{desc}]. Peso % Aplicado: {peso_imp*100:.1f}%"
-                            inject_virtual_entry(c_deb, abs(despesa_dre_mes_imp), nat_d, f"Despesa Tributária DRE - {desc} Unid {uni_nome}", logica=logica_dre, saldo_ant=(trib_soc_ant * peso_imp))
-                            inject_virtual_entry(c_cred, abs(despesa_dre_mes_imp), nat_c, f"Passivo/DARF Exigível - {desc} Unid {uni_nome}", logica=logica_dre, saldo_ant=-(trib_soc_ant * peso_imp))
-            # --- GARANTIR QUE CONTAS COM SALDO ANTERIOR APAREÇAM (Não Zerem) ---
-            for conta_id, saldo in saldo_anterior_por_conta.items():
-                if abs(saldo) > 0.01 and conta_id not in contas_fisicas:
-                    contas_fisicas[conta_id] = {
-                        "conta": conta_id,
-                        "nome": plano.get(conta_id, {}).get("nome", "Desconhecida"),
-                        "classif": plano.get(conta_id, {}).get("classif", ""),
-                        "saldo_anterior": saldo,
-                        "movimento_debito": 0.0,
-                        "movimento_credito": 0.0,
-                        "movimento_liquido": 0.0,
-                        "saldo_final": 0.0,
-                        "detalhes": []
-                    }
+        resultado = {}
 
-            # --- CONSOLIDAÇÃO ---
-            total_anterior_fisico = 0.0
-            total_movimento_fisico = 0.0
-            total_final_fisico = 0.0
-                
-            for c, data in contas_fisicas.items():
-                data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
-                total_anterior_fisico += data["saldo_anterior"]
-                total_movimento_fisico += data["movimento_liquido"]
-                total_final_fisico += data["saldo_final"]
+        memoria_arraste = {}
+        try:
+            import sqlite3
+            conn_poc = sqlite3.connect(POC_DATABASE_FILE)
+            cur_poc = conn_poc.cursor()
+            cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
+            for chv, dest in cur_poc.fetchall():
+                memoria_arraste[str(chv).strip()] = str(dest).strip()
+            conn_poc.close()
+        except Exception as e_poc:
+            print(f"[AVISO] Falha ao ler memoria de arraste no saldo_contas: {e_poc}")
 
-            for c, data in contas_virtuais.items():
-                data["saldo_final"] = data["saldo_anterior"] + data["movimento_liquido"]
-                    
-            if contas_fisicas or contas_virtuais:
-                resultados.append({
-                    "empreendimento_id": emp["id"],
-                    "empreendimento_nome": emp["nome"],
-                    "total_anterior_fisico": total_anterior_fisico,
-                    "total_movimento_fisico": total_movimento_fisico,
-                    "total_final_fisico": total_final_fisico,
-                    "contas_fisicas": list(contas_fisicas.values()),
-                    "contas_virtuais": list(contas_virtuais.values())
-                })
+
+        for conta_id in lista_contas:
+            is_imposto_recolher = conta_id in contas_imposto_recolher
             
-        return {"data": resultados}
+            cond_contabil = "(C.CONTACTBCRED = ?)" if is_imposto_recolher else "(C.CONTACTBDEB = ? OR C.CONTACTBCRED = ?)"
+            params_conta = (conta_id,) if is_imposto_recolher else (conta_id, conta_id)
+            
+            cc_filtro = mapa_conta_cc.get(conta_id)
+            
+            rows_ger = []
+            rows_ctb = []
+            
+            # 1. Fetch from LCTOCTB ALWAYS (base contábil nativa, que contém Baixas de Custo/Créditos)
+            if data_ini and data_fim:
+                query_ctb = f"""
+                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
+                    FROM LCTOCTB C
+                    LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                    WHERE C.CODIGOEMPRESA = ?
+                      AND {cond_contabil}
+                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                      AND C.DATALCTOCTB >= CAST(? AS DATE)
+                      AND C.DATALCTOCTB < CAST(? AS DATE)
+                    ORDER BY C.DATALCTOCTB ASC
+                """
+                cur_q.execute(query_ctb, (empresa_id, *params_conta, data_ini, data_fim))
+            else:
+                query_ctb = f"""
+                    SELECT C.CHAVELCTOCTB, C.DATALCTOCTB, C.CONTACTBDEB, C.CONTACTBCRED,
+                           CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), C.VALORLCTOCTB, H.DESCRHISTCTB
+                    FROM LCTOCTB C
+                    LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                    WHERE C.CODIGOEMPRESA = ?
+                      AND {cond_contabil}
+                      AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                    ORDER BY C.DATALCTOCTB ASC
+                """
+                cur_q.execute(query_ctb, (empresa_id, *params_conta))
+            
+            rows_ctb = cur_q.fetchall()
+            
+            # 2. Fetch from LCTOGER condicionalmente (contém os insumos/notas com rateio de CC explícito)
+            if cc_filtro:
+                if data_ini and data_fim:
+                    query_ger = f"""
+                        SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
+                               CASE WHEN G.NATURLCTOCTB = 1 THEN {conta_id} ELSE C.CONTACTBDEB END AS MOCK_DEB,
+                               CASE WHEN G.NATURLCTOCTB = -1 THEN {conta_id} ELSE C.CONTACTBCRED END AS MOCK_CRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
+                        FROM LCTOGER G
+                        JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                        WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                          AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                          AND G.DATALCTOCTB >= CAST(? AS DATE)
+                          AND G.DATALCTOCTB < CAST(? AS DATE)
+                        ORDER BY G.DATALCTOCTB ASC
+                    """
+                    cur_q.execute(query_ger, (empresa_id, cc_filtro, data_ini, data_fim))
+                else:
+                    query_ger = f"""
+                        SELECT G.CHAVELCTOCTB, G.DATALCTOCTB,
+                               CASE WHEN G.NATURLCTOCTB = 1 THEN {conta_id} ELSE C.CONTACTBDEB END AS MOCK_DEB,
+                               CASE WHEN G.NATURLCTOCTB = -1 THEN {conta_id} ELSE C.CONTACTBCRED END AS MOCK_CRED,
+                               CAST(C.COMPLHIST AS BLOB SUB_TYPE 0), G.VALORLCTOGER, G.NATURLCTOCTB, H.DESCRHISTCTB
+                        FROM LCTOGER G
+                        JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                        LEFT JOIN HISTORICOCTB H ON H.CODIGOHISTCTB = C.CODIGOHISTCTB
+                        WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                          AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                        ORDER BY G.DATALCTOCTB ASC
+                    """
+                    cur_q.execute(query_ger, (empresa_id, cc_filtro))
+                rows_ger = cur_q.fetchall()
+
+            mov_deb = 0.0
+            mov_cred = 0.0
+            detalhes = []
+            
+            # Map para evitar duplicar chaves nativas nativas que o LCTOGER já desmembrou
+            chaves_ger = set()
+            for r in rows_ger:
+                chaves_ger.add(r[0])  # r[0] é CHAVELCTOCTB
+
+            # Junta os dois resultsets, preferindo o LCTOGER_CC em caso de sobreposição (desmembramento fino).
+            # Mas GARANTE os créditos/baixas que só existem no LCTOCTB nativo!
+            rows = rows_ger + [r for r in rows_ctb if r[0] not in chaves_ger]
+            
+            # Rearranjando para data
+            rows = sorted(rows, key=lambda x: x[1])
+
+            for row_tuple in rows:
+                chave, dt, cdeb, ccred, hist_raw, valor = row_tuple[:6]
+                
+                if len(row_tuple) >= 8:
+                    opt_nat = row_tuple[6]
+                    descr_str = str(row_tuple[7] or "").strip()
+                else:
+                    opt_nat = None
+                    descr_str = str(row_tuple[6] or "").strip()
+                
+                if isinstance(hist_raw, (bytes, bytearray)):
+                    compl = hist_raw.decode("cp1252", "ignore")
+                elif hasattr(hist_raw, "read"):
+                    compl = hist_raw.read().decode("cp1252", "ignore")
+                else:
+                    compl = str(hist_raw or "")
+                    
+                hist = f"{descr_str} {compl}".strip()
+
+                v = float(valor or 0)
+                
+                # Para evitar duplicidade de lançamentos no CC:
+                override = memoria_arraste.get(str(chave).strip())
+                ov_dict = {"override_apto": override} if override else {}
+
+                if opt_nat is not None:
+                    # opt_nat = G.NATURLCTOCTB (1 para Debito, -1 para Credito do LCTOCTB)
+                    if opt_nat == 1 and cdeb == conta_id:
+                        nat = "D"
+                        mov_deb += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
+                    elif opt_nat == -1 and ccred == conta_id:
+                        nat = "C"
+                        mov_cred += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
+                else:
+                    # Fallback standard do LCTOCTB (nível de Lote/Partida)
+                    if cdeb == conta_id:
+                        nat = "D"
+                        mov_deb += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
+                    elif ccred == conta_id:
+                        nat = "C"
+                        mov_cred += v
+                        detalhes.append({"chave": chave, "data": str(dt), "historico": hist.strip(), "natureza": nat, "valor": v, **ov_dict})
+
+            mov_liq = mov_deb - mov_cred
+
+            # Saldo anterior (antes do período)
+            saldo_anterior = 0.0
+            if data_ini:
+                try:
+                    if cc_filtro:
+                        cur_q.execute(f"""
+                            SELECT SUM(
+                                CASE 
+                                    WHEN G.NATURLCTOCTB = 1 THEN G.VALORLCTOGER 
+                                    WHEN G.NATURLCTOCTB = -1 THEN -G.VALORLCTOGER 
+                                    ELSE 0 
+                                END
+                            )
+                            FROM LCTOGER G
+                            JOIN LCTOCTB C ON C.CODIGOEMPRESA = G.CODIGOEMPRESA AND C.CHAVELCTOCTB = G.CHAVELCTOCTB
+                            WHERE G.CODIGOEMPRESA = ? AND G.CODIGOCENTROCUSTO = ?
+                              AND C.DATALCTOCTB < CAST(? AS DATE)
+                              AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                              AND NOT (C.CODIGOHISTCTB = 370 AND G.NATURLCTOCTB = -1)
+                        """, (empresa_id, cc_filtro, data_ini))
+                    else:
+                        base_sum = "WHEN C.CONTACTBCRED = ? THEN -C.VALORLCTOCTB" if is_imposto_recolher else "WHEN C.CONTACTBDEB = ? THEN C.VALORLCTOCTB WHEN C.CONTACTBCRED = ? THEN -C.VALORLCTOCTB"
+                        cur_q.execute(f"""
+                            SELECT SUM(CASE {base_sum} ELSE 0 END)
+                            FROM LCTOCTB C
+                            WHERE C.CODIGOEMPRESA = ?
+                              AND {cond_contabil}
+                              AND C.DATALCTOCTB < CAST(? AS DATE)
+                              AND (C.CODIGOORIGLCTOCTB IS NULL OR C.CODIGOORIGLCTOCTB <> 'ZZ')
+                        """, (*params_conta, empresa_id, *params_conta, data_ini))
+                    r = cur_q.fetchone()
+                    saldo_anterior = float(r[0] or 0) if r and r[0] is not None else 0.0
+                except Exception:
+                    pass
+
+            resultado[conta_id] = {
+                "conta": conta_id,
+                "nome": plano.get(conta_id, f"Conta {conta_id}"),
+                "saldo_anterior": saldo_anterior,
+                "movimento_debito": mov_deb,
+                "movimento_credito": mov_cred,
+                "movimento_liquido": mov_deb - mov_cred,
+                "saldo_final": saldo_anterior + (mov_deb - mov_cred),
+                "detalhes": detalhes
+            }
+
+        return {"data": list(resultado.values())}
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        conn_vulcano.close()
-        conn_questor.close()
+        conn_q.close()
+        conn_v.close()
 
 @app.get("/api/health")
+
 def api_health():
     key = os.environ.get("GEMINI_API_KEY") or ""
     return {
@@ -1399,6 +2429,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Janitor Timing Middleware (após CORS) ────────────────────────────────
+app.add_middleware(JanitorTimingMiddleware)
+
+@app.on_event("startup")
+async def _janitor_startup():
+    """Inicia tasks assíncronas do Janitor SRE na inicialização do servidor."""
+    await start_profiler()           # Writer daemon de métricas
+    asyncio.create_task(run_disk_scan())  # Scanner de disco (roda a cada 30 min)
+
 from fastapi import Request
 @app.middleware("http")
 async def add_no_cache_header(request: Request, call_next):
@@ -1409,6 +2448,37 @@ async def add_no_cache_header(request: Request, call_next):
         response.headers["Expires"] = "0"
     return response
 
+# ── API Janitor SRE ────────────────────────────────────────────────────
+@app.get("/api/janitor/report")
+def api_janitor_report(janela_horas: int = 24, top_n: int = 20):
+    """Retorna métricas P50/P95/P99 de todos os endpoints nas últimas N horas."""
+    perf = get_performance_report(top_n=top_n, janela_horas=janela_horas)
+    cache = get_cache_stats()
+    return {
+        "performance": perf,
+        "cache":       cache,
+        "janitor_version": "1.0.0",
+    }
+
+@app.get("/api/janitor/disk")
+def api_janitor_disk():
+    """Retorna relatório de arquivos residuais identificados no disco."""
+    return get_disk_report()
+
+class QuarantineReq(BaseModel):
+    paths: list[str]
+
+@app.post("/api/janitor/quarantine")
+def api_janitor_quarantine(req: QuarantineReq):
+    """Move os arquivos especificados para .janitor_quarantine/ (reversível)."""
+    return move_to_quarantine(req.paths)
+
+@app.post("/api/janitor/cache/invalidate")
+def api_janitor_cache_invalidate(path: str = None):
+    """Invalida o cache de um endpoint específico ou todo o cache (path=None)."""
+    removed = invalidate_cache(path)
+    return {"removed": removed, "path": path or "*"}
+
 @app.post("/api/generate-pdf-parser")
 async def generate_pdf_parser(file: UploadFile = File(...)):
     if not os.environ.get("GEMINI_API_KEY"):
@@ -1418,18 +2488,30 @@ async def generate_pdf_parser(file: UploadFile = File(...)):
         # Read the PDF into memory
         pdf_bytes = await file.read()
         
-        # Extract text from the first 5 pages using pdfplumber
-        extracted_text = ""
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            pages_to_process = min(5, len(pdf.pages))
-            for i in range(pages_to_process):
-                extracted_text += pdf.pages[i].extract_text(layout=True) + "\n"
+        # Extract text from the first 5 pages usando Async/Thread conforme AGENTS.md
+        def _extract_pages(raw: bytes) -> str:
+            result = []
+            with pdfplumber.open(io.BytesIO(raw)) as pdf:
+                for i, page in enumerate(pdf.pages):
+                    if i >= 5: break
+                    extracted = page.extract_text() or page.extract_text(layout=True) or ""
+                    if extracted.strip():
+                        result.append(f"--- Página {i + 1} ---\n{extracted[:4500]}")
+            return "\n".join(result)
+            
+        extracted_text = await asyncio.to_thread(_extract_pages, pdf_bytes)
         
         if not extracted_text.strip():
             raise HTTPException(status_code=400, detail="Cannot extract text from this PDF (it might be an image/scanned).")
             
         # Prompt Gemini to generate the python script
-        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        gen_cfg = {
+            "max_output_tokens": 8192,
+        }
+        if HAS_VERTEXAI:
+            gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         prompt_instructions = f"""Você é um Engenheiro de Software Python Sênior especialista em ETL e processamento de finanças usando Pandas.
 Abaixo está o texto extraído da amostra do layout do relatório em PDF do sistema ERP (limite de 5 páginas).
 
@@ -1511,6 +2593,10 @@ def init_sqlite():
 init_sqlite()
 
 def get_conn(db_name="vulcano", empresa_id=None):
+    if db_name == "sqlite":
+        import sqlite3
+        return sqlite3.connect(POC_DATABASE_FILE)
+
     questor_db = DB_PATH_QUESTOR
     if db_name == "questor" and empresa_id is not None:
         import os
@@ -1578,27 +2664,7 @@ class QuestorLotePayload(BaseModel):
     
 # Rotas e Implementações
 
-@app.post("/api/templates")
-def save_template(template: TemplateInput):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
-    c = conn.cursor()
-    c.execute('INSERT INTO import_templates (nome, target_table, mapping_json) VALUES (?, ?, ?)',
-              (template.nome, template.target_table, template.mapping_json))
-    conn.commit()
-    conn.close()
-    return {"success": True}
 
-@app.get("/api/templates")
-def get_templates(target_table: str = None):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
-    c = conn.cursor()
-    if target_table:
-        c.execute('SELECT id, nome, target_table, mapping_json, data_criacao FROM import_templates WHERE target_table = ? ORDER BY id DESC', (target_table,))
-    else:
-        c.execute('SELECT id, nome, target_table, mapping_json, data_criacao FROM import_templates ORDER BY id DESC')
-    rows = c.fetchall()
-    conn.close()
-    return [{"id": r[0], "nome": r[1], "target_table": r[2], "mapping_json": r[3], "data_criacao": r[4]} for r in rows]
 
 @app.get("/api/poc")
 def get_poc():
@@ -1608,17 +2674,6 @@ def get_poc():
     rows = c.fetchall()
     conn.close()
     return {"data": [{"empreendimento": r[0], "periodo": r[1], "percentual": r[2]} for r in rows]}
-
-
-@app.get("/api/tables")
-def get_tables(db: str = "questor"):
-    conn = get_conn(db)
-    cur = conn.cursor()
-    cur.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 ORDER BY RDB$RELATION_NAME")
-    tables = [row[0].strip() for row in cur.fetchall()]
-    conn.close()
-    return {"tables": tables}
-
 # --- QUESTOR AUXILIARY TABLES ENDPOINTS ---
 @app.get("/api/questor/contas")
 def get_questor_contas():
@@ -1782,492 +2837,11 @@ def get_data(table_name: str, limit: int = 150, db: str = "questor", empresa_id:
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+from core.services.revenue_time_pipeline import RevenueTimePipeline
+
 @app.get("/api/receitas-caixa")
-def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = None, data_fim: str | None = None, empreendimentos_ids: str | None = None):
-    # Pandas Vectorized Engine Start
-    import pandas as pd
-    import numpy as np
-    import collections
-    import datetime
-    import calendar
-    
-    if data_ini and len(data_ini) == 7:
-        data_ini = f"{data_ini}-01"
-    if data_fim and len(data_fim) == 7:
-        # Pega o ultimo dia do mes
-        y, m = map(int, data_fim.split("-"))
-        last_day = calendar.monthrange(y, m)[1]
-        data_fim = f"{data_fim}-{last_day:02d}"
-    
-    conn = get_conn("vulcano")
-    cur = conn.cursor()
-
-    query = """
-    SELECT 
-        v.CODIGOEMPRESA,
-        v.CODIGOESTAB,
-        e.NOME AS EMPREENDIMENTO,
-        v.DESCUNIDIMOB AS UNIDADE,
-        c.NOME AS COMPRADOR,
-        r.DATA AS DATA_RECEBIMENTO,
-        r.TOTALPAGO AS RECEITA_CAIXA,
-        r.VALORPARCELA,
-        r.VALORVARIACAO,
-        v.TOTALVENDA AS VGV_BASE,
-        e.RET,
-        v.DISTRATO,
-        v.DATADISTRATO,
-        v.ID AS IDVENDA
-    FROM VENDA v
-    JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
-    LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
-    LEFT JOIN RECEBER r ON r.IDVENDA = v.ID AND r.TOTALPAGO > 0
-    """
-    
-    try:
-        conditions = []
-        params = []
-        if empresa_id is not None:
-            conditions.append("v.CODIGOEMPRESA = ?")
-            params.append(int(empresa_id))
-            
-        if empreendimentos_ids:
-            # Parse comma-separated string to list of ints
-            try:
-                emp_list = [int(p.strip()) for p in empreendimentos_ids.split(",") if p.strip()]
-                if emp_list:
-                    # Create IN clause with placeholders
-                    placeholders = ",".join(["?"] * len(emp_list))
-                    conditions.append(f"e.ID IN ({placeholders})")
-                    params.extend(emp_list)
-            except ValueError:
-                pass
-
-        
-        join_conditions = ""
-        join_params = []
-        
-        if data_fim:
-            join_conditions += " AND r.DATA <= ?"
-            join_params.append(data_fim)
-            
-        if data_ini:
-            join_conditions += " AND r.DATA >= ?"
-            join_params.append(data_ini)
-        
-        query = query.replace("AND r.TOTALPAGO > 0", "AND r.TOTALPAGO > 0" + join_conditions)
-            
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        
-        query += " ORDER BY r.DATA DESC NULLS LAST"
-        
-        df = pd.read_sql_query(query, conn, params=tuple(join_params + params))
-        # Global Sanitization
-        df = df.replace({np.nan: 0.0}) 
-        
-        # Saneamento Vetorizável
-        df['EMPREENDIMENTO'] = df['EMPREENDIMENTO'].fillna('').astype(str).str.strip()
-        
-        def safe_decode(x):
-            if isinstance(x, bytes):
-                try: return x.decode('win1252', 'ignore').strip()
-                except: return str(x)
-            return str(x).strip() if x is not None else ''
-
-        # Decodificações que dependem de blob/win1252 ainda usam map rápido
-        df['EMPREENDIMENTO'] = df['EMPREENDIMENTO'].map(safe_decode)
-        df['UNIDADE'] = df['UNIDADE'].map(safe_decode)
-        df['COMPRADOR'] = df['COMPRADOR'].map(safe_decode)
-        
-        df['DATA_RECEBIMENTO'] = pd.to_datetime(df['DATA_RECEBIMENTO'], errors='coerce')
-        df['RECEITA_CAIXA'] = df['RECEITA_CAIXA'].fillna(0.0).astype(float)
-        df['VALORPARCELA'] = df['VALORPARCELA'].fillna(0.0).astype(float)
-        df['VALORVARIACAO'] = df['VALORVARIACAO'].fillna(0.0).astype(float)
-        df['VGV_BASE'] = df['VGV_BASE'].fillna(0.0).astype(float)
-        
-        df['RET_FLAG'] = df['RET'].astype(str).str.upper().str.strip() == 'S'
-        df['DISTRATO_FLAG'] = df['DISTRATO'].astype(str).str.upper().str.strip() == 'S'
-        
-        df['VGV'] = np.where(df['DISTRATO_FLAG'], 0.0, df['VGV_BASE'])
-        
-        # Acréscimo
-        acrescimo_base = np.maximum(0, df['RECEITA_CAIXA'] - df['VALORPARCELA'])
-        df['ACRESCIMO'] = np.maximum(df['VALORVARIACAO'], acrescimo_base)
-        
-        # Vectorized Module YM (Period)
-        df['YM'] = df['DATA_RECEBIMENTO'].dt.to_period('M')
-        # Filtro de Competência e Totalizadores Nativos
-        # Para montar monthly_totals, filtramos ret == false
-        df_non_ret_valid = df[(~df['RET_FLAG']) & (df['RECEITA_CAIXA'] > 0) & df['DATA_RECEBIMENTO'].notnull()]
-        monthly_groups = df_non_ret_valid.groupby('YM')['RECEITA_CAIXA'].sum()
-        
-        # Computar month_adicional dicionário simulando a lógica iterativa nativa
-        quarters_data = collections.defaultdict(list)
-        for ym_period, m_total in monthly_groups.items():
-            dt = ym_period.to_timestamp()
-            ym = (dt.year, dt.month)
-            yq = (dt.year, (dt.month - 1) // 3 + 1)
-            quarters_data[yq].append(ym)
-            
-        monthly_totals_native = { (p.year, p.month): v for p, v in monthly_groups.items() }
-
-        month_adicional = {}
-        for yq, months in quarters_data.items():
-            month3 = (yq[0], yq[1] * 3)
-            month1 = (yq[0], yq[1] * 3 - 2)
-            month2 = (yq[0], yq[1] * 3 - 1)
-            
-            quarter_base = monthly_totals_native.get(month1, 0) + monthly_totals_native.get(month2, 0) + monthly_totals_native.get(month3, 0)
-            quarter_adicional = max(0, (quarter_base * 0.08) - 60000) * 0.10
-            
-            m1_adicional = max(0, (monthly_totals_native.get(month1, 0) * 0.08) - 20000) * 0.10
-            m2_adicional = max(0, (monthly_totals_native.get(month2, 0) * 0.08) - 20000) * 0.10
-            m3_adicional = quarter_adicional - m1_adicional - m2_adicional
-            
-            month_adicional[month1] = m1_adicional
-            month_adicional[month2] = m2_adicional
-            month_adicional[month3] = m3_adicional
-
-        # Mapeando Tributos de volta pro df
-        # Zerando colunas inicialmente
-        for col in ['PIS', 'COFINS', 'IRPJ', 'CSLL', 'RET', 'IRPJ_ADICIONAL']:
-            df[col] = 0.0
-            
-        # Para operações válidas (onde teve recebimento)
-        mask_valid = (df['RECEITA_CAIXA'] > 0) & df['DATA_RECEBIMENTO'].notnull()
-        m_ret = mask_valid & df['RET_FLAG']
-        m_nret = mask_valid & (~df['RET_FLAG'])
-        
-        # RET Fix
-        df.loc[m_ret, 'RET'] = df.loc[m_ret, 'RECEITA_CAIXA'] * 0.04
-        
-        # NRET Fix
-        df.loc[m_nret, 'PIS'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.0065
-        df.loc[m_nret, 'COFINS'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.03
-        df.loc[m_nret, 'IRPJ'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.012
-        df.loc[m_nret, 'CSLL'] = df.loc[m_nret, 'RECEITA_CAIXA'] * 0.0108
-
-        # IRPJ Adicional vetorizado via Series.map
-        # Precisamos transformar YM nativo (Period) para tuple (Y, M) para bater com month_adicional keys
-        # Para performance, fazemos o mapeamento no nível das chaves do período
-        if len(month_adicional) > 0:
-            def ym_to_tuple(period_val):
-                if pd.isna(period_val): return (1900, 1)
-                return (period_val.year, period_val.month)
-            
-            df_tuple_keys = df.loc[m_nret, 'YM'].map(ym_to_tuple)
-            adicional_series = df_tuple_keys.map(lambda k: month_adicional.get(k, 0.0)).astype(float)
-            total_m_series = df_tuple_keys.map(lambda k: monthly_totals_native.get(k, 0.0)).astype(float)
-            
-            fraction = df.loc[m_nret, 'RECEITA_CAIXA'] / total_m_series
-            fraction = fraction.replace([np.inf, -np.inf, np.nan], 0)
-            df.loc[m_nret, 'IRPJ_ADICIONAL'] = fraction * adicional_series
-
-        df['TRIBUTOS_CAIXA_ACUMULADO'] = df['PIS'] + df['COFINS'] + df['IRPJ'] + df['CSLL'] + df['RET'] + df['IRPJ_ADICIONAL']
-        
-        # Window Masks para Mês (data_ini)
-        target_ini_date = data_ini if data_ini else "1900-01-01"
-        target_dt = pd.to_datetime(target_ini_date)
-        is_mes_mask = df['DATA_RECEBIMENTO'] >= target_dt
-        
-        df['CAIXA_MES'] = np.where(is_mes_mask, df['RECEITA_CAIXA'], 0.0)
-        df['ACRESCIMO_CAIXA_MES'] = np.where(is_mes_mask, df['ACRESCIMO'], 0.0)
-        df['TRIBUTOS_CAIXA_MES'] = np.where(is_mes_mask, df['TRIBUTOS_CAIXA_ACUMULADO'], 0.0)
-        for col in ['PIS', 'COFINS', 'IRPJ', 'CSLL', 'RET', 'IRPJ_ADICIONAL']:
-            df[f'{col}_MES'] = np.where(is_mes_mask, df[col], 0.0)
-
-        # Se houver data_ini, faremos uma micro-query de todo o histórico puramente numérico (Super rápida)
-        # Para resgatar o Saldo Acumulado sem estourar 2 minutos travando no JOIN de nomes e strings velhos
-        if data_ini:
-            cur.execute(f"""
-                SELECT r.IDVENDA, SUM(r.TOTALPAGO), SUM(r.VALORVARIACAO)
-                FROM RECEBER r
-                JOIN VENDA v ON r.IDVENDA = v.ID
-                WHERE r.DATA < ? AND r.TOTALPAGO > 0 AND v.CODIGOEMPRESA = ?
-                GROUP BY r.IDVENDA
-            """, [data_ini, int(empresa_id) if empresa_id else 0])
-            hist_rows = cur.fetchall()
-            if hist_rows:
-                # Processamento relâmpago do Acumulado Histórico para Vendas Existentes
-                hist_dict = {row[0]: (row[1] or 0.0, row[2] or 0.0) for row in hist_rows}
-                
-                # Mapeando os recibos passados de volta para nosso df principal agregado de forma vetorial
-                def sum_hist_caixa(vid): return float(hist_dict.get(vid, (0.0, 0.0))[0])
-                def sum_hist_acres(vid): return float(hist_dict.get(vid, (0.0, 0.0))[1])
-                
-                df['HIST_CAIXA'] = df['IDVENDA'].apply(sum_hist_caixa)
-                df['HIST_ACRES'] = df['IDVENDA'].apply(sum_hist_acres)
-                
-                # A RECEITA_CAIXA global passa a contemplar as parcelas pagas no passado
-                df['RECEITA_CAIXA'] = df['RECEITA_CAIXA'] + df['HIST_CAIXA']
-                df['ACRESCIMO'] = df['ACRESCIMO'] + df['HIST_ACRES']
-                
-                # Recalcula Taxa Acumulada da Base Histórica simplificada
-                # Aplicamos a % efetiva do mês transacionado (RET/PRES) sobre a massa passada
-                rate_mes = df['TRIBUTOS_CAIXA_MES'] / df['CAIXA_MES']
-                rate_mes = rate_mes.fillna(0.0).replace([np.inf, -np.inf], 0.0)
-                
-                # Se CAIXA_MES for 0 (Sem pagamentos novos), a taxa assumida será RET (4%) ou PIS/COFINS (5.93%)
-                fallback_rate = np.where(df['RET_FLAG'], 0.04, 0.0593)
-                final_rate = np.where(df['CAIXA_MES'] > 0, rate_mes, fallback_rate)
-                
-                df['TRIBUTOS_CAIXA_ACUMULADO'] = df['TRIBUTOS_CAIXA_ACUMULADO'] + (df['HIST_CAIXA'] * final_rate)
-                
-        # Agrupamento no nível da Unidade Comercial
-        unit_group = df.groupby(['EMPREENDIMENTO', 'UNIDADE', 'COMPRADOR', 'IDVENDA']).agg({
-            'VGV': 'first',
-            'RECEITA_CAIXA': 'sum',
-            'CAIXA_MES': 'sum',
-            'ACRESCIMO': 'sum',
-            'ACRESCIMO_CAIXA_MES': 'sum',
-            'TRIBUTOS_CAIXA_ACUMULADO': 'sum',
-            'TRIBUTOS_CAIXA_MES': 'sum',
-            'PIS': 'sum', 'PIS_MES': 'sum',
-            'COFINS': 'sum', 'COFINS_MES': 'sum',
-            'IRPJ': 'sum', 'IRPJ_MES': 'sum',
-            'CSLL': 'sum', 'CSLL_MES': 'sum',
-            'RET': 'sum', 'RET_MES': 'sum',
-            'IRPJ_ADICIONAL': 'sum', 'IRPJ_ADICIONAL_MES': 'sum',
-        }).reset_index()
-
-        # Agora operamos POC (SQL -> Dict -> Map)
-        emp_contas_by_name = {}
-        poc_map = {}
-        try:
-            cur.execute("""
-                SELECT REPLACE(C.CLASSIFICACAO, '.', ''), CX.DESCRICAO 
-                FROM CONTA_CONTABIL C 
-                JOIN CONTA CX ON C.ID_CONTA = CX.NOCONTA
-            """)
-            nomes_contas = {str(r[0]).strip(): (r[1].decode('win1252', 'ignore') if isinstance(r[1], bytes) else str(r[1])).strip() for r in cur.fetchall()}
-            
-            def fmt_cta(codigo, default_desc):
-                if not codigo: return default_desc
-                c = str(codigo).strip()
-                desc = nomes_contas.get(c, default_desc)
-                return f"{c} - {desc}"
-
-            cur.execute("""
-                SELECT ID, NOME, CONTACLI, CONTAADICLI, CONTAREC, CONTADESPESA, CONTACAIXA, 
-                       CONTAVARIACAO, CONTAESTAND, CONTAESTCON, CONTACUSTO, 
-                       CONTADEVOLUCAO, CONTALUCROACUM, CONTA_ESTORNO_DEVOLUCAO, OBRACONCLUIDA
-                FROM EMPREENDIMENTO
-            """)
-            emps_all = cur.fetchall()
-            for ev in emps_all:
-                emp_name_str = (ev[1].decode('win1252', 'ignore').strip() if isinstance(ev[1], bytes) else str(ev[1]).strip()) if ev[1] else str(ev[0])
-                
-                emp_contas_by_name[emp_name_str] = {
-                    "CONTACLI": fmt_cta(ev[2] if len(ev) > 2 else None, "CLIENTES"),
-                    "CONTAADICLI": fmt_cta(ev[3] if len(ev) > 3 else None, "ADIAN DE CLIENTES"),
-                    "CONTAREC": fmt_cta(ev[4] if len(ev) > 4 else None, "RECEITA DE VENDAS DRE"),
-                    "CONTADESPESA": fmt_cta(ev[5] if len(ev) > 5 else None, "DESPESA TRIBUTARIA DRE"),
-                    "CONTACAIXA": fmt_cta(ev[6] if len(ev) > 6 else None, "BANCOS CONTA MOVIMENTO"),
-                    "CONTAVARIACAO": fmt_cta(ev[7] if len(ev) > 7 else None, "RECEITA DE VARIACOES DRE"),
-                    "CONTAESTAND": fmt_cta(ev[8] if len(ev) > 8 else None, "ESTOQUE EM ANDAMENTO"),
-                    "CONTAESTCON": fmt_cta(ev[9] if len(ev) > 9 else None, "ESTOQUE CONCLUIDO"),
-                    "CONTACUSTO": fmt_cta(ev[10] if len(ev) > 10 else None, "CMV"),
-                    "CONTADEVOLUCAO": fmt_cta(ev[11] if len(ev) > 11 else None, "DISTRATOS DRE"),
-                    "CONTALUCROACUM": fmt_cta(ev[12] if len(ev) > 12 else None, "LUCROS ACUMULADOS"),
-                    "CONTA_ESTORNO_DEVOLUCAO": fmt_cta(ev[13] if len(ev) > 13 else None, "ESTORNOS DISTRATOS DRE")
-                }
-                is_concluida = str(ev[14]).strip().upper() == 'S' if len(ev) > 14 and ev[14] else False
-                if is_concluida:
-                    poc_map[(emp_name_str, '2000-01')] = 100.0
-        except Exception as e:
-            print("POC/Empresa Warning:", e)
-            
-        try:
-            cur.execute("""
-                SELECT e.NOME, p.PERIODO, p.PERCENTUAL 
-                FROM POC p JOIN EMPREENDIMENTO e ON p.ID_EMPREENDIMENTO = e.ID
-            """)
-            for row in cur.fetchall():
-                emp_nome, periodo, p = row
-                if not emp_nome or not periodo: continue
-                emp_name_str = (emp_nome.decode('win1252', 'ignore').strip() if isinstance(emp_nome, bytes) else str(emp_nome).strip())
-                p_str = (periodo.decode('win1252', 'ignore').strip() if isinstance(periodo, bytes) else str(periodo).strip())
-                ym_key = p_str[:7]
-                current_val = poc_map.get((emp_name_str, ym_key), 0.0)
-                raw_p = float(p or 0)
-                capped_p = raw_p if raw_p <= 100.0 else 100.0
-                poc_map[(emp_name_str, ym_key)] = max(current_val, capped_p)
-        except Exception as e:
-            print("Aviso Lendo POC Oficial Vulcano:", e)
-            
-        poc_list_by_emp = collections.defaultdict(list)
-        for (p_emp, val_ym), p_val in poc_map.items():
-            poc_list_by_emp[p_emp].append((val_ym, p_val / 100.0))
-        for k in poc_list_by_emp:
-            poc_list_by_emp[k].sort(key=lambda x: x[0])
-
-        anchor_ym = data_fim[:7] if data_fim else datetime.datetime.now().strftime("%Y-%m")
-        
-        def get_poc_at_or_before(emp_name, target_ym_str):
-            best_poc = 0.0
-            for ym_key, val in poc_list_by_emp.get(emp_name, []):
-                if ym_key <= target_ym_str: best_poc = val
-                else: break
-            return best_poc
-
-        def get_poc_strictly_before(emp_name, target_ym_str):
-            best_poc = 0.0
-            for ym_key, val in poc_list_by_emp.get(emp_name, []):
-                if ym_key < target_ym_str: best_poc = val
-                else: break
-            return best_poc
-
-        # Consolidação Emp (Nível 1)
-        # Ao invés de usar pandas para isso, construímos o dictionary nativo `dashboard_meta` e o json flat `data`
-        # Isso é super rápido agora que iteramos sobre as unidades agrupadas (centenas, não mais centenas de milhares)
-        
-        dashboard_meta = collections.defaultdict(lambda: {
-             "vgv": 0.0, "poc": 0.0, "poc_anterior": 0.0, "poc_mes": 0.0,
-             "receita_societaria": 0.0, "receita_soc_mes": 0.0,
-             "caixa_acumulado": 0.0, "caixa_mes": 0.0,
-             "tributos_caixa_acumulado": 0.0, "tributos_caixa_mes": 0.0,
-             "tributos_soc_acumulado": 0.0, "tributos_soc_mes": 0.0,
-             "pis": 0.0, "cofins": 0.0, "csll": 0.0, "irpj": 0.0, "ret": 0.0, "irpj_adicional": 0.0,
-             "unidades": []
-        })
-
-        data_export = []
-        for row in unit_group.itertuples(index=False):
-            emp = str(row.EMPREENDIMENTO)
-            uni = str(row.UNIDADE)
-            comp = str(row.COMPRADOR)
-            
-            # Setup initial POC if new EMP
-            if dashboard_meta[emp]["poc_mes"] == 0 and dashboard_meta[emp]["poc"] == 0:
-                final_ym = data_fim[:7] if data_fim else datetime.datetime.now().strftime("%Y-%m")
-                start_ym = data_ini[:7] if data_ini else None
-                
-                poc_ac_temp = get_poc_at_or_before(emp, final_ym)
-                poc_ant_temp = get_poc_strictly_before(emp, start_ym) if start_ym else 0.0
-                poc_mes = max(0, poc_ac_temp - poc_ant_temp)
-                
-                dashboard_meta[emp]["poc"] = poc_ac_temp * 100.0
-                dashboard_meta[emp]["poc_anterior"] = poc_ant_temp * 100.0
-                dashboard_meta[emp]["poc_mes"] = poc_mes * 100.0
-                dashboard_meta[emp]["contas_contabeis"] = emp_contas_by_name.get(emp, {})
-                dashboard_meta[emp]["historico_poc"] = [{"periodo": x[0], "poc": x[1]*100} for x in poc_list_by_emp.get(emp, [])]
-                
-            poc_acumulado = dashboard_meta[emp]["poc"] / 100.0
-            poc_mes = dashboard_meta[emp]["poc_mes"] / 100.0
-            
-            soc_acumulada_uni = row.VGV * poc_acumulado
-            soc_mes_uni = row.VGV * poc_mes
-            
-            eff_rate_acum = (row.TRIBUTOS_CAIXA_ACUMULADO / row.RECEITA_CAIXA) if row.RECEITA_CAIXA > 0 else 0
-            
-            tributos_soc_acumulada_uni = soc_acumulada_uni * eff_rate_acum
-            # Usar a taxa efetiva acumulada do histórico da unidade para prever passivo tributário sobre o crescimento do POC no período
-            tributos_soc_mes_uni = soc_mes_uni * eff_rate_acum
-            
-            # Filtro Poda de UI (Zerar visual da UI para unidades ociosas que não tenham pendência fiscal considerável)
-            is_idle = (row.CAIXA_MES == 0) and (soc_mes_uni == 0)
-            pending_diff = abs(tributos_soc_acumulada_uni - row.TRIBUTOS_CAIXA_ACUMULADO)
-            
-            if is_idle and pending_diff < 5.0 and data_ini is not None:
-                continue # Pula unidade completamente
-
-            # Aggregating into Dashboard Meta Empreendimento
-            meta_emp = dashboard_meta[emp]
-            meta_emp["vgv"] += row.VGV
-            meta_emp["receita_societaria"] += soc_acumulada_uni
-            meta_emp["receita_soc_mes"] += soc_mes_uni
-            meta_emp["caixa_acumulado"] += row.RECEITA_CAIXA
-            meta_emp["caixa_mes"] += row.CAIXA_MES
-            meta_emp["tributos_caixa_acumulado"] += row.TRIBUTOS_CAIXA_ACUMULADO
-            meta_emp["tributos_caixa_mes"] += row.TRIBUTOS_CAIXA_MES
-            meta_emp["tributos_soc_acumulado"] += tributos_soc_acumulada_uni
-            meta_emp["tributos_soc_mes"] += tributos_soc_mes_uni
-            
-            meta_emp["pis"] += row.PIS
-            meta_emp["cofins"] += row.COFINS
-            meta_emp["csll"] += row.CSLL
-            meta_emp["irpj"] += row.IRPJ
-            meta_emp["ret"] += row.RET
-            meta_emp["irpj_adicional"] += row.IRPJ_ADICIONAL
-            
-
-            meta_emp["unidades"].append({
-                "unidade": uni, "comprador": comp, "vgv": row.VGV,
-                "caixa_acumulado": row.RECEITA_CAIXA, "caixa_mes": row.CAIXA_MES,
-                "soc_acumulado": soc_acumulada_uni, "soc_mes": soc_mes_uni,
-                "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_caixa_mes": row.TRIBUTOS_CAIXA_MES,
-                "tributos_soc_acumulado": tributos_soc_acumulada_uni, "tributos_soc_mes": tributos_soc_mes_uni,
-                "trib_detalhe_caixa_acumulado": {
-                    "pis": row.PIS, "cofins": row.COFINS, "irpj": row.IRPJ, 
-                    "csll": row.CSLL, "ret": row.RET, "irpj_adicional": row.IRPJ_ADICIONAL
-                },
-                "trib_detalhe_caixa_mes": {
-                    "pis": row.PIS_MES, "cofins": row.COFINS_MES, "irpj": row.IRPJ_MES, 
-                    "csll": row.CSLL_MES, "ret": row.RET_MES, "irpj_adicional": row.IRPJ_ADICIONAL_MES
-                }
-            })
-            
-            # Flat Data for UI rendering
-            data_export.append({
-                "estabelecimento": "1", "empreendimento": emp, "unidade": uni, "comprador": comp,
-                "periodo": anchor_ym + "-01", "vgv": row.VGV,
-                "receita_caixa": row.CAIXA_MES, "base_calculo": row.CAIXA_MES,
-                "receita_societaria": soc_mes_uni, "poc": meta_emp["poc"],
-                "pis": row.PIS_MES, "cofins": row.COFINS_MES, "irpj": row.IRPJ_MES, "csll": row.CSLL_MES, "ret": row.RET_MES,
-                "tributos_total": row.TRIBUTOS_CAIXA_MES, "tributos_societario": tributos_soc_mes_uni,
-                "saldo_clientes": max(0, soc_acumulada_uni - row.RECEITA_CAIXA),
-                "saldo_tributos": max(0, row.RECEITA_CAIXA - soc_acumulada_uni),
-                "caixa_acumulado": row.RECEITA_CAIXA, "soc_acumulado": soc_acumulada_uni,
-                "tributos_caixa_acumulado": row.TRIBUTOS_CAIXA_ACUMULADO, "tributos_soc_acumulado": tributos_soc_acumulada_uni
-            })
-
-        # Native Evolution Timeline using only current period receipts 
-        # (Ignore massive legacy accumulation dumps on timeline bounds)
-        timeline_grouped = df[df['CAIXA_MES'] > 0].groupby('YM').agg({
-             'CAIXA_MES': 'sum',
-             'TRIBUTOS_CAIXA_MES': 'sum'
-        }).reset_index()
-        
-        dashboard_timeline = []
-        for row in timeline_grouped.itertuples(index=False):
-             dashboard_timeline.append({
-                  "periodo": str(row.YM),
-                  "caixa": row.CAIXA_MES,
-                  "trib": row.TRIBUTOS_CAIXA_MES
-             })
-
-        valid_dashboard_meta = {k: v for k, v in dashboard_meta.items() if len(v["unidades"]) > 0}
-
-        cur.execute("SELECT * FROM IMPOSTO")
-        imposto_cols = [desc[0].strip() for desc in cur.description]
-        imposto_rows = cur.fetchall()
-        impostos_config = []
-        import decimal
-        for r in imposto_rows:
-            d = {}
-            for i, c in enumerate(imposto_cols):
-                val = r[i]
-                if isinstance(val, decimal.Decimal): val = float(val)
-                if isinstance(val, bytes): val = val.decode('cp1252', 'ignore')
-                elif isinstance(val, str): val = val.strip()
-                d[c] = val
-            impostos_config.append(d)
-
-        conn.close()
-        return {
-            "impostos_config": impostos_config,
-            "dashboard_data": data_export, 
-            "ret_consolidado": [], 
-            "dashboard_meta": valid_dashboard_meta,
-            "dashboard_timeline": dashboard_timeline
-        }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        if 'conn' in locals() and conn: conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
-
+def get_receitas_caixa_api(empresa_id: int | None = None, data_ini: str | None = None, data_fim: str | None = None, empreendimentos_ids: str | None = None):
+    return RevenueTimePipeline.get_receitas_caixa(empresa_id, data_ini, data_fim, empreendimentos_ids)
 @app.get("/api/compare/pessoas")
 def get_compare_pessoas(empresa_id: int | None = None):
     try:
@@ -2577,17 +3151,43 @@ def get_vulcano_empreendimentos(empresa_id: int):
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        query = """SELECT ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO, CNO, 
-                   CONTACAIXA, CONTACLI, CODIGOCENTROCUSTO, CONTAESTAND, CONTAESTCON,
-                   CONTADESPESA, CONTAREC, CONTAVARIACAO, CONTALUCROACUM,
-                   CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI,
-                   ENDERECO, CONTADEVOLUCAO, CODIGO_HIST_ESTORNO_SALDO, CONTAADICLI, OBRACONCLUIDA,
-                   CEP, SIGLAESTADO, CODIGOMUNIC, CODIGOESTAB, CODIGOFILIAL, CODIGOMATRIZ,
-                   CONTACUSTO, CONTA_ESTORNO_DEVOLUCAO,
-                   DATAINICIORET, ALIQRET, CODIGOIMPOSTO, VARIACAOIMPOSTO, TRIBUTARNORMALAPOSCONCLUSAO,
-                   AJUSTEFINALPOC, REAJUSTAR_PELO_CUB, ADQUIRIDO_TERCEIROS, SEM_CUSTOS, CONSIDERAR_POC_RECEITA,
-                   CODIGOHISTADIANTAMENTO, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CODIGO_HIST_ESTORNO_CUSTO
-                   FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?"""
+        # Detecta colunas reais da tabela para montar query defensiva
+        cur.execute("""
+            SELECT TRIM(RDB$FIELD_NAME)
+            FROM RDB$RELATION_FIELDS
+            WHERE RDB$RELATION_NAME = 'EMPREENDIMENTO'
+        """)
+        existing_cols = {r[0] for r in cur.fetchall()}
+
+        def col_or(name, default='NULL'):
+            return name if name in existing_cols else f"{default} AS {name}"
+
+        query = f"""SELECT
+            ID, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, DATACONCLUSAO, ATIVO,
+            {col_or('CNO', 'NULL')},
+            {col_or('CONTACAIXA', '0')}, {col_or('CONTACLI', '0')},
+            {col_or('CODIGOCENTROCUSTO', '0')}, {col_or('CONTAESTAND', '0')},
+            {col_or('CONTAESTCON', '0')}, {col_or('CONTADESPESA', '0')},
+            {col_or('CONTAREC', '0')}, {col_or('CONTAVARIACAO', '0')},
+            {col_or('CONTALUCROACUM', '0')},
+            {col_or('CODIGOHISTVENDA', '0')}, {col_or('CODIGOHISTRECEBIMENTO', '0')},
+            {col_or('CODIGOHISTVARIACAO', '0')}, {col_or('CODIGOHISTBAIXAADI', '0')},
+            {col_or('ENDERECO', "''" )}, {col_or('CONTADEVOLUCAO', '0')},
+            {col_or('CODIGO_HIST_ESTORNO_SALDO', '0')}, {col_or('CONTAADICLI', '0')},
+            {col_or('OBRACONCLUIDA', "'N'")},
+            {col_or('CEP', "''")}, {col_or('SIGLAESTADO', "''")},
+            {col_or('CODIGOMUNIC', "''")}, {col_or('CODIGOESTAB', "''")},
+            {col_or('CODIGOFILIAL', "''")}, {col_or('CODIGOMATRIZ', "''")},
+            {col_or('CONTACUSTO', '0')}, {col_or('CONTA_ESTORNO_DEVOLUCAO', '0')},
+            {col_or('DATAINICIORET', 'NULL')}, {col_or('ALIQRET', '0')},
+            {col_or('CODIGOIMPOSTO', '0')}, {col_or('VARIACAOIMPOSTO', '0')},
+            {col_or('TRIBUTARNORMALAPOSCONCLUSAO', "'N'")},
+            {col_or('AJUSTEFINALPOC', "'N'")}, {col_or('REAJUSTAR_PELO_CUB', "'N'")},
+            {col_or('ADQUIRIDO_TERCEIROS', "'N'")}, {col_or('SEM_CUSTOS', "'N'")},
+            {col_or('CONSIDERAR_POC_RECEITA', "'N'")},
+            {col_or('CODIGOHISTADIANTAMENTO', '0')}, {col_or('CODIGOHISTAPRCUSTO', '0')},
+            {col_or('CODIGOHISTDESPESA', '0')}, {col_or('CODIGO_HIST_ESTORNO_CUSTO', '0')}
+            FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?"""
         cur.execute(query, (empresa_id,))
         
         def dec(v):
@@ -2815,51 +3415,123 @@ def get_vulcano_clientes(empresa_id: int):
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/vulcano/dashboard-lancamentos")
+def api_dashboard_lancamentos(empresa_id: int, data_ini: str = None, data_fim: str = None):
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        
+        date_filter_venda = ""
+        date_filter_rec = ""
+        params_venda = [empresa_id]
+        params_rec = [empresa_id]
+
+        if data_ini:
+            date_filter_venda += " AND v.DTOPER >= ?"
+            date_filter_rec += " AND r.DATA >= ?"
+            params_venda.append(f"{data_ini}-01")
+            params_rec.append(f"{data_ini}-01")
+            
+        if data_fim:
+            date_filter_venda += " AND v.DTOPER <= ?"
+            date_filter_rec += " AND r.DATA <= ?"
+            import calendar
+            try:
+                y, m = data_fim.split("-")
+                last_day = calendar.monthrange(int(y), int(m))[1]
+                params_venda.append(f"{data_fim}-{last_day}")
+                params_rec.append(f"{data_fim}-{last_day}")
+            except Exception:
+                pass
+        
+        # Últimas Vendas
+        cur.execute(f"""
+            SELECT FIRST 10 v.ID, v.DTOPER, v.DESCUNIDIMOB, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, e.NOME AS EMPREENDIMENTO
+            FROM VENDA v
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE v.CODIGOEMPRESA = ?
+              {date_filter_venda}
+              AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
+              AND COALESCE(c.CNPJ, '') <> '000.000.000-00'
+              AND COALESCE(v.TOTALVENDA, 0) > 0.01
+              AND COALESCE(v.DISTRATO, 'N') <> 'S'
+            ORDER BY v.DTOPER DESC, v.ID DESC
+        """, tuple(params_venda))
+        vendas = []
+        for r in cur.fetchall():
+            try:
+                cli_nome = r[3].decode('win1252', 'ignore') if isinstance(r[3], (bytes, bytearray)) else r[3]
+                desc_unid = r[2].decode('win1252', 'ignore') if isinstance(r[2], (bytes, bytearray)) else r[2]
+                emp_nome = r[5].decode('win1252', 'ignore') if isinstance(r[5], (bytes, bytearray)) else r[5]
+            except Exception:
+                cli_nome, desc_unid, emp_nome = str(r[3]), str(r[2]), str(r[5])
+            
+            vendas.append({
+                "id": r[0],
+                "data": r[1].strftime('%d/%m/%Y') if hasattr(r[1], 'strftime') else str(r[1]),
+                "unidade": desc_unid,
+                "cliente": cli_nome,
+                "total": float(r[4] or 0),
+                "empreendimento": emp_nome
+            })
+            
+        # Últimos Recebimentos
+        cur.execute(f"""
+            SELECT FIRST 10 r.ID, r.DATA, r.TOTALPAGO, v.DESCUNIDIMOB, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO
+            FROM RECEBER r
+            JOIN VENDA v ON r.IDVENDA = v.ID
+            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+            WHERE v.CODIGOEMPRESA = ?
+              {date_filter_rec}
+              AND r.TOTALPAGO > 0
+              AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
+            ORDER BY r.DATA DESC, r.ID DESC
+        """, tuple(params_rec))
+        recebimentos = []
+        for r in cur.fetchall():
+            try:
+                cli_nome = r[4].decode('win1252', 'ignore') if isinstance(r[4], (bytes, bytearray)) else r[4]
+                desc_unid = r[3].decode('win1252', 'ignore') if isinstance(r[3], (bytes, bytearray)) else r[3]
+                emp_nome = r[5].decode('win1252', 'ignore') if isinstance(r[5], (bytes, bytearray)) else r[5]
+            except Exception:
+                cli_nome, desc_unid, emp_nome = str(r[4]), str(r[3]), str(r[5])
+            
+            recebimentos.append({
+                "id": r[0],
+                "data": r[1].strftime('%d/%m/%Y') if hasattr(r[1], 'strftime') else str(r[1]),
+                "total_pago": float(r[2] or 0),
+                "unidade": desc_unid,
+                "cliente": cli_nome,
+                "empreendimento": emp_nome
+            })
+            
+        conn.close()
+        return {"vendas": vendas, "recebimentos": recebimentos}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/vulcano/vendas")
 def get_vulcano_vendas(empresa_id: int):
     try:
         conn = get_conn("vulcano")
         query_vendas = """
-            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID, v.DATADISTRATO
             FROM VENDA v
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
             WHERE v.CODIGOEMPRESA = ?
+              AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
+              AND COALESCE(c.CNPJ, '') <> '000.000.000-00'
+              AND COALESCE(v.TOTALVENDA, 0) > 0.01
         """
         df_vendas = pd.read_sql_query(query_vendas, conn, params=(empresa_id,))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
         
-        query_livres = """
-            SELECT u.ID as UNIDADE_ID, u.NUMCADIMOB, u.DESCRICAO as DESCUNIDIMOB, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID
-            FROM UNIDADE u
-            JOIN BLOCO b ON u.IDBLOCO = b.ID
-            JOIN EMPREENDIMENTO e ON b.IDEMPREENDIMENTO = e.ID
-            WHERE e.CODIGOEMPRESA = ?
-              AND NOT EXISTS (
-                  SELECT 1 FROM VENDAUNIDADE vu
-                  JOIN VENDA v ON vu.IDVENDA = v.ID
-                  WHERE vu.IDUNIDADE = u.ID AND COALESCE(v.DISTRATO, 'N') <> 'S'
-              )
-        """
-        df_livres = pd.read_sql_query(query_livres, conn, params=(empresa_id,))
-        
-        # Populate missing columns to match schema
-        df_livres['ID'] = None
-        df_livres['DTOPER'] = None
-        df_livres['CNPJ'] = None
-        df_livres['CLIENTE_NOME'] = None
-        df_livres['TOTALVENDA'] = 0.0
-        df_livres['DISTRATO'] = 'LIVRE' # Special flag for frontend
-        df_livres['PERMUTA'] = None
-
-        if len(df_livres) > 0 or len(df_vendas) > 0:
-            df = pd.concat([df_vendas, df_livres], ignore_index=True)
-            # Sort by ID (putting None/Livres at the end) and then DTOPER
-            df['sort_id'] = df['ID'].fillna(0)
-            df.sort_values(by=['sort_id', 'DTOPER'], ascending=[False, False], inplace=True)
-        else:
-            df = df_vendas
-            
+        df = df_vendas
         df = df.replace({np.nan: None})
         conn.close()
 
@@ -2873,6 +3545,7 @@ def get_vulcano_vendas(empresa_id: int):
                 df[col] = df[col].map(safe_dec)
 
         df['DTOPER'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+        df['DATADISTRATO'] = pd.to_datetime(df['DATADISTRATO'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['TOTALVENDA'] = df['TOTALVENDA'].fillna(0).astype(float)
 
         df_mapped = df.rename(columns={
@@ -2884,13 +3557,14 @@ def get_vulcano_vendas(empresa_id: int):
             'CLIENTE_NOME': 'cliente_nome',
             'TOTALVENDA': 'total',
             'DISTRATO': 'distrato',
+            'DATADISTRATO': 'data_distrato',
             'PERMUTA': 'permuta',
             'EMPREENDIMENTO': 'empreendimento',
             'EMPREENDIMENTO_ID': 'empreendimento_id',
             'UNIDADE_ID': 'unidade_id'
         })
 
-        return df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
+        return df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
 
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
@@ -2984,14 +3658,19 @@ def get_vulcano_venda_condicoes(venda_id: int):
             (int(venda_id),),
         )
         parcelas = []
+        assinaturas_receber = set()
         for rr in cur.fetchall():
             forma_id = rr[8]
+            data_str = rr[1].strftime("%Y-%m-%d") if hasattr(rr[1], "strftime") else dec(rr[1])
+            valor = float(rr[3] or 0)
+            assinaturas_receber.add((data_str, round(valor, 2)))
+            
             parcelas.append(
                 {
                     "id": rr[0],
-                    "data": rr[1].strftime("%Y-%m-%d") if hasattr(rr[1], "strftime") else dec(rr[1]),
+                    "data": data_str,
                     "parcela": dec(rr[2]),
-                    "valor_parcela": float(rr[3] or 0),
+                    "valor_parcela": valor,
                     "variacao": float(rr[4] or 0),
                     "desconto": float(rr[5] or 0),
                     "total_pago": float(rr[6] or 0),
@@ -3000,6 +3679,45 @@ def get_vulcano_venda_condicoes(venda_id: int):
                     "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
                 }
             )
+
+        # GERAÇÃO DAS PARCELAS ABERTAS (A partir do SQLite Vulcano 2.0)
+        conn_sq = get_conn("sqlite")
+        cur_sq = conn_sq.cursor()
+        cur_sq.execute(
+            """
+            SELECT prazo_id, data_venc, parcela_ref, valor, forma_pagto_id
+            FROM parcelas_abertas_projetadas
+            WHERE venda_id = ?
+            ORDER BY data_venc, prazo_id
+            """,
+            (int(venda_id),),
+        )
+        for p in cur_sq.fetchall():
+            data_str = p[1]
+            valor = float(p[3] or 0)
+            # Evita duplicar se a parcela já foi efetivada no Firebird (RECEBER)
+            if (data_str, round(valor, 2)) in assinaturas_receber:
+                continue
+                
+            forma_id = p[4]
+            parcelas.append(
+                {
+                    "id": f"prazo_{p[0]}",
+                    "data": data_str,
+                    "parcela": p[2],
+                    "valor_parcela": valor,
+                    "variacao": 0.0,
+                    "desconto": 0.0,
+                    "total_pago": 0.0,
+                    "obs": "Prevista (Em aberto - Vulcano 2.0)",
+                    "forma_pagto_id": int(forma_id) if forma_id is not None else None,
+                    "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
+                }
+            )
+        conn_sq.close()
+            
+        # Reordena o array combinado de parcelas (recebidas e previstas) pela data
+        parcelas.sort(key=lambda x: (x["data"] or "", str(x["id"])))
 
         # Distrato (quando houver)
         cur.execute(
@@ -3139,10 +3857,10 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
 class BaixaInput(BaseModel):
     id_receber: int
     valor_pago: float
-    data_pagamento: str 
-    acrescimos: float 
-    descontos: float
-    empresa_id: int
+    data_pagamento: str | None = None
+    acrescimos: float = 0.0
+    descontos: float = 0.0
+    empresa_id: int | None = None
 
 @app.post("/api/vulcano/recebimentos/baixa")
 def baixa_recebimento(data: BaixaInput):
@@ -3151,6 +3869,9 @@ def baixa_recebimento(data: BaixaInput):
     try:
         s_conn = sqlite3.connect(POC_DATABASE_FILE)
         s_curr = s_conn.cursor()
+        import datetime
+        data_pgto = data.data_pagamento if data.data_pagamento else datetime.date.today().isoformat()
+        emp_id = data.empresa_id if data.empresa_id else 0
         s_curr.execute("""
             INSERT INTO operacoes_baixas (id_receber, empresa_id, data_pagamento, valor_pago, descontos, acrescimos) 
             VALUES (?, ?, ?, ?, ?, ?)
@@ -3159,7 +3880,7 @@ def baixa_recebimento(data: BaixaInput):
                valor_pago=excluded.valor_pago, 
                descontos=excluded.descontos, 
                acrescimos=excluded.acrescimos
-        """, (data.id_receber, data.empresa_id, data.data_pagamento, data.valor_pago, data.descontos, data.acrescimos))
+        """, (data.id_receber, emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
         s_conn.commit()
         return {"success": True, "message": "Baixada no sistema auxiliar SQLite com sucesso"}
     except Exception as e:
@@ -3167,6 +3888,188 @@ def baixa_recebimento(data: BaixaInput):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if s_conn: s_conn.close()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SINCRONIZAR PARCELAS EM ABERTO — VENDAFORMAPAGTOPRAZO → RECEBER
+# Popula RECEBER com parcelas projetadas que ainda não possuem linha efetiva.
+# ──────────────────────────────────────────────────────────────────────────────
+class PopularReceberInput(BaseModel):
+    empresa_id: int | None = None       # None = todas as empresas
+    data_inicio: str | None = None      # "YYYY-MM-DD", None = sem filtro
+    dry_run: bool = True                # True = só preview, False = grava
+    limite: int | None = None           # None = sem limite (testes: 10)
+
+@app.post("/api/vulcano/popular-receber-abertas")
+def popular_receber_abertas(data: PopularReceberInput):
+    """
+    Cruza VENDAFORMAPAGTOPRAZO (parcelas projetadas) com RECEBER (efetivas).
+    Insere as que ainda não possuem registro em RECEBER com TOTALPAGO = 0 (em aberto).
+
+    Regras de inclusão:
+    - VENDAFORMAPAGTO.ATIVA = 'S'
+    - VENDA.DISTRATO <> 'S'
+    - VENDAFORMAPAGTOPRAZO.VALOR_PAGO = 0 (ainda não quitadas)
+    - NOT EXISTS em RECEBER por IDVENDAFORMAPAGTOPRAZO
+    """
+    conn_v = None
+    try:
+        conn_v = get_conn("vulcano")
+        cur = conn_v.cursor()
+
+        # 1. Próximo ID disponível
+        cur.execute("SELECT MAX(ID) FROM RECEBER")
+        max_id = cur.fetchone()[0] or 0
+        next_id = max_id + 1
+
+        # 2. Montar condicionais
+        empresa_cond  = f"AND v.CODIGOEMPRESA = {data.empresa_id}" if data.empresa_id else ""
+        data_ini_cond = f"AND vpp.DATA >= '{data.data_inicio}'" if data.data_inicio else ""
+        limite_cond   = f"ROWS 1 TO {data.limite}" if data.limite else ""
+
+        query = f"""
+            SELECT
+                vpp.ID             AS prazo_id,
+                vpp.DATA           AS vencimento,
+                vpp.VALOR          AS valor_parcela,
+                vpp.REFERENCIA,
+                vfp.ID             AS idvendaformapagto,
+                vfp.IDVENDA,
+                vfp.DESCRICAO      AS obs_descricao,
+                v.ID_CLIENTE,
+                v.CODIGOEMPRESA
+            FROM VENDAFORMAPAGTOPRAZO vpp
+            JOIN VENDAFORMAPAGTO vfp ON vfp.ID = vpp.IDVENDAFORMAPAGTO
+            JOIN VENDA v ON v.ID = vfp.IDVENDA
+            WHERE NOT EXISTS (
+                SELECT 1 FROM RECEBER r
+                WHERE r.IDVENDAFORMAPAGTOPRAZO = vpp.ID
+            )
+            AND vfp.ATIVA = 'S'
+            AND (v.DISTRATO IS NULL OR v.DISTRATO <> 'S')
+            AND (vpp.VALOR_PAGO = 0 OR vpp.VALOR_PAGO IS NULL)
+            {empresa_cond}
+            {data_ini_cond}
+            ORDER BY v.CODIGOEMPRESA, vfp.IDVENDA, vpp.DATA
+            {limite_cond}
+        """
+        cur.execute(query)
+        cols = [d[0] for d in cur.description]
+        orfas = [dict(zip(cols, row)) for row in cur.fetchall()]
+
+        if not orfas:
+            return {
+                "modo": "dry_run" if data.dry_run else "execucao",
+                "empresa": data.empresa_id,
+                "data_inicio": data.data_inicio,
+                "total_orfas": 0,
+                "valor_total": 0.0,
+                "preview": [],
+                "inseridos": 0,
+                "mensagem": "Nenhuma parcela orfã encontrada. Banco já está completo."
+            }
+
+        # 3. Preparar inserts
+        from datetime import datetime as _dt
+        insercoes = []
+        for row in orfas:
+            venc = row["VENCIMENTO"]
+            if hasattr(venc, 'strftime'):
+                parcela_str = venc.strftime("%m/%Y")
+                data_ins = venc
+            else:
+                parcela_str = "00/0000"
+                data_ins = _dt.now()
+
+            insercoes.append({
+                "id":                     next_id,
+                "idvenda":                row["IDVENDA"],
+                "idcliente":              row["ID_CLIENTE"],
+                "data":                   data_ins,
+                "valorparcela":           float(row["VALOR_PARCELA"] or 0),
+                "valorvariacao":          0.0,
+                "totalpago":              0.0,
+                "parcela":                parcela_str,
+                "obs":                    (str(row["OBS_DESCRICAO"] or "PARCELA"))[:50],
+                "idvendaformapagto":      row["IDVENDAFORMAPAGTO"],
+                "desconto":               0.0,
+                "idvendaformapagtoprazo": row["PRAZO_ID"],
+            })
+            next_id += 1
+
+        valor_total = sum(r["valorparcela"] for r in insercoes)
+        preview = [
+            {
+                "prazo_id":  ins["idvendaformapagtoprazo"],
+                "idvenda":   ins["idvenda"],
+                "data":      ins["data"].strftime("%Y-%m-%d") if hasattr(ins["data"], 'strftime') else str(ins["data"])[:10],
+                "valor":     ins["valorparcela"],
+                "parcela":   ins["parcela"],
+                "obs":       ins["obs"],
+                "empresa":   orfas[i].get("CODIGOEMPRESA"),
+            }
+            for i, ins in enumerate(insercoes[:20])
+        ]
+
+        if data.dry_run:
+            return {
+                "modo": "dry_run",
+                "empresa": data.empresa_id,
+                "data_inicio": data.data_inicio,
+                "total_orfas": len(insercoes),
+                "valor_total": valor_total,
+                "preview": preview,
+                "inseridos": 0,
+                "mensagem": f"Simulação: {len(insercoes)} parcelas seriam inseridas totalizando R$ {valor_total:,.2f}. Envie dry_run=false para gravar."
+            }
+
+        # 4. EXECUÇÃO REAL
+        insert_sql = """
+            INSERT INTO RECEBER
+                (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO,
+                 TOTALPAGO, PARCELA, OBS, IDVENDAFORMAPAGTO, DESCONTO,
+                 IDVENDAFORMAPAGTOPRAZO)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        inseridos = 0
+        erros_detalhe = []
+        cur2 = conn_v.cursor()
+        for ins in insercoes:
+            try:
+                cur2.execute(insert_sql, (
+                    ins["id"], ins["idvenda"], ins["idcliente"], ins["data"],
+                    ins["valorparcela"], ins["valorvariacao"], ins["totalpago"],
+                    ins["parcela"], ins["obs"], ins["idvendaformapagto"],
+                    ins["desconto"], ins["idvendaformapagtoprazo"],
+                ))
+                inseridos += 1
+                if inseridos % 200 == 0:
+                    conn_v.commit()
+            except Exception as e_ins:
+                erros_detalhe.append({"id": ins["id"], "erro": str(e_ins)[:120]})
+
+        conn_v.commit()
+
+        return {
+            "modo": "execucao",
+            "empresa": data.empresa_id,
+            "data_inicio": data.data_inicio,
+            "total_orfas": len(insercoes),
+            "valor_total": valor_total,
+            "preview": preview,
+            "inseridos": inseridos,
+            "erros": len(erros_detalhe),
+            "erros_detalhe": erros_detalhe[:10],
+            "mensagem": f"{inseridos} parcelas inseridas em RECEBER com TOTALPAGO=0 (em aberto)."
+        }
+
+    except Exception as e:
+        if conn_v:
+            try: conn_v.rollback()
+            except: pass
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn_v: conn_v.close()
 
 import pandas as pd
 import re
@@ -3388,6 +4291,93 @@ def _heuristic_extract_recebimentos_from_pdf(content: bytes) -> list:
                     )
     return results
 
+
+class ConversorSavePayload(BaseModel):
+    filename: str
+    import_mode: str
+    raw_pdf_text: str = ""
+    extracted_data: list[dict]
+
+@app.post("/api/conversor/salvar-extraidos")
+async def conversor_salvar_extraidos(payload: ConversorSavePayload):
+    """
+    Grava a extração no SQLite, dividindo em um Batch Pai (onde mora o texto do PDF)
+    e os Registros Filhos (o JSON). Converte automaticamente as datas D/M/Y em ISO.
+    """
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    cur = conn.cursor()
+    try:
+        cur.execute('''
+            INSERT INTO conversor_batches (filename, import_mode, raw_pdf_text)
+            VALUES (?, ?, ?)
+        ''', (payload.filename, payload.import_mode, payload.raw_pdf_text))
+        
+        batch_id = cur.lastrowid
+        
+        # Regex to match DD/MM/YYYY
+        import re
+        def to_iso(date_str):
+            if not date_str: return None
+            # Ex: "15/04/2025" -> "2025-04-15"
+            m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", str(date_str).strip())
+            if m:
+                return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+            return date_str # if already iso or format is weird, fallback
+
+        inserts = []
+        for reg in payload.extracted_data:
+            inserts.append((
+                batch_id,
+                reg.get('comprador', ''),
+                reg.get('cpf_cnpj', ''),
+                reg.get('empreendimento', ''),
+                reg.get('unidade', ''),
+                to_iso(reg.get('dt_vencimento')),
+                to_iso(reg.get('dt_pagamento')),
+                str(reg.get('parcela', '')),
+                float(reg.get('valor_raiz', 0) or 0),
+                float(reg.get('descontos', 0) or 0),
+                float(reg.get('acrescimos_variacoes', 0) or 0),
+                float(reg.get('total_pago', 0) or 0)
+            ))
+            
+        cur.executemany('''
+            INSERT INTO conversor_data_staging (
+                batch_id, comprador, cpf_cnpj, empreendimento, unidade, 
+                dt_vencimento, dt_pagamento, parcela, valor_raiz, descontos, 
+                acrescimos_variacoes, total_pago
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', inserts)
+
+        conn.commit()
+        return {"success": True, "batch_id": batch_id, "items": len(inserts)}
+    except Exception as e:
+        conn.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/conversor/listar-extraidos")
+def conversor_listar_extraidos():
+    """Retorna os batches pai já gravados"""
+    conn = sqlite3.connect(POC_DATABASE_FILE)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT b.id, b.filename, b.import_mode, b.created_at, 
+                   COUNT(s.id) as linhas_importadas
+            FROM conversor_batches b
+            LEFT JOIN conversor_data_staging s ON s.batch_id = b.id
+            GROUP BY b.id
+            ORDER BY b.id DESC
+        ''')
+        rows = cur.fetchall()
+        return {"success": True, "batches": [dict(r) for r in rows]}
+    finally:
+        conn.close()
 
 @app.post("/api/extract-pdf")
 async def extract_pdf(
@@ -3802,7 +4792,10 @@ def _gemini_generate_python_plain(prompt: str) -> str:
     """Fallback quando JSON com python_code fica grande ou inválido."""
     _require_gemini_key()
     try:
-        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        gen_cfg = {"max_output_tokens": 8192}
+        if HAS_VERTEXAI: gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         resp = model.generate_content(
             prompt
             + "\n\nResponda APENAS com o código-fonte Python completo. Sem markdown, sem explicação."
@@ -4072,7 +5065,8 @@ async def upload_planilha(file: UploadFile = File(...)):
         return {
             "filename": file.filename,
             "columns": columns,
-            "preview": data_preview
+            "preview": data_preview,
+            "all_rows": df.to_dict(orient='records')
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
@@ -4549,10 +5543,13 @@ async def post_vendas(request: Request):
 
         # --- VENDAUNIDADE ---
         unidades_selecionadas = data.get("unidades_selecionadas", [])
-        for u_id in unidades_selecionadas:
+        if unidades_selecionadas:
+            # N+1 FIX: pré-busca o MAX(ID) uma vez, usa contador local
             cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAUNIDADE")
-            vu_id = cur.fetchone()[0]
-            cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)", (vu_id, new_id, int(u_id)))
+            vu_id_base = cur.fetchone()[0]
+            for idx_vu, u_id in enumerate(unidades_selecionadas):
+                vu_id = vu_id_base + idx_vu
+                cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)", (vu_id, new_id, int(u_id)))
 
         # Determinar última data mensal (para ancorar CHAVES/FINANCIAMENTO depois)
         import datetime as _dt
@@ -4581,9 +5578,21 @@ async def post_vendas(request: Request):
                 except Exception:
                     pass
 
+        # N+1 FIX: pré-busca todos os MAX(ID) necessários uma vez
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTO")
+        fp_id_base = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTOPRAZO")
+        prazo_id_base = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+        rec_id_base = cur.fetchone()[0]
+
+        _fp_counter    = fp_id_base
+        _prazo_counter = prazo_id_base
+        _rec_counter   = rec_id_base
+
         for cond in condicoes:
-            cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTO")
-            fp_id = cur.fetchone()[0]
+            fp_id = _fp_counter
+            _fp_counter += 1
 
             tipo = cond.get("tipo", "MENSAL")
             qtd = int(cond.get("quantidade", 1))
@@ -4634,15 +5643,16 @@ async def post_vendas(request: Request):
                     dt_prazo = calc_vencimento(venc_inicial, i, tipo, intervalo_meses)
                     dt_prazo_str = dt_prazo.strftime("%Y-%m-%d") if dt_prazo else venc_inicial
 
-                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAFORMAPAGTOPRAZO")
-                    prazo_id = cur.fetchone()[0]
+                    # N+1 FIX: usa contadores pré-calculados
+                    prazo_id = _prazo_counter
+                    _prazo_counter += 1
 
                     referencia = f"{i+1}/{qtd}"
                     q_prazo = "INSERT INTO VENDAFORMAPAGTOPRAZO (ID, IDVENDAFORMAPAGTO, DATA, REFERENCIA, VALOR, VALOR_PAGO) VALUES (?, ?, ?, ?, ?, ?)"
                     cur.execute(q_prazo, (prazo_id, fp_id, dt_prazo_str, referencia, valor_base, 0.0))
 
-                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
-                    rec_id = cur.fetchone()[0]
+                    rec_id = _rec_counter
+                    _rec_counter += 1
                     q_rec = """
                         INSERT INTO RECEBER (ID, IDVENDA, DATA, VALORPARCELA, PARCELA, OBS, IDVENDAFORMAPAGTO, IDVENDAFORMAPAGTOPRAZO, TOTALPAGO)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -4695,9 +5705,241 @@ async def post_distratos(request: Request):
 class PreviewBaixasInput(BaseModel):
     empresa_id: int
     extracted_data: list[dict]
+    use_splink: bool = False  # se True, usa Splink probabilístico ao invés do scoring manual
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# PANDERA — Schema de validação para linhas extraídas do PDF
+# ──────────────────────────────────────────────────────────────────────────
+def _validate_pdf_rows(rows: list[dict]) -> list[dict]:
+    """
+    Coerce e valida cada linha extraída do PDF via Pandera.
+    Linhas inválidas são corrigidas com defaults seguros (não bloqueiam).
+    Problemas são logados mas não lançam exceção.
+    """
+    import logging
+    import pandas as pd
+
+    _DEFAULTS = {
+        "comprador_nome": "",
+        "cpf_cnpj": "",
+        "total_pago": 0.0,
+        "valor_raiz": 0.0,
+        "unidade": "",
+        "dt_vencimento": None,
+        "acrescimos_variacoes": 0.0,
+        "descontos": 0.0,
+    }
+
+    cleaned = []
+    for i, row in enumerate(rows):
+        r = dict(row)
+        for field, default in _DEFAULTS.items():
+            raw = r.get(field)
+            if field in ("total_pago", "valor_raiz", "acrescimos_variacoes", "descontos"):
+                try:
+                    r[field] = float(raw or 0)
+                    if r[field] < 0:
+                        logging.warning(f"[Pandera] linha {i}: {field}={r[field]} negativo → zerado")
+                        r[field] = 0.0
+                except (TypeError, ValueError):
+                    logging.warning(f"[Pandera] linha {i}: {field}='{raw}' inválido → {default}")
+                    r[field] = default
+            else:
+                r[field] = str(raw or "").strip() if raw is not None else default
+        cleaned.append(r)
+    return cleaned
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# PyOD — Detecção de anomalia de valor no lote de pagamentos (Conciliação)
+# ──────────────────────────────────────────────────────────────────────────
+def _pyod_score_batch(rows: list[dict]) -> dict:
+    """
+    Detecta valores de pagamento atípicos no lote via IsolationForest.
+    Retorna {row_idx: {'anomaly_score': float, 'anomaly_flag': bool}}
+    IsolationForest funciona mesmo com poucos registros (mínimo 5).
+    """
+    import numpy as np
+    if len(rows) < 5:
+        return {}
+    try:
+        import numpy as np
+        from pyod.models.iforest import IForest
+
+        valores = np.array([
+            [float(r.get("total_pago") or 0), float(r.get("valor_raiz") or 0)]
+            for r in rows
+        ])
+
+        # IsolationForest: contamination = % esperada de outliers (5%)
+        clf = IForest(contamination=0.05, random_state=42, n_estimators=50)
+        clf.fit(valores)
+
+        scores = clf.decision_scores_   # quanto maior = mais anômalo
+        labels = clf.labels_            # 1 = outlier, 0 = normal
+
+        # Normaliza score para 0-1
+        min_s, max_s = scores.min(), scores.max()
+        norm = (scores - min_s) / (max_s - min_s + 1e-9)
+
+        return {
+            i: {"anomaly_score": round(float(norm[i]), 3), "anomaly_flag": bool(labels[i] == 1)}
+            for i in range(len(rows))
+        }
+    except Exception:
+        import traceback; traceback.print_exc()
+        return {}
+
+
+def _splink_build_match_map(extracted_rows: list[dict], todas_vendas: list) -> dict:
+    """
+    Roda Splink probabilístico entre pagamentos do PDF e contratos Vulcano.
+    Retorna {row_index: {'v_row': tuple, 'prob': float, 'v_id': int}}
+    """
+    import re, unicodedata, warnings as _w
+    _w.filterwarnings("ignore")
+    try:
+        import pandas as pd
+        from splink import DuckDBAPI, Linker, SettingsCreator
+        import splink.comparison_library as cl
+    except ImportError:
+        return {}
+
+    def _norm_cpf(s):
+        d = re.sub(r'\D', '', str(s or ''))
+        return d if len(d) >= 11 else None
+
+    def _norm_nome(s):
+        s = str(s or '').upper().strip()
+        s = unicodedata.normalize('NFD', s)
+        s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+        return re.sub(r'\s+', ' ', s)
+
+    def _norm_unidade(s):
+        return re.sub(r'BLOCO\s+\S+\s*[-]?\s*', '', str(s or '').upper()).strip()
+
+    def _balde(v, step=500):
+        try:
+            return str(int(float(v or 0) / step) * step)
+        except Exception:
+            return "0"
+
+    def _dec(vx):
+        if vx is None: return ''
+        if isinstance(vx, (bytes, bytearray)): return vx.decode('win1252', 'ignore')
+        return str(vx)
+
+    # Tabela esquerda: pagamentos PDF
+    pdf_rows = []
+    for idx, row in enumerate(extracted_rows):
+        pdf_rows.append({
+            'unique_id': f'P{idx}',
+            '_row_idx': idx,
+            'nome_norm':   _norm_nome(row.get('comprador_nome') or row.get('comprador') or ''),
+            'cpf_norm':    _norm_cpf(row.get('cpf_cnpj') or row.get('cpf') or ''),
+            'unid_norm':   _norm_unidade(row.get('unidade') or ''),
+            'valor_balde': _balde(row.get('total_pago') or row.get('valor') or 0),
+        })
+
+    # Tabela direita: contratos ERP (v_id, c_nome, c_id, c_cnpj, v_desc, e_nome)
+    erp_rows = []
+    for vd in todas_vendas:
+        v_id, c_nome, c_id, c_cnpj, v_desc, e_nome = vd
+        erp_rows.append({
+            'unique_id': f'V{v_id}',
+            '_v_id': v_id,
+            'nome_norm':   _norm_nome(_dec(c_nome)),
+            'cpf_norm':    _norm_cpf(_dec(c_cnpj)),
+            'unid_norm':   _norm_unidade(_dec(v_desc)),
+            'valor_balde': "0",  # contratos não têm valor aqui
+        })
+
+    if not pdf_rows or not erp_rows:
+        return {}
+
+    df_pdf = pd.DataFrame(pdf_rows)
+    df_erp = pd.DataFrame(erp_rows)
+
+    try:
+        settings = SettingsCreator(
+            link_type="link_only",
+            blocking_rules_to_generate_predictions=[
+                "l.cpf_norm = r.cpf_norm",
+                "substr(l.nome_norm,1,5) = substr(r.nome_norm,1,5)",
+                "l.unid_norm = r.unid_norm",
+            ],
+            comparisons=[
+                cl.ExactMatch("cpf_norm"),
+                cl.JaroWinklerAtThresholds("nome_norm", [0.92, 0.85]),
+                cl.ExactMatch("unid_norm"),
+            ],
+            max_iterations=20,
+            em_convergence=0.001,
+        )
+        db_api = DuckDBAPI()
+        linker = Linker([df_pdf, df_erp], settings, db_api=db_api)
+        linker.training.estimate_u_using_random_sampling(max_pairs=1e5)
+        try:
+            linker.training.estimate_parameters_using_expectation_maximisation(
+                "l.cpf_norm = r.cpf_norm"
+            )
+        except Exception:
+            pass
+        try:
+            linker.training.estimate_parameters_using_expectation_maximisation(
+                "substr(l.nome_norm,1,5) = substr(r.nome_norm,1,5)"
+            )
+        except Exception:
+            pass
+
+        preds = linker.inference.predict(threshold_match_probability=0.45).as_pandas_dataframe()
+        if preds.empty:
+            return {}
+
+        # Melhor match por linha PDF (maior probabilidade)
+        best = (
+            preds.sort_values('match_probability', ascending=False)
+            .drop_duplicates(subset=['unique_id_l'])
+        )
+
+        # Monta mapa {row_idx: {v_id, prob, v_row}}
+        vid_to_vrow = {str(vd[0]): vd for vd in todas_vendas}
+        result = {}
+        for _, r in best.iterrows():
+            uid_l = str(r['unique_id_l'])  # "P0", "P1" ...
+            uid_r = str(r['unique_id_r'])  # "V12345"
+            prob = float(r['match_probability'])
+            if prob < 0.45:
+                continue
+            # extrai row_idx
+            try:
+                row_idx = int(uid_l.replace('P', ''))
+            except Exception:
+                continue
+            v_id_str = uid_r.replace('V', '')
+            v_row = vid_to_vrow.get(v_id_str)
+            if v_row is None:
+                # tenta int key
+                try:
+                    v_row = vid_to_vrow.get(str(int(v_id_str)))
+                except Exception:
+                    pass
+            if v_row:
+                result[row_idx] = {'v_row': v_row, 'prob': prob}
+        return result
+    except Exception:
+        import traceback; traceback.print_exc()
+        return {}
+
 
 @app.post("/api/parser/preview-baixas")
 def preview_baixas(data: PreviewBaixasInput):
+    def dec(v):
+        if v is None: return ''
+        if isinstance(v, (bytes, bytearray)): return v.decode('win1252', 'ignore')
+        return str(v)
+
     conn = None
     try:
         conn = get_conn("vulcano")
@@ -4712,6 +5954,17 @@ def preview_baixas(data: PreviewBaixasInput):
         """, (data.empresa_id,))
         todas_vendas = cur.fetchall()
         
+        # ── Pandera: valida e coerce todos os campos das linhas PDF ──
+        _extracted_clean = _validate_pdf_rows(data.extracted_data)
+
+        # ── PyOD: score de anomalia de valor no lote inteiro ──
+        _pyod_map = _pyod_score_batch(_extracted_clean)
+
+        # ── Splink: pré-computa mapa de matches para TODO o lote de uma vez ──
+        splink_map: dict = {}
+        if data.use_splink:
+            splink_map = _splink_build_match_map(_extracted_clean, todas_vendas)
+        
         results = []
         reserved_ids_receber = set()
         reserved_ids_prazos = set()
@@ -4719,13 +5972,14 @@ def preview_baixas(data: PreviewBaixasInput):
         # Global Transaction Cache para proteger o Firebird
         _cache_receber = {}
         _cache_prazos = {}
-        
-        for row in data.extracted_data:
+
+        for row_idx, row in enumerate(_extracted_clean):
             unidade = str(row.get("unidade", "")).strip()
             total_pago = float(row.get("total_pago", 0) or 0)
             valor_raiz = float(row.get("valor_raiz", 0) or 0)
             has_date = bool(row.get("dt_vencimento"))
-            comprador_nome = str(row.get("comprador_nome", "")).strip()
+            # FIX: campo pode vir como 'comprador' ou 'comprador_nome' dependendo do extrator
+            comprador_nome = str(row.get("comprador_nome") or row.get("comprador") or "").strip()
             
             if not unidade and not comprador_nome:
                 pass
@@ -4733,49 +5987,95 @@ def preview_baixas(data: PreviewBaixasInput):
             raw_cpf = str(row.get("cpf_cnpj", "")).strip()
             cpf_clean = ''.join(c for c in raw_cpf if c.isdigit())
             
-            # Pesquisa Rápida em RAM (In-Memory Filter) com Score de Vendas
+            # ── ENGINE DE MATCHING ──────────────────────────────────────
+            # Modo Splink: usa probabilidade calibrada (Fellegi-Sunter)
+            # Modo Heurístico: scoring manual em RAM (padrão original)
             def clean_str(s): return str(s).lower().strip()
             
+            _splink_prob: float | None = None  # probabilidade do Splink, se usado
             candidatas = []
-            for v_data in todas_vendas:
-                v_id, c_nome, c_id, c_cnpj, v_desc, e_nome_db = v_data
+
+            if data.use_splink and row_idx in splink_map:
+                sm = splink_map[row_idx]
+                _splink_prob = sm['prob']
+                _is_dia = _splink_prob >= 0.85
+                candidatas = [{'v_row': sm['v_row'], 'score': int(_splink_prob * 100), 'is_diamante': _is_dia}]
+            else:
+                # ── HEURÍSTICA + RapidFuzz ─────────────────────────────────────
+                # token_set_ratio: ignora ordem das palavras e palavras extras
+                # partial_ratio:   cobre abreviações e substrings de unidade
+                from rapidfuzz import fuzz as _fuzz
+                for v_data in todas_vendas:
+                    v_id, c_nome, c_id, c_cnpj, v_desc, e_nome_db = v_data
+                    
+                    db_cpf = ''.join(c for c in str(c_cnpj or '') if c.isdigit())
+                    score = 0
+                    is_diamante_c = False
+                    
+                    # NÍVEL 0: CPF exato → Diamante (score máximo, para na iteração)
+                    if cpf_clean and len(cpf_clean) > 5 and cpf_clean == db_cpf:
+                        score += 20
+                        is_diamante_c = True
+                        
+                    # NÍVEL 1: Nome — RapidFuzz token_set_ratio
+                    # Captura: "PEDRO ALVES MONTEIRO" ↔ "PEDRO MONTEIRO ALVES" → 100
+                    # Captura: "JOAO CARLOS SILVA"   ↔ "JOAO CARLOS DA SILVA" → 95
+                    _nome_ratio = 0
+                    if comprador_nome:
+                        _nome_ratio = _fuzz.token_set_ratio(
+                            comprador_nome, str(c_nome or ''), score_cutoff=0
+                        )
+                        if _nome_ratio >= 75:
+                            score += max(5, int(_nome_ratio / 100 * 15))  # proporcional 5–15
+                        
+                    # NÍVEL 2: Unidade — partial_ratio (cobre abreviações)
+                    # Captura: "APTO 302" ↔ "BLOCO A APTO 302" → 100
+                    # FIX: se nome bate muito bem (≥85) e unidade está vazia no ERP,
+                    # aceita candidato mesmo sem DESCUNIDIMOB (ex: Flávio Hormann)
+                    if unidade and v_desc:
+                        _unid_ratio = _fuzz.partial_ratio(
+                            clean_str(unidade), clean_str(v_desc), score_cutoff=0
+                        )
+                        if _unid_ratio >= 80:
+                            score += max(5, int(_unid_ratio / 100 * 15))  # proporcional 5–15
+                    elif unidade and not v_desc and _nome_ratio >= 85:
+                        # Unidade no PDF mas DESCUNIDIMOB vazio no ERP — nome forte compensa
+                        score += 5  # bônus mínimo para entrar no pool
+                        
+                    if score > 0:
+                        candidatas.append({
+                            'v_row': v_data,
+                            'score': score,
+                            'is_diamante': is_diamante_c
+                        })
+
                 
-                db_cpf = ''.join(c for c in str(c_cnpj or '') if c.isdigit())
-                score = 0
-                is_diamante_c = False
-                
-                if cpf_clean and len(cpf_clean) > 5 and cpf_clean == db_cpf:
-                    score += 20
-                    is_diamante_c = True
-                    
-                if comprador_nome and clean_str(comprador_nome) in clean_str(c_nome):
-                    score += 10
-                    
-                if unidade and v_desc and clean_str(unidade) in clean_str(v_desc):
-                    score += 15
-                    
-                if score > 0:
-                    candidatas.append({
-                        'v_row': v_data,
-                        'score': score,
-                        'is_diamante': is_diamante_c
-                    })
-                    
             if not candidatas:
-                results.append({"row": row, "status": "NAO_ENCONTRADO_OU_JA_PAGO", "id_receber": None, "db_estado_atual": None, "proposta_ia": None})
+                results.append({"row": row, "status": "NAO_ENCONTRADO_OU_JA_PAGO", "id_receber": None,
+                               "db_estado_atual": None, "proposta_ia": None,
+                               "match_engine": "splink" if data.use_splink else "heuristic",
+                               "match_probability": _splink_prob})
                 continue
-                
-            candidatas.sort(key=lambda x: x['score'], reverse=True)
-            
-            def dec(vx):
-                if vx is None: return ''
-                if isinstance(vx, bytes): return vx.decode('win1252', 'ignore')
-                return str(vx)
-                
+
+            if candidatas:
+                candidatas.sort(key=lambda x: x['score'], reverse=True)
+                best_s = candidatas[0]['score']
+                candidatas = [c for c in candidatas if c['score'] >= best_s - 15][:10]
+                # DEBUG
+                import logging
+                logging.warning(f"[PREVIEW_BAIXAS] '{comprador_nome}' unid='{unidade}' val={total_pago:.2f} → {len(candidatas)} candidata(s): {[(dec(c['v_row'][1])[:20], c['score'], dec(c['v_row'][4])[:20]) for c in candidatas]}")
+
             grupos_unidades = {}
             for cand in candidatas:
-                desc_unid = dec(cand["v_row"][4]).upper().strip()
-                if not desc_unid: desc_unid = f'V_{cand["v_row"][0]}'
+                import re
+                desc_bruto = dec(cand["v_row"][4]).upper().strip()
+                m = re.search(r'(?:APTO|AP|UNIDADE|SALA|CASA|CT|COTA)\s*(\w+)', desc_bruto)
+                if m:
+                    desc_unid = m.group(1)
+                else:
+                    digits = re.findall(r'\d+', desc_bruto)
+                    desc_unid = digits[-1] if digits else f'V_{cand["v_row"][0]}'
+                    
                 if desc_unid not in grupos_unidades:
                     grupos_unidades[desc_unid] = []
                 grupos_unidades[desc_unid].append(cand)
@@ -4808,7 +6108,9 @@ def preview_baixas(data: PreviewBaixasInput):
                     v_id = int(cand['v_row'][0])
                     
                     if v_id not in _cache_receber:
-                        cur.execute("SELECT ID, DATA, VALORPARCELA, TOTALPAGO, PARCELA FROM RECEBER WHERE IDVENDA = ? AND DATA >= '2025-06-01'", (v_id,))
+                        # FIX: sem corte de data — queremos TODAS as parcelas da venda
+                        # separando abertas (TOTALPAGO=0) de quitadas (TOTALPAGO>0) em memória
+                        cur.execute("SELECT ID, DATA, VALORPARCELA, TOTALPAGO, PARCELA FROM RECEBER WHERE IDVENDA = ?", (v_id,))
                         _cache_receber[v_id] = cur.fetchall()
                         
                     for ra in _cache_receber[v_id]: 
@@ -4823,7 +6125,7 @@ def preview_baixas(data: PreviewBaixasInput):
                             SELECT p.ID, p.DATA, p.VALOR, vfp.ID, p.VALOR_PAGO
                             FROM VENDAFORMAPAGTOPRAZO p
                             JOIN VENDAFORMAPAGTO vfp ON vfp.ID = p.IDVENDAFORMAPAGTO
-                            WHERE vfp.IDVENDA = ? AND p.DATA >= '2025-06-01'
+                            WHERE vfp.IDVENDA = ?
                         """, (v_id,))
                         _cache_prazos[v_id] = cur.fetchall()
                         
@@ -4836,6 +6138,13 @@ def preview_baixas(data: PreviewBaixasInput):
                         
                 pool_abertas.sort(key=lambda x: str(x[0][1]) if x[0][1] else '9999')
                 pool_prazos.sort(key=lambda x: str(x[0][1]) if x[0][1] else '9999')
+                
+                logging.warning(f"  [GRUPO '{grupo_key}'] pool_abertas={len(pool_abertas)} pool_quitadas={len(pool_quitadas)} pool_prazos={len(pool_prazos)} pdf_mes={pdf_mes} pdf_ano={pdf_ano}")
+                # Detalha quitadas do mês alvo para diagnóstico
+                for _pq, _, _ in pool_quitadas[:30]:
+                    _pq_data = str(_pq[1])
+                    if pdf_mes and f'-{pdf_mes}-' in _pq_data:
+                        logging.warning(f"    [QUITADA MÊS OK] id={_pq[0]} data={_pq_data} valorparc={_pq[2]} totalpago={_pq[3]}")
                 
                 match_perfeito = None
                 lista_multipla = []
@@ -4853,44 +6162,51 @@ def preview_baixas(data: PreviewBaixasInput):
                     return (pdf_mes and f'-{pdf_mes}-' in db_venc and (not pdf_ano or pdf_ano in db_venc))
 
                 # PRIORIDADE SUPREMA 00: JA PAGO (Faturas Quitadas Históricas)
-                # Dois critérios:
-                #   A) Com data extraída: valor próximo (< 5 reais) + mês/ano bate
-                #   B) Sem data (ou OCR falhou): valor EXATO (< 0.50 reais) - sinal forte de duplicata
+                # FIX: tolerância proporcional de 30% para cobrir variação CUB/INCC
+                # Critérios (em ordem de força):
+                #   A) Com data + valor_raiz bate com parcela-base (CUB identificado)
+                #   B) Com data + diferença < 30% do valor da parcela
+                #   C) Sem data + valor EXATO (< 0.50) — sinal forte de duplicata
                 for _pool, _type in [(pool_quitadas, "JA_PAGO_RECEBER"), (pool_prazos_quitados, "JA_PAGO_PROJETADA")]:
                     for p_tuple in _pool:
                         p, cand, is_prazo = p_tuple
                         p_valor = float(p[2] or 0)
                         if p_valor <= 0: continue
-                        diff_abs = min(abs(p_valor - total_pago), abs(p_valor - valor_raiz) if valor_raiz else 9999)
-                        if diff_abs >= 5.0: continue  # Valor muito diferente, ignorar
+                        diff_abs = abs(p_valor - total_pago)
+                        diff_abs_raiz = abs(p_valor - valor_raiz) if valor_raiz else 9999
+                        diff_rate = diff_abs / p_valor if p_valor else 9999
                         db_venc = str(p[1])
-                        # Critério A: data bate + valor próximo
                         date_ok = pdf_mes and f'-{pdf_mes}-' in db_venc and (not pdf_ano or pdf_ano in db_venc)
-                        # Critério B: valor exato (< 0.50) mesmo sem data
+                        # A: data bate + valor_raiz confirma a parcela-base
+                        raiz_bate = valor_raiz and diff_abs_raiz < 5.0
+                        # B: data bate + margem 30% (cobre CUB)
+                        margem_ok = diff_rate < 0.30
+                        # C: valor exatíssimo sem data
                         exact_value = diff_abs < 0.50
-                        if date_ok or exact_value:
+                        if (date_ok and (raiz_bate or margem_ok)) or exact_value:
                             match_perfeito = p_tuple
                             mat_type = _type
                             break
                     if match_perfeito: break
 
-                # 00B. Múltiplo JA PAGO (Titulos Conjuntos quitados) — requer data
-                if not match_perfeito and not lista_multipla and pdf_mes:
+                # 00B. Múltiplo JA PAGO (Titulos Conjuntos quitados)
+                # Não exigimos same_date_combo aqui porque parcelas conjuntas (ex: Gilberto) 
+                # podem ter vencimentos DB como 01/09 e 30/09, mas foram pagas juntas no PDF.
+                if not match_perfeito and not lista_multipla:
                     achou_combo_pago = False
                     for _pool, _type in [(pool_quitadas, "MULTIPLO_JA_PAGO_RECEBER"), (pool_prazos_quitados, "MULTIPLO_JA_PAGO_PROJETADA")]:
                         if len(_pool) >= 2:
                             for combo_tamanho in [2, 3, 4]:
                                 if achou_combo_pago or len(_pool) < combo_tamanho: break
                                 for combo in combinations(_pool, combo_tamanho):
-                                    if same_date_combo(combo) and has_pdf_date(combo):
-                                        soma_combo = sum(float(it[0][2] or 0) for it in combo)
-                                        if soma_combo > 0 and soma_combo <= total_pago:
-                                            diff_rate = abs(total_pago - soma_combo)/soma_combo
-                                            if diff_rate < 0.05:
-                                                lista_multipla = list(combo)
-                                                mat_type = _type
-                                                achou_combo_pago = True
-                                                break
+                                    soma_combo = sum(float(it[0][2] or 0) for it in combo)
+                                    if soma_combo > 0 and soma_combo <= total_pago:
+                                        diff_rate = abs(total_pago - soma_combo)/soma_combo
+                                        if diff_rate < 0.05:
+                                            lista_multipla = list(combo)
+                                            mat_type = _type
+                                            achou_combo_pago = True
+                                            break
                         if achou_combo_pago: break
                 
                 # PRIORIDADE MÁXIMA 0: DATA BATE ESTREITAMENTE COM A DATA DO PDF e o VALOR BATE.
@@ -4928,6 +6244,13 @@ def preview_baixas(data: PreviewBaixasInput):
                                 if f'-{pdf_mes}-' in db_venc and (not pdf_ano or pdf_ano in db_venc):
                                     match_perfeito = p_tuple
                                     mat_type = "PERFEITO_RECEBER_MULTI"
+                                    break
+                            elif _multi_vendas and not pdf_mes:
+                                # FIX: PDF sem data em cenário multi-comprador — só confirma
+                                # se valor_raiz for exato (< R$0,50) para evitar adiantamento
+                                if valor_raiz and abs(p_valor - valor_raiz) < 0.50:
+                                    match_perfeito = p_tuple
+                                    mat_type = "PERFEITO_RECEBER_MULTI_SEM_DATA"
                                     break
                             elif not _multi_vendas:
                                 match_perfeito = p_tuple
@@ -5021,40 +6344,52 @@ def preview_baixas(data: PreviewBaixasInput):
                                             achou_combo = True
                                             break
                 
-                # 3. Margem CUB Singular SE DIAMANTE
+                # 3. Margem CUB Singular — com data exata independe de diamante (FIX Schutzeler)
+                # Sem data: exige diamante (CPF) para evitar false-positives
                 if not match_perfeito and not lista_multipla:
                     diamante_no_grupo = any(c['is_diamante'] for c in grupo_vendas)
-                    if diamante_no_grupo:
+                    # FASE CUB-A: Data exata + margem 30% — qualquer match, não precisa de diamante
+                    # Cobre variações de CUB/INCC onde o OCR capturou a data corretamente
+                    if pdf_mes:
                         for p_tuple in pool_abertas:
                             p, cand, is_prazo = p_tuple
                             p_valor = float(p[2] or 0)
-                            if p_valor > 0 and total_pago > p_valor and (abs(total_pago - p_valor) / p_valor) < 5.0:
-                                db_venc = str(p[1])
-                                if pdf_mes and f'-{pdf_mes}-' in db_venc and pdf_ano in db_venc:
+                            db_venc = str(p[1])
+                            if (p_valor > 0 and total_pago > p_valor
+                                    and f'-{pdf_mes}-' in db_venc
+                                    and (not pdf_ano or pdf_ano in db_venc)):
+                                diff_rate = (total_pago - p_valor) / p_valor
+                                # valor_raiz bate com a parcela-base → acréscimo é a variação
+                                valor_raiz_bate = valor_raiz and abs(valor_raiz - p_valor) < 5.0
+                                if diff_rate < 0.30 or valor_raiz_bate:
                                     match_perfeito = p_tuple
                                     mat_type = "CUB_RECEBER_DATA_EXATA"
                                     break
-                                    
-                        if not match_perfeito:
-                            for p_tuple in pool_abertas:
-                                p, cand, is_prazo = p_tuple
-                                p_valor = float(p[2] or 0)
-                                if p_valor > 0 and total_pago > p_valor and (abs(total_pago - p_valor) / p_valor) < 2.0:
-                                    match_perfeito = p_tuple
-                                    mat_type = "CUB_RECEBER"
-                                    break
-                                    
                         if not match_perfeito:
                             for pr_tuple in pool_prazos:
                                 pr, cand, is_prazo = pr_tuple
                                 pr_valor = float(pr[2] or 0)
-                                if pr_valor > 0 and total_pago > pr_valor and (abs(total_pago - pr_valor) / pr_valor) < 5.0:
-                                    db_venc = str(pr[1])
-                                    if pdf_mes and f'-{pdf_mes}-' in db_venc and pdf_ano in db_venc:
+                                db_venc = str(pr[1])
+                                if (pr_valor > 0 and total_pago > pr_valor
+                                        and f'-{pdf_mes}-' in db_venc
+                                        and (not pdf_ano or pdf_ano in db_venc)):
+                                    diff_rate = (total_pago - pr_valor) / pr_valor
+                                    valor_raiz_bate = valor_raiz and abs(valor_raiz - pr_valor) < 5.0
+                                    if diff_rate < 0.30 or valor_raiz_bate:
                                         match_perfeito = pr_tuple
                                         mat_type = "CUB_PROJETADA_DATA_EXATA"
                                         break
-                                        
+
+                    # FASE CUB-B: Sem data — exige diamante (CPF) para evitar false-positives
+                    if not match_perfeito and diamante_no_grupo:
+                        for p_tuple in pool_abertas:
+                            p, cand, is_prazo = p_tuple
+                            p_valor = float(p[2] or 0)
+                            if p_valor > 0 and total_pago > p_valor and (abs(total_pago - p_valor) / p_valor) < 2.0:
+                                match_perfeito = p_tuple
+                                mat_type = "CUB_RECEBER"
+                                break
+                                
                         if not match_perfeito:
                             for pr_tuple in pool_prazos:
                                 pr, cand, is_prazo = pr_tuple
@@ -5075,7 +6410,87 @@ def preview_baixas(data: PreviewBaixasInput):
                     melhor_match_final = { 'type': mat_type, 'lista': lista_multipla }
                     break
                     
+            # ── FASE CROSS-GROUP: Co-proprietários (múltiplas vendas mesma unidade) ──────────
+            # Caso: David + esposa têm 2 vendas separadas; extrato tem 1 linha = soma das 2.
+            # FIX bugs: break→continue; pool pré-filtrado para mês alvo (performance + precisão).
+            if not melhor_match_final:
+                from itertools import combinations as _combs
+                _all_q_cg = []   # quitadas do mês alvo, cross-group
+                _all_a_cg = []   # abertas do mês alvo, cross-group
+                _seen_cg = set()
+                for _gk, _gv in grupos_unidades.items():
+                    for _gc in _gv:
+                        _gv_id = int(_gc['v_row'][0])
+                        if _gv_id in _seen_cg:
+                            continue
+                        _seen_cg.add(_gv_id)
+                        for _ra in _cache_receber.get(_gv_id, []):
+                            if _ra[0] in reserved_ids_receber:
+                                continue
+                            # Pré-filtro de mês: só inclui parcelas do mês alvo do PDF
+                            _ra_data = str(_ra[1])
+                            if pdf_mes and f'-{pdf_mes}-' not in _ra_data:
+                                continue
+                            if pdf_ano and pdf_ano not in _ra_data:
+                                continue
+                            _tup = (_ra, _gc, False)
+                            if float(_ra[3] or 0) > 0:
+                                _all_q_cg.append(_tup)
+                            else:
+                                _all_a_cg.append(_tup)
+                        for _pr in _cache_prazos.get(_gv_id, []):
+                            if _pr[0] in reserved_ids_prazos:
+                                continue
+                            _pr_data = str(_pr[1])
+                            if pdf_mes and f'-{pdf_mes}-' not in _pr_data:
+                                continue
+                            if pdf_ano and pdf_ano not in _pr_data:
+                                continue
+                            _tup = (_pr, _gc, True)
+                            if float(_pr[4] or 0) > 0:
+                                _all_q_cg.append(_tup)
+                            else:
+                                _all_a_cg.append(_tup)
+
+                logging.warning(f"  [CROSS-GROUP BUILD] '{comprador_nome}' unid='{unidade}' all_q={len(_all_q_cg)} all_a={len(_all_a_cg)}")
+
+                # FIX: continue (não break) para tentar abertas quando quitadas falham
+                for _pool_cg, _mat_cg in [(_all_q_cg, "MULTIPLO_JA_PAGO_CO_PROP"), (_all_a_cg, "MULTIPLO_RECEBER_CO_PROP")]:
+                    if melhor_match_final:
+                        break
+                    if len(_pool_cg) < 2:
+                        continue   # ← FIX: era 'break', ignorava o próximo pool
+                    for _sz in [2, 3, 4]:
+                        if melhor_match_final or len(_pool_cg) < _sz:
+                            break
+                        for _combo in _combs(_pool_cg, _sz):
+                            # OBRIGATÓRIO: combo deve cruzar vendas diferentes
+                            _vids_cb = set(_c[1]['v_row'][0] for _c in _combo)
+                            if len(_vids_cb) < 2:
+                                continue
+                            # FIX: para quitadas usa TOTALPAGO (índice 3 para RECEBER, índice 4 para PRAZO)
+                            # Para abertas usa VALORPARCELA/VALOR (índice 2)
+                            def _val_item(it):
+                                d, _, is_pr = it
+                                if _mat_cg == "MULTIPLO_JA_PAGO_CO_PROP":
+                                    return float(d[4] or d[2] or 0) if is_pr else float(d[3] or d[2] or 0)
+                                return float(d[2] or 0)
+                            _soma = sum(_val_item(_c) for _c in _combo)
+                            if _soma <= 0:
+                                continue
+                            _dr = abs(total_pago - _soma) / _soma
+                            if _dr >= 0.10:   # 10% — mais generoso que intra-grupo (5%)
+                                continue
+                            melhor_match_final = {'type': _mat_cg, 'lista': list(_combo)}
+                            logging.warning(f"  [CROSS-GROUP HIT] '{comprador_nome}' unid='{unidade}' → {_mat_cg} sz={_sz} vids={_vids_cb} soma={_soma:.2f}")
+                            break
+                    if melhor_match_final:
+                        break
+
+
+
             if melhor_match_final:
+
                 if 'MULTIPLO' in melhor_match_final['type']:
                     lista = melhor_match_final['lista']
                     
@@ -5325,6 +6740,12 @@ def preview_baixas(data: PreviewBaixasInput):
                     }
                 })
 
+        # ── Injeta anomaly_score (PyOD) em cada resultado ──
+        for i, res in enumerate(results):
+            pyod_info = _pyod_map.get(i, {})
+            res["anomaly_score"]  = pyod_info.get("anomaly_score")
+            res["anomaly_flag"]   = pyod_info.get("anomaly_flag", False)
+            res["match_engine"]   = res.get("match_engine", "splink" if data.use_splink else "heuristic")
         return {"resultados": results}
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -5444,7 +6865,106 @@ def fiscal_injetar_distratos():
 def fiscal_gerar_dimob():
     return {"success": True, "message": "Arquivo DIMOB gerado estruturalmente."}
 
+@app.get("/api/sero/obras")
+def get_sero_obras(empresa_id: int):
+    """Retorna obras próprias (TIPOOUTEMP=1) vinculadas à empresa no Questor.
+    TIPOOUTEMP=1 → Obras com CNO/CEI (empreendimentos da empresa).
+    TIPOOUTEMP=2 → Empresa própria (ex: Stuttgart via OUTEMP 8734).
+    Filtro real: apenas OUTEMPs com dados no CALCULORATEIO (evento 5041) ou TERCEIROPGTO.
+    """
+    try:
+        conn_q = get_conn("questor")
+        conn_v = get_conn("vulcano")
+        cur_q  = conn_q.cursor()
+        cur_v  = conn_v.cursor()
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode("win1252", "ignore").strip()
+            return str(v).strip()
+
+        # OUTEMPs com folha própria (CALCULORATEIO evento 5041)
+        cur_q.execute("""
+            SELECT DISTINCT C.CODIGOOUTEMP
+            FROM CALCULORATEIO C
+            WHERE C.CODIGOEMPRESA = ? AND C.CODIGOEVENTO = 5041
+        """, (empresa_id,))
+        outemps_folha = {r[0] for r in cur_q.fetchall()}
+
+        # OUTEMPs com GPS terceiros (TERCEIROPGTO)
+        cur_q.execute("""
+            SELECT DISTINCT CODIGOOUTEMP
+            FROM TERCEIROPGTO
+            WHERE CODIGOEMPRESA = ?
+        """, (empresa_id,))
+        outemps_gps = {r[0] for r in cur_q.fetchall()}
+
+        todos_outemps = outemps_folha | outemps_gps
+        if not todos_outemps:
+            conn_q.close(); conn_v.close()
+            return []
+
+        placeholders = ",".join("?" * len(todos_outemps))
+        cur_q.execute(f"""
+            SELECT OE.CODIGOOUTEMP, OE.NOMEOUTEMP, OE.INSCRFEDERAL,
+                   OEE.INSCRFEDPROPRIET, OEE.TIPOOUTEMP
+            FROM OUTRAEMPEMP OEE
+            JOIN OUTRAEMPRESA OE ON OE.CODIGOOUTEMP = OEE.CODIGOOUTEMP
+            WHERE OEE.CODIGOEMPRESA = ?
+              AND OEE.CODIGOOUTEMP IN ({placeholders})
+            ORDER BY OEE.TIPOOUTEMP, OE.NOMEOUTEMP
+        """, tuple([empresa_id] + list(todos_outemps)))
+        rows_q = cur_q.fetchall()
+
+        # Busca empreendimentos EM CONSTRUCAO no Vulcano para enriquecer TIPOOUTEMP=2
+        # (obras ativas, ordenadas da mais recente para a mais antiga)
+        try:
+            cur_v.execute("""
+                SELECT NOME FROM EMPREENDIMENTO
+                WHERE CODIGOEMPRESA = ?
+                  AND (OBRACONCLUIDA = 'N' OR OBRACONCLUIDA IS NULL)
+                ORDER BY ID DESC
+            """, (empresa_id,))
+            nomes_ativos = [dec(r[0]) for r in cur_v.fetchall() if r[0]]
+        except Exception:
+            # Fallback se a coluna não existir
+            cur_v.execute("""
+                SELECT NOME FROM EMPREENDIMENTO
+                WHERE CODIGOEMPRESA = ? ORDER BY ID DESC
+            """, (empresa_id,))
+            nomes_ativos = [dec(r[0]) for r in cur_v.fetchall() if r[0]]
+        sufixo_vulcano = " / ".join(nomes_ativos[:2]) if nomes_ativos else ""
+
+
+        obras = []
+        for r in rows_q:
+            nome_q = dec(r[1])
+            tipo   = dec(r[4])
+            # Para TIPOOUTEMP=2, o INSCRFEDERAL é o CNPJ da empresa — usa nome do Vulcano
+            if tipo == "2" and sufixo_vulcano:
+                nome_display = f"{nome_q}  [{sufixo_vulcano[:60]}]"
+            else:
+                nome_display = nome_q
+            obras.append({
+                "id": r[0],
+                "nome": nome_display,
+                "nome_questor": nome_q,
+                "inscricao": dec(r[2]),
+                "cnpj_proprietario": dec(r[3]),
+                "tipo": tipo,
+                "tem_folha": r[0] in outemps_folha,
+                "tem_gps": r[0] in outemps_gps,
+            })
+        conn_q.close(); conn_v.close()
+        return obras
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
 @app.get("/api/sero/cub")
+
 def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
     try:
         conn = get_conn("vulcano")
@@ -5456,241 +6976,6 @@ def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
         return {"cub": float(r[0]) if r and r[0] else None}
     except Exception as e:
         return {"error": str(e), "cub": None}
-
-@app.get("/api/sero/maodeobra")
-def get_sero_maodeobra(
-    empresa_id: int = Query(..., description="ID da Empresa"),
-    ano: int = Query(None),
-    mes: int = Query(None),
-    cno: str = Query(None)
-):
-    conn = None
-    conn_v = None
-    try:
-        conn = get_conn("questor")
-        cur = conn.cursor()
-        
-        q = """
-            SELECT 
-                p.COMPET, 
-                c.CODIGOOUTEMP, 
-                o.NOMEOUTEMP,
-                o.INSCRFEDERAL,
-                SUM(c.VALOREVENTO) as VALOR_ALOCADO
-            FROM CALCULORATEIO c
-            JOIN PERIODOCALCULO p ON c.CODIGOPERCALCULO = p.CODIGOPERCALCULO AND c.CODIGOEMPRESA = p.CODIGOEMPRESA
-            LEFT JOIN OUTRAEMPRESA o ON c.CODIGOOUTEMP = o.CODIGOOUTEMP
-            WHERE c.CODIGOEVENTO = 5041 AND c.CODIGOEMPRESA = ?
-            GROUP BY p.COMPET, c.CODIGOOUTEMP, o.NOMEOUTEMP, o.INSCRFEDERAL
-            ORDER BY p.COMPET DESC
-        """
-        cur.execute(q, (empresa_id,))
-        rows = cur.fetchall()
-        
-        cno_dados = {}
-        cub_vigente = 0.0
-        try:
-            import re
-            conn_v = get_conn("vulcano")
-            cur_v = conn_v.cursor()
-            cur_v.execute("SELECT CNO, METRAGEMTOTAL, DATAINICIORET, DATACONCLUSAO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?", (empresa_id,))
-            for r in cur_v.fetchall():
-                cno_val = r[0].decode('win1252', 'ignore').strip() if isinstance(r[0], bytes) else str(r[0] or "").strip()
-                cno_val = re.sub(r'\D', '', cno_val)
-                if cno_val: 
-                    dt_ini = r[2].strftime("%Y-%m-%d") if r[2] and hasattr(r[2], 'strftime') else str(r[2])[:10] if r[2] else None
-                    dt_fim = r[3].strftime("%Y-%m-%d") if r[3] and hasattr(r[3], 'strftime') else str(r[3])[:10] if r[3] else None
-                    cno_dados[cno_val] = {
-                        "metragem": float(r[1] or 0),
-                        "data_inicio": dt_ini,
-                        "data_fim": dt_fim
-                    }
-                    
-            cub_history = {}
-            cur_v.execute("SELECT MES, VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND VALOR IS NOT NULL ORDER BY MES ASC")
-            for r in cur_v.fetchall():
-                m_str = r[0].strftime("%Y-%m") if hasattr(r[0], 'strftime') else str(r[0])[:7]
-                cub_history[m_str] = float(r[1])
-        except Exception:
-            pass
-            
-        def get_cub_mensal(m_str):
-            if 'cub_history' in locals() and m_str in cub_history: return cub_history[m_str]
-            if 'cub_history' in locals():
-                past_cubs = [cub for k, cub in cub_history.items() if k <= m_str]
-                if past_cubs: return past_cubs[-1]
-            return 2950.40
-            
-        obras = {}
-        alocacoes = []
-        target_compet = f"{ano}-{mes:02d}" if ano and mes else "9999-99"
-        cub_vigente = get_cub_mensal(target_compet)
-
-        for row in rows:
-            compet_dt, cod_out, nome_out, inscr, valor = row
-            compet_str = compet_dt.strftime("%Y-%m") if hasattr(compet_dt, 'strftime') else str(compet_dt)
-            nome_str = nome_out.decode('win1252', 'ignore') if isinstance(nome_out, bytes) else str(nome_out)
-            inscr_str = str(inscr or "")
-            clean_inscr = re.sub(r'\D', '', inscr_str)
-            
-            if cno and cno != "undefined" and cno != "null" and cno != "All" and cno != "":
-                clean_target_cno = re.sub(r'\D', '', cno)
-                if clean_inscr != clean_target_cno:
-                    continue
-                
-            if cod_out not in obras:
-                obras[cod_out] = {
-                    "nome": nome_str, 
-                    "cno": inscr_str, 
-                    "alocado_total": 0, 
-                    "min_compet": compet_str,
-                    "max_compet": compet_str
-                }
-            else:
-                if compet_str < obras[cod_out]["min_compet"]: obras[cod_out]["min_compet"] = compet_str
-                if compet_str > obras[cod_out]["max_compet"]: obras[cod_out]["max_compet"] = compet_str
-                    
-            val = float(valor or 0)
-            if compet_str <= target_compet:
-                obras[cod_out]["alocado_total"] += val
-            
-            alocacoes.append({
-                "compet": compet_str,
-                "codigo_obra": cod_out,
-                "nome_obra": nome_str,
-                "cno": inscr_str,
-                "valor_recolhido": val
-            })
-            
-        for k, v in obras.items():
-            clean_cno = re.sub(r'\D', '', str(v.get("cno", "")))
-            dados_emp = cno_dados.get(clean_cno, {})
-            obras[k]["metragem"] = dados_emp.get("metragem", 0.0)
-            
-            dt_ini = dados_emp.get("data_inicio")
-            if not dt_ini and v.get("min_compet"): dt_ini = v["min_compet"] + "-01"
-            dt_fim = dados_emp.get("data_fim")
-            if not dt_fim and v.get("max_compet"): dt_fim = v["max_compet"] + "-28"
-                
-            obras[k]["data_inicio"] = dt_ini
-            obras[k]["data_fim"] = dt_fim
-
-        mao_de_obra = sum(o["alocado_total"] for o in obras.values())
-        area_total = sum(o.get("metragem", 0) for o in obras.values())
-        custo_obra_estimado = area_total * cub_vigente
-        inss_devido = custo_obra_estimado * 0.20
-        total_inss = max(0, inss_devido - mao_de_obra)
-
-        from collections import defaultdict
-        from datetime import datetime
-        from dateutil.relativedelta import relativedelta
-        
-        mensal = defaultdict(float)
-        for a in alocacoes:
-            if a["compet"] <= target_compet:
-                mensal[a["compet"]] += a["valor_recolhido"]
-
-        min_inicio_obra = None
-        min_fim_obra = None
-        for k, v in obras.items():
-            ini = v.get("data_inicio")
-            if ini:
-                ini_comp = ini[:7]
-                if not min_inicio_obra or ini_comp < min_inicio_obra: min_inicio_obra = ini_comp
-            
-            fim = v.get("data_fim")
-            if fim and fim != "None" and str(fim).strip() and not str(fim).startswith("9999"):
-                fim_comp = fim[:7]
-                if not min_fim_obra or fim_comp < min_fim_obra: min_fim_obra = fim_comp
-                
-        # Determine strict bounds
-        if min_inicio_obra and min_inicio_obra < target_compet:
-            dt_start_str = min_inicio_obra
-        else:
-            # Fallback if no start date found or start date is after target_compet
-            dt_start_str = min(mensal.keys()) if mensal else target_compet
-
-        dt_end_str = target_compet
-        """
-        If they selected "2024-08" but obra ended in "2023-12", we cap the graph at "2023-12".
-        However, the user asked for "até a data consultada para obras em andamento".
-        If target_compet < min_fim_obra, it's still in progress, so cap at target_compet.
-        """
-        if min_fim_obra and min_fim_obra < target_compet:
-            dt_end_str = min_fim_obra
-                
-        curva_s = []
-        try:
-            dt_start = datetime.strptime(dt_start_str, "%Y-%m")
-            dt_end = datetime.strptime(dt_end_str, "%Y-%m")
-            
-            # Cap extreme history (e.g. 6 years = 72 months) to avoid giant graphs
-            months_diff = (dt_end.year - dt_start.year) * 12 + dt_end.month - dt_start.month
-            if months_diff > 72:
-                dt_start = dt_end - relativedelta(months=72)
-                
-            acc = 0
-            current = dt_start
-            while current <= dt_end:
-                m_str = current.strftime("%Y-%m")
-                # Need to accumulate all historical past EVEN BEFORE dt_start visually
-                # Actually, let's accumulate properly from the absolute beginning
-                pass
-                current += relativedelta(months=1)
-                
-            # Recreate acc to include everything up to dt_end
-            acc_real = 0
-            sorted_all_months = sorted(mensal.keys())
-            idx_month = 0
-            
-            current = dt_start
-            while current <= dt_end:
-                m_str = current.strftime("%Y-%m")
-                # accumulate any keys that are <= m_str
-                while idx_month < len(sorted_all_months) and sorted_all_months[idx_month] <= m_str:
-                    acc_real += mensal[sorted_all_months[idx_month]]
-                    idx_month += 1
-                
-                cub_m = get_cub_mensal(m_str)
-                inss_devido_m = area_total * cub_m * 0.20
-                    
-                curva_s.append({
-                    "mes": m_str,
-                    "realizado": acc_real,
-                    "previsto": inss_devido_m
-                })
-                current += relativedelta(months=1)
-        except Exception:
-            pass
-            
-        # Force padding so Recharts renders if only 1 month exists
-        if len(curva_s) <= 1:
-            try:
-                base_dt = datetime.strptime(target_compet, "%Y-%m") if target_compet != "9999-99" else datetime.now()
-                pad_dt = base_dt - relativedelta(months=1)
-                cub_pad = get_cub_mensal(pad_dt.strftime("%Y-%m"))
-                curva_s.insert(0, {"mes": pad_dt.strftime("%Y-%m"), "realizado": 0, "previsto": area_total * cub_pad * 0.20})
-                if len(curva_s) == 1:
-                    curva_s.append({"mes": target_compet, "realizado": acc_real if 'acc_real' in locals() else 0, "previsto": area_total * cub_vigente * 0.20})
-            except: pass
-
-        return {
-            "resumo": {
-                "mao_de_obra": mao_de_obra,
-                "total_inss": total_inss,
-                "cub_vigente": cub_vigente,
-                "area_total": area_total
-            },
-            "curva_s": curva_s[-48:] if curva_s else [],
-            "obras": [{"codigo": k, **v} for k, v in obras.items()],
-            "alocacoes": alocacoes
-        }
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: conn.close()
-        if conn_v: conn_v.close()
 
 @app.get("/api/sped/f200/preview")
 def sped_f200_preview(empresa_id: int, ano: int, mes: int):
@@ -5732,24 +7017,389 @@ def sero_salvar_config():
 def sero_registrar_alocacao():
     return {"success": True, "message": "Alocação de folha do mês registrada."}
 
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
+# ── API Agentes Autônomos (LangGraph) ────────────────────────────────────────────────────────────
+from core.agents.auditoria_graph import graph_app, AuditoriaGraphState
+from langgraph.types import Command
+import uuid
 
-import sys
-if getattr(sys, 'frozen', False):
-    frontend_dist = os.path.join(sys._MEIPASS, "dist")
-else:
-    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-if os.path.exists(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+class AuditStartReq(BaseModel):
+    conta_alvo: str
 
-    @app.exception_handler(404)
-    async def custom_404_handler(request, exc):
-        index_file = os.path.join(frontend_dist, "index.html")
-        if os.path.exists(index_file):
-            return FileResponse(index_file)
-        return {"error": "Frontend build not found"}
+def _serialize_agent_state(res: dict) -> dict:
+    """
+    Converte o state do LangGraph para um dict JSON-safe.
+    O campo `messages` contém objetos AIMessage/HumanMessage/ToolMessage
+    que não são serializaveis pelo FastAPI diretamente.
+    """
+    import json
+    safe = {}
+    for k, v in (res or {}).items():
+        if k == "messages":
+            # Converte cada mensagem para dict simples
+            msgs = []
+            for m in (v or []):
+                try:
+                    if hasattr(m, "to_json"):
+                        msgs.append({"type": getattr(m, "type", "?"), "content": str(m.content or "")[:2000]})
+                    elif hasattr(m, "content"):
+                        msgs.append({"type": type(m).__name__, "content": str(m.content or "")[:2000]})
+                    else:
+                        msgs.append({"type": "unknown", "content": str(m)[:200]})
+                except Exception:
+                    pass
+            safe[k] = msgs
+        elif k == "resultados_db":
+            # Garante que os resultados_db sejam strings (podem ter objetos)
+            safe[k] = [
+                {kk: (vv if isinstance(vv, (str, int, float, bool, type(None))) else str(vv))
+                 for kk, vv in (item.items() if isinstance(item, dict) else {})}
+                for item in (v or [])
+            ]
+        else:
+            try:
+                json.dumps(v)  # Testa se é serializavel
+                safe[k] = v
+            except Exception:
+                safe[k] = str(v)
+    return safe
+
+@app.post("/api/agentes/iniciar_auditoria")
+async def api_agentes_iniciar(req: AuditStartReq):
+    import asyncio
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+
+    initial_state = AuditoriaGraphState(
+        pergunta="Auditoria de rotina iniciada",
+        conta_alvo=req.conta_alvo,
+        passos_executados=[],
+        resultados_db=[],
+        historico_aprendizado=[],
+        sugestao_correcao={},
+        aprovado_pelo_usuario=False,
+        feedback_usuario="",
+        prompt_calibracao="",
+        dossie_heuristico={},
+        messages=[],
+        tentativas_autocorrecao=0,   # reinicia o contador de autocorreção
+    )
+
+    try:
+        # PERF: graph_app.invoke é síncrono — asyncio.to_thread descarrega no ThreadPool
+        # sem bloquear o event loop enquanto o LLM e as tools do Firebird executam.
+        res = await asyncio.to_thread(graph_app.invoke, initial_state, config)
+        state = graph_app.get_state(config)
+        return {
+            "status": "PAUSED_FOR_HUMAN" if state.next else "FINISHED",
+            "thread_id": thread_id,
+            "state": _serialize_agent_state(res)
+        }
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        msg = str(e)
+        if "GOOGLE_APPLICATION_CREDENTIALS" in tb or "credential" in msg.lower():
+            detalhe = f"Vertex AI: credencial não encontrada ou inválida. Verifique GOOGLE_APPLICATION_CREDENTIALS no .env. Detalhe: {msg}"
+        elif "DefaultCredentialsError" in tb:
+            detalhe = f"Vertex AI: sem credencial padrão. Configure GOOGLE_APPLICATION_CREDENTIALS. Detalhe: {msg}"
+        elif "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            detalhe = f"Vertex AI: cota excedida ou rate limit atingido. Aguarde e tente novamente. Detalhe: {msg}"
+        elif "404" in msg or "not found" in msg.lower():
+            detalhe = f"Vertex AI: modelo não encontrado ou projeto incorreto (project_id no chavejson.json). Detalhe: {msg}"
+        elif "LangGraph" in tb or "StateSnapshot" in tb or "graph" in tb.lower():
+            detalhe = f"LangGraph: erro interno no grafo. Detalhe: {msg}"
+        elif "firebird" in tb.lower() or "fdb" in tb.lower() or "isql" in tb.lower():
+            detalhe = f"Firebird: falha ao conectar ao banco de dados. Verifique se o serviço Firebird está rodando. Detalhe: {msg}"
+        else:
+            detalhe = f"{type(e).__name__}: {msg}"
+        raise HTTPException(status_code=500, detail=detalhe)
+
+class AuditResumeReq(BaseModel):
+    thread_id: str
+    aprovado: bool
+    feedback_usuario: str
+    prompt_calibracao: str = None
+
+@app.post("/api/agentes/resumir_auditoria")
+def api_agentes_resumir(req: AuditResumeReq):
+    config = {"configurable": {"thread_id": req.thread_id}}
+    state = graph_app.get_state(config)
+    if not state.next:
+        raise HTTPException(status_code=400, detail="A thread não está pausada.")
+    
+    update_data = {
+        "aprovado_pelo_usuario": req.aprovado,
+        "feedback_usuario": req.feedback_usuario,
+        "passos_executados": [f"Human feedback received: Approved={req.aprovado}"]
+    }
+    if req.prompt_calibracao is not None:
+        update_data["prompt_calibracao"] = req.prompt_calibracao
+    graph_app.update_state(config, update_data)
+    
+    res = graph_app.invoke(None, config=config)
+    return {
+        "status": "FINISHED",
+        "state": _serialize_agent_state(res)
+    }
+
+class PreviewMatchRequest(BaseModel):
+    rows: list
+    mapping: dict
+    target_table: str
+    empresa_id: int | None = None
+    empreendimento_id: int | None = None
+
+
+@app.post("/api/smart-importer/preview-match")
+async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
+    import re as _re
+    from datetime import datetime as _dt
+
+    inv = {str(v): k for k, v in payload.mapping.items() if v and v != "null" and isinstance(v, str)}
+
+    def _get(row, campo):
+        col = inv.get(campo)
+        return row.get(col) if col else None
+
+    def _parse_valor(v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            s = str(v).strip()
+            s = _re.sub(r"[^\d,\.]", "", s)
+            if '.' in s and ',' in s:
+                if s.rfind(',') > s.rfind('.'):
+                    s = s.replace(".", "").replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            elif ',' in s:
+                s = s.replace(",", ".")
+            return float(s) if s else None
+        except Exception:
+            return None
+
+    def _parse_data(v):
+        if not v:
+            return None
+        v = str(v).strip()[:10]
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return _dt.strptime(v, fmt).date()
+            except ValueError:
+                pass
+        return None
+
+    resultados = []
+
+    if payload.target_table == "RECEBIMENTOS":
+        conn_v = get_conn("vulcano")
+        try:
+            cur = conn_v.cursor()
+            where_clauses = ["1=1"]
+            params = []
+            if payload.empresa_id:
+                where_clauses.append("V.CODIGOEMPRESA = ?")
+                params.append(payload.empresa_id)
+            if payload.empreendimento_id:
+                where_clauses.append("B.IDEMPREENDIMENTO = ?")
+                params.append(payload.empreendimento_id)
+            
+            where_sql = " AND ".join(where_clauses)
+            
+            cur.execute(f"""
+                SELECT R.ID, R.PARCELA, R.DATA, R.VALORPARCELA, R.TOTALPAGO,
+                       C.NOME, U.DESCRICAO
+                FROM RECEBER R
+                LEFT JOIN VENDA V ON V.ID = R.IDVENDA
+                LEFT JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
+                LEFT JOIN VENDAUNIDADE VU ON VU.IDVENDA = V.ID
+                LEFT JOIN UNIDADE U ON U.ID = VU.IDUNIDADE
+                LEFT JOIN BLOCO B ON B.ID = U.IDBLOCO
+                WHERE {where_sql}
+                ORDER BY R.DATA DESC
+            """, params)
+            parcelas = cur.fetchall()
+            # idx: 0=ID, 1=PARCELA, 2=DATA(vencimento), 3=VALORPARCELA, 4=TOTALPAGO, 5=C.NOME, 6=U.DESCRICAO
+            quitadas = [p for p in parcelas if (p[4] or 0) > 0]
+            abertas  = [p for p in parcelas if (p[4] or 0) <= 0]
+            
+            assinaturas_fb = set()
+            for p in parcelas:
+                dt_str = str(p[2])[:10] if p[2] else ""
+                val = round(float(p[3] or 0), 2)
+                assinaturas_fb.add((dt_str, val))
+            
+            # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO SQLITE VULCANO 2.0
+            conn_sq = get_conn("sqlite")
+            cur_sq = conn_sq.cursor()
+            sq_where = ["1=1"]
+            sq_params = []
+            if payload.empreendimento_id:
+                sq_where.append("empreendimento_id = ?")
+                sq_params.append(payload.empreendimento_id)
+                
+            cur_sq.execute(f"""
+                SELECT prazo_id, parcela_ref, data_venc, valor, 0.0,
+                       cliente_nome, unidade_descricao
+                FROM parcelas_abertas_projetadas
+                WHERE {" AND ".join(sq_where)}
+            """, sq_params)
+            
+            for row in cur_sq.fetchall():
+                try:
+                    dt_venc = datetime.datetime.strptime(row[2], "%Y-%m-%d").date() if row[2] else None
+                except:
+                    dt_venc = None
+                    
+                dt_str = str(dt_venc)[:10] if dt_venc else ""
+                val = round(float(row[3] or 0), 2)
+                # Evita duplicidade se o Firebird já tem essa parcela
+                if (dt_str, val) in assinaturas_fb:
+                    continue
+                    
+                abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
+            conn_sq.close()
+            TOLE = 1.0
+
+            for row in payload.rows:
+                valor_pl    = _parse_valor(_get(row, "VALOR_PAGO")) or _parse_valor(_get(row, "VALOR_PARCELA"))
+                valor_nominal_pl = _parse_valor(_get(row, "VALOR_PARCELA"))
+                acrescimos_pl = _parse_valor(_get(row, "ACRESCIMOS"))
+                descontos_pl = _parse_valor(_get(row, "DESCONTOS"))
+                num_parcela_pl = _get(row, "NUMERO_PARCELA") or ""
+                
+                dt_venc_pl  = _parse_data(_get(row, "DATA_VENCIMENTO"))
+                dt_pago_pl  = _parse_data(_get(row, "DATA_PAGAMENTO"))
+                cliente_pl  = _get(row, "CLIENTE_NOME") or ""
+                contrato_pl = _get(row, "CONTRATO") or ""
+                unidade_pl  = _get(row, "UNIDADE") or ""
+
+                status = "SEM_MATCH"
+                valor_v = cliente_v = dt_venc_v = unidade_v = num_parcela = id_parcela = acrescimos = descontos = None
+
+                candidatos = []
+                for lista, st in [(abertas, "MATCH_PERFEITO"), (quitadas, "JA_QUITADO")]:
+                    for p in lista:
+                        pv    = float(p[4] if st == "JA_QUITADO" else p[3] or 0)
+                        pvenc = p[2]
+                        match_val  = valor_pl is not None and abs(pv - valor_pl) <= TOLE
+                        match_venc = dt_venc_pl and pvenc and str(pvenc)[:10] == str(dt_venc_pl)
+                        
+                        nome_db = str(p[5] or "").upper().strip()
+                        nome_pl = str(cliente_pl).upper().strip()
+                        
+                        match_nome = False
+                        if not nome_pl or not nome_db:
+                            match_nome = True
+                        else:
+                            if nome_db in nome_pl or nome_pl in nome_db:
+                                match_nome = True
+                            else:
+                                tokens_db = set([t for t in nome_db.split() if len(t) > 2])
+                                tokens_pl = set([t for t in nome_pl.split() if len(t) > 2])
+                                if len(tokens_db.intersection(tokens_pl)) >= 1:
+                                    match_nome = True
+
+                        if match_nome and (match_val or match_venc):
+                            score = 0
+                            if match_val and match_venc: score += 100
+                            elif match_val: score += 50
+                            elif match_venc: score += 20
+                            
+                            if st == "MATCH_PERFEITO": score += 10 # Prioriza abertas
+                            
+                            candidatos.append({
+                                'score': score,
+                                'status': st,
+                                'id_parcela': p[0],
+                                'num_parcela': p[1],
+                                'valor_v': pv,
+                                'cliente_v': str(p[5] or ""),
+                                'dt_venc_v': str(pvenc),
+                                'unidade_v': str(p[6] or "") if p[6] else None
+                            })
+
+                if candidatos:
+                    # Pega o melhor candidato
+                    candidatos.sort(key=lambda x: x['score'], reverse=True)
+                    best = candidatos[0]
+                    
+                    status = best['status']
+                    id_parcela = best['id_parcela']
+                    num_parcela = best['num_parcela']
+                    valor_v = best['valor_v']
+                    cliente_v = best['cliente_v']
+                    dt_venc_v = best['dt_venc_v']
+                    unidade_v = best['unidade_v']
+                    
+                    if acrescimos_pl is not None or descontos_pl is not None:
+                        acrescimos = acrescimos_pl or 0
+                        descontos = descontos_pl or 0
+                    elif valor_pl and valor_v:
+                        diff = round(valor_pl - valor_v, 2)
+                        if diff > TOLE:
+                            acrescimos = diff
+                            descontos = 0
+                        elif diff < -TOLE:
+                            descontos = abs(diff)
+                            acrescimos = 0
+                        else:
+                            acrescimos = 0
+                            descontos = 0
+
+                resultados.append({
+                    "status":           status,
+                    "id_parcela":       id_parcela,
+                    "cliente_planilha": cliente_pl or cliente_v or "",
+                    "dt_vencimento":    str(dt_venc_pl) if dt_venc_pl else dt_venc_v,
+                    "dt_pagamento":     str(dt_pago_pl) if dt_pago_pl else None,
+                    "valor_planilha":   valor_pl,
+                    "valor_vulcano":    valor_v,
+                    "unidade":          unidade_pl or unidade_v or "",
+                    "contrato":         contrato_pl,
+                    "numero_parcela":   num_parcela,
+                    "num_parcela_planilha": str(num_parcela_pl),
+                    "acrescimos":       acrescimos,
+                    "descontos":        descontos,
+                    "obs":              _get(row, "OBSERVACOES") or "",
+                })
+            
+            # Formatar parcelas em aberto para envio ao frontend (para HitL)
+            abertas_front = []
+            for a in abertas:
+                abertas_front.append({
+                    "id": a[0],
+                    "numero_parcela": a[1],
+                    "data_vencimento": str(a[2])[:10] if a[2] else None,
+                    "valor_parcela": float(a[3] or 0),
+                    "cliente_nome": str(a[5] or ""),
+                    "descricao_unidade": str(a[6] or "")
+                })
+
+        finally:
+            conn_v.close()
+    else:
+        for row in payload.rows:
+            resultados.append({
+                "status": "SEM_MATCH",
+                "cliente_planilha": "",
+                "dt_vencimento": None, "dt_pagamento": None,
+                "valor_planilha": None, "valor_vulcano": None,
+                "unidade": "", "contrato": "",
+                "obs": f"Match para {payload.target_table} em desenvolvimento.",
+            })
+
+    counts = {
+        "total":          len(resultados),
+        "ja_quitados":    sum(1 for r in resultados if r["status"] == "JA_QUITADO"),
+        "match_perfeito": sum(1 for r in resultados if r["status"] == "MATCH_PERFEITO"),
+        "sem_match":      sum(1 for r in resultados if r["status"] == "SEM_MATCH"),
+    }
+    return {"resultados": resultados, "counts": counts}
+
+
 
 @app.get('/api/debug/venda')
 def api_debug_venda():
@@ -5802,3 +7452,220 @@ def api_schema_tables():
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn_v.close()
+
+
+# ── Sindicatos CCT ────────────────────────────────────────────────────────────
+@app.get("/api/sindicatos")
+def api_sindicatos_list():
+    """Retorna os 10 sindicatos com dados do Questor + CCT extraída do SQLite."""
+    try:
+        return _sa.get_sindicatos_para_api()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/sindicatos/atualizar")
+async def api_sindicatos_atualizar(background_tasks: BackgroundTasks):
+    """Dispara atualização imediata de todos os sindicatos em background."""
+    background_tasks.add_task(_sa.rodar_atualizacao_todos)
+    return {"message": "Atualização iniciada em background."}
+
+
+@app.get("/api/sindicatos/status")
+def api_sindicatos_status():
+    """Retorna status do agente (próxima execução, status por sindicato)."""
+    return _sa.get_status_agente()
+
+
+# ── Smart Importer ─────────────────────────────────────────────────────────────
+
+# Schemas de destino conhecidos para o Smart Importer (DE-PARA)
+_SMART_IMPORTER_SCHEMAS = {
+    "VENDAS": [
+        "DATA_VENDA", "NUMERO_CONTRATO", "CLIENTE_NOME", "CLIENTE_CPF_CNPJ",
+        "EMPREENDIMENTO", "UNIDADE", "BLOCO", "VGV", "AREA", "FORMA_PAGAMENTO",
+        "CORRETOR", "STATUS", "OBSERVACOES"
+    ],
+    "RECEBIMENTOS": [
+        "DATA_PAGAMENTO", "DATA_VENCIMENTO", "VALOR_PAGO", "VALOR_PARCELA",
+        "ACRESCIMOS", "DESCONTOS", "NUMERO_PARCELA", "DESCRICAO",
+        "CLIENTE_NOME", "CLIENTE_CPF_CNPJ",
+        "EMPREENDIMENTO", "UNIDADE", "CONTRATO", "FORMA_PAGAMENTO",
+        "BANCO", "AGENCIA", "CONTA", "NOSSO_NUMERO", "OBSERVACOES"
+    ],
+    "EMPREENDIMENTOS": [
+        "NOME", "CODIGO_CC", "DATA_INICIO", "DATA_PREVISTA_ENTREGA",
+        "CONTA_ESTOQUE", "CONTA_CUSTO", "CUSTO_ORCADO", "AREA_TOTAL", "CNPJ"
+    ],
+    "CLIENTES": [
+        "NOME", "CPF_CNPJ", "EMAIL", "TELEFONE", "ENDERECO",
+        "CIDADE", "ESTADO", "CEP", "OBSERVACOES"
+    ],
+}
+
+# SQLite para persistência de templates do Smart Importer
+import sqlite3 as _sqlite3
+
+def _get_smart_importer_db() -> _sqlite3.Connection:
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_database.sqlite")
+    conn = _sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS smart_importer_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            target_table TEXT NOT NULL,
+            mapping_json TEXT NOT NULL,
+            criado_em TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+@app.post("/api/upload-planilha")
+async def api_upload_planilha(file: UploadFile = File(...)):
+    """Recebe planilha XLS/XLSX/CSV e retorna colunas + prévia de dados."""
+    import io
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    try:
+        if filename.endswith(".csv"):
+            import csv as _csv
+            text = content.decode("utf-8-sig", errors="replace")
+            reader = _csv.DictReader(io.StringIO(text))
+            rows = [row for row in reader]
+            columns = list(rows[0].keys()) if rows else []
+            preview = rows[:5]
+        else:
+            # XLS / XLSX via openpyxl
+            try:
+                import openpyxl
+                wb = await asyncio.to_thread(openpyxl.load_workbook, io.BytesIO(content), read_only=True, data_only=True)
+                ws = wb.active
+                all_rows = list(ws.iter_rows(values_only=True))
+                wb.close()
+                if not all_rows:
+                    raise HTTPException(status_code=422, detail="Planilha vazia.")
+                headers = [str(c).strip() if c is not None else f"Col_{i}" for i, c in enumerate(all_rows[0])]
+                columns = headers
+                data_rows = []
+                preview = []
+                for row in all_rows[1:]:
+                    row_dict = {headers[i]: (str(v) if v is not None else "") for i, v in enumerate(row)}
+                    data_rows.append(row_dict)
+                    if len(preview) < 5:
+                        preview.append(row_dict)
+            except ImportError:
+                raise HTTPException(status_code=500, detail="openpyxl não instalado. Rode: pip install openpyxl")
+
+        return {"columns": columns, "preview": preview, "all_rows": data_rows if not filename.endswith('.csv') else rows, "total_colunas": len(columns)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Erro ao processar planilha: {str(e)}")
+
+
+class SchemaMatchRequest(BaseModel):
+    columns: list
+    target_table: str
+
+
+@app.post("/api/schema-match")
+async def api_schema_match(payload: SchemaMatchRequest):
+    """Usa Gemini para fazer DE-PARA automático entre colunas da planilha e campos destino."""
+    _require_gemini_key()
+
+    target_fields = _SMART_IMPORTER_SCHEMAS.get(payload.target_table, [])
+    if not target_fields:
+        raise HTTPException(status_code=400, detail=f"Entidade '{payload.target_table}' não reconhecida.")
+
+    cols_str = ", ".join(payload.columns)
+    dest_str = ", ".join(target_fields)
+
+    schema_json = '{"mapping": {"COLUNA_ORIGEM": "CAMPO_DESTINO_OU_null"}}'
+    prompt = (
+        f"Você é um especialista em integração de dados para ERPs imobiliários.\n"
+        f"Faça o mapeamento (DE-PARA) entre as colunas de uma planilha e os campos do sistema destino.\n\n"
+        f"COLUNAS DA PLANILHA:\n{cols_str}\n\n"
+        f"CAMPOS DESTINO ({payload.target_table}):\n{dest_str}\n\n"
+        f"Retorne APENAS JSON no formato:\n{schema_json}\n\n"
+        f"Regras:\n"
+        f"- Para cada coluna da planilha, mapeie para o campo destino mais semanticamente próximo.\n"
+        f"- Se não houver correspondência, use null.\n"
+        f"- As chaves do JSON de saída devem ser EXATAMENTE as colunas da planilha fornecidas.\n"
+        f"- Os valores devem ser EXATAMENTE um dos campos destino listados acima, ou null.\n"
+        f"- Não invente campos. Só use campos da lista destino."
+    )
+
+    result = await _gemini_generate_json_async(prompt)
+
+    # Normaliza: garante que todas as colunas estejam no mapping
+    mapping = result.get("mapping", {})
+    for col in payload.columns:
+        if col not in mapping:
+            mapping[col] = None
+
+    return {"mapping": mapping, "target_table": payload.target_table}
+
+
+@app.get("/api/templates")
+def api_templates_list(target_table: str = None):
+    """Retorna templates salvos do Smart Importer."""
+    conn = _get_smart_importer_db()
+    try:
+        if target_table:
+            rows = conn.execute(
+                "SELECT id, nome, target_table, mapping_json, criado_em FROM smart_importer_templates WHERE target_table = ? ORDER BY id DESC",
+                (target_table,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, nome, target_table, mapping_json, criado_em FROM smart_importer_templates ORDER BY id DESC"
+            ).fetchall()
+        return [
+            {"id": r[0], "nome": r[1], "target_table": r[2], "mapping_json": r[3], "criado_em": r[4]}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+class TemplateCreateRequest(BaseModel):
+    nome: str
+    target_table: str
+    mapping_json: str
+
+
+@app.post("/api/templates")
+def api_templates_create(payload: TemplateCreateRequest):
+    """Salva um template de mapeamento do Smart Importer."""
+    conn = _get_smart_importer_db()
+    try:
+        conn.execute(
+            "INSERT INTO smart_importer_templates (nome, target_table, mapping_json) VALUES (?, ?, ?)",
+            (payload.nome, payload.target_table, payload.mapping_json)
+        )
+        conn.commit()
+        return {"success": True, "message": f"Template '{payload.nome}' salvo com sucesso."}
+    finally:
+        conn.close()
+
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+import sys
+if getattr(sys, 'frozen', False):
+    frontend_dist = os.path.join(sys._MEIPASS, "dist")
+else:
+    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+
+    @app.exception_handler(404)
+    async def custom_404_handler(request, exc):
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"error": "Frontend build not found"}

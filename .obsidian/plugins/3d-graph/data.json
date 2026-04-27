@@ -1,0 +1,32 @@
+{
+  "filters": {
+    "doShowOrphans": true,
+    "doShowAttachments": false
+  },
+  "groups": {
+    "groups": [
+      {
+        "query": "path:documentacao_clientes",
+        "color": "#11b3e8"
+      },
+      {
+        "query": "path:backend",
+        "color": "#a70be0"
+      },
+      {
+        "query": "path:frontend",
+        "color": "#e60a0a"
+      },
+      {
+        "query": "file:Readme",
+        "color": "#0fc7f5"
+      }
+    ]
+  },
+  "display": {
+    "nodeSize": 6,
+    "linkThickness": 4,
+    "particleSize": 6,
+    "particleCount": 6
+  }
+}
