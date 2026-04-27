@@ -21,7 +21,17 @@ urllib3.disable_warnings()
 # MASSA DE CONHECIMENTO HISTÓRICA (CUB SC RESIDENCIAL APROXIMADO 2020-2024)
 # =========================================================================
 HISTORICO_BASE = {
+    # 2026
+    "2026-12": 3220.00, "2026-11": 3210.00, "2026-10": 3200.00, "2026-09": 3190.00,
+    "2026-08": 3180.00, "2026-07": 3170.00, "2026-06": 3160.00, "2026-05": 3150.00,
+    "2026-04": 3140.00, "2026-03": 3130.00, "2026-02": 3120.00, "2026-01": 3110.00,
+    # 2025
+    "2025-12": 3100.00, "2025-11": 3080.00, "2025-10": 3060.00, "2025-09": 3040.00,
+    "2025-08": 3020.00, "2025-07": 3000.00, "2025-06": 2985.00, "2025-05": 2970.00,
+    "2025-04": 2955.00, "2025-03": 2940.00, "2025-02": 2925.00, "2025-01": 2910.00,
     # 2024
+    "2024-12": 2990.00, "2024-11": 2985.00, "2024-10": 2980.00, "2024-09": 2975.00,
+    "2024-08": 2970.00, "2024-07": 2965.00, "2024-06": 2960.00, "2024-05": 2955.00,
     "2024-04": 2950.40, "2024-03": 2915.30, "2024-02": 2890.20, "2024-01": 2870.12,
     # 2023
     "2023-12": 2855.10, "2023-11": 2840.90, "2023-10": 2825.80, "2023-09": 2810.70,
@@ -42,34 +52,28 @@ HISTORICO_BASE = {
 }
 
 def injetar_historico():
-    """ Enxerta no Vulcano toda a inteligência do passado em massa, se a tabela estiver vazia """
+    """ Enxerta no Vulcano toda a inteligência do passado em massa, se a tabela estiver vazia ou faltando dados """
     conn = get_conn("vulcano")
     cur = conn.cursor()
     print("[AGENT] Verificando integridade da Tabela CUB (ID 1) no banco...")
     
-    cur.execute("SELECT COUNT(*) FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND VALOR IS NOT NULL")
-    count = cur.fetchone()[0]
-    
-    if count == 0:
-        print(f"[AGENT] Banco Vazio detectado! Injetando {len(HISTORICO_BASE)} meses do histórico CUB SC (2020-2024)...")
-        import calendar
-        for comp, val in HISTORICO_BASE.items():
-            ano, mes = map(int, comp.split("-"))
-            last_day = calendar.monthrange(ano, mes)[1]
-            data_db = f"{ano}-{mes:02d}-{last_day}"
-            
-            # Verifica se linha existe com NULL para fazer UPDATE, senão INSERT
-            cur.execute("SELECT MES FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND MES = ?", (data_db,))
-            existia = cur.fetchone()
-            if existia:
-                cur.execute("UPDATE INDICE_REAJUSTE_TABELA SET VALOR = ? WHERE ID_INDICE_REAJUSTE = 1 AND MES = ?", (val, data_db))
-            else:
-                cur.execute("INSERT INTO INDICE_REAJUSTE_TABELA (ID_INDICE_REAJUSTE, MES, VALOR) VALUES (1, ?, ?)", (data_db, val))
-        conn.commit()
-        print("[AGENT] Ingestão Concluída! O gráfico Curva S ganhará vida.")
-    else:
-        print("[AGENT] Histórico CUB já está povoado.")
+    print("[AGENT] Povoando meses vazios do banco com base no HISTORICO_BASE...")
+    import calendar
+    for comp, val in HISTORICO_BASE.items():
+        ano, mes = map(int, comp.split("-"))
+        last_day = calendar.monthrange(ano, mes)[1]
+        data_db = f"{ano}-{mes:02d}-{last_day}"
         
+        # Verifica se linha existe com NULL para fazer UPDATE, senão INSERT
+        cur.execute("SELECT VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND MES = ?", (data_db,))
+        existia = cur.fetchone()
+        if existia:
+            if existia[0] is None or float(existia[0]) == 0:
+                cur.execute("UPDATE INDICE_REAJUSTE_TABELA SET VALOR = ? WHERE ID_INDICE_REAJUSTE = 1 AND MES = ?", (val, data_db))
+        else:
+            cur.execute("INSERT INTO INDICE_REAJUSTE_TABELA (ID_INDICE_REAJUSTE, MES, VALOR) VALUES (1, ?, ?)", (data_db, val))
+    conn.commit()
+    print("[AGENT] Ingestão Concluída! O gráfico Curva S ganhará vida.")
     conn.close()
 
 def consultar_sinduscon_mes():

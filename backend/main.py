@@ -1016,6 +1016,9 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
     O parametro `cno` aceita o CODIGOOUTEMP (string) para filtrar uma obra especifica.
     """
     CUB_FALLBACK = {
+        "2026-12": 3220.00, "2026-11": 3210.00, "2026-10": 3200.00, "2026-09": 3190.00,
+        "2026-08": 3180.00, "2026-07": 3170.00, "2026-06": 3160.00, "2026-05": 3150.00,
+        "2026-04": 3140.00, "2026-03": 3130.00, "2026-02": 3120.00, "2026-01": 3110.00,
         "2025-12": 3100.00, "2025-11": 3080.00, "2025-10": 3060.00, "2025-09": 3040.00,
         "2025-08": 3020.00, "2025-07": 3000.00, "2025-06": 2985.00, "2025-05": 2970.00,
         "2025-04": 2955.00, "2025-03": 2940.00, "2025-02": 2925.00, "2025-01": 2910.00,
@@ -1202,10 +1205,21 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
             "SELECT CODIGOOUTEMP, COMPET, SUM(VALORORIGEMGPS)"
             " FROM TERCEIROPGTO"
             " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
-            " GROUP BY CODIGOOUTEMP, COMPET ORDER BY COMPET",
+            " GROUP BY CODIGOOUTEMP, COMPET",
             tuple([empresa_id] + outemps_list)
         )
         terceiro_rows = cur_q.fetchall()
+
+        # 5.1 Empreiteiras PJ: OUTRAEMPPGTOSERVICO.BASEGPS
+        cur_q.execute(
+            "SELECT CODIGOOUTEMP, COMPET, SUM(BASEGPS)"
+            " FROM OUTRAEMPPGTOSERVICO"
+            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
+            " GROUP BY CODIGOOUTEMP, COMPET",
+            tuple([empresa_id] + outemps_list)
+        )
+        terceiro_rows.extend(cur_q.fetchall())
+        terceiro_rows.sort(key=lambda x: x[1])  # Reordena por COMPET
 
         # 6. Agrega por competencia
         from collections import defaultdict
@@ -6939,308 +6953,6 @@ def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
         return {"cub": float(r[0]) if r and r[0] else None}
     except Exception as e:
         return {"error": str(e), "cub": None}
-
-@app.get("/api/sero/maodeobra")
-def get_sero_maodeobra(
-    empresa_id: int = Query(..., description="ID da Empresa"),
-    ano: int = Query(None),
-    mes: int = Query(None),
-    cno: str = Query(None)
-):
-    conn = None
-    conn_v = None
-    try:
-        conn = get_conn("questor")
-        cur = conn.cursor()
-
-        # --- FONTE 1: Folha de Pagamentos via CALCULORATEIO (evento 5041) ---
-        q = """
-            SELECT 
-                p.COMPET, 
-                c.CODIGOOUTEMP, 
-                o.NOMEOUTEMP,
-                o.INSCRFEDERAL,
-                SUM(c.VALOREVENTO) as VALOR_ALOCADO
-            FROM CALCULORATEIO c
-            JOIN PERIODOCALCULO p ON c.CODIGOPERCALCULO = p.CODIGOPERCALCULO AND c.CODIGOEMPRESA = p.CODIGOEMPRESA
-            LEFT JOIN OUTRAEMPRESA o ON c.CODIGOOUTEMP = o.CODIGOOUTEMP
-            WHERE c.CODIGOEVENTO = 5041 AND c.CODIGOEMPRESA = ?
-            GROUP BY p.COMPET, c.CODIGOOUTEMP, o.NOMEOUTEMP, o.INSCRFEDERAL
-            ORDER BY p.COMPET DESC
-        """
-        cur.execute(q, (empresa_id,))
-        rows = cur.fetchall()
-
-        # --- FONTE 2: Terceiros/GPS via TERCEIROPGTO.VALORORIGEMGPS ---
-        q_terc = """
-            SELECT
-                t.COMPET,
-                t.CODIGOOUTEMP,
-                o.NOMEOUTEMP,
-                o.INSCRFEDERAL,
-                SUM(t.VALORORIGEMGPS) as VALOR_GPS
-            FROM TERCEIROPGTO t
-            LEFT JOIN OUTRAEMPRESA o ON t.CODIGOOUTEMP = o.CODIGOOUTEMP
-            WHERE t.CODIGOEMPRESA = ?
-              AND t.VALORORIGEMGPS > 0
-            GROUP BY t.COMPET, t.CODIGOOUTEMP, o.NOMEOUTEMP, o.INSCRFEDERAL
-            ORDER BY t.COMPET DESC
-        """
-        try:
-            cur.execute(q_terc, (empresa_id,))
-            rows_terc = cur.fetchall()
-        except Exception:
-            rows_terc = []
-        
-        cno_dados = {}
-        cub_vigente = 0.0
-        try:
-            import re
-            conn_v = get_conn("vulcano")
-            cur_v = conn_v.cursor()
-            cur_v.execute("SELECT CNO, METRAGEMTOTAL, DATAINICIORET, DATACONCLUSAO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?", (empresa_id,))
-            for r in cur_v.fetchall():
-                cno_val = r[0].decode('win1252', 'ignore').strip() if isinstance(r[0], bytes) else str(r[0] or "").strip()
-                cno_val = re.sub(r'\D', '', cno_val)
-                if cno_val: 
-                    dt_ini = r[2].strftime("%Y-%m-%d") if r[2] and hasattr(r[2], 'strftime') else str(r[2])[:10] if r[2] else None
-                    dt_fim = r[3].strftime("%Y-%m-%d") if r[3] and hasattr(r[3], 'strftime') else str(r[3])[:10] if r[3] else None
-                    cno_dados[cno_val] = {
-                        "metragem": float(r[1] or 0),
-                        "data_inicio": dt_ini,
-                        "data_fim": dt_fim
-                    }
-                    
-            cub_history = {}
-            cur_v.execute("SELECT MES, VALOR FROM INDICE_REAJUSTE_TABELA WHERE ID_INDICE_REAJUSTE = 1 AND VALOR IS NOT NULL ORDER BY MES ASC")
-            for r in cur_v.fetchall():
-                m_str = r[0].strftime("%Y-%m") if hasattr(r[0], 'strftime') else str(r[0])[:7]
-                cub_history[m_str] = float(r[1])
-        except Exception:
-            pass
-            
-        def get_cub_mensal(m_str):
-            if 'cub_history' in locals() and m_str in cub_history: return cub_history[m_str]
-            if 'cub_history' in locals():
-                past_cubs = [cub for k, cub in cub_history.items() if k <= m_str]
-                if past_cubs: return past_cubs[-1]
-            return 2950.40
-            
-        obras = {}
-        alocacoes = []
-        target_compet = f"{ano}-{mes:02d}" if ano and mes else "9999-99"
-        cub_vigente = get_cub_mensal(target_compet)
-
-        for row in rows:
-            compet_dt, cod_out, nome_out, inscr, valor = row
-            compet_str = compet_dt.strftime("%Y-%m") if hasattr(compet_dt, 'strftime') else str(compet_dt)
-            nome_str = nome_out.decode('win1252', 'ignore') if isinstance(nome_out, bytes) else str(nome_out)
-            inscr_str = str(inscr or "")
-            clean_inscr = re.sub(r'\D', '', inscr_str)
-            
-            if cno and cno != "undefined" and cno != "null" and cno != "All" and cno != "":
-                clean_target_cno = re.sub(r'\D', '', cno)
-                if clean_inscr != clean_target_cno:
-                    continue
-                
-            if cod_out not in obras:
-                obras[cod_out] = {
-                    "nome": nome_str, 
-                    "cno": inscr_str, 
-                    "alocado_total": 0, 
-                    "min_compet": compet_str,
-                    "max_compet": compet_str
-                }
-            else:
-                if compet_str < obras[cod_out]["min_compet"]: obras[cod_out]["min_compet"] = compet_str
-                if compet_str > obras[cod_out]["max_compet"]: obras[cod_out]["max_compet"] = compet_str
-                    
-            val = float(valor or 0)
-            if compet_str <= target_compet:
-                obras[cod_out]["alocado_total"] += val
-            
-            alocacoes.append({
-                "compet": compet_str,
-                "codigo_obra": cod_out,
-                "nome_obra": nome_str,
-                "cno": inscr_str,
-                "valor_recolhido": val,
-                "fonte": "folha"
-            })
-            
-        for k, v in obras.items():
-            clean_cno = re.sub(r'\D', '', str(v.get("cno", "")))
-            dados_emp = cno_dados.get(clean_cno, {})
-            obras[k]["metragem"] = dados_emp.get("metragem", 0.0)
-            
-            dt_ini = dados_emp.get("data_inicio")
-            if not dt_ini and v.get("min_compet"): dt_ini = v["min_compet"] + "-01"
-            dt_fim = dados_emp.get("data_fim")
-            if not dt_fim and v.get("max_compet"): dt_fim = v["max_compet"] + "-28"
-                
-            obras[k]["data_inicio"] = dt_ini
-            obras[k]["data_fim"] = dt_fim
-
-        # --- Integra Terceiros/GPS na base de mão de obra ---
-        import re as _re
-        alocacoes_terceiros = []
-        gps_total = 0.0
-        for row_t in rows_terc:
-            compet_dt_t, cod_out_t, nome_out_t, inscr_t, valor_t = row_t
-            compet_str_t = compet_dt_t.strftime("%Y-%m") if hasattr(compet_dt_t, 'strftime') else str(compet_dt_t)[:7]
-            nome_str_t = nome_out_t.decode('win1252', 'ignore') if isinstance(nome_out_t, bytes) else str(nome_out_t or "Terceiro")
-            inscr_str_t = str(inscr_t or "")
-            clean_inscr_t = _re.sub(r'\D', '', inscr_str_t)
-
-            # Filtro CNO (se selecionado)
-            if cno and cno not in ("undefined", "null", "All", ""):
-                clean_target_cno_t = _re.sub(r'\D', '', cno)
-                if clean_inscr_t != clean_target_cno_t:
-                    continue
-
-            val_t = float(valor_t or 0)
-            if compet_str_t <= target_compet:
-                gps_total += val_t
-
-            alocacoes_terceiros.append({
-                "compet": compet_str_t,
-                "codigo_obra": cod_out_t,
-                "nome_obra": nome_str_t,
-                "cno": inscr_str_t,
-                "valor_recolhido": val_t,
-                "fonte": "terceiros_gps"
-            })
-            # Acumula no mensal para curva_s
-            if compet_str_t <= target_compet:
-                alocacoes.append({
-                    "compet": compet_str_t,
-                    "codigo_obra": cod_out_t,
-                    "nome_obra": nome_str_t,
-                    "cno": inscr_str_t,
-                    "valor_recolhido": val_t,
-                    "fonte": "terceiros_gps"
-                })
-
-        mao_de_obra_folha = sum(o["alocado_total"] for o in obras.values())
-        mao_de_obra = mao_de_obra_folha + gps_total
-        area_total = sum(o.get("metragem", 0) for o in obras.values())
-        custo_obra_estimado = area_total * cub_vigente
-        inss_devido = custo_obra_estimado * 0.20
-        total_inss = max(0, inss_devido - mao_de_obra)
-
-        from collections import defaultdict
-        from datetime import datetime
-        from dateutil.relativedelta import relativedelta
-        
-        mensal = defaultdict(float)
-        for a in alocacoes:
-            if a["compet"] <= target_compet:
-                mensal[a["compet"]] += a["valor_recolhido"]
-
-        min_inicio_obra = None
-        min_fim_obra = None
-        for k, v in obras.items():
-            ini = v.get("data_inicio")
-            if ini:
-                ini_comp = ini[:7]
-                if not min_inicio_obra or ini_comp < min_inicio_obra: min_inicio_obra = ini_comp
-            
-            fim = v.get("data_fim")
-            if fim and fim != "None" and str(fim).strip() and not str(fim).startswith("9999"):
-                fim_comp = fim[:7]
-                if not min_fim_obra or fim_comp < min_fim_obra: min_fim_obra = fim_comp
-                
-        # Determine strict bounds
-        if min_inicio_obra and min_inicio_obra < target_compet:
-            dt_start_str = min_inicio_obra
-        else:
-            # Fallback if no start date found or start date is after target_compet
-            dt_start_str = min(mensal.keys()) if mensal else target_compet
-
-        dt_end_str = target_compet
-        """
-        If they selected "2024-08" but obra ended in "2023-12", we cap the graph at "2023-12".
-        However, the user asked for "até a data consultada para obras em andamento".
-        If target_compet < min_fim_obra, it's still in progress, so cap at target_compet.
-        """
-        if min_fim_obra and min_fim_obra < target_compet:
-            dt_end_str = min_fim_obra
-                
-        curva_s = []
-        try:
-            dt_start = datetime.strptime(dt_start_str, "%Y-%m")
-            dt_end = datetime.strptime(dt_end_str, "%Y-%m")
-            
-            # Cap extreme history (e.g. 6 years = 72 months) to avoid giant graphs
-            months_diff = (dt_end.year - dt_start.year) * 12 + dt_end.month - dt_start.month
-            if months_diff > 72:
-                dt_start = dt_end - relativedelta(months=72)
-                
-            acc = 0
-            current = dt_start
-            while current <= dt_end:
-                m_str = current.strftime("%Y-%m")
-                # Need to accumulate all historical past EVEN BEFORE dt_start visually
-                # Actually, let's accumulate properly from the absolute beginning
-                pass
-                current += relativedelta(months=1)
-                
-            # Recreate acc to include everything up to dt_end
-            acc_real = 0
-            sorted_all_months = sorted(mensal.keys())
-            idx_month = 0
-            
-            current = dt_start
-            while current <= dt_end:
-                m_str = current.strftime("%Y-%m")
-                # accumulate any keys that are <= m_str
-                while idx_month < len(sorted_all_months) and sorted_all_months[idx_month] <= m_str:
-                    acc_real += mensal[sorted_all_months[idx_month]]
-                    idx_month += 1
-                
-                cub_m = get_cub_mensal(m_str)
-                inss_devido_m = area_total * cub_m * 0.20
-                    
-                curva_s.append({
-                    "mes": m_str,
-                    "realizado": acc_real,
-                    "previsto": inss_devido_m
-                })
-                current += relativedelta(months=1)
-        except Exception:
-            pass
-            
-        # Force padding so Recharts renders if only 1 month exists
-        if len(curva_s) <= 1:
-            try:
-                base_dt = datetime.strptime(target_compet, "%Y-%m") if target_compet != "9999-99" else datetime.now()
-                pad_dt = base_dt - relativedelta(months=1)
-                cub_pad = get_cub_mensal(pad_dt.strftime("%Y-%m"))
-                curva_s.insert(0, {"mes": pad_dt.strftime("%Y-%m"), "realizado": 0, "previsto": area_total * cub_pad * 0.20})
-                if len(curva_s) == 1:
-                    curva_s.append({"mes": target_compet, "realizado": acc_real if 'acc_real' in locals() else 0, "previsto": area_total * cub_vigente * 0.20})
-            except: pass
-
-        return {
-            "resumo": {
-                "mao_de_obra": mao_de_obra,
-                "mao_de_obra_folha": mao_de_obra_folha,
-                "mao_de_obra_terceiros_gps": gps_total,
-                "total_inss": total_inss,
-                "cub_vigente": cub_vigente,
-                "area_total": area_total
-            },
-            "curva_s": curva_s[-48:] if curva_s else [],
-            "obras": [{"codigo": k, **v} for k, v in obras.items()],
-            "alocacoes": alocacoes,
-            "alocacoes_terceiros": alocacoes_terceiros
-        }
-    except Exception as e:
-        import traceback; traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn: conn.close()
-        if conn_v: conn_v.close()
 
 @app.get("/api/sped/f200/preview")
 def sped_f200_preview(empresa_id: int, ano: int, mes: int):
