@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler, UploadCloud } from 'lucide-react';
+import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler, UploadCloud, Save } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 const API_BASE = "http://127.0.0.1:8000";
@@ -58,6 +58,8 @@ export const SeroView = ({ selectedEmpresa }) => {
     const [selectedObraId, setSelectedObraId] = useState('');
     const [importingPdf, setImportingPdf] = useState(false);
     const [pdfData, setPdfData] = useState(null);
+    const [savingPdf, setSavingPdf] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
 
     useEffect(() => {
         if (!selectedEmpresa) return;
@@ -115,12 +117,58 @@ export const SeroView = ({ selectedEmpresa }) => {
         }
     };
 
+    const handleSavePdfData = async () => {
+        if (!pdfData || pdfData.length === 0 || !selectedEmpresa) return;
+        setSavingPdf(true);
+        setError(null);
+        setSaveSuccess(false);
+
+        try {
+            const res = await fetch(`${API_BASE}/api/sero/salvar-importacao`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empresa_id: parseInt(selectedEmpresa, 10),
+                    registros: pdfData
+                })
+            });
+            if (!res.ok) {
+                const t = await res.text();
+                throw new Error(`HTTP ${res.status}: ${t}`);
+            }
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 4000);
+        } catch (err) {
+            setError(`Erro ao salvar dados: ${err.message}`);
+        } finally {
+            setSavingPdf(false);
+        }
+    };
+
+
     useEffect(() => {
         if (selectedEmpresa && ano && mes) fetchSero();
     }, [selectedEmpresa, selectedObraId, ano, mes]);
 
     const r = seroData?.resumo || {};
     const obraAtual = obras.find(o => String(o.id) === String(selectedObraId));
+
+    const mergedData = React.useMemo(() => {
+        if (!pdfData) return null;
+        const pdfComps = new Set(pdfData.map(p => p.competencia));
+        const sysData = (seroData?.alocacoes_terceiros || []).filter(t => !pdfComps.has(t.compet)).map(t => ({
+            competencia: t.compet,
+            cnpj_cpf: t.cno,
+            origem: t.nome_obra + ' (Questor)',
+            valor_original: null,
+            taxa_correcao: null,
+            valor_atualizado: t.valor_recolhido,
+            is_system: true
+        }));
+        const merged = [...pdfData.map(p => ({ ...p, is_system: false })), ...sysData];
+        merged.sort((a, b) => (a.competencia < b.competencia ? 1 : -1));
+        return merged;
+    }, [pdfData, seroData]);
 
     return (
         <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 pt-4 pb-10">
@@ -244,9 +292,16 @@ export const SeroView = ({ selectedEmpresa }) => {
             </div>
 
             {/* ── Erro ── */}
-            {error && !seroData && (
+            {error && !seroData && !pdfData && (
                 <div className="bg-red-950/30 text-red-400 border border-red-900/40 rounded-xl p-4 flex items-center gap-3 text-sm">
                     <AlertCircle size={18} /> <span className="font-bold">{error}</span>
+                </div>
+            )}
+            
+            {/* ── Sucesso ao Salvar ── */}
+            {saveSuccess && (
+                <div className="bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded-xl p-4 flex items-center gap-3 text-sm">
+                    <ShieldCheck size={18} /> <span className="font-bold">Dados salvos com sucesso no Vulcano!</span>
                 </div>
             )}
 
@@ -378,22 +433,30 @@ export const SeroView = ({ selectedEmpresa }) => {
                                 <table className="w-full text-[11px]">
                                     <thead>
                                         <tr className="border-b border-[#161616]">
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Competência</th>
                                             <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
-                                                {pdfData ? 'Competência / Mês' : 'Competência'}
+                                                {pdfData ? 'CPF / CNPJ' : 'Tomador / Obra'}
                                             </th>
-                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Tomador / Obra</th>
-                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">CNO / CNPJ</th>
-                                            <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">GPS Recolhido</th>
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
+                                                {pdfData ? 'Origem' : 'CNO / CNPJ'}
+                                            </th>
+                                            {pdfData && <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Valor Original</th>}
+                                            {pdfData && <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Taxa</th>}
+                                            <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
+                                                {pdfData ? 'Valor Atualizado' : 'GPS Recolhido'}
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pdfData ? (
-                                            pdfData.map((t, i) => (
-                                                <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">Alocação SERO</td>
-                                                    <td className="px-5 py-2 text-white max-w-[260px] truncate">{t.nome}</td>
-                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.cnpj_cpf}</td>
-                                                    <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor)}</td>
+                                            mergedData.map((t, i) => (
+                                                <tr key={i} className={`border-b border-[#0f0f0f] hover:bg-[#111] transition-colors ${t.is_system ? 'opacity-60' : ''}`}>
+                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.competencia}</td>
+                                                    <td className="px-5 py-2 font-mono text-[#888] text-[10px]">{t.cnpj_cpf}</td>
+                                                    <td className="px-5 py-2 text-white max-w-[200px] truncate" title={t.origem}>{t.origem}</td>
+                                                    <td className="px-5 py-2 text-right font-mono text-[#666]">{t.valor_original !== null ? fmt(t.valor_original) : '-'}</td>
+                                                    <td className="px-5 py-2 text-right font-mono text-[#666]">{t.taxa_correcao !== null ? Number(t.taxa_correcao).toFixed(4) : '-'}</td>
+                                                    <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor_atualizado)}</td>
                                                 </tr>
                                             ))
                                         ) : (
@@ -409,16 +472,32 @@ export const SeroView = ({ selectedEmpresa }) => {
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t border-[#1e1e1e] bg-[#0e0e0e]">
-                                            <td colSpan={3} className="px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#444] font-bold">Total GPS</td>
+                                            <td colSpan={pdfData ? 5 : 3} className="px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#444] font-bold">
+                                                {pdfData ? 'Total Atualizado' : 'Total GPS'}
+                                            </td>
                                             <td className="px-5 py-2.5 text-right font-black text-[#34d399]">
                                                 {pdfData 
-                                                    ? fmt(pdfData.reduce((s, t) => s + (t.valor || 0), 0))
+                                                    ? fmt(mergedData.reduce((s, t) => s + (t.valor_atualizado || 0), 0))
                                                     : fmt(seroData.alocacoes_terceiros.reduce((s, t) => s + (t.valor_recolhido || 0), 0))}
                                             </td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
+                            
+                            {/* ── Botão de Salvar (Apenas se tiver PDF Data) ── */}
+                            {pdfData && (
+                                <div className="px-5 py-4 border-t border-[#161616] bg-[#0e0e0e] flex justify-end">
+                                    <button
+                                        onClick={handleSavePdfData}
+                                        disabled={savingPdf}
+                                        className="flex items-center gap-2 bg-[#10b981]/10 border border-[#10b981]/30 text-[#10b981] hover:bg-[#10b981] hover:text-black transition-all duration-200 font-black text-[10px] tracking-[0.15em] uppercase rounded-lg px-5 py-2.5 h-[36px] disabled:opacity-40"
+                                    >
+                                        {savingPdf ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                                        {savingPdf ? 'Salvando...' : 'Salvar Extrato no Vulcano'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
