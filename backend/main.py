@@ -1128,22 +1128,38 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
             import re
             return set(w.upper() for w in re.split(r'\W+', str(s)) if len(w) >= 4)
 
+        # Pré-calcula metragem dos empreendimentos em construção (para TIPOOUTEMP=2)
+        metragem_em_construcao = sum(
+            float(ev[2] or 0)
+            for ev in emp_vulcano
+            if dec(ev[4]) != "S" and float(ev[2] or 0) > 0
+        )
+
         def _match_metragem(nome_outemp, tipo_outemp):
-            """Retorna metragem do empreendimento Vulcano que melhor bate com o nome."""
+            """Retorna metragem do empreendimento Vulcano que melhor bate com o nome.
+            TIPOOUTEMP=2 (empresa própria, ex: Stuttgart): usa soma dos empreendimentos
+                         em construção — o name match não funciona pois o NOMEOUTEMP é
+                         o nome da empresa construtora, não do empreendimento.
+            TIPOOUTEMP=1 (obra com CNO/CEI próprio): faz match por tokens do nome.
+            """
+            # Para empresa própria (Stuttgart, etc.): metragem das obras em andamento
+            if tipo_outemp == "2":
+                return metragem_em_construcao
+
+            # Para obras com CNO/CEI: match por tokens do nome
             toks_q = _tokens(nome_outemp)
             best_score, best_metro = 0, 0.0
             for ev in emp_vulcano:
                 nome_v = dec(ev[1]) if ev[1] else ""
                 metro  = float(ev[2] or 0)
-                concl  = dec(ev[4])
+                if metro == 0:
+                    continue
                 toks_v = _tokens(nome_v)
                 overlap = len(toks_q & toks_v)
-                # Para TIPOOUTEMP='2' (empresa própria), prefere obras em construção
-                if tipo_outemp == "2" and concl == "S":
-                    continue
-                if overlap > best_score and metro > 0:
+                if overlap > best_score:
                     best_score, best_metro = overlap, metro
             return best_metro
+
 
         # Busca TIPOOUTEMP para cada outemp do cadastro
         if outemps_list:
