@@ -2594,6 +2594,10 @@ async def _janitor_startup():
     """Inicia tasks assíncronas do Janitor SRE na inicialização do servidor."""
     await start_profiler()           # Writer daemon de métricas
     asyncio.create_task(run_disk_scan())  # Scanner de disco (roda a cada 30 min)
+    
+    # Iniciar o Watcher da Fila Automática de PDFs
+    from core.services.queue_watcher import start_queue_watcher
+    start_queue_watcher(_get_smart_importer_db(), _gemini_generate_json_async)
 
 from fastapi import Request
 @app.middleware("http")
@@ -7683,6 +7687,20 @@ def _get_smart_importer_db() -> _sqlite3.Connection:
             criado_em TEXT DEFAULT (datetime('now'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS smart_importer_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            file_hash TEXT UNIQUE NOT NULL,
+            file_type TEXT NOT NULL,
+            target_table TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDENTE',
+            empresa_id_detectada INTEGER,
+            cnpj_detectado TEXT,
+            extracted_json TEXT,
+            criado_em TEXT DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()
     return conn
 
@@ -7834,3 +7852,43 @@ if os.path.exists(frontend_dist):
         if os.path.exists(index_file):
             return FileResponse(index_file)
         return {"error": "Frontend build not found"}
+
+# ── API Smart Importer Queue ──────────────────────────────────────────────────
+@app.get("/api/smart-importer/queue")
+def api_get_queue():
+    conn = _get_smart_importer_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, filename, file_type, target_table, status, empresa_id_detectada, cnpj_detectado, criado_em FROM smart_importer_queue ORDER BY id DESC")
+    rows = cur.fetchall()
+    return [{
+        "id": r[0], "filename": r[1], "file_type": r[2], "target_table": r[3],
+        "status": r[4], "empresa_id_detectada": r[5], "cnpj_detectado": r[6], "criado_em": r[7]
+    } for r in rows]
+
+@app.delete("/api/smart-importer/queue/{queue_id}")
+def api_delete_queue(queue_id: int):
+    conn = _get_smart_importer_db()
+    conn.execute("DELETE FROM smart_importer_queue WHERE id = ?", (queue_id,))
+    conn.commit()
+    return {"success": True}
+
+@app.post("/api/smart-importer/queue/{queue_id}/approve")
+def api_approve_queue(queue_id: int):
+    conn = _get_smart_importer_db()
+    cur = conn.cursor()
+    cur.execute("SELECT extracted_json, filename FROM smart_importer_queue WHERE id = ?", (queue_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Não encontrado na fila")
+    try:
+        import json
+        data = json.loads(row[0]) if row[0] else []
+        columns = list(data[0].keys()) if data else []
+        return {
+            "columns": columns,
+            "preview": data[:5],
+            "all_rows": data,
+            "filename": row[1]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro processando JSON extraído: {e}")
