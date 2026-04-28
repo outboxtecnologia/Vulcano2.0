@@ -1053,8 +1053,10 @@ async def api_sero_importar_pdf(file: UploadFile = File(...)):
             for i, page in enumerate(pdf.pages):
                 if i >= max_pages: break
                 extracted = page.extract_text() or page.extract_text(layout=True) or ""
-                if extracted.strip():
-                    result.append(f"--- Página {i + 1} ---\n{extracted[:max_chars]}")
+                text = extracted.strip()
+                if text:
+                    for j in range(0, len(text), max_chars):
+                        result.append(f"--- Página {i + 1} (Parte {j//max_chars + 1}) ---\n{text[j:j+max_chars]}")
         return result
 
     try:
@@ -1398,6 +1400,7 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
         historico_mensal = defaultdict(lambda: {"realizado": 0.0, "previsto": 0.0})
         total_folha = total_terceiros = 0.0
         alocacoes_t = []
+        alocacoes_f = []
 
         for (outemp, compet_dt, valor) in folha_rows:
             comp = str(compet_dt)[:7]
@@ -1406,6 +1409,12 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
             # Acumula total até o mês selecionado (inclusive)
             if comp <= compet_alvo:
                 total_folha += v
+                alocacoes_f.append({
+                    "compet": comp,
+                    "codigooutemp": outemp,
+                    "nome_obra": obras_cadastro.get(outemp, {}).get("nome", f"Obra {outemp}"),
+                    "valor": round(v, 2)
+                })
 
         for (comp, cnpj_cpf, origem, valor_atualizado) in sero_importados:
             comp = norm_comp(comp)
@@ -1460,6 +1469,7 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
                 "cub_vigente":               cub_vigente,
                 "area_total":                round(area_total, 2),
             },
+            "alocacoes_folha": sorted(alocacoes_f, key=lambda x: x["compet"], reverse=True),
             "alocacoes_terceiros": sorted(alocacoes_t, key=lambda x: x["compet"], reverse=True),
             "curva_s": curva_s,
         }
