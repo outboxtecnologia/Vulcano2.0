@@ -1350,19 +1350,24 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
 
 
 
-        where_cc_folha = f" AND C.CODIGOCENTROCUSTO = {int(cc_filtro)}" if cc_filtro else ""
-        
         # 4. Folha propria: CALCULORATEIO evento 5041 + PERIODOCALCULO
-        cur_q.execute(
+        sql_folha = (
             "SELECT C.CODIGOOUTEMP, P.COMPET, SUM(C.VALOREVENTO)"
             " FROM CALCULORATEIO C"
             " JOIN PERIODOCALCULO P ON P.CODIGOPERCALCULO = C.CODIGOPERCALCULO"
             " WHERE C.CODIGOEVENTO = 5041 AND C.CODIGOEMPRESA = ?"
-            " AND C.CODIGOOUTEMP IN (" + placeholders + ")"
-            + where_cc_folha +
-            " GROUP BY C.CODIGOOUTEMP, P.COMPET ORDER BY P.COMPET",
-            tuple([empresa_id] + outemps_list)
         )
+        params_folha = [empresa_id]
+        
+        if cc_filtro:
+            sql_folha += f" AND C.CODIGOCENTROCUSTO = {int(cc_filtro)}"
+        else:
+            sql_folha += " AND C.CODIGOOUTEMP IN (" + placeholders + ")"
+            params_folha.extend(outemps_list)
+            
+        sql_folha += " GROUP BY C.CODIGOOUTEMP, P.COMPET ORDER BY P.COMPET"
+        
+        cur_q.execute(sql_folha, tuple(params_folha))
         folha_rows = cur_q.fetchall()
 
         # A pedido do usuário, "Terceiros GPS" e "Empreiteiras PJ" do Questor 
