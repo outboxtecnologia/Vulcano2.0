@@ -138,7 +138,7 @@ export default function App() {
                         <p className="text-[9px] text-[var(--v-text-faint)] uppercase tracking-widest">Digite o ID da empresa para entrar direto:</p>
                         <div className="flex gap-2">
                           <input value={manualId} onChange={e => setManualId(e.target.value)}
-                            className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text-bold)] text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
+                            className="bg-[#0c0908] border border-[rgba(255, 160, 80, 0.08)] rounded px-3 py-2 text-[var(--v-text-bold)] text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
                             placeholder="959"/>
                           <button onClick={() => { setSelectedEmpresa(manualId); setEmpresaConfirmed(true); }}
                             className="px-4 py-2 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all">
@@ -158,7 +158,7 @@ export default function App() {
                       <p className="text-[9px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Entrar com ID de empresa:</p>
                       <div className="flex gap-2">
                         <input value={manualId} onChange={e => setManualId(e.target.value)}
-                          className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text-bold)] text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
+                          className="bg-[#0c0908] border border-[rgba(255, 160, 80, 0.08)] rounded px-3 py-2 text-[var(--v-text-bold)] text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
                           placeholder="959"/>
                         <button onClick={() => { setSelectedEmpresa(manualId); setEmpresaConfirmed(true); }}
                           className="px-4 py-2 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all">
@@ -235,25 +235,25 @@ export default function App() {
 return (
     <div className="font-body selection:bg-[var(--v-accent)]/30 flex h-screen overflow-hidden transition-colors duration-300 immersive-bg"
          data-theme={theme}
-         style={{ color: 'var(--v-text)', background: 'var(--v-deep)' }}>
+         style={{ color: 'var(--v-text)', background: '#0c0908' }}>
         <div className="absolute inset-0 backdrop-blur-[1px] z-0"
              style={{ background: 'var(--v-blur-bg)' }}></div>
 
         {/* Lado Esquerdo - Stitch SideNavBar */}
         <aside className="fixed left-0 top-0 h-full w-64 z-[60] flex flex-col py-6 transition-all"
                style={{
-                 background: 'var(--v-glass)',
+                 background: '#0c0908',
                  backdropFilter: 'blur(24px)',
                  WebkitBackdropFilter: 'blur(24px)',
-                 borderRight: '1px solid var(--v-border)'
+                 borderRight: '1px solid rgba(255, 160, 80, 0.08)'
                }}>
             <div className="px-6 mb-10 flex items-center gap-3">
                 <div className="w-8 h-8 bg-[var(--v-accent)] rounded-[var(--v-radius)] flex items-center justify-center shadow-[0_0_15px_#ff4d0066]">
                   <Cpu size={18} className="text-black" />
                 </div>
                 <div>
-                   <h1 className="font-headline font-black text-xl tracking-tighter leading-none" style={{ color: 'var(--v-text-bold)' }}>VULCANO</h1>
-                   <p className="text-[9px] tracking-[0.2em] uppercase mt-1 font-black" style={{ color: 'var(--v-accent)' }}>Construction AI</p>
+                   <h1 className="font-headline font-black text-xl tracking-tighter leading-none" style={{ color: 'var(--v-text-bold)' }}>VULCANO CONTÁBIL</h1>
+                   <p className="text-[9px] tracking-[0.2em] uppercase mt-1 font-black" style={{ color: 'var(--v-accent)' }}>· 2.0</p>
                 </div>
             </div>
             
@@ -282,9 +282,9 @@ return (
                 </div>
             </nav>
             <div className="px-4 mt-auto">
-                <button className="w-full bg-[var(--v-accent)] text-black py-4 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.3em] flex items-center justify-center transition-all shadow-[0_0_20px_#ff4d0033]"
-                        style={{ ':hover': { background: 'var(--v-text-bold)' } }}>
-                    <Plus size={14} className="mr-2" /> Nova Obra
+                <button className="w-full bg-[#F97316] text-black py-4 rounded-[var(--v-radius)] font-black text-[12px] uppercase tracking-[0.1em] flex items-center justify-center transition-all shadow-[0_0_20px_#ff4d0033]"
+                        style={{ ':hover': { background: 'white' } }}>
+                    <Plus size={16} className="mr-2" /> NOVA OBRA
                 </button>
             </div>
         </aside>
@@ -295,8 +295,8 @@ return (
             {/* TopNavBar Stitch Design */}
             <header className="h-16 flex items-center justify-between px-8 backdrop-blur-2xl shrink-0 z-50 transition-colors"
                     style={{
-                      borderBottom: '1px solid var(--v-border)',
-                      background: 'var(--v-glass)'
+                      borderBottom: '1px solid rgba(255, 160, 80, 0.08)',
+                      background: '#0c0908'
                     }}>
                 <div className="flex items-center gap-4 flex-1">
                     <div className="relative group">
@@ -306,7 +306,7 @@ return (
                             className="text-xs rounded-[var(--v-radius)] pl-10 pr-4 py-2 w-96 outline-none transition-all"
                             style={{
                               background: 'var(--v-card)',
-                              border: '1px solid var(--v-border)',
+                              border: '1px solid rgba(255, 160, 80, 0.08)',
                               color: 'var(--v-text)',
                             }}
                             placeholder="Pesquisar no Cortex Index..."
@@ -318,7 +318,7 @@ return (
                 
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2 px-4 py-2 rounded-[var(--v-radius)] shadow-sm transition-colors"
-                         style={{ background: 'var(--v-card)', border: '1px solid var(--v-border)' }}>
+                         style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
                         <Database size={12} className="text-[var(--v-accent)] shrink-0" />
                         <select
                             value={selectedEmpresa}
@@ -338,7 +338,7 @@ return (
                         <div className="h-8 w-[1px] bg-white/5"></div>
                         <select value={theme} onChange={(e) => { document.documentElement.setAttribute('data-theme', e.target.value); setTheme(e.target.value); }}
                                 className="px-2 py-1 outline-none font-bold text-[10px] cursor-pointer uppercase transition-all rounded-[var(--v-radius)]"
-                                style={{ color: 'var(--v-text-bold)', border: '1px solid var(--v-border)', background: 'var(--v-card)' }}>
+                                style={{ color: 'var(--v-text-bold)', border: '1px solid rgba(255, 160, 80, 0.08)', background: 'var(--v-card)' }}>
                             <option value="night">NIGHT</option>
                             <option value="light">LIGHT</option>
                             <option value="numb">NUMB</option>

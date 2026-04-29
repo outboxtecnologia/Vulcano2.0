@@ -1,0 +1,1060 @@
+<body>
+  <div>
+    <div style='display: flex; height: 100vh; background: rgb(12, 9, 8);'>
+      <aside style='width: 240px; background: rgb(12, 9, 8); border-right: 1px solid rgba(255, 160, 80, 0.08); display: flex; flex-direction: column; height: 100vh; flex-shrink: 0; transition: width 220ms cubic-bezier(0.2, 0.8, 0.2, 1); overflow: hidden; position: relative;'>
+        <div style='padding: 14px 16px; display: flex; align-items: center; gap: 10px; justify-content: flex-start; border-bottom: 1px solid rgba(255, 160, 80, 0.08); height: 59px;'>
+          <div style='width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; filter: drop-shadow(rgba(255, 120, 40, 0.35) 0px 0px 10px);'>
+            <img style='width: 100%; height: 100%; object-fit: contain; object-position: center center;'>
+            </img>
+          </div>
+          <div style='line-height: 1; white-space: nowrap;'>
+            <div style='font-family: "Space Grotesk", Inter, sans-serif; font-weight: 700; font-size: 14px; color: rgb(240, 230, 216); letter-spacing: 0.02em;'>
+              TEXT: VULCANO
+            </div>
+            <div style='font-family: "JetBrains Mono", monospace; font-size: 9px; color: rgb(255, 122, 26); letter-spacing: 0.22em; margin-top: 3px;'>
+              TEXT: CONTÁBIL · 2.0
+            </div>
+          </div>
+        </div>
+        <button style='position: absolute; top: 72px; right: -11px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgb(26, 22, 20); border: 1px solid rgba(255, 160, 80, 0.18); border-radius: 50%; color: rgb(138, 122, 104); cursor: pointer; z-index: 10; box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 8px; transition: 150ms;'>
+          <svg style='transform: rotate(180deg); transition: transform 220ms;'>
+        </button>
+        <div style='flex: 1 1 0%; overflow: hidden auto; padding: 12px 0px;'>
+          <div style='margin-bottom: 16px;'>
+            <div style='padding: 8px 16px 6px; font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.2em; color: rgb(90, 78, 66);'>
+              TEXT: CORE MODULES
+            </div>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Dashboard
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Empreendimentos
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px 7px 14px; justify-content: flex-start; color: rgb(255, 122, 26); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: linear-gradient(90deg, rgba(255, 122, 26, 0.1) 0%, transparent 100%); border-left: 2px solid rgb(255, 122, 26); text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Vendas
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Recebimentos
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Smart Importer
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Conversor Universal
+              </span>
+            </a>
+          </div>
+          <div style='margin-bottom: 16px;'>
+            <div style='padding: 8px 16px 6px; font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.2em; color: rgb(90, 78, 66);'>
+              TEXT: ENTERPRISE SUITE
+            </div>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Tributos Globais
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Evolução POC
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Auditoria ERP
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Contabilizações
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Fiscal & SPED
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Fechamento Custos
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Sero INSS
+              </span>
+            </a>
+            <a style='display: flex; align-items: center; gap: 10px; padding: 7px 16px; justify-content: flex-start; color: rgb(138, 122, 104); font-size: 13px; font-family: Inter, system-ui, sans-serif; background: transparent; border-left: 2px solid transparent; text-decoration: none; cursor: pointer; transition: color 120ms; position: relative; white-space: nowrap;'>
+              <svg>
+              <span>
+                TEXT: Notas & Docs
+              </span>
+            </a>
+          </div>
+        </div>
+        <div style='padding: 12px; border-top: 1px solid rgba(255, 160, 80, 0.08);'>
+          <button style='width: 100%; padding: 9px 12px; display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, rgb(255, 122, 26) 0%, rgb(201, 58, 18) 100%); border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; border-radius: 6px; color: rgb(26, 10, 4); font-weight: 600; font-size: 12.5px; letter-spacing: 0.04em; cursor: pointer; box-shadow: rgba(255, 122, 26, 0.25) 0px 0px 20px, rgba(255, 220, 180, 0.4) 0px 1px 0px inset; white-space: nowrap;'>
+            <svg>
+            TEXT: NOVA OBRA
+          </button>
+        </div>
+      </aside>
+      <div style='flex: 1 1 0%; display: flex; flex-direction: column; min-width: 0px;'>
+        <header style='border-bottom: 1px solid rgba(255, 160, 80, 0.08); background: rgb(18, 16, 14); padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0;'>
+          <div style='display: flex; align-items: center; gap: 9px; padding-right: 14px; border-right: 1px solid rgba(255, 160, 80, 0.08);'>
+            <div class='pulse' style='width: 6px; height: 6px; border-radius: 50%; background: rgb(255, 122, 26); box-shadow: rgb(255, 122, 26) 0px 0px 8px;'>
+            </div>
+            <span style='font-family: "JetBrains Mono"; font-size: 10px; letter-spacing: 0.22em; color: rgb(240, 230, 216);'>
+              TEXT: VENDAS
+            </span>
+            <span style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66);'>
+              TEXT: · 16
+            </span>
+          </div>
+          <div style='position: relative;'>
+            <button style='display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 7px; cursor: pointer; background: rgb(26, 22, 20); border: 1px solid rgba(255, 160, 80, 0.08); color: rgb(138, 122, 104); font-size: 12px; font-family: Inter; white-space: nowrap; transition: 120ms;'>
+              <svg>
+              <span style='color: rgb(138, 122, 104); max-width: 160px; overflow: hidden; text-overflow: ellipsis;'>
+                TEXT: Empreendimento
+              </span>
+              <svg>
+            </button>
+          </div>
+          <div style='position: relative;'>
+            <button style='display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 7px; cursor: pointer; background: rgb(26, 22, 20); border: 1px solid rgba(255, 160, 80, 0.08); color: rgb(138, 122, 104); font-size: 12px; font-family: Inter; white-space: nowrap; transition: 120ms;'>
+              <svg>
+              <span style='color: rgb(138, 122, 104); max-width: 160px; overflow: hidden; text-overflow: ellipsis;'>
+                TEXT: Período
+              </span>
+              <svg>
+            </button>
+          </div>
+          <div style='position: relative;'>
+            <button style='display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 7px; cursor: pointer; background: rgb(26, 22, 20); border: 1px solid rgba(255, 160, 80, 0.08); color: rgb(138, 122, 104); font-size: 12px; font-family: Inter; white-space: nowrap; transition: 120ms;'>
+              <svg>
+              <span style='color: rgb(138, 122, 104); max-width: 160px; overflow: hidden; text-overflow: ellipsis;'>
+                TEXT: Status
+              </span>
+              <svg>
+            </button>
+          </div>
+          <div style='flex: 1 1 0%; display: flex; align-items: center; gap: 10px; min-width: 200px; padding: 8px 12px; border-radius: 8px; background: rgb(26, 22, 20); border: 1px solid rgba(255, 160, 80, 0.08); transition: 140ms;'>
+            <svg>
+            <input style='flex: 1 1 0%; min-width: 0px; background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; outline: none; color: rgb(240, 230, 216); font-size: 13.5px; font-family: Inter;'>
+            </input>
+            <kbd>
+              TEXT: /
+            </kbd>
+          </div>
+          <button style='display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 7px; background: rgb(26, 22, 20); border: 1px solid rgba(255, 160, 80, 0.18); color: rgb(240, 230, 216); font-size: 12px; font-family: Inter; cursor: pointer; white-space: nowrap;'>
+            <svg>
+            <span>
+              TEXT: Comandos
+            </span>
+            <kbd style='margin-left: 6px;'>
+              TEXT: ⌘K
+            </kbd>
+          </button>
+          <button style='display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 7px; background: linear-gradient(135deg, rgb(255, 122, 26), rgb(201, 58, 18)); border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; color: rgb(26, 10, 4); font-size: 12px; font-weight: 600; font-family: Inter; cursor: pointer; white-space: nowrap; box-shadow: rgba(201, 58, 18, 0.35) 0px 4px 12px, rgba(255, 220, 180, 0.4) 0px 1px 0px inset;'>
+            <svg>
+            <span>
+              TEXT: Nova venda
+            </span>
+            <kbd style='margin-left: 6px; background: rgba(0, 0, 0, 0.2); border-color: rgba(0, 0, 0, 0.3); color: rgb(58, 22, 6);'>
+              TEXT: ⇧⌘N
+            </kbd>
+          </button>
+        </header>
+        <div style='flex: 1 1 0%; display: flex; min-height: 0px;'>
+          <div style='flex: 1 1 0%; min-width: 0px; overflow-y: auto; padding: 4px 0px;'>
+            <div>
+              <div style='padding: 14px 18px 6px; display: flex; align-items: center; gap: 10px;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.28em; color: rgb(90, 78, 66);'>
+                  TEXT: HOJE
+                </span>
+                <span style='flex: 1 1 0%; height: 1px; background: rgba(255, 160, 80, 0.08);'>
+                </span>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; color: rgb(90, 78, 66);'>
+                  TEXT: 3
+                </span>
+              </div>
+              <button class='row-hl' style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(255, 122, 26);'>
+                  TEXT: #15820
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: STU
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: B2MP ADMINISTRAÇÃO
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 1604 · BL ÚNICO ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 62.340.567/0001-02
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Residencial Stuttgart
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 2.328.473,22
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 2 h
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15819
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: STU
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: JOSÉ HENRIQUE DOMINGUES
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: VAGA G214 · GARAGEM ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 745.812.092-40
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Residencial Stuttgart
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 699.640,60
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 4 h
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15818
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: UNI
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: CAROLINE STRAUSS
+                    <span style='margin-left: 8px; color: rgb(255, 194, 71);'>
+                      TEXT: ⚑
+                    </span>
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 902 · A ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 112.845.678-11
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Ed. Unique Place
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 892.100,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 6 h
+                </div>
+              </button>
+            </div>
+            <div>
+              <div style='padding: 14px 18px 6px; display: flex; align-items: center; gap: 10px;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.28em; color: rgb(90, 78, 66);'>
+                  TEXT: ONTEM
+                </span>
+                <span style='flex: 1 1 0%; height: 1px; background: rgba(255, 160, 80, 0.08);'>
+                </span>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; color: rgb(90, 78, 66);'>
+                  TEXT: 2
+                </span>
+              </div>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15814
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: STU
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: MARIA EMÍLIA LATINI
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: VAGA G215 · GARAGEM ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 810.278.107-49
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Residencial Stuttgart
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 699.640,60
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 1 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15812
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: GOE
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: NOVA TERRA INVESTIMENTOS
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 1402 · A ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 22.145.789/0001-80
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Ed. Goeldner
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 1.202.800,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 1 d
+                </div>
+              </button>
+            </div>
+            <div>
+              <div style='padding: 14px 18px 6px; display: flex; align-items: center; gap: 10px;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.28em; color: rgb(90, 78, 66);'>
+                  TEXT: ESTA SEMANA
+                </span>
+                <span style='flex: 1 1 0%; height: 1px; background: rgba(255, 160, 80, 0.08);'>
+                </span>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; color: rgb(90, 78, 66);'>
+                  TEXT: 4
+                </span>
+              </div>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15780
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: STU
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: ROSANE MARIA GIACOMINI
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: VAGA G217 · GARAGEM ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 421.612.959-35
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Residencial Stuttgart
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 2.026.503,47
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 3 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15779
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: STU
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: FLAVIO HORMANN
+                    <span style='margin-left: 8px; color: rgb(255, 194, 71);'>
+                      TEXT: ⚑
+                    </span>
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: VAGA G218 · GARAGEM ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 448.820.440-91
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Residencial Stuttgart
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 2.026.503,48
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 3 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15770
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: HSP
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: PAULO ROBERTO MENDES
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 1401 · A ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 331.122.844-09
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Ed. HS Prime
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 1.410.500,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 4 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15765
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: GRN
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: ANDRÉ ROCHA
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: CASA 47 · GLEBA II ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 112.890.553-42
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Green Village I e II
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 680.000,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 5 d
+                </div>
+              </button>
+            </div>
+            <div>
+              <div style='padding: 14px 18px 6px; display: flex; align-items: center; gap: 10px;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.28em; color: rgb(90, 78, 66);'>
+                  TEXT: ESTE MÊS
+                </span>
+                <span style='flex: 1 1 0%; height: 1px; background: rgba(255, 160, 80, 0.08);'>
+                </span>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; color: rgb(90, 78, 66);'>
+                  TEXT: 4
+                </span>
+              </div>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15700
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: UNI
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: SCHUTZLER CONSULTORIA
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: VAGA G219 · GARAGEM ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 36.044.038/0001-22
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Ed. Unique Place
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 2.792.418,26
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 12 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15680
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: STU
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: EDUARDO SILVEIRA
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 905 · BL ÚNICO ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 882.543.110-71
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Residencial Stuttgart
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 1.840.000,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 14 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15640
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: PIE
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: JULIA SCHMITT
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 705 · A ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 441.230.998-22
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Res. Piemonte
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 540.000,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 17 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15580
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: ATH
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: RICARDO MOURA
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 901 · B ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 109.844.211-30
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Ed. Palas Athenas
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 1.310.500,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 21 d
+                </div>
+              </button>
+            </div>
+            <div>
+              <div style='padding: 14px 18px 6px; display: flex; align-items: center; gap: 10px;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.28em; color: rgb(90, 78, 66);'>
+                  TEXT: ANTERIORES
+                </span>
+                <span style='flex: 1 1 0%; height: 1px; background: rgba(255, 160, 80, 0.08);'>
+                </span>
+                <span style='font-family: "JetBrains Mono"; font-size: 9.5px; color: rgb(90, 78, 66);'>
+                  TEXT: 3
+                </span>
+              </div>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15440
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: HSP
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: RENATA BUENO
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 1302 · A ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 445.812.900-22
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Ed. HS Prime
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 720.440,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 92, 92); box-shadow: rgb(255, 92, 92) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(255, 92, 92);'>
+                    TEXT: DISTRATADA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 95 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15401
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: ILH
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: CAMILA ANDRADE
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: APTO 1101 · B ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 221.987.045-66
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Res. Ilha Ventura
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 1.620.100,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 102 d
+                </div>
+              </button>
+              <button style='position: relative; width: 100%; display: grid; grid-template-columns: 56px 36px 1fr 200px 120px 90px 90px; align-items: center; gap: 14px; padding: 10px 18px; background: transparent; border-width: medium medium 1px; border-style: none none solid; border-color: currentcolor currentcolor rgba(255, 160, 80, 0.08); border-image: initial; cursor: pointer; color: rgb(240, 230, 216); text-align: left;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(90, 78, 66);'>
+                  TEXT: #15311
+                </span>
+                <span style='width: 30px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15)); border: 1px solid rgba(255, 140, 42, 0.25); font-family: "JetBrains Mono"; font-size: 9.5px; font-weight: 600; color: rgb(255, 210, 138); display: flex; align-items: center; justify-content: center; letter-spacing: 0.04em;'>
+                  TEXT: TER
+                </span>
+                <div style='min-width: 0px;'>
+                  <div style='font-size: 13.5px; font-weight: 500; color: rgb(240, 230, 216); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                    TEXT: EDUARDO SILVEIRA
+                  </div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104); margin-top: 2px;'>
+                    TEXT: LOTE 218 · QUADRA 4 ·
+                    <span style='color: rgb(90, 78, 66);'>
+                      TEXT: 882.543.110-71
+                    </span>
+                  </div>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 11px; color: rgb(138, 122, 104);'>
+                  TEXT: Terrenos
+                </div>
+                <div style='font-family: "Space Grotesk"; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;'>
+                  TEXT: R$ 240.000,00
+                </div>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span style='width: 5px; height: 5px; border-radius: 50%; background: rgb(61, 214, 140); box-shadow: rgb(61, 214, 140) 0px 0px 6px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.16em; color: rgb(61, 214, 140);'>
+                    TEXT: ATIVA
+                  </span>
+                </div>
+                <div style='font-family: "JetBrains Mono"; font-size: 10px; color: rgb(90, 78, 66); text-align: right;'>
+                  TEXT: há 123 d
+                </div>
+              </button>
+            </div>
+          </div>
+          <aside style='width: 380px; flex-shrink: 0; border-left: 1px solid rgba(255, 160, 80, 0.08); background: rgb(18, 16, 14); overflow-y: auto;'>
+            <div style='padding: 18px 20px; border-bottom: 1px solid rgba(255, 160, 80, 0.08);'>
+              <div style='display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10px; letter-spacing: 0.22em; color: rgb(90, 78, 66);'>
+                  TEXT: CONTRATO #15820
+                </span>
+                <div style='display: flex; align-items: center; gap: 6px;'>
+                  <span class='pulse' style='width: 6px; height: 6px; border-radius: 50%; background: rgb(255, 194, 71); box-shadow: rgb(255, 194, 71) 0px 0px 8px;'>
+                  </span>
+                  <span style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.18em; color: rgb(255, 194, 71);'>
+                    TEXT: CONDICIONADA
+                  </span>
+                </div>
+              </div>
+              <h2 style='font-family: "Space Grotesk"; font-size: 19px; font-weight: 600; color: rgb(240, 230, 216); line-height: 1.25; letter-spacing: -0.005em; margin-bottom: 6px;'>
+                TEXT: B2MP ADMINISTRAÇÃO
+              </h2>
+              <div style='font-family: "JetBrains Mono"; font-size: 10.5px; color: rgb(138, 122, 104);'>
+                TEXT: 62.340.567/0001-02
+              </div>
+            </div>
+            <div style='padding: 18px 20px; border-bottom: 1px solid rgba(255, 160, 80, 0.08);'>
+              <div style='display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0px; border-bottom: 1px dashed rgba(255, 160, 80, 0.08);'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10px; letter-spacing: 0.18em; color: rgb(90, 78, 66);'>
+                  TEXT: UNIDADE
+                </span>
+                <span style='font-size: 12.5px; color: rgb(240, 230, 216);'>
+                  TEXT: APTO 1604 · BL ÚNICO
+                </span>
+              </div>
+              <div style='display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0px; border-bottom: 1px dashed rgba(255, 160, 80, 0.08);'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10px; letter-spacing: 0.18em; color: rgb(90, 78, 66);'>
+                  TEXT: OBRA
+                </span>
+                <span style='font-size: 12.5px; color: rgb(240, 230, 216);'>
+                  TEXT: Residencial Stuttgart
+                </span>
+              </div>
+              <div style='display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0px; border-bottom: 1px dashed rgba(255, 160, 80, 0.08);'>
+                <span style='font-family: "JetBrains Mono"; font-size: 10px; letter-spacing: 0.18em; color: rgb(90, 78, 66);'>
+                  TEXT: ASSINADO
+                </span>
+                <span style='font-size: 12.5px; color: rgb(240, 230, 216);'>
+                  TEXT: 19/07/24 · há 2 h
+                </span>
+              </div>
+            </div>
+            <div style='padding: 18px 20px; border-bottom: 1px solid rgba(255, 160, 80, 0.08);'>
+              <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 12px;'>
+                <div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.22em; color: rgb(90, 78, 66); margin-bottom: 4px;'>
+                    TEXT: VALOR DA VENDA
+                  </div>
+                  <div style='font-family: "Space Grotesk"; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgb(240, 230, 216);'>
+                    TEXT: R$ 2.328.473,22
+                  </div>
+                </div>
+                <div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.22em; color: rgb(90, 78, 66); margin-bottom: 4px;'>
+                    TEXT: PARCELAS
+                  </div>
+                  <div style='font-family: "Space Grotesk"; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgb(240, 230, 216);'>
+                    TEXT: 120x
+                  </div>
+                </div>
+                <div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.22em; color: rgb(90, 78, 66); margin-bottom: 4px;'>
+                    TEXT: ENTRADA
+                  </div>
+                  <div style='font-family: "Space Grotesk"; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgb(240, 230, 216);'>
+                    TEXT: R$ 349.270,98
+                  </div>
+                </div>
+                <div>
+                  <div style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.22em; color: rgb(90, 78, 66); margin-bottom: 4px;'>
+                    TEXT: VPL ESTIMADO
+                  </div>
+                  <div style='font-family: "Space Grotesk"; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgb(240, 230, 216);'>
+                    TEXT: R$ 1.816.209,11
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style='padding: 18px 20px; border-bottom: 1px solid rgba(255, 160, 80, 0.08);'>
+              <div style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.22em; color: rgb(90, 78, 66); margin-bottom: 10px;'>
+                TEXT: CRONOGRAMA · 12 MESES
+              </div>
+              <div style='display: flex; align-items: flex-end; gap: 3px; height: 48px;'>
+                <div style='flex: 1 1 0%; height: 93.3616%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 40.8727%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 91.6374%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 34.1433%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 82.0634%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 96.4778%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 44.7631%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 86.1476%; background: linear-gradient(rgb(255, 154, 74), rgb(201, 58, 18)); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 73.9339%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 84.3874%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 82.2921%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 53.1725%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 42.1831%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 99.6633%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 63.3601%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 87.3167%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 97.4281%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 63.6635%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 38.9549%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 34.7531%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 83.2493%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 66.2645%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 80.8049%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+                <div style='flex: 1 1 0%; height: 81.2841%; background: rgba(255, 140, 42, 0.18); border-radius: 1px;'>
+                </div>
+              </div>
+            </div>
+            <div style='padding: 14px 14px 18px;'>
+              <div style='font-family: "JetBrains Mono"; font-size: 9.5px; letter-spacing: 0.22em; color: rgb(90, 78, 66); padding: 0px 6px 8px;'>
+                TEXT: AÇÕES
+              </div>
+              <button style='width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; color: rgb(240, 230, 216); cursor: pointer; text-align: left;'>
+                <svg>
+                <span style='flex: 1 1 0%; font-size: 12.5px;'>
+                  TEXT: Abrir estrutura financeira
+                </span>
+                <kbd>
+                  TEXT: ↵
+                </kbd>
+              </button>
+              <button style='width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; color: rgb(240, 230, 216); cursor: pointer; text-align: left;'>
+                <svg>
+                <span style='flex: 1 1 0%; font-size: 12.5px;'>
+                  TEXT: Lançar parcela manual
+                </span>
+                <kbd>
+                  TEXT: ⌘L
+                </kbd>
+              </button>
+              <button style='width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; color: rgb(240, 230, 216); cursor: pointer; text-align: left;'>
+                <svg>
+                <span style='flex: 1 1 0%; font-size: 12.5px;'>
+                  TEXT: Reconciliar com Questor
+                </span>
+                <kbd>
+                  TEXT: ⇧⌘R
+                </kbd>
+              </button>
+              <button style='width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; color: rgb(240, 230, 216); cursor: pointer; text-align: left;'>
+                <svg>
+                <span style='flex: 1 1 0%; font-size: 12.5px;'>
+                  TEXT: Exportar contrato (.pdf)
+                </span>
+                <kbd>
+                  TEXT: ⇧⌘E
+                </kbd>
+              </button>
+              <button style='width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 6px; background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: initial; color: rgb(255, 156, 156); cursor: pointer; text-align: left;'>
+                <svg>
+                <span style='flex: 1 1 0%; font-size: 12.5px;'>
+                  TEXT: Distratar contrato
+                </span>
+                <kbd>
+                  TEXT: ⇧⌘D
+                </kbd>
+              </button>
+            </div>
+          </aside>
+        </div>
+        <footer style='border-top: 1px solid rgba(255, 160, 80, 0.08); background: rgb(18, 16, 14); padding: 8px 16px; display: flex; align-items: center; gap: 18px; flex-shrink: 0; font-family: "JetBrains Mono"; font-size: 10px; letter-spacing: 0.16em; color: rgb(90, 78, 66);'>
+          <span>
+            <kbd>
+              TEXT: ↑
+            </kbd>
+            <kbd style='margin-left: 2px;'>
+              TEXT: ↓
+            </kbd>
+            TEXT: NAVEGAR
+          </span>
+          <span>
+            <kbd>
+              TEXT: ↵
+            </kbd>
+            TEXT: AÇÃO
+          </span>
+          <span>
+            <kbd>
+              TEXT: /
+            </kbd>
+            TEXT: BUSCAR
+          </span>
+          <span>
+            <kbd>
+              TEXT: ⌘K
+            </kbd>
+            TEXT: COMANDOS
+          </span>
+          <span>
+            <kbd>
+              TEXT: ⇧⌘N
+            </kbd>
+            TEXT: NOVA VENDA
+          </span>
+          <span style='flex: 1 1 0%;'>
+          </span>
+          <span>
+            TEXT: EXIBINDO
+            <span style='color: rgb(240, 230, 216);'>
+              TEXT: 16
+            </span>
+            TEXT: · TOTAL
+            <span style='color: rgb(255, 122, 26);'>
+              TEXT: R$ 21,03M
+            </span>
+          </span>
+        </footer>
+      </div>
+    </div>
+  </div>
+</body>
