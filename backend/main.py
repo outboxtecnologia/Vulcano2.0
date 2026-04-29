@@ -1027,12 +1027,153 @@ def api_custos_lcto(req: CustoLctoReq):
         conn_vulcano.close()
         conn_questor.close()
 
+@app.post("/api/sero/importar-pdf")
+async def api_sero_importar_pdf(file: UploadFile = File(...)):
+    """
+    Importa e processa o PDF do extrato SERO utilizando Vertex AI para extrair 
+    as alocações de empresas terceirizadas.
+    """
+    import io
+    import pdfplumber
+    import asyncio
+    from fastapi import HTTPException
+    
+    _require_gemini_key()
+    
+    try:
+        content = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao ler arquivo: {e}")
+        
+    def _extract_pages(raw: bytes) -> list[str]:
+        result = []
+        max_pages = 20
+        max_chars = 4500
+        with pdfplumber.open(io.BytesIO(raw)) as pdf:
+            for i, page in enumerate(pdf.pages):
+                if i >= max_pages: break
+                extracted = page.extract_text() or page.extract_text(layout=True) or ""
+                text = extracted.strip()
+                if text:
+                    for j in range(0, len(text), max_chars):
+                        result.append(f"--- Página {i + 1} (Parte {j//max_chars + 1}) ---\n{text[j:j+max_chars]}")
+        return result
+
+    try:
+        chunks = await asyncio.to_thread(_extract_pages, content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro ao extrair texto do PDF: {e}")
+
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Não foi possível extrair texto do PDF.")
+
+    schema = '{"registros":[{"competencia":"","cnpj_cpf":"","origem":"","valor_original":0.0,"taxa_correcao":0.0,"valor_atualizado":0.0}]}'
+    
+    async def process_chunk(chunk_text: str):
+        prompt = f"Extraia TODOS os registros de abatimentos do SERO da tabela de Créditos. É EXTREMAMENTE IMPORTANTE que você extraia TODAS as linhas que contêm uma Competência (ex: 10/2023) e um CNPJ/CPF válido, incluindo as primeiras linhas logo abaixo do cabeçalho. Não pule nenhuma linha válida! Retorne Competência, CPF/CNPJ, Origem, Valor Original, Taxa de Correção Monetária e Valor Atualizado. Retorne APENAS JSON no formato indicado:\n{schema}\n\nTexto:\n{chunk_text}"
+        try:
+            return await _gemini_generate_json_async(prompt)
+        except Exception as e:
+            print(f"Erro no chunk SERO: {e}")
+            return {"registros": []}
+
+    # Dispara páginas em paralelo conforme regra do AGENTS.md
+    tasks = [process_chunk(chunk) for chunk in chunks]
+    results = await asyncio.gather(*tasks)
+
+    # Consolida os registros
+    todas_empresas = []
+    for res in results:
+        regs = res.get("registros", [])
+        for r in regs:
+            # Filtra registros inválidos ou vazios (exigindo cnpj_cpf e valor_atualizado)
+            if r.get("cnpj_cpf") and r.get("valor_atualizado") is not None:
+                todas_empresas.append(r)
+
+    def parse_comp(comp: str):
+        if not comp: return "0000-00"
+        c = str(comp).strip()
+        if "/" in c:
+            parts = c.split("/")
+            if len(parts) == 2:
+                m, y = parts[0].strip(), parts[1].strip()
+                if len(y) == 2: y = "20" + y
+                if len(y) == 4:
+                    return f"{y}-{m.zfill(2)}"
+        return c
+
+    for emp in todas_empresas:
+        emp["competencia"] = parse_comp(emp.get("competencia", ""))
+
+    # Ordena por competencia cronológica (crescente)
+    todas_empresas.sort(key=lambda x: x.get("competencia", ""), reverse=False)
+    return todas_empresas
+
+class SeroSalvarInput(BaseModel):
+    empresa_id: int
+    registros: list[dict]
+
+@app.post("/api/sero/salvar-importacao")
+def api_sero_salvar_importacao(payload: SeroSalvarInput):
+    """Salva os dados do extrato SERO extraídos do PDF no banco de dados SQLite."""
+    conn = None
+    try:
+        import sqlite3
+        conn = sqlite3.connect(POC_DATABASE_FILE)
+        cur = conn.cursor()
+        
+        def norm_comp(c):
+            c = (c or '').strip()
+            if "/" in c:
+                p = c.split("/")
+                if len(p) == 2:
+                    y, m = p[1].strip(), p[0].strip()
+                    if len(y) == 4:
+                        return f"{y}-{m.zfill(2)}"
+            return c
+
+        competencias = list(set([norm_comp(reg.get('competencia')) for reg in payload.registros if reg.get('competencia')]))
+        if competencias:
+            placeholders = ','.join(['?'] * len(competencias))
+            cur.execute(f"DELETE FROM SERO_IMPORTACOES WHERE empresa_id = ? AND competencia IN ({placeholders})", [payload.empresa_id] + competencias)
+        
+        inserts = []
+        for reg in payload.registros:
+            inserts.append((
+                payload.empresa_id,
+                norm_comp(reg.get('competencia')),
+                reg.get('cnpj_cpf', ''),
+                reg.get('origem', ''),
+                float(reg.get('valor_original', 0) or 0),
+                float(reg.get('taxa_correcao', 0) or 0),
+                float(reg.get('valor_atualizado', 0) or 0)
+            ))
+            
+        cur.executemany('''
+            INSERT INTO SERO_IMPORTACOES (
+                empresa_id, competencia, cnpj_cpf, origem, 
+                valor_original, taxa_correcao, valor_atualizado
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', inserts)
+        
+        conn.commit()
+        return {"success": True, "message": f"{len(inserts)} registros salvos com sucesso.", "inseridos": len(inserts)}
+    except Exception as e:
+        if conn: conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
 @app.get("/api/sero/maodeobra")
 def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cno: str = None):
+    cc_filtro = None
+    if cno and "|" in cno:
+        cno, cc_filtro = cno.split("|")
     """
     Apuracao SERO/INSS real a partir das tabelas Questor.
     - Folha propria:  CALCULORATEIO (evento 5041) + PERIODOCALCULO (competencia)
-    - Folha terceiros: TERCEIROPGTO.VALORORIGEMGPS (tem COMPET direto)
+    - Folha terceiros: TERCEIROPGTO.VALORORIGEMGPS ou TERCEIROPGTOSERVICO.VALOR (tem COMPET direto)
     - Cadastro obra:  OUTRAEMPRESA + OUTRAEMPEMP (INSCRFEDPROPRIET = CNPJ proprietario)
     - Metragem:       EMPREENDIMENTO.METRAGEMTOTAL (Vulcano, match por CNPJ)
     - CUB:            INDICE_REAJUSTE_TABELA (Vulcano) com fallback para historico embutido
@@ -1212,43 +1353,54 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
 
 
         # 4. Folha propria: CALCULORATEIO evento 5041 + PERIODOCALCULO
-        cur_q.execute(
+        sql_folha = (
             "SELECT C.CODIGOOUTEMP, P.COMPET, SUM(C.VALOREVENTO)"
             " FROM CALCULORATEIO C"
             " JOIN PERIODOCALCULO P ON P.CODIGOPERCALCULO = C.CODIGOPERCALCULO"
             " WHERE C.CODIGOEVENTO = 5041 AND C.CODIGOEMPRESA = ?"
-            " AND C.CODIGOOUTEMP IN (" + placeholders + ")"
-            " GROUP BY C.CODIGOOUTEMP, P.COMPET ORDER BY P.COMPET",
-            tuple([empresa_id] + outemps_list)
         )
+        params_folha = [empresa_id]
+        
+        if cc_filtro:
+            sql_folha += f" AND C.CODIGOCENTROCUSTO = {int(cc_filtro)}"
+        else:
+            sql_folha += " AND C.CODIGOOUTEMP IN (" + placeholders + ")"
+            params_folha.extend(outemps_list)
+            
+        sql_folha += " GROUP BY C.CODIGOOUTEMP, P.COMPET ORDER BY P.COMPET"
+        
+        cur_q.execute(sql_folha, tuple(params_folha))
         folha_rows = cur_q.fetchall()
 
-        # 5. Terceiros GPS: TERCEIROPGTO.VALORORIGEMGPS (COMPET direto)
-        cur_q.execute(
-            "SELECT CODIGOOUTEMP, COMPET, SUM(VALORORIGEMGPS)"
-            " FROM TERCEIROPGTO"
-            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
-            " GROUP BY CODIGOOUTEMP, COMPET",
-            tuple([empresa_id] + outemps_list)
-        )
-        terceiro_rows = cur_q.fetchall()
+        # A pedido do usuário, "Terceiros GPS" e "Empreiteiras PJ" do Questor 
+        # foram removidos da apuração, pois não possuem CC amarrado confiavelmente.
+        # Os terceiros virão exclusivamente do PDF SERO importado.
 
-        # 5.1 Empreiteiras PJ: OUTRAEMPPGTOSERVICO.BASEGPS
-        cur_q.execute(
-            "SELECT CODIGOOUTEMP, COMPET, SUM(BASEGPS)"
-            " FROM OUTRAEMPPGTOSERVICO"
-            " WHERE CODIGOEMPRESA = ? AND CODIGOOUTEMP IN (" + placeholders + ")"
-            " GROUP BY CODIGOOUTEMP, COMPET",
-            tuple([empresa_id] + outemps_list)
-        )
-        terceiro_rows.extend(cur_q.fetchall())
-        terceiro_rows.sort(key=lambda x: x[1])  # Reordena por COMPET
+        import sqlite3
+        conn_lite = sqlite3.connect(POC_DATABASE_FILE)
+        cur_lite = conn_lite.cursor()
+        cur_lite.execute("SELECT competencia, cnpj_cpf, origem, valor_atualizado FROM SERO_IMPORTACOES WHERE empresa_id = ?", (empresa_id,))
+        sero_importados = cur_lite.fetchall()
+        conn_lite.close()
+        
+        def norm_comp(c):
+            c = (c or '').strip()
+            if "/" in c:
+                p = c.split("/")
+                if len(p) == 2:
+                    y, m = p[1].strip(), p[0].strip()
+                    if len(y) == 4:
+                        return f"{y}-{m.zfill(2)}"
+            return c
+
+        competencias_importadas = set(norm_comp(r[0]) for r in sero_importados)
 
         # 6. Agrega por competencia
         from collections import defaultdict
         historico_mensal = defaultdict(lambda: {"realizado": 0.0, "previsto": 0.0})
         total_folha = total_terceiros = 0.0
         alocacoes_t = []
+        alocacoes_f = []
 
         for (outemp, compet_dt, valor) in folha_rows:
             comp = str(compet_dt)[:7]
@@ -1257,19 +1409,23 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
             # Acumula total até o mês selecionado (inclusive)
             if comp <= compet_alvo:
                 total_folha += v
+                alocacoes_f.append({
+                    "compet": comp,
+                    "codigooutemp": outemp,
+                    "nome_obra": obras_cadastro.get(outemp, {}).get("nome", f"Obra {outemp}"),
+                    "valor": round(v, 2)
+                })
 
-        for (outemp, compet_dt, valor) in terceiro_rows:
-            comp = str(compet_dt)[:7]
-            v = float(valor or 0)
+        for (comp, cnpj_cpf, origem, valor_atualizado) in sero_importados:
+            comp = norm_comp(comp)
+            v = float(valor_atualizado or 0)
             historico_mensal[comp]["realizado"] += v
-            info = obras_cadastro.get(outemp, {})
-            # Tabela e total: todos os registros até o mês selecionado
             if comp <= compet_alvo:
                 total_terceiros += v
                 alocacoes_t.append({
-                    "compet": comp, "codigooutemp": outemp,
-                    "nome_obra": info.get("nome", ""),
-                    "cno": info.get("inscricao", ""),
+                    "compet": comp, "codigooutemp": "SERO",
+                    "nome_obra": (origem or "") + " (SERO PDF)",
+                    "cno": cnpj_cpf,
                     "valor_recolhido": round(v, 2),
                 })
 
@@ -1313,6 +1469,7 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
                 "cub_vigente":               cub_vigente,
                 "area_total":                round(area_total, 2),
             },
+            "alocacoes_folha": sorted(alocacoes_f, key=lambda x: x["compet"], reverse=True),
             "alocacoes_terceiros": sorted(alocacoes_t, key=lambda x: x["compet"], reverse=True),
             "curva_s": curva_s,
         }
@@ -2437,6 +2594,10 @@ async def _janitor_startup():
     """Inicia tasks assíncronas do Janitor SRE na inicialização do servidor."""
     await start_profiler()           # Writer daemon de métricas
     asyncio.create_task(run_disk_scan())  # Scanner de disco (roda a cada 30 min)
+    
+    # Iniciar o Watcher da Fila Automática de PDFs
+    from core.services.queue_watcher import start_queue_watcher
+    start_queue_watcher(_get_smart_importer_db(), _gemini_generate_json_async)
 
 from fastapi import Request
 @app.middleware("http")
@@ -3757,7 +3918,10 @@ def get_vulcano_venda_condicoes(venda_id: int):
 @app.get("/api/vulcano/recebimentos")
 def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, data_ini: str = None, data_fim: str = None):
     import sqlite3
+    import pandas as pd
+    import numpy as np
     s_conn = None
+    conn = None
     try:
         locais = {}
         try:
@@ -3771,14 +3935,14 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             if s_conn: s_conn.close()
             
         conn = get_conn("vulcano")
-        query = """
-            SELECT r.DATA, r.TOTALPAGO, r.VALORPARCELA, r.VALORVARIACAO, v.DESCUNIDIMOB, c.CNPJ, r.PARCELA, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO, r.OBS, r.ID, v.TOTALVENDA, r.DESCONTO
+        query = '''
+            SELECT r.DATA, r.TOTALPAGO, r.VALORPARCELA, r.VALORVARIACAO, v.DESCUNIDIMOB, c.CNPJ, r.PARCELA, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO, r.OBS, r.ID, v.TOTALVENDA, r.DESCONTO, v.ID AS VENDA_ID
             FROM VENDA v
             JOIN RECEBER r ON r.IDVENDA = v.ID
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
             WHERE v.CODIGOEMPRESA = ?
-        """
+        '''
         params = [empresa_id]
         
         if empreendimento_id:
@@ -3797,7 +3961,6 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
         
         df = pd.read_sql_query(query, conn, params=tuple(params))
         df = df.replace({np.nan: None})
-        conn.close()
 
         def safe_dec(x):
             if isinstance(x, bytes):
@@ -3808,7 +3971,6 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             if col in df.columns:
                 df[col] = df[col].map(safe_dec)
 
-        # Vetorização de formatação de data e numéricos
         df['DATA_STR'] = pd.to_datetime(df['DATA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['DATA_ISO'] = pd.to_datetime(df['DATA'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
         df['TOTALPAGO'] = df['TOTALPAGO'].fillna(0).astype(float)
@@ -3829,13 +3991,23 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             'CLIENTE_NOME': 'cliente',
             'EMPREENDIMENTO': 'empreendimento',
             'OBS': 'obs',
-            'DESCONTO': 'desconto'
+            'DESCONTO': 'desconto',
+            'VENDA_ID': 'venda_id'
         }).fillna('')
         
-        result_list = df_mapped[['id', 'data', 'vencimento_iso', 'total', 'parcela', 'variacao', 'descricao_venda', 'cliente_cnpj', 'num_parcela', 'cliente', 'empreendimento', 'obs', 'desconto']].to_dict('records')
+        result_list = df_mapped[['id', 'data', 'vencimento_iso', 'total', 'parcela', 'variacao', 'descricao_venda', 'cliente_cnpj', 'num_parcela', 'cliente', 'empreendimento', 'obs', 'desconto', 'venda_id']].to_dict('records')
+        
+        assinaturas_receber = set()
         
         for item in result_list:
             rid = item['id']
+            
+            v_id = item.get('venda_id')
+            d_iso = item.get('vencimento_iso')
+            val = float(item.get('parcela') or 0)
+            if v_id and d_iso:
+                assinaturas_receber.add((v_id, d_iso, round(val, 2)))
+                
             if rid in locais:
                 db_l = locais[rid]
                 item['total'] = db_l[1]
@@ -3849,10 +4021,91 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                 item['acrescimo_local'] = 0.0
                 item['status_sistema'] = 'BAIXADO_LEGADO' if float(item.get('total', 0) or 0) > 0 else 'ABERTO'
                 
+        # --- PARCELAS ABERTAS PROJETADAS ---
+        try:
+            conn_sq = get_conn("sqlite")
+            cur_sq = conn_sq.cursor()
+            
+            query_v = '''
+                SELECT v.ID, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO
+                FROM VENDA v
+                LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+                LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+                WHERE v.CODIGOEMPRESA = ?
+            '''
+            params_v = [empresa_id]
+            if empreendimento_id:
+                query_v += " AND v.IDEMPREENDIMENTO = ?"
+                params_v.append(empreendimento_id)
+            
+            df_v = pd.read_sql_query(query_v, conn, params=tuple(params_v))
+            df_v = df_v.replace({np.nan: None})
+            for col in ['DESCUNIDIMOB', 'CNPJ', 'CLIENTE_NOME', 'EMPREENDIMENTO']:
+                if col in df_v.columns:
+                    df_v[col] = df_v[col].map(safe_dec)
+            
+            vendas_dict = df_v.set_index('ID').to_dict('index')
+            venda_ids = list(vendas_dict.keys())
+            
+            if venda_ids:
+                chunk_size = 900
+                for i in range(0, len(venda_ids), chunk_size):
+                    chunk = venda_ids[i:i+chunk_size]
+                    placeholders = ','.join('?' * len(chunk))
+                    cur_sq.execute(f'''
+                        SELECT prazo_id, data_venc, parcela_ref, valor, venda_id
+                        FROM parcelas_abertas_projetadas
+                        WHERE venda_id IN ({placeholders})
+                    ''', chunk)
+                    
+                    for p in cur_sq.fetchall():
+                        d_str = p[1]
+                        val = float(p[3] or 0)
+                        v_id = p[4]
+                        
+                        if (v_id, d_str, round(val, 2)) in assinaturas_receber:
+                            continue
+                            
+                        if data_ini and d_str < data_ini: continue
+                        if data_fim and d_str > data_fim: continue
+                        
+                        v_info = vendas_dict.get(v_id, {})
+                        try:
+                            d_fmt = pd.to_datetime(d_str).strftime('%d/%m/%Y')
+                        except:
+                            d_fmt = d_str
+                            
+                        result_list.append({
+                            'id': f"prazo_{p[0]}",
+                            'data': d_fmt,
+                            'vencimento_iso': d_str,
+                            'total': 0.0,
+                            'parcela': val,
+                            'variacao': 0.0,
+                            'descricao_venda': v_info.get('DESCUNIDIMOB', ''),
+                            'cliente_cnpj': v_info.get('CNPJ', ''),
+                            'num_parcela': p[2] or '',
+                            'cliente': v_info.get('CLIENTE_NOME', ''),
+                            'empreendimento': v_info.get('EMPREENDIMENTO', ''),
+                            'obs': 'Prevista (Em aberto - Vulcano 2.0)',
+                            'desconto': 0.0,
+                            'data_pagamento': '',
+                            'desconto_local': 0.0,
+                            'acrescimo_local': 0.0,
+                            'status_sistema': 'ABERTO'
+                        })
+            conn_sq.close()
+        except Exception as e_sq:
+            print("Erro ao integrar parcelas projetadas:", e_sq)
+
+        result_list.sort(key=lambda x: x.get('vencimento_iso') or '')
+
         return result_list
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
 
 class BaixaInput(BaseModel):
     id_receber: int
@@ -6867,11 +7120,6 @@ def fiscal_gerar_dimob():
 
 @app.get("/api/sero/obras")
 def get_sero_obras(empresa_id: int):
-    """Retorna obras próprias (TIPOOUTEMP=1) vinculadas à empresa no Questor.
-    TIPOOUTEMP=1 → Obras com CNO/CEI (empreendimentos da empresa).
-    TIPOOUTEMP=2 → Empresa própria (ex: Stuttgart via OUTEMP 8734).
-    Filtro real: apenas OUTEMPs com dados no CALCULORATEIO (evento 5041) ou TERCEIROPGTO.
-    """
     try:
         conn_q = get_conn("questor")
         conn_v = get_conn("vulcano")
@@ -6915,45 +7163,58 @@ def get_sero_obras(empresa_id: int):
         """, tuple([empresa_id] + list(todos_outemps)))
         rows_q = cur_q.fetchall()
 
-        # Busca empreendimentos EM CONSTRUCAO no Vulcano para enriquecer TIPOOUTEMP=2
-        # (obras ativas, ordenadas da mais recente para a mais antiga)
         try:
             cur_v.execute("""
-                SELECT NOME FROM EMPREENDIMENTO
+                SELECT ID, NOME, CODIGOCENTROCUSTO FROM EMPREENDIMENTO
                 WHERE CODIGOEMPRESA = ?
                   AND (OBRACONCLUIDA = 'N' OR OBRACONCLUIDA IS NULL)
                 ORDER BY ID DESC
             """, (empresa_id,))
-            nomes_ativos = [dec(r[0]) for r in cur_v.fetchall() if r[0]]
+            vulcano_projetos = cur_v.fetchall()
         except Exception:
-            # Fallback se a coluna não existir
             cur_v.execute("""
-                SELECT NOME FROM EMPREENDIMENTO
+                SELECT ID, NOME, CODIGOCENTROCUSTO FROM EMPREENDIMENTO
                 WHERE CODIGOEMPRESA = ? ORDER BY ID DESC
             """, (empresa_id,))
-            nomes_ativos = [dec(r[0]) for r in cur_v.fetchall() if r[0]]
-        sufixo_vulcano = " / ".join(nomes_ativos[:2]) if nomes_ativos else ""
-
+            vulcano_projetos = cur_v.fetchall()
 
         obras = []
         for r in rows_q:
+            cod = r[0]
             nome_q = dec(r[1])
             tipo   = dec(r[4])
-            # Para TIPOOUTEMP=2, o INSCRFEDERAL é o CNPJ da empresa — usa nome do Vulcano
-            if tipo == "2" and sufixo_vulcano:
-                nome_display = f"{nome_q}  [{sufixo_vulcano[:60]}]"
-            else:
-                nome_display = nome_q
+            inscr  = dec(r[2])
+            cnpj_prop = dec(r[3])
+            tem_folha = cod in outemps_folha
+            tem_gps = cod in outemps_gps
+            
+            if tipo == "2":
+                if vulcano_projetos:
+                    for pid, pnome, pcc in vulcano_projetos:
+                        if pcc:
+                            obras.append({
+                                "id": f"{cod}|{pcc}",
+                                "nome": f"{dec(pnome)} (CC {pcc})",
+                                "nome_questor": nome_q,
+                                "inscricao": inscr,
+                                "cnpj_proprietario": cnpj_prop,
+                                "tipo": 2,
+                                "tem_folha": tem_folha,
+                                "tem_gps": tem_gps,
+                            })
+                    continue 
+            
             obras.append({
-                "id": r[0],
-                "nome": nome_display,
+                "id": str(cod),
+                "nome": nome_q,
                 "nome_questor": nome_q,
-                "inscricao": dec(r[2]),
-                "cnpj_proprietario": dec(r[3]),
-                "tipo": tipo,
-                "tem_folha": r[0] in outemps_folha,
-                "tem_gps": r[0] in outemps_gps,
+                "inscricao": inscr,
+                "cnpj_proprietario": cnpj_prop,
+                "tipo": int(tipo) if tipo else 1,
+                "tem_folha": tem_folha,
+                "tem_gps": tem_gps,
             })
+            
         conn_q.close(); conn_v.close()
         return obras
     except Exception as e:
@@ -7518,6 +7779,20 @@ def _get_smart_importer_db() -> _sqlite3.Connection:
             criado_em TEXT DEFAULT (datetime('now'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS smart_importer_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            file_hash TEXT UNIQUE NOT NULL,
+            file_type TEXT NOT NULL,
+            target_table TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDENTE',
+            empresa_id_detectada INTEGER,
+            cnpj_detectado TEXT,
+            extracted_json TEXT,
+            criado_em TEXT DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()
     return conn
 
@@ -7669,3 +7944,43 @@ if os.path.exists(frontend_dist):
         if os.path.exists(index_file):
             return FileResponse(index_file)
         return {"error": "Frontend build not found"}
+
+# ── API Smart Importer Queue ──────────────────────────────────────────────────
+@app.get("/api/smart-importer/queue")
+def api_get_queue():
+    conn = _get_smart_importer_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, filename, file_type, target_table, status, empresa_id_detectada, cnpj_detectado, criado_em FROM smart_importer_queue ORDER BY id DESC")
+    rows = cur.fetchall()
+    return [{
+        "id": r[0], "filename": r[1], "file_type": r[2], "target_table": r[3],
+        "status": r[4], "empresa_id_detectada": r[5], "cnpj_detectado": r[6], "criado_em": r[7]
+    } for r in rows]
+
+@app.delete("/api/smart-importer/queue/{queue_id}")
+def api_delete_queue(queue_id: int):
+    conn = _get_smart_importer_db()
+    conn.execute("DELETE FROM smart_importer_queue WHERE id = ?", (queue_id,))
+    conn.commit()
+    return {"success": True}
+
+@app.post("/api/smart-importer/queue/{queue_id}/approve")
+def api_approve_queue(queue_id: int):
+    conn = _get_smart_importer_db()
+    cur = conn.cursor()
+    cur.execute("SELECT extracted_json, filename FROM smart_importer_queue WHERE id = ?", (queue_id,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Não encontrado na fila")
+    try:
+        import json
+        data = json.loads(row[0]) if row[0] else []
+        columns = list(data[0].keys()) if data else []
+        return {
+            "columns": columns,
+            "preview": data[:5],
+            "all_rows": data,
+            "filename": row[1]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro processando JSON extraído: {e}")

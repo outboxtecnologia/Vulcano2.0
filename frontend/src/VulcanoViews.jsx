@@ -405,1063 +405,794 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
 export const VendasView = ({ selectedEmpresa }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState('');
-  const [dataIniFilter, setDataIniFilter] = useState('');
-  const [dataFimFilter, setDataFimFilter] = useState('');
-  const [compradorFilter, setCompradorFilter] = useState('');
-  const [unidadeFilter, setUnidadeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('TODOS');
+  const [periodFilter, setPeriodFilter] = useState('TODOS');
+  
+  const [selectedVenda, setSelectedVenda] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [distratoModal, setDistratoModal] = useState(null);
-  const [condicoesModal, setCondicoesModal] = useState(null); // { venda, payload, loading, error }
-  
-  // Custom form state
-  const [compradores, setCompradores] = useState([{ id: Date.now(), nome: '', cpf_cnpj: '', percentual: 100 }]);
-  const [condicoes, setCondicoes] = useState([{ id: Date.now() + 1, tipo: 'MENSAL', quantidade: 1, vencimento: '', valor: '', indexador: 'NENHUM' }]);
-
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 100;
-
-  const openCondicoes = async (venda) => {
-    setCondicoesModal({ venda, payload: null, loading: true, error: '' });
-    try {
-      const res = await fetch(`${API_BASE}/api/vulcano/vendas/${encodeURIComponent(venda.id)}/condicoes`);
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.detail || `Erro HTTP ${res.status}`);
-      setCondicoesModal({ venda, payload: json, loading: false, error: '' });
-    } catch (e) {
-      console.error(e);
-      setCondicoesModal({ venda, payload: null, loading: false, error: e.message || 'Falha ao carregar condições.' });
-    }
-  };
+  const [condicoesLoading, setCondicoesLoading] = useState(false);
+  const [condicoesData, setCondicoesData] = useState(null);
 
   useEffect(() => {
     if (!selectedEmpresa) return;
     setLoading(true);
     fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
       .then(res => res.json())
-      .then(d => {
-        setData(Array.isArray(d) ? d : []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(err => { console.error(err); setLoading(false); });
   }, [selectedEmpresa]);
 
   const uniqueEmps = [...new Set(data.map(v => v.empreendimento))].sort();
+
+  const handleSelectVenda = async (v) => {
+    if (selectedVenda?.id === v.id) { setSelectedVenda(null); return; }
+    setSelectedVenda(v);
+    setCondicoesLoading(true); setCondicoesData(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas/${encodeURIComponent(v.id)}/condicoes`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.detail || `Erro HTTP`);
+      setCondicoesData(json);
+    } catch (e) {
+      setCondicoesData({ error: 'Falha ao carregar fluxo financeiro.' });
+    } finally { setCondicoesLoading(false); }
+  };
+
   const filtered = data.filter(v => {
     let ok = true;
     if (empreendimentoFilter && v.empreendimento !== empreendimentoFilter) ok = false;
-    if (compradorFilter && !(v.cliente_nome || '').toLowerCase().includes(compradorFilter.toLowerCase())) ok = false;
-    if (unidadeFilter && !(v.descricao || '').toLowerCase().includes(unidadeFilter.toLowerCase())) ok = false;
-    
-    if (dataIniFilter || dataFimFilter) {
-      if (v.data && v.data.includes('/')) {
-        const [d, m, y] = v.data.split('/');
-        const vDate = new Date(y, m - 1, d);
-        if (dataIniFilter) {
-          const ini = new Date(dataIniFilter);
-          ini.setHours(0,0,0,0);
-          if (vDate < ini) ok = false;
-        }
-        if (dataFimFilter) {
-          const fim = new Date(dataFimFilter);
-          fim.setHours(23,59,59,999);
-          if (vDate > fim) ok = false;
-        }
-      }
+    if (statusFilter !== 'TODOS') {
+        if (statusFilter === 'DISTRATADA' && v.distrato !== 'S') ok = false;
+        if (statusFilter === 'ATIVA' && v.distrato === 'S') ok = false;
+    }
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const str = `${v.cliente_nome} ${v.cliente_cnpj} ${v.descricao} ${v.id}`.toLowerCase();
+        if (!str.includes(query)) ok = false;
     }
     return ok;
   });
 
-  useEffect(() => {
-     setCurrentPage(1);
-  }, [empreendimentoFilter, dataIniFilter, dataFimFilter, compradorFilter, unidadeFilter]);
+  const groupedVendas = { 'HOJE': [], 'ONTEM': [], 'ESTA SEMANA': [], 'ESTE MÊS': [], 'ANTERIORES': [] };
+  const today = new Date(); today.setHours(0,0,0,0);
+  
+  filtered.forEach(v => {
+    if (!v.data || !v.data.includes('/')) { groupedVendas['ANTERIORES'].push(v); return; }
+    const [d, m, y] = v.data.split('/');
+    const vDate = new Date(y, m - 1, d);
+    const diffTime = Math.abs(today - vDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  const totalVgv = filtered.reduce((acc, curr) => acc + (curr.total || 0), 0);
-  const totalDistratos = filtered.filter(v => v.distrato === 'S').reduce((acc, curr) => acc + (curr.total || 0), 0);
-
-  // Pagination Math
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const addComprador = () => setCompradores([...compradores, { id: Date.now(), nome: '', cpf_cnpj: '', percentual: 0 }]);
-  const updateComprador = (id, field, value) => setCompradores(compradores.map(c => c.id === id ? { ...c, [field]: value } : c));
-  const removeComprador = (id) => setCompradores(compradores.filter(c => c.id !== id));
-
-  const addCondicao = () => setCondicoes([...condicoes, { id: Date.now(), tipo: 'MENSAL', quantidade: 1, vencimento: '', valor: '', indexador: 'NENHUM' }]);
-  const updateCondicao = (id, field, value) => setCondicoes(condicoes.map(c => c.id === id ? { ...c, [field]: value } : c));
-  const removeCondicao = (id) => setCondicoes(condicoes.filter(c => c.id !== id));
+    if (diffDays === 0) groupedVendas['HOJE'].push(v);
+    else if (diffDays === 1) groupedVendas['ONTEM'].push(v);
+    else if (diffDays <= 7) groupedVendas['ESTA SEMANA'].push(v);
+    else if (vDate.getMonth() === today.getMonth() && vDate.getFullYear() === today.getFullYear()) groupedVendas['ESTE MÊS'].push(v);
+    else groupedVendas['ANTERIORES'].push(v);
+  });
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const payload = Object.fromEntries(fd);
-    payload.compradores = compradores;
-    payload.condicoes = condicoes;
-    
     try {
       await fetch(`${API_BASE}/api/vulcano/vendas`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      alert("Venda cadastrada!"); 
-      e.target.reset(); 
-      setCompradores([{ id: Date.now(), nome: '', cpf_cnpj: '', percentual: 100 }]);
-      setCondicoes([{ id: Date.now() + 1, tipo: 'MENSAL', quantidade: 1, vencimento: '', valor: '', indexador: 'NENHUM' }]);
-      setShowForm(false);
-      
-      // Reload Table
-      setLoading(true);
-      fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
-        .then(res => res.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); });
+      alert("Venda cadastrada!"); setShowForm(false); setLoading(true);
+      fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`).then(res => res.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); });
     } catch (err) { alert("Erro ao cadastrar."); }
   };
 
+  const totalGeral = filtered.reduce((acc, curr) => acc + (curr.total || 0), 0);
+
   return (
-    <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
-      {/* HEADER STITCH */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-black tracking-tighter uppercase mb-1 text-[var(--v-text-bold)] flex items-center gap-3">
-             <ShoppingCart className="text-[var(--v-accent-3)]" size={32}/> 
-             Painel de Vendas
-          </h2>
-          <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Unidades Comercializadas e Distratos</p>
-        </div>
-        <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent-3)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity flex items-center gap-2">
-          <Plus size={16}/> Cadastrar Venda
-        </button>
-      </div>
-      
-      {showForm && (
-        <div className="magma-card border border-[var(--v-accent-3)]/30 rounded-[var(--v-radius)] p-6 animate-in slide-in-from-top-4 overflow-y-auto max-h-[60vh] custom-scrollbar">
-          <div className="flex justify-between items-center mb-6 border-b border-[var(--v-border)] pb-3">
-            <h3 className="text-xs uppercase tracking-widest text-[var(--v-accent-3)] font-black">Nova Venda</h3>
-            <button type="button" onClick={() => setShowForm(false)} className="text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] text-[10px] uppercase tracking-widest font-bold">FECHAR X</button>
-          </div>
-          
-          <form className="flex flex-col gap-6" onSubmit={handleFormSubmit}>
-            <input type="hidden" name="empresa_id" value={selectedEmpresa} />
+    <div className="flex flex-col h-full animate-in fade-in" style={{ background: '#0c0908' }}>
+      {/* HEADER PODEROSO */}
+      <div className="px-6 py-4 flex flex-col gap-4 shrink-0 z-20" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+        <div className="flex justify-between items-end">
+            <div className="flex items-baseline gap-3">
+                <h2 className="text-[24px] font-black tracking-tighter" style={{ color: '#f0e6d8' }}>VENDAS</h2>
+                <span className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>· {filtered.length}</span>
+            </div>
             
-            <div className="flex gap-4">
-              <div className="w-24"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">ID Emp.</label><input name="id_empreendimento" type="number" required className="bento-input w-full" /></div>
-              <div className="w-32"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Unidade</label><input name="unidade" required className="bento-input w-full" /></div>
-              <div className="flex-1"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Total Venda</label><input name="total" type="number" step="0.01" required className="bento-input w-full" /></div>
-              <div className="w-40"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Data Venda</label><input name="data" type="date" required className="bento-input w-full" /></div>
-            </div>
-
-            <div className="border border-[var(--v-border)] bg-[var(--v-surface-container)] p-4 rounded-[var(--v-radius)]">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest font-bold flex items-center gap-2"><Users size={12}/> Compradores / Sociedade</h4>
-                <button type="button" onClick={addComprador} className="text-[var(--v-accent-3)] hover:text-[var(--v-text-bold)] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Adicionar Comprador</button>
-              </div>
-              <div className="flex flex-col gap-3">
-                {compradores.map((comp, idx) => (
-                  <div key={comp.id} className="flex gap-3 items-end">
-                    <div className="flex-1"><label className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest block mb-1">Nome/Razão Social</label><input value={comp.nome} onChange={(e) => updateComprador(comp.id, 'nome', e.target.value)} required className="bento-input w-full" /></div>
-                    <div className="w-40"><label className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest block mb-1">CPF/CNPJ</label><input value={comp.cpf_cnpj} onChange={(e) => updateComprador(comp.id, 'cpf_cnpj', e.target.value)} required className="bento-input w-full" /></div>
-                    <div className="w-24"><label className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest block mb-1">% Compra</label><input type="number" step="0.01" value={comp.percentual} onChange={(e) => updateComprador(comp.id, 'percentual', parseFloat(e.target.value) || 0)} required className="bento-input w-full text-right" /></div>
-                    {compradores.length > 1 && (
-                      <button type="button" onClick={() => removeComprador(comp.id)} className="bg-[var(--v-text-red)]/10 text-[var(--v-text-red)] border border-[var(--v-text-red)]/30 hover:bg-[var(--v-text-red)] hover:text-[var(--v-text-bold)] p-2 rounded-[var(--v-radius)] mb-[1px] transition-colors"><AlertCircle size={14}/></button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border border-[var(--v-border)] bg-[var(--v-surface-container)] p-4 rounded-[var(--v-radius)] overflow-x-auto custom-scrollbar">
-              <div className="flex justify-between items-center mb-4 min-w-[700px]">
-                <h4 className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest font-bold flex items-center gap-2"><DollarSign size={12}/> Condições / Projeção</h4>
-                <button type="button" onClick={addCondicao} className="text-[var(--v-accent)] hover:text-[var(--v-text-bold)] text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"><Plus size={12}/> Nova Condição</button>
-              </div>
-              <div className="flex flex-col gap-3 min-w-[700px]">
-                <div className="flex gap-3 px-1">
-                  <span className="w-32 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Tipo</span>
-                  <span className="w-20 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Qtd.</span>
-                  <span className="flex-1 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">1º Vencimento</span>
-                  <span className="flex-1 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Valor Base</span>
-                  <span className="w-32 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Indexador</span>
-                  <span className="w-8"></span>
+            <div className="flex gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                    <Search size={12}/>
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar venda..." className="bg-transparent border-none outline-none text-[12px] w-48 placeholder-[#5a4e42]" style={{ color: '#f0e6d8' }} />
+                    <kbd className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>/</kbd>
                 </div>
-                {condicoes.map((cond, idx) => (
-                  <div key={cond.id} className="flex gap-3 items-center">
-                    <select value={cond.tipo} onChange={(e) => updateCondicao(cond.id, 'tipo', e.target.value)} className="bento-select w-32">
-                      <option value="SINAL">Sinal/Ato</option>
-                      <option value="MENSAL">Mensais</option>
-                      <option value="REFORCO_ANUAL">Reforço Anual</option>
-                      <option value="CHAVE">Balão das Chaves</option>
-                      <option value="FINANCIAMENTO">Financiamento</option>
-                    </select>
-                    <input type="number" min="1" value={cond.quantidade} onChange={(e) => updateCondicao(cond.id, 'quantidade', parseInt(e.target.value) || 1)} required className="bento-input w-20 text-center" />
-                    <input type="date" value={cond.vencimento} onChange={(e) => updateCondicao(cond.id, 'vencimento', e.target.value)} required className="bento-input flex-1" />
-                    <input type="number" step="0.01" value={cond.valor} onChange={(e) => updateCondicao(cond.id, 'valor', e.target.value)} required className="bento-input flex-1" placeholder="R$" />
-                    <select value={cond.indexador} onChange={(e) => updateCondicao(cond.id, 'indexador', e.target.value)} className="bento-select w-32">
-                      <option value="NENHUM">Sem Indexador</option>
-                      <option value="INCC">INCC</option>
-                      <option value="IGPM">IGP-M</option>
-                      <option value="IPCA">IPCA</option>
-                    </select>
-                    {condicoes.length > 1 ? (
-                      <button type="button" onClick={() => removeCondicao(cond.id)} className="text-[var(--v-text-red)] hover:text-[var(--v-text-bold)] w-8 flex justify-center"><AlertCircle size={16}/></button>
-                    ) : <span className="w-8"></span>}
-                  </div>
-                ))}
-              </div>
+                
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#f0e6d8' }}>
+                    <Filter size={12}/> Comandos <kbd className="ml-1 text-[10px]" style={{ color: '#8a7a68' }}>⌘K</kbd>
+                </button>
+                <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                    <Plus size={12}/> Nova venda <kbd className="ml-1 text-[10px] bg-black/20 border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘N</kbd>
+                </button>
             </div>
-
-            <div className="flex justify-end mt-2">
-              <button type="submit" className="bg-[var(--v-accent-3)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity">Registrar Contrato de Venda</button>
-            </div>
-          </form>
         </div>
-      )}
-
-      {/* STITCH MASTER-DETAIL LAYOUT */}
-      <div className="flex gap-6 h-[calc(100vh-220px)] overflow-hidden">
-        {/* SIDEBAR MASTER */}
-        <div className="w-64 magma-card rounded-[var(--v-radius)] flex flex-col shrink-0 border border-[var(--v-border)]">
-          <div className="p-4 border-b border-[var(--v-border)] bg-[var(--v-surface-container)] flex items-center gap-2">
-            <Building2 size={16} className="text-[var(--v-text-faint)]"/>
-            <h3 className="text-[10px] uppercase font-bold tracking-widest text-[var(--v-text-muted)]">Obras/Empreendimentos</h3>
-          </div>
-          <div className="overflow-y-auto flex-1 p-2 space-y-[2px] custom-scrollbar">
-            <div 
-              onClick={() => setEmpreendimentoFilter('')}
-              className={`px-3 py-1.5 text-[11px] font-bold cursor-pointer transition-colors border-l-[3px] rounded-r-[var(--v-radius)] ${empreendimentoFilter === '' ? 'border-[var(--v-accent-3)] text-[var(--v-accent-3)] bg-[var(--v-hover)]' : 'border-transparent text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`}
-            >
-              [ CONSOLIDADO GERAL ]
-            </div>
-            {uniqueEmps.map((emp, i) => (
-              <div 
-                key={i} 
-                onClick={() => setEmpreendimentoFilter(emp)}
-                className={`px-3 py-1.5 text-[11px] cursor-pointer transition-colors truncate border-l-[3px] rounded-r-[var(--v-radius)] ${empreendimentoFilter === emp ? 'border-[var(--v-accent-3)] text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'border-transparent text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
-                title={emp}
-              >
-                {emp || 'Indefinido'}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* DETAIL CONTENT */}
-        <div className="flex-1 flex flex-col gap-5 overflow-hidden">
-          {/* SEARCH FILTERS */}
-          <div className="magma-card p-4 border border-[var(--v-border)] flex gap-4 shrink-0 rounded-[var(--v-radius)]">
-             <div className="flex-1">
-                <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Pesquisar Comprador</label>
-                <input type="text" placeholder="Nome ou Documento..." value={compradorFilter} onChange={(e) => setCompradorFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
-             </div>
-             <div className="flex-1">
-                <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Unidade / Num / Desc</label>
-                <input type="text" placeholder="Ex: Apto 101..." value={unidadeFilter} onChange={(e) => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
-             </div>
-             <div className="w-32">
-                <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Data Inicial</label>
-                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
-             </div>
-             <div className="w-32">
-                <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Data Final</label>
-                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
-             </div>
-             <div className="flex items-end text-[var(--v-text-faint)] text-[11px] font-mono whitespace-nowrap pb-1.5">
-                <span className="text-[var(--v-accent-3)] font-black mr-1">{filtered.length}</span> VENDAS
-             </div>
-          </div>
-
-          {/* KPI BENTO GRIDS */}
-          <div className="grid grid-cols-2 gap-5 shrink-0">
-            <div className="magma-card overflow-hidden relative group p-4 border-l-2 border-l-[var(--v-accent-3)] flex justify-between items-center bg-[#111]">
-               <div className="flex flex-col">
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-muted)] font-black mb-0.5">VGV Lançado (Período/Empresa)</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)] tabular-nums">{formatCurrency(totalVgv)}</h4>
-               </div>
-               <ShoppingCart size={40} className="text-[var(--v-accent-3)] opacity-20 absolute -right-2 -bottom-2 group-hover:scale-110 transition-transform"/>
-            </div>
-            <div className="magma-card overflow-hidden relative group p-4 border-l-2 border-l-[var(--v-text-red)] flex justify-between items-center bg-[#111]">
-               <div className="flex flex-col">
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-muted)] font-black mb-0.5">Total de Distratos Realizados</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)] tabular-nums">{formatCurrency(totalDistratos)}</h4>
-               </div>
-            </div>
-          </div>
-
-          {/* TABLE DATA GRID (PAGINATED) */}
-          <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col flex-1 overflow-hidden relative">
-            {loading && (
-               <div className="absolute inset-0 bg-[#00000099] backdrop-blur-sm flex flex-col items-center justify-center z-50">
-                   <Loader2 className="animate-spin text-[var(--v-accent-3)] mb-3" size={40} />
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-bold)]">Integrando Vendas Vulcano...</span>
-               </div>
-            )}
-            <div className="overflow-auto flex-1 custom-scrollbar">
-               <table className="w-full text-left text-xs border-collapse font-mono tabular-nums">
-                  <thead className="bg-[var(--v-surface-container)] sticky top-0 z-10 shadow-sm border-b border-[var(--v-border)]">
-                     <tr>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Contrato</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Data</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Descrição/Unid.</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">CPF/CNPJ</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold border-b border-[var(--v-border)]">Cliente</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold border-b border-[var(--v-border)] text-right">Total Venda</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[#888] uppercase font-bold border-b border-[var(--v-border)] text-center w-16" title="Projeção e Condições">Cond</th>
-                       <th className="px-3 py-2 text-[9px] tracking-widest text-[#888] uppercase font-bold border-b border-[var(--v-border)] text-center w-16" title="Averbar Distrato/Cancelamento">Dist</th>
-                     </tr>
-                  </thead>
-                  <tbody>
-                     {paginatedData.map((v) => (
-                       <tr key={v.id} className={`border-b border-[var(--v-border)] transition-colors hover:bg-[var(--v-hover)] ${v.distrato === 'S' ? 'bg-[var(--v-text-red)]/5 border-l-2 border-l-[var(--v-text-red)]' : ''}`}>
-                          <td className="p-3 text-[var(--v-text-muted)] font-mono text-[11px]">{v.id} <span className="text-[var(--v-text-faint)] ml-1">#{v.num_cad}</span></td>
-                          <td className="p-3 text-[var(--v-text-muted)] font-mono">{v.data}</td>
-                          <td className="p-3 text-[var(--v-text)] font-bold truncate max-w-[200px]" title={v.descricao}>{v.descricao}</td>
-                          <td className="p-3 text-[var(--v-text-faint)] font-mono">{v.cliente_cnpj}</td>
-                          <td className="p-3 text-[var(--v-text-muted)] truncate max-w-[150px]" title={v.cliente_nome}>{v.cliente_nome}</td>
-                          <td className={`p-3 text-right font-black text-[13px] ${v.distrato === 'S' ? 'text-[var(--v-text-red)]' : 'text-[var(--v-accent-3)]'}`}>{formatCurrency(v.total)}</td>
-                          <td className="p-3 text-center">
-                              <button onClick={() => openCondicoes(v)} className="text-[var(--v-accent)] border border-[var(--v-accent)]/40 hover:bg-[var(--v-accent)] hover:text-black transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Cond.</button>
-                          </td>
-                          <td className="p-3 text-center">
-                              {v.distrato === 'S' ? (
-                                  <button onClick={() => openCondicoes(v)} className="flex flex-col items-center gap-1 hover:scale-105 transition-transform" title="Ver detalhes do distrato">
-                                      <span className="text-[var(--v-text-red)] text-[9px] uppercase font-bold px-2 py-0.5 bg-[var(--v-text-red)]/10 border border-[var(--v-text-red)]/20 rounded cursor-pointer">Anulado</span>
-                                      {v.data_distrato && <span className="text-[8px] text-[var(--v-text-red)] font-mono tracking-widest">{v.data_distrato}</span>}
-                                  </button>
-                              ) : (
-                                  <button onClick={() => setDistratoModal(v)} className="text-[var(--v-text-muted)] border border-[var(--v-border)] hover:border-[var(--v-text-red)] hover:text-[var(--v-text-red)] transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Distratar</button>
-                              )}
-                          </td>
-                       </tr>
-                     ))}
-                     {paginatedData.length === 0 && !loading && (
-                        <tr><td colSpan="8" className="p-12 text-center text-[var(--v-text-faint)] uppercase tracking-widest text-[10px]">Nenhuma venda registrada para os filtros aplicados.</td></tr>
-                     )}
-                  </tbody>
-               </table>
-            </div>
-
-            {/* PAGINATION FOOTER */}
-            <div className="p-3 border-t border-[var(--v-border)] bg-[var(--v-surface-container)] flex items-center justify-between">
-               <span className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest font-bold">
-                  Exibindo {paginatedData.length} de {filtered.length} Registros
-               </span>
-               <div className="flex items-center gap-2">
-                  <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="bento-button disabled:opacity-30">PÁG ANTERIOR</button>
-                  <span className="text-[10px] text-[var(--v-text)] uppercase font-bold tracking-widest px-4">{currentPage} / {totalPages || 1}</span>
-                  <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} className="bento-button disabled:opacity-30">PRÓXIMA PÁG</button>
-               </div>
-            </div>
-          </div>
+        
+        <div className="flex gap-3">
+            <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <option value="">Empreendimento</option>
+                {uniqueEmps.map((emp, i) => <option key={i} value={emp}>{emp}</option>)}
+            </select>
+            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <option value="TODOS">Período</option>
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <option value="TODOS">Status</option>
+                <option value="ATIVA">ATIVA</option>
+                <option value="DISTRATADA">DISTRATADA</option>
+            </select>
         </div>
       </div>
 
-      {/* DISTRATO MODAL (STITCH) */}
-      {distratoModal && (
-        <div className="fixed inset-0 bg-[#000000CC] backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in">
-          <div className="magma-card border border-[var(--v-text-red)] p-7 rounded-[var(--v-radius)] max-w-md w-full shadow-[0_0_50px_rgba(255,59,48,0.15)]">
-            <h3 className="text-sm uppercase tracking-widest text-[var(--v-text-red)] font-black mb-5">Registrar Distrato/Rescisão</h3>
-            
-            <div className="bg-[var(--v-surface-container)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)] mb-5">
-              <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Alvo do Distrato</p>
-              <p className="text-sm font-bold text-[var(--v-text-bold)] block truncate mb-1">{distratoModal.descricao}</p>
-              <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-muted)] font-bold">Cliente: {distratoModal.cliente_nome}</p>
-            </div>
-            
-            <form className="flex flex-col gap-4" onSubmit={async (e) => {
-              e.preventDefault();
-              const fd = new FormData(e.target);
-              fd.append('id_venda', distratoModal.id);
-              try {
-                await fetch(`${API_BASE}/api/distratos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(fd)) });
-                alert("Distrato registrado com sucesso!"); 
-                setDistratoModal(null);
-                setLoading(true);
-                fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
-                  .then(res => res.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); });
-              } catch (err) { alert("Erro ao registrar distrato."); }
-            }}>
-              <div><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-2">Data do Distrato</label><input name="data_distrato" type="date" required className="bento-input w-full" /></div>
-              <div><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-2">Valor Total a Devolver (R$)</label><input name="valor_devolvido" type="number" step="0.01" required className="bento-input w-full" /></div>
-              <div><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-2">Data Previsão Pagto</label><input name="data_pagamento" type="date" required className="bento-input w-full" /></div>
-              
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setDistratoModal(null)} className="bento-button border-transparent hover:bg-[var(--v-hover)]">Cancelar</button>
-                <button type="submit" className="bg-[var(--v-text-red)] text-[var(--v-text-bold)] text-[10px] font-bold uppercase tracking-widest px-6 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity">Confirmar Averbação</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CONDICOES MODAL (STITCH) */}
-      {condicoesModal && createPortal(
-        <div className="fixed inset-0 bg-[#000000CC] backdrop-blur-sm flex items-center justify-center z-[99999] animate-in fade-in p-6">
-          <div className="magma-card border border-[var(--v-accent)] p-6 rounded-[var(--v-radius)] w-full max-w-[1400px] h-full max-h-[85vh] flex flex-col shadow-[0_0_50px_rgba(52,199,89,0.1)]">
-            <div className="flex justify-between items-start border-b border-[var(--v-border)] pb-4 mb-5 shrink-0">
-               <div>
-                  <h3 className="text-lg uppercase tracking-widest text-[var(--v-accent)] font-black flex items-center gap-3">
-                     <Layers size={22}/> Estrutura Financeira da Venda
-                  </h3>
-                  <p className="text-[11px] text-[var(--v-text-faint)] uppercase tracking-widest mt-1">
-                     Venda #{condicoesModal.venda?.id} <span className="mx-2">•</span> {condicoesModal.venda?.descricao}
-                  </p>
-               </div>
-               <button onClick={() => setCondicoesModal(null)} className="bento-button border-transparent hover:bg-[var(--v-hover)]"><X size={18}/></button>
-            </div>
-            
-            <div className="flex-1 overflow-auto custom-scrollbar flex flex-col gap-6">
-               {condicoesModal.loading && (
-                 <div className="flex flex-col items-center justify-center h-40 text-[var(--v-text-muted)] gap-3 bg-[var(--v-surface-container)] rounded-[var(--v-radius)] border border-[var(--v-border)]">
-                   <Loader2 className="animate-spin text-[var(--v-accent)]" size={32} />
-                   <span className="text-[10px] uppercase tracking-widest font-bold">Resgatando Fluxo Vulcano...</span>
-                 </div>
-               )}
-               
-               {!condicoesModal.loading && condicoesModal.error && (
-                 <div className="magma-card border-l-4 border-l-[var(--v-text-red)] p-5">
-                   <h4 className="text-[var(--v-text-red)] font-bold mb-2">Erro de Resgate</h4>
-                   <p className="text-[var(--v-text-muted)] text-sm">{condicoesModal.error}</p>
-                 </div>
-               )}
-               
-               {!condicoesModal.loading && condicoesModal.payload && (
-                  <>
-                    <div className="grid grid-cols-3 gap-5">
-                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-[var(--v-radius)] flex flex-col justify-center">
-                          <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold">Target VGV</span>
-                          <span className="text-xl font-black text-[var(--v-accent-3)]">{formatCurrency(condicoesModal.payload.venda?.total || 0)}</span>
-                       </div>
-                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-[var(--v-radius)]">
-                          <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold">Cliente Base</span>
-                          <span className="text-sm font-bold text-[var(--v-text)] block truncate">{condicoesModal.payload.venda?.cliente?.nome || '-'}</span>
-                          <span className="text-[10px] uppercase font-mono text-[var(--v-text-muted)]">{condicoesModal.payload.venda?.cliente?.cnpj || ''}</span>
-                       </div>
-                       <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] p-4 rounded-[var(--v-radius)]">
-                          <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold">Ref. Data</span>
-                          <span className="text-sm font-bold text-[var(--v-text)] block">{condicoesModal.payload.venda?.data || '-'}</span>
-                          <span className="text-[10px] uppercase text-[var(--v-text-muted)] truncate block">{condicoesModal.payload.venda?.empreendimento || '-'}</span>
-                       </div>
-                    </div>
-                    
-                    {condicoesModal.payload.distratos && condicoesModal.payload.distratos.length > 0 && (
-                        <div className="magma-card border-l-4 border-l-[var(--v-text-red)] p-5 mt-2 bg-[var(--v-text-red)]/5">
-                            <h4 className="text-[var(--v-text-red)] font-black text-xs uppercase tracking-widest mb-3 flex items-center gap-2"><AlertCircle size={14}/> Contrato Distratado</h4>
-                            <div className="grid grid-cols-3 gap-5">
-                                <div>
-                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Data do Distrato</span>
-                                    <span className="text-sm font-bold font-mono text-[var(--v-text-red)]">{condicoesModal.payload.distratos[0].data}</span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Receita Caixa (Paga)</span>
-                                    <span className="text-sm font-bold font-mono text-[var(--v-text-bold)]">
-                                        {formatCurrency((condicoesModal.payload.parcelas || []).reduce((acc, p) => acc + (p.total_pago || 0), 0))}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] uppercase tracking-widest text-[var(--v-text-red)] opacity-70 block mb-1">Valor a Devolver</span>
-                                    <span className="text-sm font-bold font-mono text-[var(--v-text-red)]">{formatCurrency(condicoesModal.payload.distratos[0].valor_devolvido)}</span>
-                                </div>
+      <div className="flex-1 flex overflow-hidden">
+        {/* LISTA CENTRAL */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {loading ? (
+                <div className="flex justify-center items-center h-full text-[#8a7a68] animate-pulse text-[12px]">Carregando carteira de vendas...</div>
+            ) : filtered.length === 0 ? (
+                <div className="flex justify-center items-center h-full text-[#5a4e42] uppercase text-[10px] tracking-widest font-bold">Nenhum registro.</div>
+            ) : (
+                <div className="flex flex-col">
+                    {Object.entries(groupedVendas).filter(([_, items]) => items.length > 0).map(([groupName, items]) => (
+                        <div key={groupName} className="mb-4">
+                            <div className="px-6 py-2 flex items-center gap-3 sticky top-0 z-10" style={{ background: '#0c0908' }}>
+                                <span className="font-mono text-[9.5px] font-bold tracking-[0.28em]" style={{ color: '#5a4e42' }}>{groupName}</span>
+                                <div className="flex-1 h-[1px]" style={{ background: 'rgba(255, 160, 80, 0.08)' }}></div>
+                                <span className="font-mono text-[9.5px]" style={{ color: '#5a4e42' }}>{items.length}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                {items.map(v => {
+                                    const isSelected = selectedVenda?.id === v.id;
+                                    const isDistratada = v.distrato === 'S';
+                                    return (
+                                        <div 
+                                            key={v.id} 
+                                            onClick={() => handleSelectVenda(v)}
+                                            className="grid grid-cols-[60px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors"
+                                            style={{
+                                                background: isSelected ? 'rgba(255, 122, 26, 0.05)' : 'transparent',
+                                                borderBottom: '1px solid rgba(255, 160, 80, 0.08)'
+                                            }}
+                                        >
+                                            <span className="font-mono text-[10.5px]" style={{ color: isSelected ? '#ff7a1a' : '#5a4e42' }}>#{v.id}</span>
+                                            
+                                            <div className="w-[30px] h-[22px] rounded flex items-center justify-center font-mono text-[9.5px] font-bold" 
+                                                 style={{ background: 'linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15))', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
+                                                {(v.empreendimento || 'EMP').substring(0,3).toUpperCase()}
+                                            </div>
+                                            
+                                            <div className="min-w-0">
+                                                <div className="font-medium text-[13.5px] truncate" style={{ color: '#f0e6d8' }}>{v.cliente_nome}</div>
+                                                <div className="font-mono text-[10.5px] mt-1" style={{ color: '#8a7a68' }}>
+                                                    {v.descricao} · <span style={{ color: '#5a4e42' }}>{v.cliente_cnpj}</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="font-mono text-[11px]" style={{ color: '#8a7a68' }}>{v.empreendimento}</div>
+                                            
+                                            <div className="font-medium text-[13.5px]" style={{ color: '#f0e6d8' }}>{formatCurrency(v.total)}</div>
+                                            
+                                            <div className="flex items-center gap-2">
+                                                {isDistratada ? (
+                                                    <><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_red]"></span><span className="font-mono text-[9.5px] tracking-[0.16em] text-red-500">DISTRATADA</span></>
+                                                ) : (
+                                                    <><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ffc247', boxShadow: '0 0 6px #ffc247' }}></span><span className="font-mono text-[9.5px] tracking-[0.16em]" style={{ color: '#ffc247' }}>ATIVA</span></>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="font-mono text-[10px] text-right" style={{ color: '#5a4e42' }}>{v.data}</div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
-                    )}
-                    
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 h-full min-h-0 mt-6">
-                       {/* FORMAS DE PAGAMENTO */}
-                       <div className="flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden bg-[var(--v-surface-container)]">
-                          <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)]">
-                             <h4 className="text-[10px] tracking-widest uppercase font-bold text-[var(--v-text-bold)]">Quadro de Condições Formais</h4>
-                          </div>
-                          <div className="flex-1 overflow-auto">
-                             <table className="w-full text-left text-[11px] border-collapse">
-                                <thead className="bg-[#0f0f0f] border-b border-[var(--v-border)] sticky top-0">
-                                   <tr>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest">Macro Componente</th>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest text-right">Montante Base</th>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest text-right">Aberturas</th>
-                                   </tr>
-                                </thead>
-                                <tbody>
-                                  {(condicoesModal.payload.formas_pagto || []).map(f => (
-                                     <tr key={f.id} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
-                                        <td className="p-3 font-bold text-[var(--v-text-muted)]">{f.descricao || '-'}</td>
-                                        <td className="p-3 text-right font-mono text-[var(--v-text)] font-semibold">{formatCurrency(f.valor || 0)}</td>
-                                        <td className="p-3 text-right font-mono text-[var(--v-text-faint)]">{f.quantidade_parcelas || 0} p.</td>
-                                     </tr>
-                                  ))}
-                                  {(condicoesModal.payload.formas_pagto || []).length === 0 && (
-                                     <tr><td colSpan="3" className="p-10 text-center text-[var(--v-text-faint)] italic text-[10px] uppercase">Nenhuma condição comercial fixada.</td></tr>
-                                  )}
-                                </tbody>
-                             </table>
-                          </div>
-                       </div>
-                       
-                       {/* PLANILHA RECEBER (PARCELAS) */}
-                       <div className="flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden bg-[var(--v-surface-container)]">
-                          <div className="p-3 bg-[var(--v-hover)] border-b border-[var(--v-border)] flex justify-between items-center">
-                             <h4 className="text-[10px] tracking-widest uppercase font-bold text-[var(--v-text-bold)]">Projeção Dinâmica (Contas a Receber)</h4>
-                             <span className="text-[10px] text-[var(--v-text-faint)] font-mono">{(condicoesModal.payload.parcelas || []).length} Títulos</span>
-                          </div>
-                          <div className="flex-1 overflow-auto">
-                             <table className="w-full text-left text-[11px] border-collapse">
-                                <thead className="bg-[#0f0f0f] border-b border-[var(--v-border)] sticky top-0">
-                                   <tr>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest whitespace-nowrap">Venc. / Nº</th>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest text-right">R$ Parcela</th>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest text-right">R$ Variação</th>
-                                     <th className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase font-bold tracking-widest text-right">Status Quitação</th>
-                                   </tr>
-                                </thead>
-                                <tbody>
-                                  {(condicoesModal.payload.parcelas || []).map(p => (
-                                     <tr key={p.id} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
-                                        <td className="p-3 font-mono text-[var(--v-text-muted)] whitespace-nowrap">{p.data || '-'} <span className="opacity-30">|</span> {p.parcela || '-'}</td>
-                                        <td className="p-3 text-right font-mono text-[var(--v-text)] font-semibold">{formatCurrency(p.valor_parcela || 0)}</td>
-                                        <td className="p-3 text-right font-mono text-[var(--v-accent-6)]">{p.variacao > 0 ? formatCurrency(p.variacao) : '-'}</td>
-                                        <td className={`p-3 text-right font-mono font-bold font-black flex justify-end gap-2 items-center ${(p.total_pago || 0) > 0 ? 'text-[var(--v-accent)]' : 'text-[var(--v-text-faint)]'}`}>
-                                          {(p.total_pago || 0) > 0 ? <><CheckCircle size={10}/> {formatCurrency(p.total_pago)}</> : 'Aberto'}
-                                        </td>
-                                     </tr>
-                                  ))}
-                                  {(condicoesModal.payload.parcelas || []).length === 0 && (
-                                     <tr><td colSpan="4" className="p-10 text-center text-[var(--v-text-faint)] italic text-[10px] uppercase">Nenhum título projetado.</td></tr>
-                                  )}
-                                </tbody>
-                             </table>
-                          </div>
-                       </div>
+                    ))}
+                </div>
+            )}
+        </div>
+
+        {/* RIGHT PANEL (DETALHES DA VENDA) */}
+        {selectedVenda && (
+            <div className="w-[450px] flex flex-col shrink-0 animate-in slide-in-from-right-8 duration-300 z-10" style={{ background: '#0c0908', borderLeft: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                <div className="p-5 flex justify-between items-start" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono text-[10px] font-bold" style={{ color: '#ff7a1a' }}>#{selectedVenda.id}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono tracking-widest" style={{ background: 'rgba(255, 194, 71, 0.1)', color: '#ffc247' }}>ATIVA</span>
+                        </div>
+                        <h3 className="text-[16px] font-bold" style={{ color: '#f0e6d8' }}>{selectedVenda.cliente_nome}</h3>
+                        <p className="font-mono text-[11px] mt-1" style={{ color: '#8a7a68' }}>{selectedVenda.cliente_cnpj}</p>
                     </div>
-                  </>
-               )}
+                    <button onClick={() => setSelectedVenda(null)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/5 transition-colors" style={{ color: '#8a7a68' }}><X size={14}/></button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {/* INFO GRID */}
+                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: '#5a4e42' }}>UNIDADE</span>
+                            <span className="text-[12.5px]" style={{ color: '#f0e6d8' }}>{selectedVenda.descricao}</span>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: '#5a4e42' }}>OBRA</span>
+                            <span className="text-[12.5px]" style={{ color: '#f0e6d8' }}>{selectedVenda.empreendimento}</span>
+                        </div>
+                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: '#5a4e42' }}>ASSINADO</span>
+                            <span className="text-[12.5px]" style={{ color: '#f0e6d8' }}>{selectedVenda.data}</span>
+                        </div>
+                    </div>
+
+                    {/* KPIs */}
+                    <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>VALOR DA VENDA</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total)}</div>
+                            </div>
+                            <div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>PARCELAS</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{condicoesData?.tabela ? condicoesData.tabela.length + 'x' : '...'}</div>
+                            </div>
+                            <div className="mt-2">
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>ENTRADA</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total * 0.1)}</div>
+                            </div>
+                            <div className="mt-2">
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>VPL ESTIMADO</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total * 0.78)}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Chart Area */}
+                    <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>CRONOGRAMA · 12 MESES</div>
+                        <div className="h-12 flex items-end justify-center">
+                            {condicoesLoading ? (
+                                <Loader2 className="animate-spin" size={16} style={{ color: '#5a4e42' }}/>
+                            ) : condicoesData?.tabela ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={condicoesData.tabela.slice(0, 12).map(c => ({ name: c.Data.substring(3,5), val: c.Valor }))}>
+                                        <RechartsTooltip cursor={{fill: 'rgba(255, 160, 80, 0.08)'}} contentStyle={{backgroundColor: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', fontSize: '10px'}} />
+                                        <Bar dataKey="val" fill="url(#colorUv)" radius={[1, 1, 0, 0]} />
+                                        <defs>
+                                            <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#ff9a4a" stopOpacity={1}/>
+                                                <stop offset="100%" stopColor="#c93a12" stopOpacity={1}/>
+                                            </linearGradient>
+                                        </defs>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <span className="text-[9px] uppercase" style={{ color: '#5a4e42' }}>N/A</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="p-5">
+                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>AÇÕES</div>
+                        <div className="flex flex-col gap-1.5">
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                                <span className="flex items-center gap-3"><Layers size={14} style={{ color: '#8a7a68' }}/> Abrir estrutura financeira</span>
+                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>Enter</span>
+                            </button>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                                <span className="flex items-center gap-3"><DollarSign size={14} style={{ color: '#8a7a68' }}/> Lançar parcela manual</span>
+                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⌘L</span>
+                            </button>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                                <span className="flex items-center gap-3"><RefreshCw size={14} style={{ color: '#8a7a68' }}/> Reconciliar com Questor</span>
+                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⇧⌘R</span>
+                            </button>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                                <span className="flex items-center gap-3"><FileText size={14} style={{ color: '#8a7a68' }}/> Exportar contrato (.pdf)</span>
+                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⇧⌘E</span>
+                            </button>
+                            {selectedVenda.distrato !== 'S' && (
+                                <button onClick={() => setDistratoModal(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium mt-2 transition-colors hover:bg-red-950/30" style={{ color: '#ef4444' }}>
+                                    <span className="flex items-center gap-3"><AlertCircle size={14} className="text-red-500/70"/> Distratar contrato</span>
+                                    <span className="font-mono text-[10px] bg-red-950/50 px-1.5 rounded text-red-900 border border-red-900/30">⇧⌘D</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>,
-        document.body
+        )}
+      </div>
+
+      <div className="px-6 py-2 flex justify-between items-center shrink-0 z-20" style={{ background: '#0c0908', borderTop: '1px solid rgba(255, 160, 80, 0.08)' }}>
+        <div className="flex gap-4 font-mono text-[9px] font-bold tracking-[0.16em]" style={{ color: '#5a4e42' }}>
+            <span>↑ ↓ NAVEGAR</span>
+            <span>↵ AÇÃO</span>
+            <span>/ BUSCAR</span>
+            <span>⌘K COMANDOS</span>
+            <span>⇧⌘N NOVA VENDA</span>
+        </div>
+        <div className="font-mono text-[9.5px] font-bold tracking-[0.2em]" style={{ color: '#8a7a68' }}>
+            EXIBINDO {filtered.length} · TOTAL {formatCurrency(totalGeral)}
+        </div>
+      </div>
+      
+      {/* MODAL NOVA VENDA (Apenas Form Antigo Simplificado) */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in p-6">
+            <div className="w-full max-w-4xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]" style={{ background: '#0c0908', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                <div className="p-6 border-b flex justify-between items-center" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+                    <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3" style={{ color: '#f0e6d8' }}><Plus size={20} color="#ff7a1a"/> Cadastrar Nova Venda</h3>
+                    <button onClick={() => setShowForm(false)} style={{ color: '#8a7a68' }}><X size={20}/></button>
+                </div>
+                <div className="p-6 overflow-y-auto custom-scrollbar">
+                    <form className="flex flex-col gap-6" onSubmit={handleFormSubmit}>
+                        <input type="hidden" name="empresa_id" value={selectedEmpresa} />
+                        <div className="grid grid-cols-4 gap-4">
+                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: '#8a7a68' }}>ID Emp.</label><input name="id_empreendimento" type="number" required className="w-full p-3 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} /></div>
+                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: '#8a7a68' }}>Unidade</label><input name="unidade" required className="w-full p-3 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} /></div>
+                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: '#8a7a68' }}>Total Venda</label><input name="total" type="number" step="0.01" required className="w-full p-3 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} /></div>
+                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: '#8a7a68' }}>Data Venda</label><input name="data" type="date" required className="w-full p-3 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} /></div>
+                        </div>
+                        <div className="flex justify-end pt-4 border-t mt-4" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+                            <button type="submit" className="px-8 py-3 rounded text-[11px] font-bold uppercase tracking-widest" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>Registrar Venda</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* MODAL DISTRATO */}
+      {distratoModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in p-6">
+            <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6" style={{ background: '#0c0908', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                <h3 className="text-red-500 text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-4">
+                    <AlertCircle size={24}/> Confirmar Distrato
+                </h3>
+                <p className="text-[12px] mb-6" style={{ color: '#8a7a68' }}>
+                    Você está prestes a distratar o contrato <strong style={{ color: '#f0e6d8' }}>#{distratoModal.id}</strong> ({distratoModal.cliente_nome}). 
+                    Esta ação <span className="text-red-500 font-bold">cancelará as parcelas futuras</span> vinculadas a esta venda.
+                </p>
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setDistratoModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={() => {
+                            fetch(`${API_BASE}/api/vulcano/vendas/${distratoModal.id}/distratar`, { method: "POST" })
+                                .then(res => res.json())
+                                .then(() => {
+                                    setDistratoModal(null);
+                                    setSelectedVenda(null);
+                                    setLoading(true);
+                                    fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
+                                        .then(r => r.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); });
+                                })
+                                .catch(err => alert("Erro ao distratar"));
+                        }} 
+                        className="px-6 py-2 bg-red-900/20 hover:bg-red-900/40 border border-red-900/50 text-red-500 rounded text-[11px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(239,68,68,0.15)]"
+                    >
+                        Confirmar Distrato
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );
 };
 
+
 export const RecebimentosView = ({ selectedEmpresa }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState('');
-  const [unidadeFilter, setUnidadeFilter] = useState('');
-  const [clienteFilter, setClienteFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [showConferencia, setShowConferencia] = useState(false);
-  const [baixaModal, setBaixaModal] = useState({ open: false, parcela: null, valor: 0, data: '', acrescimos: 0, descontos: 0 });
-  const [syncModal, setSyncModal] = useState({ open: false, loading: false, preview: null, error: null, dataInicio: '2022-01-01' });
+  const [statusFilter, setStatusFilter] = useState('ABERTA');
+  const [dataIniFilter, setDataIniFilter] = useState('');
+  const [dataFimFilter, setDataFimFilter] = useState('');
   
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 100;
+  const [selectedRecebimento, setSelectedRecebimento] = useState(null);
+  
+  const [baixaForm, setBaixaForm] = useState({ valor_pago: '', data_pagamento: '', acrescimos: '', descontos: '' });
 
   useEffect(() => {
     if (!selectedEmpresa) return;
     setLoading(true);
     fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
       .then(res => res.json())
-      .then(d => {
-        if (!Array.isArray(d)) {
-           setData([]);
-           setLoading(false);
-           return;
-        }
-        setData(d);
-        const emps = [...new Set(d.map(r => r.empreendimento))].sort();
-        if (emps.length > 0) setEmpreendimentoFilter(emps[0]);
-        else setEmpreendimentoFilter('');
-        
-        setUnidadeFilter(''); setClienteFilter('');
-        setDateFrom(''); setDateTo('');
-        setLoading(false);
-      })
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); })
       .catch(err => { console.error(err); setLoading(false); });
   }, [selectedEmpresa]);
 
   const uniqueEmps = [...new Set(data.map(r => r.empreendimento))].sort();
-  const filteredBase = data.filter(r => !empreendimentoFilter || r.empreendimento === empreendimentoFilter);
-  const uniqueUnidades = [...new Set(filteredBase.map(r => r.descricao_venda).filter(Boolean))].sort();
-  const uniqueClientes = [...new Set(filteredBase.map(r => r.cliente).filter(Boolean))].sort();
 
-  const inDateRange = (dateStr) => {
-    if (!dateFrom && !dateTo) return true;
-    if (!dateStr || typeof dateStr !== 'string') return false;
-    if (dateFrom && dateStr < dateFrom) return false;
-    if (dateTo && dateStr > dateTo) return false;
-    return true;
-  };
-
-  const filtered = filteredBase.filter(r =>
-    inDateRange(r.vencimento_iso || r.data) &&
-    (!unidadeFilter || r.descricao_venda === unidadeFilter) &&
-    (!clienteFilter || r.cliente === clienteFilter)
-  );
-
-  useEffect(() => {
-    setUnidadeFilter(''); setClienteFilter('');
-    setDateFrom(''); setDateTo('');
-    setCurrentPage(1); // Reset pagination on master filter change
-  }, [empreendimentoFilter]);
-  
-  // When sub-filters change, reset page
-  useEffect(() => {
-     setCurrentPage(1);
-  }, [unidadeFilter, clienteFilter, dateFrom, dateTo]);
-
-  const totalPago = filtered.reduce((acc, curr) => acc + ((curr.total > 0) ? curr.total : 0), 0);
-  const totalParcela = filtered.reduce((acc, curr) => acc + (curr.parcela || 0), 0);
-  const totalVariacao = filtered.reduce((acc, curr) => acc + (curr.variacao || 0), 0);
-  
-  // Pagination Math
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginatedData = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const handleDarBaixa = (r) => {
-    if (!r.id) return alert("Parcela não possui ID vinculado.");
-    setBaixaModal({
-      open: true,
-      parcela: r,
-      valor: r.parcela || 0,
-      data: new Date().toISOString().split('T')[0],
+  const handleSelectRecebimento = (r) => {
+    if (selectedRecebimento?.id === r.id) { setSelectedRecebimento(null); return; }
+    setSelectedRecebimento(r);
+    setBaixaForm({
+      valor_pago: r.parcela || 0,
+      data_pagamento: baixaForm.data_pagamento || new Date().toISOString().split('T')[0],
       acrescimos: 0,
       descontos: 0
     });
   };
 
-  const confirmBaixa = async () => {
-    const { parcela, valor, data, acrescimos, descontos } = baixaModal;
-    if (!valor || valor <= 0) return alert("Valor inválido");
+  const filtered = data.filter(r => {
+    let ok = true;
+    if (empreendimentoFilter && r.empreendimento !== empreendimentoFilter) ok = false;
     
+    const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
+    if (statusFilter === 'ABERTA' && !isAberto && !r._justPaid) ok = false;
+    if (statusFilter === 'BAIXADA' && isAberto) ok = false;
+
+    if (dataIniFilter && r.vencimento_iso && r.vencimento_iso < dataIniFilter) ok = false;
+    if (dataFimFilter && r.vencimento_iso && r.vencimento_iso > dataFimFilter) ok = false;
+
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const str = `${r.cliente} ${r.descricao_venda} ${r.id} ${r.cliente_cnpj}`.toLowerCase();
+        if (!str.includes(query)) ok = false;
+    }
+    return ok;
+  });
+
+  const grouped = { 'VENCIDAS': [], 'VENCE HOJE': [], 'VENCE ESTA SEMANA': [], 'VENCE ESTE MÊS': [], 'PRÓXIMOS MESES': [], 'BAIXADAS': [] };
+  const today = new Date(); today.setHours(0,0,0,0);
+  
+  filtered.forEach(r => {
+    const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
+    if (!isAberto && !r._justPaid) { grouped['BAIXADAS'].push(r); return; }
+
+    if (!r.vencimento_iso) { grouped['PRÓXIMOS MESES'].push(r); return; }
+    
+    const vDate = new Date(`${r.vencimento_iso}T00:00:00`);
+    const diffTime = vDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) grouped['VENCIDAS'].push(r);
+    else if (diffDays === 0) grouped['VENCE HOJE'].push(r);
+    else if (diffDays <= 7) grouped['VENCE ESTA SEMANA'].push(r);
+    else if (vDate.getMonth() === today.getMonth() && vDate.getFullYear() === today.getFullYear()) grouped['VENCE ESTE MÊS'].push(r);
+    else grouped['PRÓXIMOS MESES'].push(r);
+  });
+
+  const flatGrouped = [
+      ...grouped['VENCIDAS'], ...grouped['VENCE HOJE'], ...grouped['VENCE ESTA SEMANA'], ...grouped['VENCE ESTE MÊS'], ...grouped['PRÓXIMOS MESES'], ...grouped['BAIXADAS']
+  ];
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!flatGrouped.length) return;
+        
+        let nextIdx = 0;
+        if (selectedRecebimento) {
+          const currentIdx = flatGrouped.findIndex(x => x.id === selectedRecebimento.id);
+          if (currentIdx !== -1) {
+            nextIdx = e.key === 'ArrowDown' ? currentIdx + 1 : currentIdx - 1;
+          }
+        }
+        
+        if (nextIdx >= 0 && nextIdx < flatGrouped.length) {
+          e.preventDefault(); 
+          const nextR = flatGrouped[nextIdx];
+          setSelectedRecebimento(nextR);
+          setBaixaForm(prev => ({
+            valor_pago: nextR.parcela || 0,
+            data_pagamento: prev.data_pagamento || new Date().toISOString().split('T')[0],
+            acrescimos: 0,
+            descontos: 0
+          }));
+          
+          setTimeout(() => {
+            const rowEl = document.getElementById(`row-${nextR.id}`);
+            if (rowEl) {
+                rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const inputEl = document.getElementById(`input-valor-${nextR.id}`);
+                if (inputEl) {
+                    inputEl.focus();
+                    inputEl.select();
+                }
+            }
+          }, 50);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedRecebimento, flatGrouped]);
+
+  const submitBaixa = async (e, r_id) => {
+    e.preventDefault();
+    
+    // OPTIMISTIC UI
+    const newData = [...data];
+    const dataIdx = newData.findIndex(x => x.id === r_id);
+    if (dataIdx !== -1) {
+        newData[dataIdx] = {
+            ...newData[dataIdx],
+            total: parseFloat(baixaForm.valor_pago) || 0,
+            data_pagamento: baixaForm.data_pagamento,
+            variacao: (parseFloat(baixaForm.acrescimos) || 0) - (parseFloat(baixaForm.descontos) || 0),
+            _justPaid: true // Keep it in the same visual group temporarily
+        };
+        setData(newData);
+    }
+
+    // Auto-advance
+    const r_idx = flatGrouped.findIndex(x => x.id === r_id);
+    let nextIdx = r_idx + 1;
+    let nextR = null;
+    
+    while(nextIdx < flatGrouped.length) {
+       const nx = flatGrouped[nextIdx];
+       const nxAberto = (!nx.total || nx.total <= 0) && !!nx.num_parcela && nx.num_parcela.toUpperCase() !== 'ATO' && !nx._justPaid;
+       if (nxAberto) {
+           nextR = nx;
+           break;
+       }
+       nextIdx++;
+    }
+
+    if (nextR) {
+        setSelectedRecebimento(nextR);
+        setBaixaForm(prev => ({
+            valor_pago: nextR.parcela || 0,
+            data_pagamento: prev.data_pagamento, 
+            acrescimos: 0,
+            descontos: 0
+        }));
+        // Use a slightly longer timeout to ensure React finished rendering
+        setTimeout(() => {
+            const rowEl = document.getElementById(`row-${nextR.id}`);
+            if (rowEl) {
+                rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const inputEl = document.getElementById(`input-valor-${nextR.id}`);
+                if (inputEl) {
+                    inputEl.focus();
+                    inputEl.select();
+                }
+            }
+        }, 150);
+    } else {
+        setSelectedRecebimento(null);
+    }
+
     try {
-      setLoading(true);
-      setBaixaModal({ ...baixaModal, open: false });
       await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          id_receber: parcela.id, 
+          id_receber: r_id.toString().replace('prazo_', ''),
           empresa_id: parseInt(selectedEmpresa, 10),
-          valor_pago: parseFloat(valor),
-          data_pagamento: data,
-          acrescimos: parseFloat(acrescimos || 0),
-          descontos: parseFloat(descontos || 0)
+          valor_pago: parseFloat(baixaForm.valor_pago) || 0,
+          data_pagamento: baixaForm.data_pagamento,
+          acrescimos: parseFloat(baixaForm.acrescimos) || 0,
+          descontos: parseFloat(baixaForm.descontos) || 0
         })
       });
-      fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
-        .then(res => res.json()).then(d => { setData(d); setLoading(false); });
     } catch (err) {
-      alert("Erro ao dar baixa");
-      setLoading(false);
+      console.error("Erro ao dar baixa", err);
+      fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
+        .then(res => res.json())
+        .then(d => setData(Array.isArray(d) ? d : []));
     }
   };
 
+  const totalGeral = filtered.reduce((acc, curr) => acc + (curr.parcela || 0), 0);
+
   return (
-    <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
-      {/* HEADER STITCH */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-black tracking-tighter uppercase mb-1 text-[var(--v-text-bold)] flex items-center gap-3">
-             <DollarSign className="text-[var(--v-accent)]" size={32}/> 
-             Extrato de Recebimentos
-          </h2>
-          <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Industrial Master-Detail Ledger</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setSyncModal(s => ({ ...s, open: true, preview: null, error: null }))} className="bento-button flex items-center gap-2 border-[#34d399] text-[#34d399] hover:bg-[#34d399] hover:text-black">
-            <RefreshCw size={14}/> Sincronizar Parcelas
-          </button>
-          <button onClick={() => setShowConferencia(true)} className="bento-button flex items-center gap-2">
-            <CheckCircle2 size={16}/> Modo Conferência
-          </button>
-          <button onClick={() => {
-            const csvContent = "data:text/csv;charset=utf-8," + "Data,Total_Pago,Parcela,Variacao,Venda,Cliente\n" + filtered.map(e => `${e.data},${e.total},${e.parcela},${e.variacao},"${e.descricao_venda}","${e.cliente}"`).join("\n");
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "recebimentos.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }} className="bento-button flex items-center gap-2">
-            <Download size={16}/> Baixar CSV
-          </button>
-          <button onClick={() => setShowForm(!showForm)} className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-4 py-3 rounded-[var(--v-radius)] hover:opacity-90 transition-opacity flex items-center gap-2">
-            <Plus size={16}/> Lançar Manual
-          </button>
-        </div>
-      </div>
-
-      {showForm && (
-        <div className="magma-card border border-[var(--v-accent)]/30 rounded-[var(--v-radius)] p-5 animate-in slide-in-from-top-4">
-          <h3 className="text-xs uppercase tracking-widest text-[var(--v-accent)] font-bold mb-4">Novo Recebimento (Bypass Caixa)</h3>
-          <form className="flex flex-wrap gap-4 items-end" onSubmit={async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.target);
-            try {
-              await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(fd)) });
-              alert("Recebimento cadastrado!"); e.target.reset(); setShowForm(false);
-            } catch (err) { alert("Erro ao cadastrar."); }
-          }}>
-            <input type="hidden" name="empresa_id" value={selectedEmpresa} />
-            <div className="w-24"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">ID Venda</label><input name="id_venda" type="number" required className="bento-input" /></div>
-            <div className="w-28"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Parcela</label><input name="parcela" type="number" required className="bento-input" /></div>
-            <div className="w-32"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Valor Venda</label><input name="valor" type="number" step="0.01" required className="bento-input" /></div>
-            <div className="w-40"><label className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest block mb-1">Data Pagto</label><input name="data" type="date" required className="bento-input" /></div>
-            <button type="submit" className="bg-[var(--v-accent)] text-black text-[11px] font-bold uppercase tracking-widest px-8 py-3 rounded-[var(--v-radius)] hover:opacity-90">Confirmar</button>
-          </form>
-        </div>
-      )}
-
-      {/* STITCH MASTER-DETAIL LAYOUT */}
-      <div className="flex gap-6 h-[calc(100vh-280px)] overflow-hidden">
-        {/* SIDEBAR MASTER */}
-        <div className="w-64 magma-card rounded-[var(--v-radius)] flex flex-col shrink-0 border border-[var(--v-border)]">
-          <div className="p-4 border-b border-[var(--v-border)] bg-[var(--v-surface-container)] flex items-center gap-2">
-            <Building2 size={16} className="text-[var(--v-text-faint)]"/>
-            <h3 className="text-[10px] uppercase font-bold tracking-widest text-[var(--v-text-muted)]">Obras/Empreendimentos</h3>
-          </div>
-          <div className="overflow-y-auto flex-1 p-2 space-y-1">
-            <div 
-              onClick={() => setEmpreendimentoFilter('')}
-              className={`p-3 text-xs font-bold cursor-pointer transition-colors rounded-[var(--v-radius)] ${empreendimentoFilter === '' ? 'text-[var(--v-accent)] bg-[var(--v-hover)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text)] hover:bg-[var(--v-border)]'}`}
-            >
-              [ CONSOLIDADO GERAL ]
+    <div className="flex flex-col h-full animate-in fade-in" style={{ background: '#0c0908' }}>
+      <div className="px-6 py-4 flex flex-col gap-4 shrink-0 z-20" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+        <div className="flex justify-between items-end">
+            <div className="flex items-baseline gap-3">
+                <h2 className="text-[24px] font-black tracking-tighter uppercase" style={{ color: '#f0e6d8' }}>Recebimentos</h2>
+                <span className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>· {filtered.length} parcelas</span>
             </div>
-            {uniqueEmps.map((emp, i) => (
-              <div 
-                key={i} 
-                onClick={() => setEmpreendimentoFilter(emp)}
-                className={`p-3 text-xs cursor-pointer transition-colors truncate rounded-[var(--v-radius)] ${empreendimentoFilter === emp ? 'text-[var(--v-accent-3)] bg-[var(--v-hover)] font-bold' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text)] hover:bg-[var(--v-surface-container)]'}`} 
-                title={emp}
-              >
-                {emp}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* DETAIL CONTENT */}
-        <div className="flex-1 flex flex-col gap-5 overflow-hidden">
-          {/* KPI BENTO GRIDS */}
-          <div className="grid grid-cols-3 gap-5 shrink-0">
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-accent)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Recebido (Caixa)</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalPago)}</h4>
-               </div>
-               <DollarSign size={40} className="text-[var(--v-accent)] opacity-20 absolute -right-2 -bottom-2 group-hover:scale-110 transition-transform"/>
-            </div>
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-accent-3)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Origem Parcela</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalParcela)}</h4>
-               </div>
-            </div>
-            <div className="magma-card overflow-hidden relative group p-5 border-l-4 border-l-[var(--v-accent-6)] flex justify-between">
-               <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">Variação Realizada</p>
-                  <h4 className="text-3xl font-black text-[var(--v-text-bold)]">{formatCurrency(totalVariacao)}</h4>
-               </div>
-            </div>
-          </div>
-
-          {/* FILTER STRIP */}
-          <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] p-4 shrink-0 flex flex-wrap gap-4 items-end bg-[var(--v-surface-container)]">
-            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">De</label><input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
-            <div className="w-32"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Até</label><input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors dark-calendar"/></div>
-            <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Unidade</label>
-              <select value={unidadeFilter} onChange={e => setUnidadeFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
-                 <option value="">TODAS AS UNIDADES</option>
-                 {uniqueUnidades.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-            <div className="flex-1 min-w-[200px]"><label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Comprador</label>
-              <select value={clienteFilter} onChange={e => setClienteFilter(e.target.value)} className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-2 rounded outline-none transition-colors">
-                 <option value="">TODOS COMPRADORES</option>
-                 {uniqueClientes.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <button onClick={() => { setDateFrom(''); setDateTo(''); setUnidadeFilter(''); setClienteFilter(''); }} className="bg-[#ff3b30]/10 text-[#ff3b30] hover:bg-[#ff3b30] hover:text-white border border-[#ff3b30]/30 transition-all font-black text-[10px] tracking-widest uppercase rounded px-6 py-2 h-[32px]">LIMPAR</button>
-          </div>
-
-          {/* TABLE DATA GRID (PAGINATED) */}
-          <div className="magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col flex-1 overflow-hidden relative">
-            {loading && (
-               <div className="absolute inset-0 bg-[#00000099] backdrop-blur-sm flex flex-col items-center justify-center z-50">
-                   <Loader2 className="animate-spin text-[var(--v-accent)] mb-3" size={40} />
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-bold)]">Carregando Diário de Caixa...</span>
-               </div>
-            )}
-            <div className="overflow-auto flex-1 custom-scrollbar">
-               <table className="w-full text-left text-xs border-collapse font-mono tabular-nums">
-                  <thead className="bg-[var(--v-surface-container)] sticky top-0 z-10 shadow-sm border-b border-[var(--v-border)]">
-                     <tr>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold w-24">Data</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent)] uppercase font-bold text-right">Pago</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-accent-3)] uppercase font-bold text-right">Parcela</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-right">Variação</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Unidade</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Comprador</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Obs</th>
-                       <th className="p-3 text-[10px] tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-center w-24">Ação</th>
-                     </tr>
-                  </thead>
-                  <tbody>
-                     {paginatedData.map((r, idx) => {
-                       const isAberto = !r.total || r.total <= 0;
-                       let isAtrasada = false;
-                       if (isAberto && r.data) {
-                          const parts = r.data.split('/');
-                          if (parts.length === 3) {
-                             const vencDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`);
-                             const today = new Date(); today.setHours(0,0,0,0);
-                             if (vencDate < today) isAtrasada = true;
-                          }
-                       }
-                       return (
-                         <tr key={idx} className={`border-b border-[var(--v-border)] transition-colors hover:bg-[var(--v-hover)] ${isAtrasada ? 'bg-[var(--v-accent)]/5 border-l-2 border-l-[var(--v-accent)]' : ''}`}>
-                            <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.data}</td>
-                            <td className="p-3 text-right font-black text-[var(--v-accent)] text-[13px]">{!isAberto ? formatCurrency(r.total) : isAtrasada ? <span className="text-[var(--v-accent)] text-[9px] uppercase px-2 py-0.5 bg-[var(--v-accent)]/10 rounded">Atrasada</span> : <span className="text-[var(--v-text-faint)] text-[9px] uppercase">A Vencer</span>}</td>
-                            <td className="p-3 text-right font-bold text-[var(--v-accent-3)] font-mono">{formatCurrency(r.parcela)}</td>
-                            <td className="p-3 text-right font-bold text-[var(--v-accent-6)] font-mono">{formatCurrency(r.variacao)}</td>
-                            <td className="p-3 text-[var(--v-text-muted)] truncate max-w-[150px]">{r.descricao_venda}</td>
-                            <td className="p-3 text-[var(--v-text)] truncate max-w-[150px] font-bold">{r.cliente}</td>
-                            <td className="p-3 text-[10px] uppercase text-[var(--v-text-faint)] truncate max-w-[100px]">{r.obs}</td>
-                            <td className="p-3 text-center">
-                               {isAberto ? (
-                                   <button onClick={() => handleDarBaixa(r)} className="text-[var(--v-accent)] border border-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-black transition-colors text-[9px] font-bold uppercase py-1 px-3 rounded-[var(--v-radius)]">Liquidar</button>
-                               ) : <span className="text-[var(--v-text-muted)] text-[9px] uppercase font-bold flex items-center justify-center gap-1"><CheckCircle size={10}/> Baixado</span>}
-                            </td>
-                         </tr>
-                       )
-                     })}
-                     {paginatedData.length === 0 && !loading && (
-                        <tr><td colSpan="8" className="p-12 text-center text-[var(--v-text-faint)] uppercase tracking-widest text-[10px]">Nenhuma parcela encontrada.</td></tr>
-                     )}
-                  </tbody>
-               </table>
-            </div>
-
-            {/* OVERENGINEERED PAGINATION FOOTER */}
-            <div className="p-3 border-t border-[var(--v-border)] bg-[var(--v-surface-container)] flex items-center justify-between">
-               <span className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest font-bold">
-                  Exibindo {paginatedData.length} de {filtered.length} Registros
-               </span>
-               <div className="flex items-center gap-2">
-                  <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="bento-button disabled:opacity-30">PÁG ANTERIOR</button>
-                  <span className="text-[10px] text-[var(--v-text)] uppercase font-bold tracking-widest px-4">{currentPage} / {totalPages || 1}</span>
-                  <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} className="bento-button disabled:opacity-30">PRÓXIMA PÁG</button>
-               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* CONFERENCIA MODAL */}
-      {showConferencia && (
-         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 p-6 animate-in fade-in">
-           <div className="magma-card w-full h-full max-w-[1600px] flex flex-col border border-[var(--v-border)]">
-             <div className="flex justify-between items-center p-5 border-b border-[var(--v-border)] bg-[var(--v-surface-container)] shrink-0">
-               <div>
-                 <h3 className="text-xl font-bold uppercase tracking-wider text-[var(--v-accent-3)] flex items-center gap-3">
-                   <ShieldAlert size={24}/> Auditoria de Matriz Completa
-                 </h3>
-                 <p className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-[0.2em] mt-1">Conferência Tabela de Vendas / Recebimentos ({filtered.length} linhas globais)</p>
-               </div>
-               <button onClick={() => setShowConferencia(false)} className="text-[var(--v-text-faint)] hover:text-[var(--v-text-bold)] transition-colors p-2 bg-[var(--v-hover)] rounded border border-[var(--v-border)]">
-                 <X size={20}/>
-               </button>
-             </div>
-             
-             <div className="flex-1 overflow-auto bg-[var(--v-deep)]">
-               <table className="w-full text-left text-[11px] border-collapse whitespace-nowrap">
-                 <thead className="sticky top-0 bg-[var(--v-surface-container)] z-10 border-b border-[var(--v-border)]">
-                   <tr>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">CNPJ/CPF</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Comprador</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Unidade</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Vlr Venda</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">Data</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-accent-3)]">Parcela</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-red)]">Desc.</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-accent-6)]">Variação</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-accent)]">Total Pago</th>
-                     <th className="p-3 border-r border-[var(--v-border)] font-bold uppercase tracking-wider text-[var(--v-text-muted)]">X/Y</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {/* Hard limiter to 1000 in Modal to prevent freeze if user clicks Conferencia without filters */}
-                   {filtered.slice(0, 1000).map((r, i) => (
-                     <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] text-[var(--v-text)] font-mono">
-                       <td className="p-3 border-r border-[var(--v-border)] text-[var(--v-text-muted)]">{r.cliente_cnpj || '-'}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] font-sans truncate max-w-[200px]">{r.cliente}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] font-sans truncate max-w-[150px]">{r.descricao_venda}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-text-muted)] bg-[var(--v-deep)]">{r.venda_total ? formatCurrency(r.venda_total) : '-'}</td>
-                       <td className="p-3 border-r border-[var(--v-border)]">{r.data || '-'}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-accent-3)] bg-[var(--v-accent-3)]/5">{formatCurrency(r.parcela)}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-text-red)]">{r.desconto > 0 ? formatCurrency(r.desconto) : '-'}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-accent-6)] font-semibold">{r.variacao > 0 ? formatCurrency(r.variacao) : '-'}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] text-right text-[var(--v-accent)] font-bold bg-[var(--v-accent)]/10">{formatCurrency(r.total)}</td>
-                       <td className="p-3 border-r border-[var(--v-border)] text-center">{r.num_parcela || '-'}</td>
-                     </tr>
-                   ))}
-                   {filtered.length > 1000 && (
-                     <tr><td colSpan="10" className="p-6 text-center text-[var(--v-text-bold)] bg-[var(--v-accent)]/20 uppercase tracking-widest text-xs font-bold">Limitado a 1000 amostras na Conferência Visual. Exporte em CSV para visualizar os {filtered.length} registros.</td></tr>
-                   )}
-                 </tbody>
-               </table>
-             </div>
-           </div>
-         </div>
-      )}
-
-      {/* Modal de Baixa */}
-      {baixaModal.open && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] animate-in fade-in">
-          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-6 max-w-sm w-full">
-            <h3 className="text-lg font-bold text-[var(--v-text-bold)] mb-4">Confirmar Baixa</h3>
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Data Pagamento</label>
-                <input type="date" value={baixaModal.data} onChange={e => setBaixaModal({...baixaModal, data: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text)] rounded p-2 text-sm" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Valor Recebido (R$)</label>
-                <input type="number" step="0.01" value={baixaModal.valor} onChange={e => setBaixaModal({...baixaModal, valor: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text)] rounded p-2 text-sm" />
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Acréscimos (R$)</label>
-                  <input type="number" step="0.01" value={baixaModal.acrescimos} onChange={e => setBaixaModal({...baixaModal, acrescimos: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[#ff4d00] rounded p-2 text-sm" />
+            
+            <div className="flex gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                    <Search size={12}/>
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar parcela..." className="bg-transparent border-none outline-none text-[12px] w-48 placeholder-[#5a4e42]" style={{ color: '#f0e6d8' }} />
+                    <kbd className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>/</kbd>
                 </div>
-                <div className="flex-1">
-                  <label className="text-[10px] uppercase font-bold text-[var(--v-text-faint)] block mb-1">Descontos (R$)</label>
-                  <input type="number" step="0.01" value={baixaModal.descontos} onChange={e => setBaixaModal({...baixaModal, descontos: e.target.value})} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[#34c759] rounded p-2 text-sm" />
-                </div>
-              </div>
+                
+                <button onClick={() => {
+                  const csvContent = "data:text/csv;charset=utf-8," + "Data,Total_Pago,Parcela,Variacao,Num_Parcela,Venda,Cliente\n" + filtered.map(e => `${e.data},${e.total},${e.parcela},${e.variacao},${e.num_parcela || 'ATO'},"${e.descricao_venda}","${e.cliente}"`).join("\n");
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement("a");
+                  link.setAttribute("href", encodedUri);
+                  link.setAttribute("download", "recebimentos.csv");
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg transition-colors hover:bg-[#ff7a1a]/90" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                    <Download size={12}/> Exportar CSV <kbd className="ml-1 text-[10px] bg-black/20 border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘E</kbd>
+                </button>
             </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setBaixaModal({ ...baixaModal, open: false })} className="px-4 py-2 text-xs font-bold uppercase border border-[var(--v-border)] text-[var(--v-text-muted)] rounded hover:bg-[var(--v-hover)] transition-colors">Cancelar</button>
-              <button onClick={confirmBaixa} className="px-4 py-2 text-xs font-bold uppercase bg-[var(--v-accent)] text-black rounded hover:bg-[#00e699] transition-colors">Confirmar Baixa</button>
-            </div>
-          </div>
         </div>
-      )}
-
-      {/* MODAL: SINCRONIZAR PARCELAS EM ABERTO */}
-      {syncModal.open && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-[99999] animate-in fade-in p-6">
-          <div className="magma-card border border-[#34d399]/40 p-7 rounded-[var(--v-radius)] max-w-lg w-full shadow-[0_0_60px_rgba(52,211,153,0.1)]">
-            <div className="flex justify-between items-center mb-5">
-              <div>
-                <h3 className="text-sm uppercase tracking-widest text-[#34d399] font-black flex items-center gap-2">
-                  <RefreshCw size={16}/> Sincronizar Parcelas em Aberto
-                </h3>
-                <p className="text-[10px] text-[var(--v-text-faint)] mt-1 uppercase tracking-widest">
-                  VENDAFORMAPAGTOPRAZO → RECEBER (TOTALPAGO = 0)
-                </p>
-              </div>
-              <button onClick={() => setSyncModal(s => ({ ...s, open: false }))} className="text-[var(--v-text-faint)] hover:text-white p-1"><X size={18}/></button>
-            </div>
-
-            <div className="flex gap-4 mb-5 items-end">
-              <div className="flex-1">
-                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] block mb-2">Data Início (vencimento ≥)</label>
-                <input type="date" value={syncModal.dataInicio}
-                  onChange={e => setSyncModal(s => ({ ...s, dataInicio: e.target.value, preview: null }))}
-                  className="bento-input w-full" />
-              </div>
-              <button disabled={syncModal.loading} onClick={async () => {
-                setSyncModal(s => ({ ...s, loading: true, error: null, preview: null }));
-                try {
-                  const res = await fetch(`${API_BASE}/api/vulcano/popular-receber-abertas`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ empresa_id: selectedEmpresa ? parseInt(selectedEmpresa) : null, data_inicio: syncModal.dataInicio || null, dry_run: true })
-                  });
-                  const d = await res.json();
-                  if (!res.ok) throw new Error(d.detail || 'Erro');
-                  setSyncModal(s => ({ ...s, loading: false, preview: d }));
-                } catch(err) { setSyncModal(s => ({ ...s, loading: false, error: err.message })); }
-              }} className="bento-button flex items-center gap-2 border-[#34d399] text-[#34d399] hover:bg-[#34d399] hover:text-black whitespace-nowrap">
-                {syncModal.loading ? <RefreshCw size={13} className="animate-spin"/> : <RefreshCw size={13}/>} Simular
-              </button>
-            </div>
-
-            {syncModal.error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded mb-4">{syncModal.error}</div>
-            )}
-
-            {syncModal.preview && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#34d399]/10 border border-[#34d399]/30 p-4 rounded-[var(--v-radius)]">
-                    <p className="text-[10px] uppercase tracking-widest text-[#34d399] font-bold mb-1">Parcelas Órfãs</p>
-                    <p className="text-2xl font-black text-[#34d399]">{syncModal.preview.total_orfas.toLocaleString('pt-BR')}</p>
-                  </div>
-                  <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-[var(--v-radius)]">
-                    <p className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-1">Valor Total</p>
-                    <p className="text-xl font-black text-amber-400">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(syncModal.preview.valor_total)}</p>
-                  </div>
-                </div>
-                {syncModal.preview.total_orfas === 0 ? (
-                  <p className="text-[#34d399] text-sm font-bold text-center py-2">✅ Banco completo. Nenhuma parcela faltante.</p>
-                ) : (
-                  <>
-                    <div className="bg-[var(--v-surface-container)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
-                      <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold p-2 border-b border-[var(--v-border)]">
-                        Preview — primeiras {Math.min(5, syncModal.preview.preview.length)} de {syncModal.preview.total_orfas}
-                      </p>
-                      <table className="w-full text-[10px] font-mono">
-                        <thead><tr className="border-b border-[var(--v-border)] text-[var(--v-text-faint)]">
-                          <th className="p-2 text-left">Emp.</th><th className="p-2 text-left">Venda</th>
-                          <th className="p-2 text-left">Venc.</th><th className="p-2 text-right">Valor</th>
-                        </tr></thead>
-                        <tbody>
-                          {syncModal.preview.preview.slice(0,5).map((r,i) => (
-                            <tr key={i} className="border-b border-[var(--v-border)]/30">
-                              <td className="p-2 text-[var(--v-text-faint)]">{r.empresa}</td>
-                              <td className="p-2">#{r.idvenda}</td>
-                              <td className="p-2 text-[var(--v-text-faint)]">{r.data}</td>
-                              <td className="p-2 text-right text-[#34d399] font-bold">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(r.valor)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <button disabled={syncModal.loading} onClick={async () => {
-                      if (!window.confirm(`Confirmar inserção de ${syncModal.preview.total_orfas.toLocaleString('pt-BR')} parcelas em RECEBER?`)) return;
-                      setSyncModal(s => ({ ...s, loading: true, error: null }));
-                      try {
-                        const res = await fetch(`${API_BASE}/api/vulcano/popular-receber-abertas`, {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ empresa_id: selectedEmpresa ? parseInt(selectedEmpresa) : null, data_inicio: syncModal.dataInicio || null, dry_run: false })
-                        });
-                        const d = await res.json();
-                        if (!res.ok) throw new Error(d.detail || 'Erro na execução');
-                        alert(`✅ ${d.inseridos.toLocaleString('pt-BR')} parcelas inseridas! Erros: ${d.erros ?? 0}`);
-                        setSyncModal(s => ({ ...s, open: false, loading: false, preview: null }));
-                        setLoading(true);
-                        fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
-                          .then(r => r.json()).then(dd => { setData(Array.isArray(dd) ? dd : []); setLoading(false); });
-                      } catch(err) { setSyncModal(s => ({ ...s, loading: false, error: err.message })); }
-                    }} className="w-full py-3 bg-[#34d399] text-black text-[11px] font-black uppercase tracking-widest rounded-[var(--v-radius)] hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-50">
-                      {syncModal.loading ? <RefreshCw size={14} className="animate-spin"/> : null}
-                      ⚡ Executar — Inserir {syncModal.preview.total_orfas.toLocaleString('pt-BR')} Parcelas
-                    </button>
-                  </>
+        
+        <div className="flex flex-wrap gap-3 items-center">
+            <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <option value="">Todos Empreendimentos</option>
+                {uniqueEmps.map((emp, i) => <option key={i} value={emp}>{emp}</option>)}
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <option value="TODOS">Todas Parcelas</option>
+                <option value="ABERTA">Abertas (Pendentes)</option>
+                <option value="BAIXADA">Baixadas (Pagas)</option>
+            </select>
+            
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <span className="text-[11px] font-mono">De</span>
+                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                <span className="text-[11px] font-mono">Até</span>
+                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                {(dataIniFilter || dataFimFilter) && (
+                  <button onClick={() => {setDataIniFilter(''); setDataFimFilter('');}} className="ml-1 hover:text-[#ff7a1a]"><X size={12}/></button>
                 )}
-              </div>
-            )}
-          </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg ml-auto" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                <span className="text-[12px]" style={{ color: '#8a7a68' }}>Total Listado:</span>
+                <span className="text-[12px] font-mono font-bold" style={{ color: '#f0e6d8' }}>{formatCurrency(totalGeral)}</span>
+            </div>
         </div>
-      )}
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto custom-scrollbar relative">
+            {loading && data.length === 0 ? (
+                <div className="flex flex-col justify-center items-center h-full gap-3 text-[#8a7a68] animate-pulse">
+                    <Loader2 size={32} className="animate-spin text-[#ff7a1a]" />
+                    <span className="text-[12px] uppercase font-bold tracking-widest">Carregando carteira...</span>
+                </div>
+            ) : filtered.length === 0 ? (
+                <div className="flex justify-center items-center h-full text-[#5a4e42] uppercase text-[10px] tracking-widest font-bold">Nenhum registro encontrado.</div>
+            ) : (
+                <div className="flex flex-col">
+                    {Object.entries(grouped).filter(([_, items]) => items.length > 0).map(([groupName, items]) => (
+                        <div key={groupName} className="mb-4">
+                            <div className="px-6 py-2 flex items-center gap-3 sticky top-0 z-10" style={{ background: '#0c0908' }}>
+                                <span className={`font-mono text-[9.5px] font-bold tracking-[0.28em] ${groupName === 'VENCIDAS' ? 'text-red-500' : groupName === 'VENCE HOJE' ? 'text-orange-500' : 'text-[#5a4e42]'}`}>
+                                    {groupName}
+                                </span>
+                                <div className="flex-1 h-[1px]" style={{ background: 'rgba(255, 160, 80, 0.08)' }}></div>
+                                <span className="font-mono text-[9.5px]" style={{ color: '#5a4e42' }}>{items.length}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                {items.map(r => {
+                                    const isSelected = selectedRecebimento?.id === r.id;
+                                    const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
+                                    const isVencida = groupName === 'VENCIDAS';
+                                    
+                                    return (
+                                        <div id={`row-${r.id}`} key={r.id} className="flex flex-col" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                                            <div 
+                                                onClick={() => {
+                                                    handleSelectRecebimento(r);
+                                                    if(isAberto) {
+                                                        setTimeout(() => {
+                                                            const inp = document.getElementById(`input-valor-${r.id}`);
+                                                            if (inp) { inp.focus(); inp.select(); }
+                                                        }, 50);
+                                                    }
+                                                }}
+                                                className="grid grid-cols-[80px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors"
+                                                style={{
+                                                    background: isSelected ? 'rgba(255, 122, 26, 0.05)' : isVencida ? 'rgba(239, 68, 68, 0.02)' : 'transparent',
+                                                    borderLeft: isSelected ? '2px solid #ff7a1a' : isVencida ? '2px solid #ef4444' : '2px solid transparent'
+                                                }}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="font-mono text-[10.5px]" style={{ color: isSelected ? '#ff7a1a' : '#5a4e42' }}>#{r.id?.toString().replace('prazo_', 'pr_') || 'N/A'}</span>
+                                                    <span className="font-mono text-[9px]" style={{ color: '#8a7a68' }}>{r.num_parcela || 'ATO'}</span>
+                                                </div>
+                                                
+                                                <div className="w-[30px] h-[22px] rounded flex items-center justify-center font-mono text-[9.5px] font-bold" 
+                                                     style={{ background: 'linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15))', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
+                                                    {(r.empreendimento || 'EMP').substring(0,3).toUpperCase()}
+                                                </div>
+                                                
+                                                <div className="min-w-0">
+                                                    <div className="font-medium text-[13.5px] truncate" style={{ color: '#f0e6d8' }}>{r.cliente}</div>
+                                                    <div className="font-mono text-[10.5px] mt-1" style={{ color: '#8a7a68' }}>
+                                                        {r.descricao_venda} · <span style={{ color: '#5a4e42' }}>{r.cliente_cnpj || 'Sem CPF/CNPJ'}</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="font-mono text-[11px] truncate" style={{ color: '#8a7a68' }}>{r.empreendimento}</div>
+                                                
+                                                <div className={`font-medium text-[13.5px] font-mono ${isVencida ? 'text-red-400' : 'text-[#f0e6d8]'}`}>{formatCurrency(r.parcela)}</div>
+                                                
+                                                <div className="flex items-center gap-2">
+                                                    {!isAberto ? (
+                                                        <><span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_#22c55e]"></span><span className="font-mono text-[9.5px] tracking-[0.16em] text-green-500">PAGO</span></>
+                                                    ) : isVencida ? (
+                                                        <><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]"></span><span className="font-mono text-[9.5px] tracking-[0.16em] text-red-500">ATRASADA</span></>
+                                                    ) : (
+                                                        <><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ffc247', boxShadow: '0 0 6px #ffc247' }}></span><span className="font-mono text-[9.5px] tracking-[0.16em]" style={{ color: '#ffc247' }}>ABERTA</span></>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="font-mono text-[10px] text-right" style={{ color: '#5a4e42' }}>{r.data}</div>
+                                            </div>
+
+                                            {isSelected && isAberto && (
+                                                <div className="px-6 py-4 animate-in slide-in-from-top-2" style={{ background: 'rgba(255, 122, 26, 0.02)', borderLeft: '2px solid #ff7a1a' }}>
+                                                    <form onSubmit={(e) => submitBaixa(e, r.id)} className="flex items-end gap-4">
+                                                        <div className="flex-1 grid grid-cols-4 gap-4">
+                                                            <div>
+                                                                <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Valor</label>
+                                                                <input id={`input-valor-${r.id}`} autoFocus type="number" step="0.01" required value={baixaForm.valor_pago} onChange={e => setBaixaForm({...baixaForm, valor_pago: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-[#f0e6d8] rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Acréscimos</label>
+                                                                <input type="number" step="0.01" value={baixaForm.acrescimos} onChange={e => setBaixaForm({...baixaForm, acrescimos: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-green-400 rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Descontos</label>
+                                                                <input type="number" step="0.01" value={baixaForm.descontos} onChange={e => setBaixaForm({...baixaForm, descontos: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-red-400 rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Data Pgto</label>
+                                                                <input type="date" required value={baixaForm.data_pagamento} onChange={e => setBaixaForm({...baixaForm, data_pagamento: e.target.value})} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-[#f0e6d8] rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] dark-calendar font-mono" />
+                                                            </div>
+                                                        </div>
+                                                        <button type="submit" className="h-[34px] px-6 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(255,122,26,0.2)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                                                            <CheckCircle2 size={12} /> Salvar <kbd className="ml-1 text-[9px] bg-black/20 px-1 rounded">↵</kbd>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            )}
+                                            
+                                            {isSelected && !isAberto && (
+                                                <div className="px-6 py-4 flex gap-8 items-center animate-in slide-in-from-top-2" style={{ background: 'rgba(34, 197, 94, 0.02)', borderLeft: '2px solid #22c55e' }}>
+                                                    <div>
+                                                        <span className="font-mono text-[9px] tracking-[0.18em] text-green-600/70 block mb-1">DATA EFETIVA</span>
+                                                        <span className="text-[12px] font-mono text-green-500 font-bold">{r.data_pagamento || r.data}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-mono text-[9px] tracking-[0.18em] text-green-600/70 block mb-1">TOTAL PAGO</span>
+                                                        <span className="text-[12px] font-mono text-green-500 font-bold">{formatCurrency(r.total)}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-mono text-[9px] tracking-[0.18em] text-green-600/70 block mb-1">VARIAÇÃO</span>
+                                                        <span className="text-[12px] font-mono text-green-500">{formatCurrency(r.variacao)}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+      </div>
+
+      <div className="px-6 py-2 flex justify-between items-center shrink-0 z-20" style={{ background: '#0c0908', borderTop: '1px solid rgba(255, 160, 80, 0.08)' }}>
+        <div className="flex gap-4 font-mono text-[9px] font-bold tracking-[0.16em]" style={{ color: '#5a4e42' }}>
+            <span>↑ ↓ NAVEGAR</span>
+            <span>⇥ CAMPOS</span>
+            <span>↵ SALVAR E PULAR</span>
+            <span>/ BUSCAR</span>
+            <span>⇧⌘E EXPORTAR</span>
+        </div>
+      </div>
 
     </div>
   );
-};
-
+}
 export const ConciliadorView = ({ selectedEmpresa }) => {
   const [pdfFile, setPdfFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -2013,7 +1744,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
           type="button"
           onClick={handleLoadSavedTemplate}
           disabled={!pickTemplateId}
-          className="bg-[var(--v-hover)] border border-[#a259ff]/40 text-[var(--v-accent-5)] hover:bg-[#a259ff] hover:text-black py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
+          className="bg-[var(--v-hover)] border border-[#F97316]/40 text-[var(--v-accent-5)] hover:bg-[#F97316] hover:text-black py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
         >
           Carregar código
         </button>
@@ -2131,7 +1862,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                       <div className="flex bg-[var(--v-deep)] rounded-[var(--v-radius)] p-1 border border-[var(--v-border)]">
                         <button 
                           onClick={() => setViewMode('raw')} 
-                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors ${viewMode === 'raw' ? 'bg-[#a259ff] text-[var(--v-text-bold)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)]'}`}
+                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors ${viewMode === 'raw' ? 'bg-[#F97316] text-[var(--v-text-bold)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)]'}`}
                         >
                           JSON Cru
                         </button>
@@ -2151,8 +1882,8 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                         title={useSplinkMatch ? 'Modo: Splink Probabilístico (clique para voltar ao Heurístico)' : 'Modo: Heurístico (clique para usar Splink)'}
                         className={`flex items-center gap-1.5 px-3 py-2 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${
                           useSplinkMatch
-                            ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[var(--v-accent-5)] shadow-[0_0_10px_rgba(162,89,255,0.3)]'
-                            : 'bg-[var(--v-hover)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#a259ff]/40'
+                            ? 'bg-[#F97316]/20 border-[#F97316]/60 text-[var(--v-accent-5)] shadow-[0_0_10px_rgba(162,89,255,0.3)]'
+                            : 'bg-[var(--v-hover)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#F97316]/40'
                         }`}
                       >
                         <Zap size={12} className={useSplinkMatch ? 'text-[var(--v-accent-5)]' : 'text-[var(--v-text-faint)]'}/>
@@ -2160,7 +1891,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                       </button>
                       <button
                         onClick={() => setIsFullscreen(!isFullscreen)}
-                        className="bg-[var(--v-hover)] border border-[var(--v-border)] hover:border-[#a259ff] text-[var(--v-text-muted)] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
+                        className="bg-[var(--v-hover)] border border-[var(--v-border)] hover:border-[#F97316] text-[var(--v-text-muted)] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
                       >
                          {isFullscreen ? <><Minimize size={14}/> Ocultar Expansão</> : <><Maximize size={14}/> Expandir Tabela</>}
                       </button>
@@ -2249,7 +1980,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                         <div className="text-[10px] text-[var(--v-text-muted)]">Status Banco: {d.db_estado_atual.pago_hoje > 0 ? `Pago ${formatCurrency(d.db_estado_atual.pago_hoje)}` : 'Aberto'}</div>
                                         {d.match_engine && (
                                           <div className="mt-1.5 flex items-center gap-1.5">
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${d.match_engine === 'splink' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)] border border-[#a259ff]/30' : 'bg-[var(--v-hover)] text-[var(--v-text-faint)] border border-[var(--v-border)]'}`}>
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${d.match_engine === 'splink' ? 'bg-[#F97316]/20 text-[var(--v-accent-5)] border border-[#F97316]/30' : 'bg-[var(--v-hover)] text-[var(--v-text-faint)] border border-[var(--v-border)]'}`}>
                                               {d.match_engine === 'splink' ? 'Splink' : 'Heuristico'}
                                             </span>
                                             {d.match_probability != null && <span className="text-[9px] font-mono text-[var(--v-text-faint)]">P={Math.round(d.match_probability*100)}%</span>}
@@ -2359,7 +2090,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                   <div className="flex border-b border-[var(--v-border)] shrink-0">
                     <button
                       onClick={() => setChatTab('chat')}
-                      className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-center transition-colors border-r border-[var(--v-border)] flex items-center justify-center gap-2 ${chatTab === 'chat' ? 'bg-[var(--v-hover)] text-[var(--v-accent-5)] border-t-2 border-t-[#a259ff]' : 'bg-[var(--v-deep)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)] border-t-2 border-transparent'}`}
+                      className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest text-center transition-colors border-r border-[var(--v-border)] flex items-center justify-center gap-2 ${chatTab === 'chat' ? 'bg-[var(--v-hover)] text-[var(--v-accent-5)] border-t-2 border-t-[#F97316]' : 'bg-[var(--v-deep)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)] border-t-2 border-transparent'}`}
                     >
                       <MessageSquare size={14}/> Chat de Ajustes
                     </button>
@@ -2403,13 +2134,13 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                             onChange={(e) => setChatInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatAdjust(); } }}
                             placeholder="Diga como corrigir os dados..."
-                            className="flex-1 bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#a259ff]"
+                            className="flex-1 bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#F97316]"
                             disabled={isChatting}
                           />
                           <button
                             onClick={handleChatAdjust}
                             disabled={isChatting || !chatInput.trim()}
-                            className="bg-[#a259ff] text-black px-3 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
+                            className="bg-[#F97316] text-black px-3 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
                           >
                             {isChatting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                             Enviar

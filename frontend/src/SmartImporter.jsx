@@ -85,6 +85,10 @@ export default function SmartImporter({ selectedEmpresa }) {
   const [parcelasAbertas, setParcelasAbertas] = useState([]);
   const [manualMatchModal, setManualMatchModal] = useState({ open: false, rowData: null, rowIndex: null });
 
+  // Fila Automatizada (Watcher)
+  const [queueItems, setQueueItems] = useState([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+
   React.useEffect(() => {
     fetch(`${API_BASE}/api/templates`)
       .then(res => res.json())
@@ -100,7 +104,46 @@ export default function SmartImporter({ selectedEmpresa }) {
         .catch(err => console.error("Erro ao carregar empreendimentos", err));
     }
   }, [selectedEmpresa]);
+  const loadQueue = () => {
+    fetch(`${API_BASE}/api/smart-importer/queue`)
+      .then(res => res.json())
+      .then(data => setQueueItems(data))
+      .catch(err => console.error("Erro ao carregar fila", err));
+  };
 
+  React.useEffect(() => {
+    loadQueue();
+    const interval = setInterval(loadQueue, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleApproveQueue = async (queueId, target) => {
+    setQueueLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/smart-importer/queue/${queueId}/approve`, { method: 'POST' });
+      if (!res.ok) throw new Error("Falha ao puxar arquivo da fila");
+      const data = await res.json();
+      setColumns(data.columns || []);
+      setPreviewData(data.preview || []);
+      setAllRows(data.all_rows || data.preview || []);
+      setTargetTable(target);
+      setStep(2);
+    } catch (err) {
+      alert("Erro ao puxar da fila: " + err.message);
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
+  const handleDeleteQueue = async (queueId) => {
+    if (!window.confirm("Deseja descartar este arquivo da fila?")) return;
+    try {
+      await fetch(`${API_BASE}/api/smart-importer/queue/${queueId}`, { method: 'DELETE' });
+      loadQueue();
+    } catch (err) {
+      alert("Erro ao deletar da fila.");
+    }
+  };
 
   const handleFileUpload = async (e) => {
     e.preventDefault();
@@ -278,27 +321,86 @@ export default function SmartImporter({ selectedEmpresa }) {
 
       {/* Step 1: Upload */}
       {step === 1 && (
-        <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-8 rounded-[var(--v-radius)] text-center">
-          <FileSpreadsheet size={64} className="mx-auto text-[var(--v-text-faint)] mb-6" />
-          <h3 className="text-xl font-bold text-[var(--v-text-bold)] mb-2 uppercase tracking-widest">Selecione seu arquivo</h3>
-          <p className="text-[var(--v-text-muted)] text-sm mb-8">Suporte para .XLS, .XLSX e .CSV. O sistema irá ler o cabeçalho automaticamente.</p>
-          
-          <form onSubmit={handleFileUpload} className="max-w-md mx-auto flex flex-col gap-4">
-            <input 
-              type="file" 
-              accept=".csv, .xls, .xlsx"
-              onChange={(e) => setFile(e.target.files[0])}
-              className="w-full text-sm text-[var(--v-text-muted)] file:mr-4 file:py-3 file:px-4 file:rounded-[var(--v-radius)] file:border-0 file:text-[10px] file:font-bold file:uppercase file:tracking-widest file:bg-[var(--v-hover)] file:text-[var(--v-accent-4)] hover:file:bg-[var(--v-hover)] file:cursor-pointer border border-[var(--v-border)] bg-[#0b0b0b] p-2"
-            />
-            <button 
-              type="submit" 
-              disabled={loading || !file} 
-              className="w-full bg-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-              {loading ? 'Analisando Estrutura...' : 'Iniciar Importação'}
-            </button>
-          </form>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Coluna 1: Upload Manual */}
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-8 rounded-[var(--v-radius)] text-center h-full flex flex-col justify-center">
+            <FileSpreadsheet size={64} className="mx-auto text-[var(--v-text-faint)] mb-6" />
+            <h3 className="text-xl font-bold text-[var(--v-text-bold)] mb-2 uppercase tracking-widest">Upload Manual</h3>
+            <p className="text-[var(--v-text-muted)] text-sm mb-8">Suporte para .XLS, .XLSX e .CSV. O sistema irá ler o cabeçalho automaticamente.</p>
+            
+            <form onSubmit={handleFileUpload} className="max-w-md mx-auto flex flex-col gap-4 w-full">
+              <input 
+                type="file" 
+                accept=".csv, .xls, .xlsx"
+                onChange={(e) => setFile(e.target.files[0])}
+                className="w-full text-sm text-[var(--v-text-muted)] file:mr-4 file:py-3 file:px-4 file:rounded-[var(--v-radius)] file:border-0 file:text-[10px] file:font-bold file:uppercase file:tracking-widest file:bg-[var(--v-hover)] file:text-[var(--v-accent-4)] hover:file:bg-[var(--v-hover)] file:cursor-pointer border border-[var(--v-border)] bg-[#0b0b0b] p-2"
+              />
+              <button 
+                type="submit" 
+                disabled={loading || !file} 
+                className="w-full bg-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                {loading ? 'Analisando...' : 'Iniciar Importação Manual'}
+              </button>
+            </form>
+          </div>
+
+          {/* Coluna 2: Fila de Processamento Automático */}
+          <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-6 rounded-[var(--v-radius)] h-full flex flex-col max-h-[500px]">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-[var(--v-border)]">
+              <h3 className="text-sm font-bold text-[var(--v-text-bold)] uppercase tracking-widest flex items-center gap-2">
+                <Database size={16} className="text-[#a259ff]" /> Fila Automática
+              </h3>
+              <button onClick={loadQueue} className="text-[10px] uppercase font-bold text-[var(--v-text-muted)] hover:text-white">Atualizar</button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3">
+              {queueItems.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)]">A fila está vazia.</p>
+                  <p className="text-xs text-[var(--v-text-muted)] mt-2">Arraste PDFs para as pastas monitoradas.</p>
+                </div>
+              ) : (
+                queueItems.map(item => (
+                  <div key={item.id} className="bg-[#0b0b0b] border border-[var(--v-border)] p-4 rounded flex flex-col gap-2">
+                    <div className="flex justify-between items-start">
+                      <p className="text-xs font-bold text-[var(--v-text)] truncate max-w-[200px]" title={item.filename}>{item.filename}</p>
+                      <span className={`text-[8px] uppercase font-bold px-2 py-1 rounded ${
+                        item.status === 'AGUARDANDO_REVISAO' ? 'bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30' :
+                        item.status === 'PROCESSANDO' ? 'bg-[#ffcc00]/10 text-[#ffcc00] border border-[#ffcc00]/30' :
+                        item.status === 'PENDENTE' ? 'bg-[#333] text-[var(--v-text-faint)]' :
+                        'bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/30'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-end mt-2">
+                      <div className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)]">
+                        <p>Destino: <span className="text-[var(--v-accent-5)]">{item.target_table}</span></p>
+                        {item.cnpj_detectado && <p className="mt-1">CNPJ: {item.cnpj_detectado}</p>}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleDeleteQueue(item.id)} className="p-1.5 text-[var(--v-text-faint)] hover:text-[#ff4d00] hover:bg-[#ff4d00]/10 rounded">
+                          <X size={14} />
+                        </button>
+                        {item.status === 'AGUARDANDO_REVISAO' && (
+                          <button 
+                            onClick={() => handleApproveQueue(item.id, item.target_table)}
+                            disabled={queueLoading}
+                            className="bg-[#007aff] hover:bg-[#005bb5] text-white px-3 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {queueLoading ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
+                            Revisar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
