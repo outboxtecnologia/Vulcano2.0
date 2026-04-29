@@ -13,6 +13,7 @@ import { AuditoriaERPView } from './AuditoriaERPView';
 import { SindicatosView } from './SindicatosView';
 import { JanitorView } from './JanitorView';
 import LoginView from './LoginView';
+import EmpresaSelectionView from './components/EmpresaSelectionView';
 import './index.css';
 import {
   Building2, Database, TableProperties, Fingerprint, PieChart, Construction,
@@ -89,145 +90,12 @@ export default function App() {
   }
 
   if (!empresaConfirmed) {
-    const filteredEmpresas = globalEmpresas.filter(e => 
-      e.nome.toLowerCase().includes(search.toLowerCase()) || 
-      e.id.toString().includes(search)
-    );
-
     return (
-      <div className="font-body overflow-hidden min-h-screen w-full relative immersive-bg" data-theme={theme} style={{ color: 'var(--v-text)' }}>
-        <div className="absolute inset-0 backdrop-blur-[2px] z-0" style={{ background: 'var(--v-blur-bg)' }}></div>
-        <div className="relative z-10 h-screen w-full flex flex-col items-center justify-between py-12 px-8 overflow-y-auto custom-scrollbar">
-            <header className="w-full max-w-7xl flex justify-between items-center opacity-60 hover:opacity-100 transition-opacity duration-700">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-[var(--v-accent)] rounded-[var(--v-radius)] flex items-center justify-center shadow-[0_0_15px_rgba(255,77,0,0.5)]">
-                  <Cpu size={18} className="text-black" />
-                </div>
-                <span className="font-headline text-lg font-black tracking-[0.4em] text-[var(--v-text-bold)]">VULCANO <span className="font-light opacity-50">2.0</span></span>
-              </div>
-              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-muted)]">
-                <span>Status: <span className="text-[var(--v-accent-3)]">Online</span></span>
-                <Landmark size={14} />
-              </div>
-            </header>
-            
-            <main className="w-full max-w-6xl flex flex-col items-center gap-10 mt-12 mb-12">
-               <div className="text-center space-y-4">
-                   <h1 className="font-headline text-5xl md:text-6xl font-black tracking-tighter text-[var(--v-text-bold)] drop-shadow-2xl">Ecossistema de Gestão</h1>
-                   <p className="font-body text-[11px] text-[var(--v-accent)] uppercase tracking-[0.6em] font-black opacity-90">Precision Audit & Financial Governance</p>
-               </div>
-
-               <div className="w-full max-w-xl relative group">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--v-text-faint)] group-focus-within:text-[var(--v-accent)] transition-colors" size={18} />
-                  <input 
-                    type="text"
-                    placeholder="BUSCAR EMPRESA OU NODE..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full bg-black/40 backdrop-blur-md border border-white/10 rounded-[var(--v-radius)] py-4 pl-12 pr-4 text-xs font-bold uppercase tracking-widest text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50 focus:ring-1 focus:ring-[#ff4d00]/20 transition-all"
-                  />
-               </div>
-               
-               {empresasLoading ? (
-                  <div className="text-[var(--v-text-bold)] flex flex-col gap-5 items-center py-16">
-                    <RefreshCw className="animate-spin text-[var(--v-accent)]" size={36} />
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Conectando ao banco Vulcano...</span>
-                    {loadingSlow && (
-                      <div className="mt-4 flex flex-col items-center gap-3 bg-black/40 border border-white/10 rounded p-5">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent-6)]">Demora detectada â€” banco pode estar bloqueado</p>
-                        <p className="text-[9px] text-[var(--v-text-faint)] uppercase tracking-widest">Digite o ID da empresa para entrar direto:</p>
-                        <div className="flex gap-2">
-                          <input value={manualId} onChange={e => setManualId(e.target.value)}
-                            className="bg-[#0c0908] border border-[rgba(255, 160, 80, 0.08)] rounded px-3 py-2 text-[var(--v-text-bold)] text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
-                            placeholder="959"/>
-                          <button onClick={() => { setSelectedEmpresa(manualId); setEmpresaConfirmed(true); }}
-                            className="px-4 py-2 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all">
-                            Entrar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-               ) : empresasError ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="text-[var(--v-accent)] bg-[var(--v-accent)]/10 p-6 max-w-lg text-center rounded-[var(--v-radius)] font-bold border border-[#ff4d00]/30 tracking-widest uppercase text-xs shadow-2xl">
-                      <AlertCircle size={28} className="mx-auto mb-3" />
-                      <p className="text-[10px] leading-relaxed">{empresasError}</p>
-                    </div>
-                    <div className="flex flex-col items-center gap-2 bg-black/40 border border-white/10 rounded p-5">
-                      <p className="text-[9px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Entrar com ID de empresa:</p>
-                      <div className="flex gap-2">
-                        <input value={manualId} onChange={e => setManualId(e.target.value)}
-                          className="bg-[#0c0908] border border-[rgba(255, 160, 80, 0.08)] rounded px-3 py-2 text-[var(--v-text-bold)] text-xs font-mono w-24 outline-none focus:border-[#ff4d00]"
-                          placeholder="959"/>
-                        <button onClick={() => { setSelectedEmpresa(manualId); setEmpresaConfirmed(true); }}
-                          className="px-4 py-2 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all">
-                          Entrar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-               ) : filteredEmpresas.length === 0 ? (
-                  <div className="text-[var(--v-text-muted)] uppercase tracking-widest text-xs border border-white/5 p-12 rounded-[var(--v-radius)] bg-black/20 backdrop-blur-sm">Nenhuma empresa localizada</div>
-               ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full px-4 items-stretch pb-10">
-                      {filteredEmpresas.slice(0, search ? 100 : 6).map((emp, i) => (
-                          <div key={emp.id} className="group relative cursor-pointer" onClick={() => { setSelectedEmpresa(emp.id.toString()); setEmpresaConfirmed(true); }}>
-                              <div className="p-8 flex flex-col h-full min-h-[220px] justify-between rounded-[var(--v-radius)] border border-white/10 hover:border-[#ff4d00]/50 bg-black/40 hover:bg-black/60 backdrop-blur-md transition-all duration-500 hover:-translate-y-2 group-hover:shadow-[0_20px_50px_rgba(255,77,0,0.15)]">
-                                  <div className="space-y-6">
-                                      <div className="w-12 h-12 flex items-center justify-center border border-white/10 group-hover:border-[#ff4d00]/40 group-hover:bg-[var(--v-accent)]/10 transition-all duration-500 bg-white/5 overflow-hidden relative">
-                                          <div className="absolute inset-0 translate-y-full group-hover:translate-y-0 bg-[var(--v-accent)] transition-transform duration-500 opacity-20"></div>
-                                          <Building2 className="text-[var(--v-text-muted)] group-hover:text-[var(--v-accent)] transition-colors z-10" size={24}/>
-                                      </div>
-                                      <div className="space-y-2">
-                                          <h3 className="font-headline text-lg font-black tracking-widest text-[var(--v-text-bold)] group-hover:text-[var(--v-accent)] transition-colors uppercase leading-tight">{emp.nome}</h3>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-[var(--v-text-faint)] font-black px-1.5 py-0.5 border border-white/5 rounded-[var(--v-radius)]">ID {emp.id}</span>
-                                            <span className="text-[9px] text-[var(--v-accent-3)] font-black uppercase tracking-widest">Ativo</span>
-                                          </div>
-                                      </div>
-                                  </div>
-                                  <div className="flex items-center justify-between mt-8">
-                                      <div className="flex items-center gap-2 text-[var(--v-accent)] opacity-40 group-hover:opacity-100 transition-all duration-500">
-                                          <span className="text-[10px] uppercase tracking-[0.3em] font-black">ENTRAR</span>
-                                          <ArrowUpRight size={14} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                                      </div>
-                                      <Fingerprint size={20} className="text-[var(--v-text-bold)]/5 group-hover:text-[var(--v-accent)]/20 transition-all duration-700" />
-                                  </div>
-                              </div>
-                          </div>
-                      ))}
-                      {!search && globalEmpresas.length > 6 && (
-                        <div className="col-span-1 md:col-span-2 lg:col-span-3 flex justify-center mt-6">
-                           <button 
-                             onClick={() => setSearch(' ')} 
-                             className="text-[10px] font-black uppercase tracking-[0.4em] text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)] transition-colors border-b border-white/10 hover:border-[#ff4d00] pb-1"
-                           >
-                              Ver todos os nodes ({globalEmpresas.length})
-                           </button>
-                        </div>
-                      )}
-                  </div>
-               )}
-            </main>
-            
-            <footer className="w-full max-w-7xl flex flex-col md:flex-row justify-between items-center gap-6 opacity-40 hover:opacity-100 transition-opacity duration-700 border-t border-white/10 pt-8 mt-auto">
-              <div className="flex items-center gap-6">
-                 <div className="flex items-center gap-3">
-                    <span className="w-2 h-2 bg-[var(--v-accent)] rounded-[var(--v-radius)] animate-pulse shadow-[0_0_10px_#ff4d00]"></span>
-                    <p className="text-[9px] font-bold text-[var(--v-text-muted)] uppercase tracking-[0.3em]">Cortex Engine Operational</p>
-                 </div>
-                 <div className="h-4 w-[1px] bg-white/10"></div>
-                 <p className="text-[9px] font-bold text-[var(--v-text-faint)] uppercase tracking-[0.3em]">Build 2.0.4 - VULCANO LABS</p>
-              </div>
-              <div className="flex gap-8">
-                  {['SLA', 'SYSTEM', 'PRIVACY'].map(t => (
-                    <span key={t} className="text-[9px] font-black text-[var(--v-text-faint)] hover:text-[var(--v-text-muted)] cursor-pointer transition-colors uppercase tracking-[0.3em]">{t}</span>
-                  ))}
-              </div>
-            </footer>
-        </div>
-      </div>
+      <EmpresaSelectionView
+        globalEmpresas={globalEmpresas}
+        onSelectEmpresa={(id) => { setSelectedEmpresa(id); setEmpresaConfirmed(true); }}
+        onLogout={() => { setIsAuthenticated(false); }}
+      />
     );
   }
 
