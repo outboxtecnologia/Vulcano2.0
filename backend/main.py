@@ -3676,7 +3676,7 @@ def api_dashboard_lancamentos(empresa_id: int, data_ini: str = None, data_fim: s
 
 
 @app.get("/api/vulcano/vendas")
-def get_vulcano_vendas(empresa_id: int):
+def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini: str = None, data_fim: str = None):
     try:
         conn = get_conn("vulcano")
         query_vendas = """
@@ -3689,7 +3689,18 @@ def get_vulcano_vendas(empresa_id: int):
               AND COALESCE(c.CNPJ, '') <> '000.000.000-00'
               AND COALESCE(v.TOTALVENDA, 0) > 0.01
         """
-        df_vendas = pd.read_sql_query(query_vendas, conn, params=(empresa_id,))
+        params = [empresa_id]
+        if empreendimento_id:
+            query_vendas += " AND v.IDEMPREENDIMENTO = ?"
+            params.append(empreendimento_id)
+        if data_ini:
+            query_vendas += " AND v.DTOPER >= CAST(? AS DATE)"
+            params.append(data_ini)
+        if data_fim:
+            query_vendas += " AND v.DTOPER <= CAST(? AS DATE)"
+            params.append(data_fim)
+            
+        df_vendas = pd.read_sql_query(query_vendas, conn, params=tuple(params))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
         
         df = df_vendas

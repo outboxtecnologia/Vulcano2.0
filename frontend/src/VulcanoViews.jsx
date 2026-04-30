@@ -406,9 +406,12 @@ export const VendasView = ({ selectedEmpresa }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [empreendimentosList, setEmpreendimentosList] = useState([]);
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('TODOS');
-  const [periodFilter, setPeriodFilter] = useState('TODOS');
+  const [dataIniFilter, setDataIniFilter] = useState('');
+  const [dataFimFilter, setDataFimFilter] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   
   const [selectedVenda, setSelectedVenda] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -418,14 +421,31 @@ export const VendasView = ({ selectedEmpresa }) => {
 
   useEffect(() => {
     if (!selectedEmpresa) return;
+    fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
+      .then(res => res.json())
+      .then(d => setEmpreendimentosList(d))
+      .catch(err => console.error(err));
+  }, [selectedEmpresa]);
+
+  const handleSearch = () => {
+    if (!selectedEmpresa) return;
+    if (!empreendimentoFilter || !dataIniFilter || !dataFimFilter) {
+      alert("Por favor, selecione um empreendimento e um período de datas antes de buscar.");
+      return;
+    }
     setLoading(true);
-    fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
+    setHasSearched(true);
+    
+    let url = `${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`;
+    if (empreendimentoFilter) url += `&empreendimento_id=${empreendimentoFilter}`;
+    if (dataIniFilter) url += `&data_ini=${dataIniFilter}`;
+    if (dataFimFilter) url += `&data_fim=${dataFimFilter}`;
+
+    fetch(url)
       .then(res => res.json())
       .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); })
       .catch(err => { console.error(err); setLoading(false); });
-  }, [selectedEmpresa]);
-
-  const uniqueEmps = [...new Set(data.map(v => v.empreendimento))].sort();
+  };
 
   const handleSelectVenda = async (v) => {
     if (selectedVenda?.id === v.id) { setSelectedVenda(null); return; }
@@ -443,7 +463,7 @@ export const VendasView = ({ selectedEmpresa }) => {
 
   const filtered = data.filter(v => {
     let ok = true;
-    if (empreendimentoFilter && v.empreendimento !== empreendimentoFilter) ok = false;
+    if (empreendimentoFilter && v.empreendimento_id && v.empreendimento_id.toString() !== empreendimentoFilter.toString()) ok = false;
     if (statusFilter !== 'TODOS') {
         if (statusFilter === 'DISTRATADA' && v.distrato !== 'S') ok = false;
         if (statusFilter === 'ATIVA' && v.distrato === 'S') ok = false;
@@ -514,17 +534,23 @@ export const VendasView = ({ selectedEmpresa }) => {
         
         <div className="flex gap-3">
             <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
-                <option value="">Empreendimento</option>
-                {uniqueEmps.map((emp, i) => <option key={i} value={emp}>{emp}</option>)}
+                <option value="">Selecione Empreendimento</option>
+                {empreendimentosList.map((emp) => <option key={emp.id} value={emp.id}>{emp.nome}</option>)}
             </select>
-            <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
-                <option value="TODOS">Período</option>
-            </select>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <span className="text-[11px] font-mono">De</span>
+                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                <span className="text-[11px] font-mono">Até</span>
+                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+            </div>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
                 <option value="TODOS">Status</option>
                 <option value="ATIVA">ATIVA</option>
                 <option value="DISTRATADA">DISTRATADA</option>
             </select>
+            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-white/10" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: '#ff7a1a' }}>
+                Buscar
+            </button>
         </div>
       </div>
 
@@ -533,6 +559,8 @@ export const VendasView = ({ selectedEmpresa }) => {
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             {loading ? (
                 <div className="flex justify-center items-center h-full text-[#8a7a68] animate-pulse text-[12px]">Carregando carteira de vendas...</div>
+            ) : !hasSearched ? (
+                <div className="flex justify-center items-center h-full text-[#5a4e42] uppercase text-[10px] tracking-widest font-bold">Selecione empreendimento e período para buscar.</div>
             ) : filtered.length === 0 ? (
                 <div className="flex justify-center items-center h-full text-[#5a4e42] uppercase text-[10px] tracking-widest font-bold">Nenhum registro.</div>
             ) : (
@@ -791,10 +819,12 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [empreendimentosList, setEmpreendimentosList] = useState([]);
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('ABERTA');
   const [dataIniFilter, setDataIniFilter] = useState('');
   const [dataFimFilter, setDataFimFilter] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
   
   const [selectedRecebimento, setSelectedRecebimento] = useState(null);
   
@@ -802,12 +832,31 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
 
   useEffect(() => {
     if (!selectedEmpresa) return;
+    fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
+      .then(res => res.json())
+      .then(d => setEmpreendimentosList(d))
+      .catch(err => console.error(err));
+  }, [selectedEmpresa]);
+
+  const handleSearch = () => {
+    if (!selectedEmpresa) return;
+    if (!empreendimentoFilter || !dataIniFilter || !dataFimFilter) {
+      alert("Por favor, selecione um empreendimento e um período de datas antes de buscar.");
+      return;
+    }
     setLoading(true);
-    fetch(`${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`)
+    setHasSearched(true);
+    
+    let url = `${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`;
+    if (empreendimentoFilter) url += `&empreendimento_id=${empreendimentoFilter}`;
+    if (dataIniFilter) url += `&data_ini=${dataIniFilter}`;
+    if (dataFimFilter) url += `&data_fim=${dataFimFilter}`;
+
+    fetch(url)
       .then(res => res.json())
       .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); })
       .catch(err => { console.error(err); setLoading(false); });
-  }, [selectedEmpresa]);
+  };
 
   const uniqueEmps = [...new Set(data.map(r => r.empreendimento))].sort();
 
@@ -824,7 +873,6 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
 
   const filtered = data.filter(r => {
     let ok = true;
-    if (empreendimentoFilter && r.empreendimento !== empreendimentoFilter) ok = false;
     
     const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
     if (statusFilter === 'ABERTA' && !isAberto && !r._justPaid) ok = false;
@@ -1021,8 +1069,8 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
         
         <div className="flex flex-wrap gap-3 items-center">
             <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
-                <option value="">Todos Empreendimentos</option>
-                {uniqueEmps.map((emp, i) => <option key={i} value={emp}>{emp}</option>)}
+                <option value="">Selecione Empreendimento</option>
+                {empreendimentosList.map((emp) => <option key={emp.id} value={emp.id}>{emp.nome}</option>)}
             </select>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
                 <option value="TODOS">Todas Parcelas</option>
@@ -1040,6 +1088,10 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                 )}
             </div>
 
+            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-white/10" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: '#ff7a1a' }}>
+                Buscar
+            </button>
+
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg ml-auto" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
                 <span className="text-[12px]" style={{ color: '#8a7a68' }}>Total Listado:</span>
                 <span className="text-[12px] font-mono font-bold" style={{ color: '#f0e6d8' }}>{formatCurrency(totalGeral)}</span>
@@ -1054,6 +1106,8 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                     <Loader2 size={32} className="animate-spin text-[#ff7a1a]" />
                     <span className="text-[12px] uppercase font-bold tracking-widest">Carregando carteira...</span>
                 </div>
+            ) : !hasSearched ? (
+                <div className="flex justify-center items-center h-full text-[#5a4e42] uppercase text-[10px] tracking-widest font-bold">Selecione empreendimento e período para buscar.</div>
             ) : filtered.length === 0 ? (
                 <div className="flex justify-center items-center h-full text-[#5a4e42] uppercase text-[10px] tracking-widest font-bold">Nenhum registro encontrado.</div>
             ) : (

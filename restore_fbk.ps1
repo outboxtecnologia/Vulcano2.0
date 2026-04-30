@@ -1,6 +1,5 @@
 $ErrorActionPreference = "Continue"
-$logFile = "D:\Questor_Restore\restore_log.txt"
-$7zPath = "C:\Program Files\PLANET9\program\current\resources\app.asar.unpacked\node_modules\7zip\7zip-lite\7z.exe"
+$logFile = "D:\Questor_Restore\restore_log_fase2.txt"
 $gbakPath = "C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\Firebird\bin\gbak.exe"
 
 Function Log-Msg {
@@ -10,28 +9,22 @@ Function Log-Msg {
     $ts + $message | Out-File -FilePath $logFile -Append
 }
 
-Log-Msg "Iniciando descompactação do arquivo Questor.fbk.xz (pode demorar bastante devido ao tamanho de 14GB)..."
-
-$xzFile = "D:\Questor_Restore\Questor.fbk.xz"
 $fbkFile = "D:\Questor_Restore\Questor.fbk"
 $fdbPath = "D:\Questor_Restore\Questor.fdb"
 
-if (Test-Path $xzFile) {
-    if (-Not (Test-Path $fbkFile)) {
-        & $7zPath x $xzFile -o"D:\Questor_Restore" -y 2>&1 | Out-File -FilePath $logFile -Append
-        Log-Msg "Descompactação concluída."
-    } else {
-        Log-Msg "O arquivo Questor.fbk já existe. Pulando etapa de descompactação."
-    }
+Log-Msg "Limpando o arquivo .FDB corrompido/incompleto..."
+if (Test-Path $fdbPath) {
+    Remove-Item -Path $fdbPath -Force
+}
+
+if (Test-Path $fbkFile) {
+    Log-Msg "Iniciando a restauração do banco de dados (Apenas Fase 2 - gbak)..."
+    Log-Msg "Tamanho do arquivo FBK de origem: $([math]::Round((Get-Item $fbkFile).Length / 1GB, 2)) GB"
     
-    if (Test-Path $fbkFile) {
-        Log-Msg "Iniciando restauração via gbak para $fdbPath (o banco pode ter mais de 50GB, aguarde)..."
-        # O gbak converte o backup .fbk em um banco utilizável .fdb
-        & $gbakPath -c -v -user SYSDBA -password masterkey $fbkFile $fdbPath 2>&1 | Out-File -FilePath $logFile -Append
-        Log-Msg "Restauração finalizada com sucesso! Seu arquivo .fdb está pronto."
-    } else {
-        Log-Msg "ERRO: O arquivo $fbkFile não foi gerado após a descompactação."
-    }
+    # O gbak converte o backup .fbk em um banco utilizável .fdb
+    & $gbakPath -c -v -user SYSDBA -password masterkey $fbkFile $fdbPath 2>&1 | Out-File -FilePath $logFile -Append
+    
+    Log-Msg "Restauração finalizada com sucesso! Seu arquivo .fdb está pronto."
 } else {
-    Log-Msg "ERRO: O arquivo $xzFile não foi encontrado."
+    Log-Msg "ERRO: O arquivo $fbkFile não foi encontrado."
 }
