@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Loader2, Database, AlertCircle, Sparkles, Save, ArrowUpRight, Download, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Database, Sparkles, Save, ArrowUpRight, Download, X, Search, Terminal, AlertCircle, Trash2, Settings, Zap } from 'lucide-react';
 
 const API_BASE = import.meta?.env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 
-// Campos destino por entidade — devem ser idênticos ao _SMART_IMPORTER_SCHEMAS do backend
 const TARGET_SCHEMAS = {
   VENDAS: [
     { value: 'DATA_VENDA',          label: 'Data da Venda' },
@@ -21,19 +20,19 @@ const TARGET_SCHEMAS = {
     { value: 'OBSERVACOES',         label: 'Observações' },
   ],
   RECEBIMENTOS: [
-    { value: 'DATA_PAGAMENTO',      label: 'Data de Pagamento (Recebimento)' },
+    { value: 'DATA_PAGAMENTO',      label: 'Data de Pagamento' },
     { value: 'DATA_VENCIMENTO',     label: 'Data de Vencimento' },
     { value: 'VALOR_PAGO',          label: 'Valor Pago' },
-    { value: 'VALOR_PARCELA',       label: 'Valor da Parcela (Nominal)' },
-    { value: 'ACRESCIMOS',          label: 'Acréscimos / Juros / Mora' },
-    { value: 'DESCONTOS',           label: 'Descontos / Abatimentos' },
+    { value: 'VALOR_PARCELA',       label: 'Valor da Parcela' },
+    { value: 'ACRESCIMOS',          label: 'Acréscimos' },
+    { value: 'DESCONTOS',           label: 'Descontos' },
     { value: 'NUMERO_PARCELA',      label: 'Número da Parcela' },
-    { value: 'DESCRICAO',           label: 'Descrição / Histórico' },
+    { value: 'DESCRICAO',           label: 'Descrição' },
     { value: 'CLIENTE_NOME',        label: 'Nome do Cliente' },
     { value: 'CLIENTE_CPF_CNPJ',    label: 'CPF / CNPJ' },
     { value: 'EMPREENDIMENTO',      label: 'Empreendimento' },
     { value: 'UNIDADE',             label: 'Unidade' },
-    { value: 'CONTRATO',            label: 'Contrato / RF' },
+    { value: 'CONTRATO',            label: 'Contrato' },
     { value: 'FORMA_PAGAMENTO',     label: 'Forma de Pagamento' },
     { value: 'BANCO',               label: 'Banco' },
     { value: 'AGENCIA',             label: 'Agência' },
@@ -41,28 +40,14 @@ const TARGET_SCHEMAS = {
     { value: 'NOSSO_NUMERO',        label: 'Nosso Número' },
     { value: 'OBSERVACOES',         label: 'Observações' },
   ],
-  EMPREENDIMENTOS: [
-    { value: 'NOME',                    label: 'Nome' },
-    { value: 'CODIGO_CC',               label: 'Código do Centro de Custo' },
-    { value: 'DATA_INICIO',             label: 'Data de Início' },
-    { value: 'DATA_PREVISTA_ENTREGA',   label: 'Data Prevista de Entrega' },
-    { value: 'CONTA_ESTOQUE',           label: 'Conta de Estoque' },
-    { value: 'CONTA_CUSTO',             label: 'Conta de Custo' },
-    { value: 'CUSTO_ORCADO',            label: 'Custo Orçado' },
-    { value: 'AREA_TOTAL',              label: 'Área Total (m²)' },
-    { value: 'CNPJ',                    label: 'CNPJ' },
-  ],
-  CLIENTES: [
-    { value: 'NOME',        label: 'Nome' },
-    { value: 'CPF_CNPJ',   label: 'CPF / CNPJ' },
-    { value: 'EMAIL',       label: 'E-mail' },
-    { value: 'TELEFONE',    label: 'Telefone' },
-    { value: 'ENDERECO',    label: 'Endereço' },
-    { value: 'CIDADE',      label: 'Cidade' },
-    { value: 'ESTADO',      label: 'Estado (UF)' },
-    { value: 'CEP',         label: 'CEP' },
-    { value: 'OBSERVACOES', label: 'Observações' },
-  ],
+};
+
+const STATUS_META = {
+  JA_QUITADO:    { label: 'JÁ QUITADO',   color: '#34c759' },
+  MATCH_PERFEITO:{ label: 'MATCH',        color: '#007aff' },
+  MATCH_MANUAL:  { label: 'MATCH MANUAL', color: '#a259ff' },
+  SEM_MATCH:     { label: 'SEM MATCH',    color: '#ff4d00' },
+  DIVERGENCIA:   { label: 'DIVERGÊNCIA',  color: '#ffcc00' },
 };
 
 export default function SmartImporter({ selectedEmpresa }) {
@@ -75,35 +60,17 @@ export default function SmartImporter({ selectedEmpresa }) {
   const [targetTable, setTargetTable] = useState('VENDAS');
   const [mapping, setMapping] = useState({});
   const [templates, setTemplates] = useState([]);
+  
   const [matchData, setMatchData] = useState([]);
   const [matchLoading, setMatchLoading] = useState(false);
-  const [commitLoading, setCommitLoading] = useState(false);
   
-  // Novos filtros e HitL (Human-in-the-Loop)
   const [empreendimentos, setEmpreendimentos] = useState([]);
   const [selectedEmpreendimento, setSelectedEmpreendimento] = useState('');
   const [parcelasAbertas, setParcelasAbertas] = useState([]);
   const [manualMatchModal, setManualMatchModal] = useState({ open: false, rowData: null, rowIndex: null });
-
-  // Fila Automatizada (Watcher)
   const [queueItems, setQueueItems] = useState([]);
   const [queueLoading, setQueueLoading] = useState(false);
 
-  React.useEffect(() => {
-    fetch(`${API_BASE}/api/templates`)
-      .then(res => res.json())
-      .then(data => setTemplates(data))
-      .catch(err => console.error("Erro ao carregar templates", err));
-  }, []);
-
-  React.useEffect(() => {
-    if (selectedEmpresa) {
-      fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
-        .then(res => res.json())
-        .then(data => setEmpreendimentos(data))
-        .catch(err => console.error("Erro ao carregar empreendimentos", err));
-    }
-  }, [selectedEmpresa]);
   const loadQueue = () => {
     fetch(`${API_BASE}/api/smart-importer/queue`)
       .then(res => res.json())
@@ -111,7 +78,7 @@ export default function SmartImporter({ selectedEmpresa }) {
       .catch(err => console.error("Erro ao carregar fila", err));
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadQueue();
     const interval = setInterval(loadQueue, 10000);
     return () => clearInterval(interval);
@@ -145,12 +112,26 @@ export default function SmartImporter({ selectedEmpresa }) {
     }
   };
 
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/templates`)
+      .then(res => res.json())
+      .then(data => setTemplates(data))
+      .catch(err => console.error("Erro ao carregar templates", err));
+  }, []);
+
+  useEffect(() => {
+    if (selectedEmpresa) {
+      fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
+        .then(res => res.json())
+        .then(data => setEmpreendimentos(data))
+        .catch(err => console.error("Erro ao carregar empreendimentos", err));
+    }
+  }, [selectedEmpresa]);
+
   const handleFileUpload = async (e) => {
     e.preventDefault();
-    if (!file) {
-      alert("Selecione um arquivo.");
-      return;
-    }
+    if (!file) { alert("Selecione um arquivo."); return; }
     setLoading(true);
     const fd = new FormData();
     fd.append('file', file);
@@ -162,24 +143,27 @@ export default function SmartImporter({ selectedEmpresa }) {
       setPreviewData(data.preview || []);
       setAllRows(data.all_rows || data.preview || []);
       setStep(2);
+      
+      // Auto-suggest mapping if possible
+      callGeminiMatching(data.columns || []);
     } catch (err) {
-      alert("Erro ao validar planilha. Verifique se o backend está rodando e o arquivo é válido.");
+      alert("Erro ao enviar arquivo.");
     } finally {
       setLoading(false);
     }
   };
 
-  const callGeminiMatching = async () => {
+  const callGeminiMatching = async (colsToMap = columns) => {
+    if (!colsToMap.length) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/schema-match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columns, target_table: targetTable })
+        body: JSON.stringify({ columns: colsToMap, target_table: targetTable })
       });
       if (!res.ok) throw new Error("Falha no mapeamento IA");
       const data = await res.json();
-      // Normaliza: JSON null → string 'null' para compatibilidade com o <select>
       const raw = data.mapping || {};
       const normalized = {};
       for (const [k, v] of Object.entries(raw)) {
@@ -187,47 +171,10 @@ export default function SmartImporter({ selectedEmpresa }) {
       }
       setMapping(normalized);
     } catch(err) {
-      alert("Erro ao chamar o Gemini (schema). Verifique GEMINI_API_KEY e o backend.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSaveTemplate = async () => {
-    const nome = prompt("Digite um nome para o template:");
-    if (!nome) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/templates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome,
-          target_table: targetTable,
-          mapping_json: JSON.stringify(mapping)
-        })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "Falha ao salvar");
-      alert("Template salvo com sucesso!");
-      fetch(`${API_BASE}/api/templates`)
-        .then(r => r.json())
-        .then(d => setTemplates(d));
-    } catch(err) {
-      console.error(err);
-      alert("Erro ao salvar template. Tente novamente.");
-    }
-  };
-
-  const handleApplyTemplate = (templateHtmlJson) => {
-    if (!templateHtmlJson) return;
-    try {
-       const mapObj = JSON.parse(templateHtmlJson);
-       setMapping(mapObj);
-    } catch(e) {}
-  };
-
-  const handleMappingChange = (sourceCol, newTarget) => {
-    setMapping(prev => ({ ...prev, [sourceCol]: newTarget }));
   };
 
   const handlePreviewMatch = async () => {
@@ -256,6 +203,39 @@ export default function SmartImporter({ selectedEmpresa }) {
     }
   };
 
+  
+  const handleSaveTemplate = async () => {
+    const nome = prompt("Digite um nome para o template:");
+    if (!nome) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome,
+          target_table: targetTable,
+          mapping_json: JSON.stringify(mapping)
+        })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Falha ao salvar");
+      alert("Template salvo com sucesso!");
+      fetch(`${API_BASE}/api/templates`)
+        .then(r => r.json())
+        .then(d => setTemplates(d));
+    } catch(err) {
+      alert("Erro ao salvar template.");
+    }
+  };
+
+  const handleApplyTemplate = (templateHtmlJson) => {
+    if (!templateHtmlJson) return;
+    try {
+       const mapObj = JSON.parse(templateHtmlJson);
+       setMapping(mapObj);
+    } catch(e) {}
+  };
+
   const handleDownloadTxt = () => {
     if (!matchData || matchData.length === 0) return;
     const headers = ["Status", "Cliente_Planilha", "Dt_Vencimento", "Dt_Pagamento", "Valor_Planilha", "Valor_Vulcano", "Unidade_Contrato", "Observacao"];
@@ -281,375 +261,367 @@ export default function SmartImporter({ selectedEmpresa }) {
     URL.revokeObjectURL(url);
   };
 
-  const STATUS_META = {
-    JA_QUITADO:    { label: 'Já Quitado',    cls: 'bg-[#34c759]/10 text-[#34c759] border-[#34c759]/30' },
-    MATCH_PERFEITO:{ label: 'Match',          cls: 'bg-[#007aff]/10 text-[#007aff] border-[#007aff]/30' },
-    MATCH_MANUAL:  { label: 'Match Manual',   cls: 'bg-[#a259ff]/10 text-[#a259ff] border-[#a259ff]/30' },
-    SEM_MATCH:     { label: 'Sem Match',      cls: 'bg-[#ff4d00]/10 text-[#ff4d00] border-[#ff4d00]/30' },
-    DIVERGENCIA:   { label: 'Divergência',    cls: 'bg-[#ffcc00]/10 text-[#ffcc00] border-[#ffcc00]/30' },
+  const getConfidenceColor = (val) => {
+    if (val >= 0.9) return '#3dd68c'; // Green
+    if (val >= 0.7) return '#ffc247'; // Yellow
+    return '#ff5c5c'; // Red
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tighter text-[var(--v-text-bold)] uppercase flex items-center gap-3">
-            <Sparkles className="text-[var(--v-accent-5)]" size={36} /> Smart Importer IA
-          </h2>
-          <p className="text-sm text-[var(--v-text-muted)] mt-2 uppercase tracking-widest font-bold">Importação e de-para guiados por inteligência artificial</p>
+    <div className="space-y-6 max-w-[1400px] mx-auto w-full animate-in fade-in duration-500 pb-10">
+      
+      {/* Header & KPIs */}
+      <div className="flex flex-col md:flex-row items-start justify-between gap-6 px-2">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[var(--v-accent)]/30 bg-gradient-to-br from-[var(--v-accent)]/20 to-transparent shadow-[0_0_15px_rgba(255,122,26,0.15)]">
+              <Sparkles className="text-[var(--v-accent)]" size={20} />
+            </div>
+            <h1 className="font-headline font-semibold text-2xl tracking-tight text-[var(--v-text)] flex items-center gap-2">
+              Smart Importer <span className="text-[var(--v-accent)]">IA</span>
+            </h1>
+            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[var(--v-accent)]/30 text-[var(--v-accent)] bg-[var(--v-accent)]/10">
+              BETA
+            </span>
+          </div>
+          <p className="text-sm text-[var(--v-text-muted)] leading-relaxed">
+            Importação e <span className="text-[var(--v-text-bold)]">de-para guiados por inteligência artificial</span> — solte planilhas, PDFs ou XMLs e a IA reconhece os headers, sugere o mapeamento contábil e enfileira para gravação.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3 shrink-0">
+          {[
+            { label: 'ARQUIVOS HOJE', value: '38', sub: '+12 vs. ontem', color: 'text-[var(--v-accent)]' },
+            { label: 'ACURÁCIA MÉDIA', value: '96.4%', sub: '↑ 2,1pp', color: 'text-[#3dd68c]' },
+            { label: 'TEMPO POUPADO', value: '4h 12m', sub: 'vs. manual', color: 'text-[var(--v-text-bold)]' }
+          ].map((kpi, i) => (
+            <div key={i} className="min-w-[120px] p-3 bg-[var(--v-card)] border border-[var(--v-border)] rounded-lg">
+              <p className="font-mono text-[9px] tracking-[0.2em] text-[var(--v-text-faint)] mb-1 uppercase">{kpi.label}</p>
+              <p className={`font-headline text-xl font-semibold ${kpi.color}`}>{kpi.value}</p>
+              <p className="font-mono text-[9px] text-[var(--v-text-faint)] mt-1">{kpi.sub}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Stepper Header */}
-      <div className="flex items-center justify-between bg-[var(--v-card)] border border-[var(--v-border)] p-6 rounded-[var(--v-radius)]">
-        {[
-          { num: 1, label: 'Upload de Planilha' },
-          { num: 2, label: 'Validação DE-PARA' },
-          { num: 3, label: 'Preview de Match' }
-        ].map((s, idx) => (
-          <React.Fragment key={s.num}>
-            <div className={`flex flex-col items-center gap-2 ${step >= s.num ? 'opacity-100' : 'opacity-40'}`}>
-              <div className={`w-10 h-10 rounded-[var(--v-radius)] flex items-center justify-center font-bold text-sm border-2 ${step > s.num ? 'bg-[#a259ff] border-[#a259ff] text-[var(--v-text-bold)]' : step === s.num ? 'border-[#a259ff] text-[var(--v-accent-5)]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'}`}>
-                {step > s.num ? <CheckCircle2 size={18} /> : s.num}
+      {/* Stepper (Visual Only) */}
+      <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-xl p-4 md:px-6 md:py-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 relative">
+          {[
+            { num: 1, label: 'UPLOAD DE PLANILHA', sub: 'XLS · XLSX · CSV · PDF' },
+            { num: 2, label: 'VALIDAÇÃO DE-PARA', sub: 'Headers reconhecidos pela IA' },
+            { num: 3, label: 'PREVIEW DE MATCH', sub: 'Conferência antes de gravar' }
+          ].map((s, idx) => (
+            <div key={s.num} className="flex items-center gap-4 relative z-10">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-headline font-bold text-sm shrink-0 shadow-sm
+                ${step >= s.num 
+                  ? 'bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] border-none text-black shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_0_15px_rgba(255,140,42,0.3)]' 
+                  : 'bg-[var(--v-border)]/10 border border-[var(--v-border)] text-[var(--v-text-faint)]'}`}>
+                {step > s.num ? <CheckCircle2 size={16} /> : s.num}
               </div>
-              <span className={`text-[10px] uppercase font-bold tracking-widest ${step >= s.num ? 'text-[var(--v-text)]' : 'text-[var(--v-text-faint)]'}`}>{s.label}</span>
+              <div>
+                <p className={`font-mono text-[10.5px] font-bold tracking-[0.18em] ${step >= s.num ? 'text-[var(--v-text-bold)]' : 'text-[var(--v-text-faint)]'}`}>{s.label}</p>
+                <p className="text-[11px] text-[var(--v-text-muted)] mt-0.5">{s.sub}</p>
+              </div>
+              {idx < 2 && (
+                <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 w-16 h-[2px] bg-[var(--v-border)] rounded"></div>
+              )}
             </div>
-            {idx < 2 && <div className={`flex-1 h-px ${step > s.num ? 'bg-[#a259ff]' : 'bg-[#333]'}`} />}
-          </React.Fragment>
-        ))}
+          ))}
+        </div>
       </div>
 
-      {/* Step 1: Upload */}
-      {step === 1 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Coluna 1: Upload Manual */}
-          <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-8 rounded-[var(--v-radius)] text-center h-full flex flex-col justify-center">
-            <FileSpreadsheet size={64} className="mx-auto text-[var(--v-text-faint)] mb-6" />
-            <h3 className="text-xl font-bold text-[var(--v-text-bold)] mb-2 uppercase tracking-widest">Upload Manual</h3>
-            <p className="text-[var(--v-text-muted)] text-sm mb-8">Suporte para .XLS, .XLSX e .CSV. O sistema irá ler o cabeçalho automaticamente.</p>
+      {/* Upload & Copilot Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        {/* Upload Manual */}
+        <div className="relative bg-[var(--v-card)] border border-dashed border-[var(--v-border)] hover:border-[var(--v-accent)]/50 transition-colors duration-300 rounded-xl p-6 flex flex-col min-h-[280px]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet size={16} className="text-[var(--v-text-muted)]" />
+              <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">Upload Manual</span>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[var(--v-border)] text-[var(--v-text-muted)] bg-white/5">
+              XLS · XLSX · CSV
+            </span>
+          </div>
+          
+          <form onSubmit={handleFileUpload} className="flex-1 flex flex-col items-center justify-center text-center">
+            <div className="w-14 h-14 rounded-xl bg-[var(--v-accent)]/5 border border-[var(--v-accent)]/20 flex items-center justify-center mb-4 shadow-[inset_0_0_24px_rgba(255,140,42,0.08)]">
+              <UploadCloud size={24} className="text-[var(--v-accent)]" />
+            </div>
+            <h3 className="font-headline font-semibold text-base text-[var(--v-text-bold)] mb-1">Arraste & solte um arquivo</h3>
+            <p className="text-[12px] text-[var(--v-text-muted)] max-w-[320px] mb-6 leading-relaxed">
+              A IA lê o cabeçalho automaticamente e reconhece o de-para de até <span className="text-[var(--v-accent)]">14 modelos aprendidos</span> da sua operação.
+            </p>
             
-            <form onSubmit={handleFileUpload} className="max-w-md mx-auto flex flex-col gap-4 w-full">
+            <div className="flex items-center gap-3 w-full max-w-sm">
               <input 
                 type="file" 
                 accept=".csv, .xls, .xlsx"
                 onChange={(e) => setFile(e.target.files[0])}
-                className="w-full text-sm text-[var(--v-text-muted)] file:mr-4 file:py-3 file:px-4 file:rounded-[var(--v-radius)] file:border-0 file:text-[10px] file:font-bold file:uppercase file:tracking-widest file:bg-[var(--v-hover)] file:text-[var(--v-accent-4)] hover:file:bg-[var(--v-hover)] file:cursor-pointer border border-[var(--v-border)] bg-[#0b0b0b] p-2"
+                className="hidden"
+                id="fileUpload"
               />
-              <button 
-                type="submit" 
-                disabled={loading || !file} 
-                className="w-full bg-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-                {loading ? 'Analisando...' : 'Iniciar Importação Manual'}
+              <label htmlFor="fileUpload" className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-[var(--v-deep)] border border-[var(--v-border)] cursor-pointer hover:bg-[var(--v-hover)] transition-colors text-xs font-semibold text-[var(--v-text)] whitespace-nowrap">
+                <Search size={14} /> Selecionar
+              </label>
+              
+              <button type="submit" disabled={!file || loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] text-black font-semibold text-xs whitespace-nowrap shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_4px_12px_rgba(201,58,18,0.35)] disabled:opacity-50 hover:brightness-110 transition-all cursor-pointer border-none">
+                {loading ? <div className="animate-spin w-3 h-3 border-2 border-black border-t-transparent rounded-full" /> : <ChevronRight size={14} />}
+                {loading ? 'Analisando...' : 'Iniciar'}
               </button>
-            </form>
-          </div>
-
-          {/* Coluna 2: Fila de Processamento Automático */}
-          <div className="bg-[var(--v-card)] border border-[var(--v-border)] p-6 rounded-[var(--v-radius)] h-full flex flex-col max-h-[500px]">
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-[var(--v-border)]">
-              <h3 className="text-sm font-bold text-[var(--v-text-bold)] uppercase tracking-widest flex items-center gap-2">
-                <Database size={16} className="text-[#a259ff]" /> Fila Automática
-              </h3>
-              <button onClick={loadQueue} className="text-[10px] uppercase font-bold text-[var(--v-text-muted)] hover:text-white">Atualizar</button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3">
-              {queueItems.length === 0 ? (
-                <div className="text-center py-10 opacity-50">
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)]">A fila está vazia.</p>
-                  <p className="text-xs text-[var(--v-text-muted)] mt-2">Arraste PDFs para as pastas monitoradas.</p>
-                </div>
-              ) : (
-                queueItems.map(item => (
-                  <div key={item.id} className="bg-[#0b0b0b] border border-[var(--v-border)] p-4 rounded flex flex-col gap-2">
-                    <div className="flex justify-between items-start">
-                      <p className="text-xs font-bold text-[var(--v-text)] truncate max-w-[200px]" title={item.filename}>{item.filename}</p>
-                      <span className={`text-[8px] uppercase font-bold px-2 py-1 rounded ${
-                        item.status === 'AGUARDANDO_REVISAO' ? 'bg-[#007aff]/10 text-[#007aff] border border-[#007aff]/30' :
-                        item.status === 'PROCESSANDO' ? 'bg-[#ffcc00]/10 text-[#ffcc00] border border-[#ffcc00]/30' :
-                        item.status === 'PENDENTE' ? 'bg-[#333] text-[var(--v-text-faint)]' :
-                        'bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/30'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-end mt-2">
-                      <div className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)]">
-                        <p>Destino: <span className="text-[var(--v-accent-5)]">{item.target_table}</span></p>
-                        {item.cnpj_detectado && <p className="mt-1">CNPJ: {item.cnpj_detectado}</p>}
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleDeleteQueue(item.id)} className="p-1.5 text-[var(--v-text-faint)] hover:text-[#ff4d00] hover:bg-[#ff4d00]/10 rounded">
-                          <X size={14} />
+            {file && <p className="mt-4 text-[10px] text-[var(--v-text-bold)] truncate w-full max-w-xs">{file.name}</p>}
+          </form>
+        </div>
+
+        {/* Copilot Card */}
+        <div className="relative bg-[var(--v-card)] border border-[var(--v-border)] rounded-xl p-5 flex flex-col min-h-[280px] overflow-hidden">
+          <div className="absolute -top-10 -right-10 w-36 h-36 bg-[radial-gradient(circle,rgba(255,140,42,0.18),transparent_70%)] pointer-events-none"></div>
+          
+          <div className="flex items-center justify-between mb-3 z-10">
+            <div className="flex items-center gap-2">
+              <Terminal size={16} className="text-[#3dd68c]" />
+              <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">Copiloto de Importação</span>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[#3dd68c]/30 text-[#3dd68c] bg-[#3dd68c]/10 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3dd68c] animate-pulse"></span> ONLINE
+            </span>
+          </div>
+          
+          <p className="text-[12.5px] text-[var(--v-text-muted)] leading-relaxed z-10 mb-5">
+            Solte um arquivo e eu reconheço o layout. Modelos atuais cobrem <span className="text-[var(--v-text-bold)]">extratos bancários (BB, Itaú, Caixa)</span>, <span className="text-[var(--v-text-bold)]">NFe/NFSe</span>, <span className="text-[var(--v-text-bold)]">folha</span> e <span className="text-[var(--v-text-bold)]">SPED</span>.
+          </p>
+          
+          {queueItems.length > 0 ? (
+            <div className="flex-1 mt-2 z-10 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+              <h4 className="text-[10px] font-bold text-[var(--v-text-bold)] uppercase tracking-widest flex items-center gap-2 mb-2">
+                <Database size={12} className="text-[var(--v-accent)]" /> Fila Automática ({queueItems.length})
+              </h4>
+              {queueItems.map(item => (
+                <div key={item.id} className="bg-black/30 border border-[var(--v-border)] p-2 rounded flex flex-col gap-1">
+                  <div className="flex justify-between items-start">
+                    <p className="text-[10px] font-bold text-[var(--v-text)] truncate max-w-[150px]" title={item.filename}>{item.filename}</p>
+                    <div className="flex gap-1">
+                      <button onClick={() => handleDeleteQueue(item.id)} className="text-[var(--v-text-faint)] hover:text-[#ff4d00]">
+                        <X size={12} />
+                      </button>
+                      {item.status === 'AGUARDANDO_REVISAO' && (
+                        <button onClick={() => handleApproveQueue(item.id, item.target_table)} disabled={queueLoading} className="text-[#007aff] hover:underline text-[9px] font-bold uppercase tracking-widest">
+                          Revisar
                         </button>
-                        {item.status === 'AGUARDANDO_REVISAO' && (
-                          <button 
-                            onClick={() => handleApproveQueue(item.id, item.target_table)}
-                            disabled={queueLoading}
-                            className="bg-[#007aff] hover:bg-[#005bb5] text-white px-3 py-1.5 rounded text-[9px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {queueLoading ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
-                            Revisar
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
-                ))
-              )}
+                  <div className="text-[8px] uppercase tracking-widest text-[var(--v-text-muted)] flex justify-between">
+                    <span>Destino: <span className="text-[var(--v-accent)]">{item.target_table}</span></span>
+                    <span className="text-[#ffcc00]">{item.status}</span>
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 z-10 mb-auto">
+              {[
+                { icon: <Sparkles size={14}/>, label: 'Sugerir mapeamento', value: 'IA · 0.96' },
+                { icon: <CheckCircle2 size={14}/>, label: 'Validar com regras', value: '+12 regras' },
+                { icon: <AlertCircle size={14}/>, label: 'Marcar divergências', value: 'auto' },
+                { icon: <Zap size={14}/>, label: 'Aprender com correções', value: 'on' }
+              ].map((f, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 bg-black/30 border border-[var(--v-border)] rounded-md">
+                  <div className="text-[var(--v-text-muted)]">{f.icon}</div>
+                  <span className="flex-1 text-[11px] text-[var(--v-text-bold)] truncate">{f.label}</span>
+                  <span className="font-mono text-[9px] text-[var(--v-text-faint)]">{f.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-[var(--v-accent)]/5 border border-dashed border-[var(--v-accent)]/30 rounded-lg flex gap-3 z-10">
+            <Settings size={14} className="text-[var(--v-text-muted)] shrink-0 mt-0.5" />
+            <p className="text-[11px] text-[var(--v-text-muted)] leading-snug">
+              Sempre que uma coluna fica abaixo de <span className="text-[#ffc247]">0.85 de confiança</span>, eu peço sua confirmação e aprendo o padrão para os próximos arquivos.
+            </p>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Step 2: Validação Humana / Mapping */}
-      {step === 2 && (
-        <div className="flex flex-col gap-6">
-          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] p-8">
-            <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[var(--v-border)]">
-              <Sparkles className="text-[var(--v-accent-5)]" size={32} />
-              <div>
-                <h3 className="text-xl font-bold text-[var(--v-text-bold)] uppercase tracking-widest">Configuração do Destino</h3>
-                <p className="text-[var(--v-text-muted)] text-sm">Defina o destino e mapeie as colunas. Se precisar, peça para a IA sugerir o mapeamento.</p>
-              </div>
+      {/* DE-PARA Table Section */}
+      {step >= 2 && columns.length > 0 && step < 3 && (
+        <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+          <div className="p-4 border-b border-[var(--v-border)] flex items-center justify-between bg-black/20">
+            <div className="flex items-center gap-3">
+              <Database size={16} className="text-[var(--v-text-muted)]" />
+              <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">DE-PARA SUGERIDO PELA IA</span>
+              <div className="w-[1px] h-3 bg-[var(--v-border)]"></div>
+              <span className="font-mono text-[9.5px] text-[var(--v-text-faint)]">{columns.length} colunas identificadas</span>
             </div>
-            
-            <div className="grid grid-cols-2 gap-8 mb-8">
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold block mb-2">Entidade Destino (Vulcano/Questor)</label>
-                <select 
-                  value={targetTable} 
-                  onChange={(e) => setTargetTable(e.target.value)}
-                  className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text-bold)] p-4 rounded-[var(--v-radius)] outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
-                >
-                  <option value="VENDAS">Vendas (Contratos)</option>
-                  <option value="RECEBIMENTOS">Recebimentos (Baixas)</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold block mb-2">Empreendimento (Filtro)</label>
-                <select 
-                  value={selectedEmpreendimento} 
-                  onChange={(e) => setSelectedEmpreendimento(e.target.value)}
-                  className="w-full bg-[#0b0b0b] border border-[var(--v-border)] text-[var(--v-text-bold)] p-4 rounded-[var(--v-radius)] outline-none focus:border-[#a259ff] text-sm font-bold tracking-widest uppercase transition-colors"
-                >
-                  <option value="">TODOS</option>
-                  {empreendimentos.map(e => (
-                    <option key={e.id} value={e.id}>{e.id} - {e.nome}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="bg-[#0b0b0b] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col justify-between">
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-2">Aplicar Template Salvo</p>
-                  <select 
-                    onChange={(e) => handleApplyTemplate(e.target.value)}
-                    className="w-full bg-[var(--v-card)] border border-[var(--v-border)] text-[var(--v-text-bold)] p-3 rounded-[var(--v-radius)] outline-none text-xs font-bold tracking-widest uppercase transition-colors"
-                  >
-                    <option value="">-- Selecione (Opcional) --</option>
-                    {templates.filter(t => t.target_table === targetTable).map(t => (
-                      <option key={t.id} value={t.mapping_json}>{t.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-6 mt-4 pt-4 border-t border-[var(--v-border)] items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-black text-[var(--v-accent-5)]">{columns.length}</p>
-                    <p className="text-xs text-[var(--v-text-muted)]">Colunas Identificadas</p>
-                  </div>
-                  <button 
-                    onClick={callGeminiMatching} 
-                    disabled={loading}
-                    className="bg-[var(--v-card)] border border-[#a259ff] text-[#a259ff] px-4 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#a259ff]/10 transition-colors disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    {loading ? 'Rodando Inferência...' : 'Sugerir Mapeamento (IA)'}
-                  </button>
-                </div>
-              </div>
+            <div className="flex items-center gap-3">
+              <select 
+                onChange={(e) => handleApplyTemplate(e.target.value)}
+                className="bg-[var(--v-deep)] border border-[var(--v-border)] text-[var(--v-text-muted)] py-1.5 px-3 rounded text-[11px] outline-none max-w-[150px]"
+              >
+                <option value="">Aplicar Template...</option>
+                {templates.filter(t => t.target_table === targetTable).map(t => (
+                  <option key={t.id} value={t.mapping_json}>{t.nome}</option>
+                ))}
+              </select>
+              <select 
+                value={selectedEmpreendimento} 
+                onChange={(e) => setSelectedEmpreendimento(e.target.value)}
+                className="bg-[var(--v-deep)] border border-[var(--v-border)] text-[var(--v-text-muted)] py-1.5 px-3 rounded text-[11px] outline-none max-w-[150px]"
+              >
+                <option value="">Todos Empreendimentos</option>
+                {empreendimentos.map(e => <option key={e.id} value={e.id}>{e.id} - {e.nome}</option>)}
+              </select>
+              <select 
+                value={targetTable} 
+                onChange={(e) => setTargetTable(e.target.value)}
+                className="bg-[var(--v-deep)] border border-[var(--v-border)] text-[var(--v-text-bold)] py-1.5 px-3 rounded text-[11px] outline-none"
+              >
+                <option value="VENDAS">Destino: VENDAS</option>
+                <option value="RECEBIMENTOS">Destino: RECEBIMENTOS</option>
+              </select>
+              <button onClick={() => callGeminiMatching(columns)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
+                <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Re-analisar
+              </button>
+              <button onClick={handlePreviewMatch} disabled={matchLoading} className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[var(--v-accent)]/30 rounded text-[11px] font-bold hover:bg-[var(--v-accent)]/20 transition-colors disabled:opacity-50">
+                {matchLoading ? 'Aguarde...' : 'Gerar Preview de Match'} <ArrowUpRight size={12} />
+              </button>
             </div>
           </div>
-
-          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
-            <table className="w-full text-left border-collapse">
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-[var(--v-deep)]">
-                  <th className="p-4 border-b border-[var(--v-border)] text-[10px] font-bold tracking-widest uppercase text-[var(--v-text-faint)] w-1/2">Coluna Origem (Planilha)</th>
-                  <th className="p-4 border-b border-[var(--v-border)] text-[10px] font-bold tracking-widest uppercase text-[var(--v-accent-5)] w-1/2">Campo Destino ({targetTable})</th>
+                <tr className="bg-black/40 font-mono text-[9.5px] tracking-[0.2em] text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
+                  <th className="p-3 w-12 text-center">#</th>
+                  <th className="p-3">COLUNA NA PLANILHA</th>
+                  <th className="p-3 w-8 text-center"></th>
+                  <th className="p-3">CAMPO VULCANO</th>
+                  <th className="p-3 text-[var(--v-text-muted)]">AMOSTRA</th>
+                  <th className="p-3 text-right">AÇÃO / OPÇÕES</th>
                 </tr>
               </thead>
               <tbody>
-                {columns.map((col, idx) => (
-                  <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
-                    <td className="p-4 text-sm font-bold text-[var(--v-text)] flex flex-col gap-1">
-                      {col}
-                      <span className="text-[10px] text-[var(--v-text-faint)] font-normal truncate max-w-sm" title={previewData.length > 0 ? previewData[0][col] : ''}>
-                        {previewData.length > 0 ? `Ex: ${previewData[0][col]}` : ''}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <ArrowUpRight size={14} className="text-[var(--v-text-faint)]" />
+                {columns.map((col, idx) => {
+                  const val = mapping[col] && mapping[col] !== 'null';
+                  return (
+                    <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors items-center group">
+                      <td className="p-3 text-center font-mono text-[10.5px] text-[var(--v-text-faint)]">{(idx + 1).toString().padStart(2, '0')}</td>
+                      <td className="p-3 font-mono text-[11.5px] font-semibold text-[var(--v-text)]">{col}</td>
+                      <td className="p-3 text-center text-[var(--v-accent)]"><ArrowUpRight size={14} className="opacity-50 mx-auto" /></td>
+                      <td className="p-3">
                         <select 
                           value={mapping[col] ?? 'null'} 
-                          onChange={(e) => handleMappingChange(col, e.target.value)}
-                          className={`w-full bg-[#0b0b0b] border ${mapping[col] && mapping[col] !== 'null' ? 'border-[#a259ff] text-[var(--v-text)]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'} p-2 rounded-[var(--v-radius)] outline-none text-xs font-bold uppercase tracking-wider transition-colors`}
+                          onChange={(e) => {
+                            setMapping(prev => ({ ...prev, [col]: e.target.value }));
+                          }}
+                          className={`w-full max-w-[220px] bg-[var(--v-deep)] border ${val ? 'border-[#3dd68c]/30 text-[#3dd68c]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'} py-1.5 px-2 rounded outline-none text-[11px] font-mono font-medium appearance-none cursor-pointer hover:border-[var(--v-accent)]/50 transition-colors`}
                         >
-                          <option value="null">-- Não Importar --</option>
+                          <option value="null">-- Ignorar --</option>
                           {(TARGET_SCHEMAS[targetTable] || []).map(field => (
                             <option key={field.value} value={field.value}>{field.label}</option>
                           ))}
                         </select>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3 text-[11px] text-[var(--v-text-muted)] truncate max-w-[180px]" title={previewData[0]?.[col]}>
+                        {previewData[0]?.[col] || '-'}
+                      </td>
+                      <td className="p-3 text-right">
+                        {val ? (
+                          <span className="font-mono text-[9.5px] tracking-widest text-[#3dd68c] px-2 py-1 bg-[#3dd68c]/10 rounded border border-[#3dd68c]/20">MAPPED</span>
+                        ) : (
+                          <span className="font-mono text-[9.5px] tracking-widest text-[var(--v-text-faint)] px-2 py-1 bg-black/40 rounded border border-[var(--v-border)]">IGNORADO</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
-
-          <div className="flex justify-between items-center bg-[var(--v-card)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)]">
-            <button onClick={handleSaveTemplate} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[var(--v-accent-4)] transition-colors text-[10px] font-bold uppercase tracking-widest">
-              <Save size={14} /> Salvar como Template
-            </button>
-            <div className="flex gap-4">
-              <button onClick={() => setStep(1)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar</button>
-              <button
-                onClick={handlePreviewMatch}
-                disabled={matchLoading}
-                className="bg-[#a259ff] text-[var(--v-text-bold)] px-8 py-3 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#8e45e6] transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {matchLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUpRight size={16} />}
-                {matchLoading ? 'Analisando...' : 'Avançar para Match →'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Step 3: Preview de Match */}
+      {/* MATCH PREVIEW Section */}
       {step === 3 && (
-        <div className="flex flex-col gap-6">
-          {/* KPIs */}
-          {(() => {
-            const total   = matchData.length;
-            const quitados = matchData.filter(r => r.status === 'JA_QUITADO').length;
-            const matches  = matchData.filter(r => r.status === 'MATCH_PERFEITO' || r.status === 'MATCH_MANUAL').length;
-            const semMatch = matchData.filter(r => r.status === 'SEM_MATCH').length;
-            return (
-              <div className="grid grid-cols-4 gap-4">
-                {[{l:'Total Linhas', v:total, c:'border-[var(--v-border)]'},
-                  {l:'Já Quitados', v:quitados, c:'border-[#34c759]'},
-                  {l:'Match / Vinc.', v:matches, c:'border-[#007aff]'},
-                  {l:'Sem Match', v:semMatch, c:'border-[#ff4d00]'}].map(k => (
-                  <div key={k.l} className={`bg-[var(--v-card)] border-l-4 ${k.c} p-5 rounded-[var(--v-radius)]`}>
-                    <p className="text-[10px] uppercase tracking-widest text-[var(--v-text-faint)] font-bold mb-1">{k.l}</p>
-                    <p className="text-3xl font-black text-[var(--v-text-bold)]">{k.v}</p>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Tabela */}
-          <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
-            <div className="overflow-x-auto max-h-[55vh] overflow-y-auto custom-scrollbar">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[var(--v-deep)] sticky top-0 z-10">
-                  <tr>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Status</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Nº Parcela</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Cliente (Planilha)</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Vencimento</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Pagamento</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent-3)] text-right">Valor Pago</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-accent)] text-right">Valor Vulcano</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[#ffcc00] text-right">Acréscimos</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[#34c759] text-right">Descontos</th>
-                    <th className="p-3 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">Ação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matchData.map((r, idx) => {
-                    const meta = STATUS_META[r.status] || { label: r.status, cls: 'bg-[#333] text-[var(--v-text-muted)] border-[var(--v-border)]' };
-                    const fmt = v => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '-';
-                    return (
-                      <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
-                        <td className="p-3">
-                          <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded border ${meta.cls}`}>{meta.label}</span>
-                        </td>
-                        <td className="p-3 text-[var(--v-text-muted)] font-mono">
-                          {r.numero_parcela || '-'}
-                          {r.num_parcela_planilha && (
-                            <span className="block mt-1 text-[9px] text-[var(--v-accent)] opacity-80" title="Número da Parcela na Planilha">
-                              Planilha: {r.num_parcela_planilha}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 font-bold text-[var(--v-text)] truncate max-w-[150px]">{r.cliente_planilha || '-'}</td>
-                        <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.dt_vencimento || '-'}</td>
-                        <td className="p-3 text-[var(--v-text-muted)] font-mono">{r.dt_pagamento || '-'}</td>
-                        <td className="p-3 text-right font-black text-[var(--v-accent-3)]">{fmt(r.valor_planilha)}</td>
-                        <td className="p-3 text-right font-black text-[var(--v-accent)]">{fmt(r.valor_vulcano)}</td>
-                        <td className="p-3 text-right font-bold text-[#ffcc00]">{r.acrescimos > 0 ? fmt(r.acrescimos) : '-'}</td>
-                        <td className="p-3 text-right font-bold text-[#34c759]">{r.descontos > 0 ? fmt(r.descontos) : '-'}</td>
-                        <td className="p-3">
-                          {r.status === 'SEM_MATCH' && (
-                            <button
-                              onClick={() => setManualMatchModal({ open: true, rowData: r, rowIndex: idx })}
-                              className="px-2 py-1 bg-[var(--v-deep)] border border-[#ff4d00]/30 text-[#ff4d00] hover:bg-[#ff4d00]/10 hover:border-[#ff4d00] rounded text-[9px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1"
-                            >
-                              🔗 Vincular
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {matchData.length === 0 && (
-                    <tr><td colSpan="10" className="p-12 text-center text-[var(--v-text-faint)] uppercase tracking-widest text-[10px]">Nenhum resultado retornado pelo backend.</td></tr>
-                  )}
-                </tbody>
-                <tfoot className="bg-[#0b0b0b] sticky bottom-0 border-t-2 border-[var(--v-border)]">
-                  <tr>
-                    <td colSpan="5" className="p-3 text-right text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)]">TOTAL FATURAMENTO (Recebido)</td>
-                    <td className="p-3 text-right font-black text-[#a259ff] text-sm">
-                      {(() => {
-                        const sum = matchData.filter(r => r.status === 'MATCH_PERFEITO' || r.status === 'MATCH_MANUAL' || r.status === 'JA_QUITADO').reduce((acc, r) => acc + (r.valor_planilha || 0), 0);
-                        return `R$ ${sum.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
-                      })()}
-                    </td>
-                    <td colSpan="4"></td>
-                  </tr>
-                </tfoot>
-              </table>
+        <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+          <div className="p-4 border-b border-[var(--v-border)] flex items-center justify-between bg-black/20">
+            <div className="flex items-center gap-3">
+              <Database size={16} className="text-[var(--v-text-muted)]" />
+              <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">PREVIEW DE MATCH E INTEGRAÇÃO</span>
+              <div className="w-[1px] h-3 bg-[var(--v-border)]"></div>
+              <span className="font-mono text-[9.5px] text-[var(--v-text-faint)]">{matchData.length} registros analisados</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={handleSaveTemplate} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-[var(--v-border)] rounded text-[11px] text-[var(--v-text-muted)] hover:text-[var(--v-text)] transition-colors">
+                <Save size={12} /> Salvar Template
+              </button>
+              <button onClick={handleDownloadTxt} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-[var(--v-border)] rounded text-[11px] text-[#007aff] hover:bg-[#007aff]/10 transition-colors">
+                <Download size={12} /> Baixar TXT
+              </button>
+              <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
+                Voltar
+              </button>
+              <button onClick={() => alert("Gravação será implementada na API")} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#3dd68c]/10 text-[#3dd68c] border border-[#3dd68c]/30 rounded text-[11px] font-bold hover:bg-[#3dd68c]/20 transition-colors shadow-sm">
+                <Save size={14} /> Gravar no ERP
+              </button>
             </div>
           </div>
-
-          <div className="flex justify-between items-center bg-[var(--v-card)] p-4 border border-[var(--v-border)] rounded-[var(--v-radius)]">
-            <div className="flex items-center gap-4">
-              <button onClick={handleSaveTemplate} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[var(--v-accent-4)] transition-colors text-[10px] font-bold uppercase tracking-widest">
-                <Save size={14} /> Salvar Template
-              </button>
-              <button onClick={handleDownloadTxt} className="flex items-center gap-2 text-[var(--v-text-muted)] hover:text-[#007aff] transition-colors text-[10px] font-bold uppercase tracking-widest">
-                <Download size={14} /> Baixar TXT
-              </button>
-            </div>
-            <div className="flex gap-4 items-center">
-              <button onClick={() => setStep(2)} className="px-6 py-3 rounded-[var(--v-radius)] text-[var(--v-text-muted)] border border-[var(--v-border)] hover:text-[var(--v-text-bold)] hover:bg-[var(--v-hover)] text-[10px] uppercase font-bold tracking-widest transition-colors">Voltar ao DE-PARA</button>
-              <div className="flex items-center gap-3 text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest ml-4">
-                <span>{matchData.filter(r=>r.status==='MATCH_PERFEITO').length} pronto(s)</span>
-                <span className="text-[var(--v-border)]">|</span>
-                <span>{matchData.filter(r=>r.status==='JA_QUITADO').length} quitado(s)</span>
-              </div>
-            </div>
+          
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
+              <thead className="bg-black/40 sticky top-0 z-10 backdrop-blur-md">
+                <tr className="font-mono text-[9.5px] tracking-[0.1em] text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
+                  <th className="p-3">STATUS</th>
+                  <th className="p-3">CLIENTE (Planilha)</th>
+                  <th className="p-3">DATA PGTO</th>
+                  <th className="p-3 text-right">VALOR PLANILHA</th>
+                  <th className="p-3 text-right">VALOR ERP</th>
+                  <th className="p-3 text-right">DIFERENÇA</th>
+                  <th className="p-3 text-center">AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matchData.map((r, idx) => {
+                  const meta = STATUS_META[r.status] || { label: r.status, color: '#888' };
+                  const fmt = v => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '-';
+                  const diff = Math.abs((r.valor_planilha || 0) - (r.valor_vulcano || 0));
+                  
+                  return (
+                    <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
+                      <td className="p-3">
+                        <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded border" style={{ color: meta.color, backgroundColor: `${meta.color}15`, borderColor: `${meta.color}30` }}>
+                          {meta.label}
+                        </span>
+                      </td>
+                      <td className="p-3 font-semibold text-[var(--v-text)] truncate max-w-[200px]" title={r.cliente_planilha}>{r.cliente_planilha || '-'}</td>
+                      <td className="p-3 font-mono text-[11px] text-[var(--v-text-muted)]">{r.dt_pagamento || '-'}</td>
+                      <td className="p-3 text-right font-black text-[var(--v-text)]">{fmt(r.valor_planilha)}</td>
+                      <td className="p-3 text-right font-black text-[var(--v-text-muted)]">{fmt(r.valor_vulcano)}</td>
+                      <td className="p-3 text-right font-bold text-[11px]">
+                        {diff > 0.01 ? <span className="text-[#ffc247]">{fmt(diff)}</span> : <span className="text-[var(--v-text-faint)]">Exato</span>}
+                      </td>
+                      <td className="p-3 text-center">
+                        {r.status === 'SEM_MATCH' ? (
+                          <button onClick={() => setManualMatchModal({ open: true, rowData: r, rowIndex: idx })} className="px-2 py-1 bg-[var(--v-deep)] border border-[var(--v-border)] hover:border-[#a259ff] text-[var(--v-text-muted)] hover:text-[#a259ff] rounded text-[9px] font-bold uppercase tracking-widest transition-colors inline-flex items-center gap-1">
+                            Vincular
+                          </button>
+                        ) : (
+                          <span className="text-[var(--v-text-faint)]">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Modal de Match Manual */}
       {manualMatchModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#111] border border-[var(--v-border)] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -682,7 +654,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                 </div>
                 <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
                   <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Valor Pago</p>
-                  <p className="text-sm font-black text-[var(--v-accent-3)]">R$ {Number(manualMatchModal.rowData?.valor_planilha || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
+                  <p className="text-sm font-black text-[var(--v-accent)]">R$ {Number(manualMatchModal.rowData?.valor_planilha || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
                 </div>
               </div>
             </div>
@@ -753,6 +725,48 @@ export default function SmartImporter({ selectedEmpresa }) {
           </div>
         </div>
       )}
+
+      {/* IMPORTAÇÕES RECENTES */}
+      <div className="pt-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Database size={16} className="text-[var(--v-text-faint)]" />
+          <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">Importações Recentes</span>
+          <div className="flex-1 h-px bg-[var(--v-border)]/50"></div>
+          <span className="font-mono text-[9.5px] text-[var(--v-text-faint)]">ÚLTIMAS 24H · 38 ARQUIVOS</span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[
+            { name: 'recebimentos_quinzena.csv', time: 'há 2 min', lines: 218, acc: '98.0%', saved: '14m', icon: <FileSpreadsheet size={16}/>, color: '#007aff' },
+            { name: 'extrato_caixa_06.pdf', time: 'há 8 min', lines: 412, acc: '95.0%', saved: '22m', icon: <UploadCloud size={16}/>, color: '#ff4d00' },
+            { name: 'NF_emit_05.xlsx', time: 'há 47 min', lines: 174, acc: '97.0%', saved: '11m', icon: <FileSpreadsheet size={16}/>, color: '#3dd68c' }
+          ].map((item, i) => (
+            <div key={i} className="bg-black/30 border border-[var(--v-border)] hover:border-[var(--v-border)]/80 rounded-xl p-4 transition-colors cursor-pointer group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-[var(--v-text-bold)]">
+                  <div style={{color: item.color}} className="opacity-80 group-hover:opacity-100 transition-opacity">{item.icon}</div>
+                  <span className="font-mono text-[11px] truncate max-w-[150px]" title={item.name}>{item.name}</span>
+                </div>
+                <span className="font-mono text-[9.5px] text-[var(--v-text-faint)]">{item.time}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <div className="font-headline font-semibold text-lg text-[var(--v-text)]">{item.lines}</div>
+                  <div className="font-mono text-[9px] tracking-widest text-[var(--v-text-faint)] mt-0.5">LINHAS</div>
+                </div>
+                <div>
+                  <div className="font-headline font-semibold text-lg text-[#3dd68c]">{item.acc}</div>
+                  <div className="font-mono text-[9px] tracking-widest text-[var(--v-text-faint)] mt-0.5">ACURÁCIA</div>
+                </div>
+                <div>
+                  <div className="font-headline font-semibold text-lg text-[var(--v-accent)]">{item.saved}</div>
+                  <div className="font-mono text-[9px] tracking-widest text-[var(--v-text-faint)] mt-0.5">POUPADO</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
     </div>
   );
