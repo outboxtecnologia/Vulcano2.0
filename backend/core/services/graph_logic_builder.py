@@ -81,6 +81,7 @@ class AccountingGraphPipeline:
                     _kwargs = dict(
                         empresa_id=empresa_id,
                         empreendimentos_ids=str(empreendimento_id) if empreendimento_id else None,
+                        prune_idle=False
                     )
                     _f_atual = _pool.submit(
                         get_receitas_caixa,

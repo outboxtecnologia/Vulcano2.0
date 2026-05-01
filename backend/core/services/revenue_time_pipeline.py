@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 class RevenueTimePipeline:
     @staticmethod
-    def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = None, data_fim: str | None = None, empreendimentos_ids: str | None = None):
+    def get_receitas_caixa(empresa_id: int | None = None, data_ini: str | None = None, data_fim: str | None = None, empreendimentos_ids: str | None = None, prune_idle: bool = True):
         from main import get_conn
 
         # Pandas Vectorized Engine Start
@@ -494,7 +494,7 @@ class RevenueTimePipeline:
                 target_ini_rcx = data_ini[:7] if data_ini else ''
                 is_nova_venda_no_mes = bool(data_venda_row) and bool(target_ini_rcx) and (data_venda_row == target_ini_rcx)
     
-                if is_idle and pending_diff < 5.0 and data_ini is not None and not is_nova_venda_no_mes:
+                if prune_idle and is_idle and pending_diff < 5.0 and data_ini is not None and not is_nova_venda_no_mes:
                     continue # Pula unidade completamente
     
                 # Aggregating into Dashboard Meta Empreendimento
