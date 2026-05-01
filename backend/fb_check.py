@@ -1,4 +1,4 @@
-﻿from main_BKP_VERTEX import get_conn
+from main_BKP_VERTEX import get_conn
 
 conn = get_conn("vulcano")
 cur = conn.cursor()

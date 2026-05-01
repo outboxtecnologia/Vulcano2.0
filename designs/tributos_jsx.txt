@@ -1,0 +1,1573 @@
+<div style={{ flex: '1 1 0%', display: 'flex', flexDirection: 'column', minWidth: '0px' }}>
+<header style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)', background: 'rgb(18, 16, 14)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: '0' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '9px', paddingRight: '14px', borderRight: '1px solid rgba(255, 160, 80, 0.08)' }}>
+<div className="pulse" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgb(255, 122, 26)', boxShadow: 'rgb(255, 122, 26) 0px 0px 8px' }}></div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.22em', color: 'rgb(240, 230, 216)' }}>
+            TRIBUTOS GLOBAIS
+          </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(90, 78, 66)' }}>
+            · 12 obras
+          </span>
+</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px 5px 12px', borderRadius: '7px', background: 'rgba(255, 140, 42, 0.08)', border: '1px solid rgba(255, 140, 42, 0.3)' }}>
+<div style={{ display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '8.5px', letterSpacing: '0.2em', color: 'rgb(90, 78, 66)', lineHeight: '1' }}>
+              COMPETÊNCIA INI
+            </span>
+<input style={{ background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', outline: 'none', color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', padding: '2px 0px 0px', width: '88px' }} type="month" value="2026-01" />
+</div>
+</div>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px 5px 12px', borderRadius: '7px', background: 'rgb(26, 22, 20)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+<div style={{ display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '8.5px', letterSpacing: '0.2em', color: 'rgb(90, 78, 66)', lineHeight: '1' }}>
+              COMPETÊNCIA FIM
+            </span>
+<input placeholder="aberto" style={{ background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', outline: 'none', color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', padding: '2px 0px 0px', width: '88px' }} type="month" value="" />
+</div>
+</div>
+<div style={{ display: 'flex', alignItems: 'center', background: 'rgb(26, 22, 20)', border: '1px solid rgba(255, 160, 80, 0.08)', borderRadius: '7px', padding: '3px', gap: '2px' }}>
+<button style={{ padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', background: 'linear-gradient(
+                135deg,
+                rgba(255, 122, 26, 0.2),
+                rgba(201, 58, 18, 0.1)
+              )', border: '1px solid rgba(255, 140, 42, 0.35)', color: 'rgb(255, 122, 26)', fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.16em' }}>
+            TODOS
+          </button>
+<button style={{ padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', background: 'transparent', border: '1px solid transparent', color: 'rgb(138, 122, 104)', fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.16em' }}>
+            PRESUMIDO
+          </button>
+<button style={{ padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', background: 'transparent', border: '1px solid transparent', color: 'rgb(138, 122, 104)', fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.16em' }}>
+            RET 4%
+          </button>
+</div>
+<div style={{ flex: '1 1 0%' }}></div>
+<button style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '7px', background: 'rgb(26, 22, 20)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'rgb(240, 230, 216)', fontSize: '12px', fontFamily: 'Inter', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+<span> Exportar matriz </span>
+</button>
+<button style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '7px', background: 'linear-gradient(
+              135deg,
+              rgb(255, 122, 26),
+              rgb(201, 58, 18)
+            )', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(26, 10, 4)', fontSize: '12px', fontWeight: '600', fontFamily: 'Inter', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: 'rgba(201, 58, 18, 0.35) 0px 4px 12px,
+              rgba(255, 220, 180, 0.4) 0px 1px 0px inset' }}>
+<span> Atualizar matriz </span>
+<kbd style={{ marginLeft: '6px', background: 'rgba(0, 0, 0, 0.2)', borderColor: 'rgba(0, 0, 0, 0.3)', color: 'rgb(58, 22, 6)' }}>
+            ⇧⌘R
+          </kbd>
+</button>
+</header>
+<div style={{ flex: '1 1 0%', display: 'flex', minHeight: '0px' }}>
+<div style={{ flex: '1 1 0%', minWidth: '0px', overflowY: 'auto' }}>
+<div style={{ padding: '24px 24px 16px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+<div style={{ width: '34px', height: '34px', borderRadius: '8px', background: 'linear-gradient(
+                    135deg,
+                    rgba(255, 122, 26, 0.2),
+                    rgba(201, 58, 18, 0.1)
+                  )', border: '1px solid rgba(255, 140, 42, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'rgba(255, 140, 42, 0.18) 0px 0px 18px' }}></div>
+<h1 style={{ fontFamily: ''Space Grotesk'', fontWeight: '600', fontSize: '22px', letterSpacing: '-0.01em', color: 'rgb(240, 230, 216)' }}>
+                Tributos Globais
+                <span style={{ color: 'rgb(90, 78, 66)', fontWeight: '400' }}>
+                  · Caixa vs Competência
+                </span>
+</h1>
+<span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 8px', borderRadius: '3px', background: 'rgba(255, 122, 26, 0.12)', color: 'rgb(255, 122, 26)', border: '1px solid rgba(255, 122, 26, 0.3)', fontFamily: ''JetBrains Mono', monospace', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                PRES vs RET
+              </span>
+</div>
+<div style={{ fontSize: '12.5px', color: 'rgb(138, 122, 104)', lineHeight: '1.55', maxWidth: '780px', paddingLeft: '44px' }}>
+              Apuração Presumido
+              <span style={{ color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontSize: '11px' }}>
+                (PIS 0,65% · COFINS 3% · CSLL 1,08% · IRPJ 1,2% + 10%)
+              </span>
+              versus
+              <span style={{ color: 'rgb(240, 230, 216)' }}> RET 4% </span>
+              — diferimento entre regime de competência (faturamento societário)
+              e regime de caixa (recebimento fiscal).
+            </div>
+</div>
+<div style={{ padding: '0px 24px 22px' }}>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+<div style={{ position: 'relative', overflow: 'hidden', background: 'rgb(26, 22, 20)', borderWidth: '1px 1px 1px 3px', borderStyle: 'solid', borderColor: 'rgba(255, 160, 80, 0.08)
+                    rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08)
+                    rgb(255, 122, 26)', borderImage: 'initial', borderRadius: '10px', padding: '16px 18px' }}>
+<div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', background: 'radial-gradient(
+                      circle,
+                      rgba(255, 122, 26, 0.12),
+                      transparent 70%
+                    )', pointerEvents: 'none' }}></div>
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)' }}>
+                    BASE ACUM. FATURAMENTO
+                  </span>
+</div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '24px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                  R$ 48.752.981,73
+                </div>
+<div style={{ fontSize: '11px', color: 'rgb(138, 122, 104)', marginTop: '6px' }}>
+                  Regime de competência (Soc.)
+                </div>
+</div>
+<div style={{ position: 'relative', overflow: 'hidden', background: 'rgb(26, 22, 20)', borderWidth: '1px 1px 1px 3px', borderStyle: 'solid', borderColor: 'rgba(255, 160, 80, 0.08)
+                    rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08)
+                    rgb(255, 122, 26)', borderImage: 'initial', borderRadius: '10px', padding: '16px 18px' }}>
+<div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', background: 'radial-gradient(
+                      circle,
+                      rgba(255, 122, 26, 0.12),
+                      transparent 70%
+                    )', pointerEvents: 'none' }}></div>
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)' }}>
+                    TOTAL ACUM. A RECOLHER
+                  </span>
+</div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '24px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                  R$ 4.885.324,19
+                </div>
+<div style={{ fontSize: '11px', color: 'rgb(138, 122, 104)', marginTop: '6px' }}>
+                  Regime de caixa (Fiscal)
+                </div>
+</div>
+<div style={{ position: 'relative', overflow: 'hidden', background: 'rgb(26, 22, 20)', borderWidth: '1px 1px 1px 3px', borderStyle: 'solid', borderColor: 'rgba(255, 160, 80, 0.08)
+                    rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08)
+                    rgb(255, 194, 71)', borderImage: 'initial', borderRadius: '10px', padding: '16px 18px' }}>
+<div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', background: 'radial-gradient(
+                      circle,
+                      rgba(255, 194, 71, 0.12),
+                      transparent 70%
+                    )', pointerEvents: 'none' }}></div>
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)' }}>
+                    SALDO DIFERIMENTO FISCAL
+                  </span>
+</div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '24px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                  R$ -2.571.753,84
+                </div>
+<div style={{ fontSize: '11px', color: 'rgb(138, 122, 104)', marginTop: '6px' }}>
+                  Provisão · ativo diferido
+                </div>
+</div>
+</div>
+</div>
+<div style={{ padding: '0px 24px 22px' }}>
+<div style={{ background: 'rgb(26, 22, 20)', border: '1px solid rgba(255, 160, 80, 0.08)', borderRadius: '10px', overflow: 'hidden' }}>
+<div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10.5px', letterSpacing: '0.22em', color: 'rgb(240, 230, 216)' }}>
+                  MATRIZ POR EMPREENDIMENTO
+                </span>
+<span style={{ width: '1px', height: '12px', background: 'rgba(255, 160, 80, 0.08)' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(90, 78, 66)' }}>
+                  12 obras · período aberto
+                </span>
+<span style={{ flex: '1 1 0%' }}> </span>
+<button style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 9px', borderRadius: '7px', background: 'rgb(26, 22, 20)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'rgb(240, 230, 216)', fontSize: '12px', fontFamily: 'Inter', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+<span style={{ fontSize: '11px' }}> Colunas </span>
+</button>
+</div>
+<div style={{ overflowX: 'auto' }}>
+<div style={{ minWidth: '1100px' }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', padding: '10px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', background: 'rgba(0, 0, 0, 0.22)', fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+<span> OBRA / EMPREENDIMENTO </span>
+<span style={{ textAlign: 'center' }}> REGIME </span>
+<span style={{ textAlign: 'right' }}> PIS/COFINS </span>
+<span style={{ textAlign: 'right' }}> CSLL+IRPJ </span>
+<span style={{ textAlign: 'right', color: 'rgb(255, 194, 71)' }}>
+                      ADIC. IR (10%)
+                    </span>
+<span style={{ textAlign: 'right', color: 'rgb(61, 214, 140)' }}>
+                      RET 4%
+                    </span>
+<span style={{ textAlign: 'right' }}> TRIB. SOC. </span>
+<span style={{ textAlign: 'right' }}> TRIB. FISCAL </span>
+<span style={{ textAlign: 'center' }}> STATUS </span>
+</div>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        ED. LIV MORON
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 17k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 17k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        EDIFICIO PREMIER RESIDENCE
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 65k
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 53k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 194, 71)', boxShadow: 'rgb(255, 194, 71) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(255, 194, 71)' }}>
+                          DIFERIDO PI
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 12k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        JARDIM FLAMBOYANT RESIDENCE
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 36k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 36k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        JURERE - RUA DAS BALEIAS FRANCAS
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 72k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 72k
+                      </span>
+</div>
+</button>
+<button className="row-hl" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        PIER MONTE CARLO
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 22.244,60
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 13.895,26
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 3.061,11
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 961k
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 39.200,97
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 1,33M
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 372k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL CACHOEIRA PALACE
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 76k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 76k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL DOWNTOWN BOULEVARD
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 19.032,13
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 11.888,56
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 2.619,04
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 66k
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 33.539,73
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 448k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 382k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL NAUTIK CLASS
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(61, 214, 140, 0.1)', color: 'rgb(61, 214, 140)', border: '1px solid rgba(61, 214, 140, 0.3)' }}>
+                        RET
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(61, 214, 140)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 68.064,87
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 1,22M
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 68.064,87
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 1,38M
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 158k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL RECANTO DO BOM JESUS
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 41k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 41k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL SUMMIT
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 18.738,67
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 11.705,25
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 2.578,66
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 33.022,58
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 725k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 725k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium medium 1px', borderStyle: 'none none solid', borderColor: 'currentcolor currentcolor
+                        rgba(255, 160, 80, 0.08)', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL THE LEVEL PARADISE
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 13.544,12
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 8.460,44
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 1.863,83
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 23.868,39
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 684k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 684k
+                      </span>
+</div>
+</button>
+<button className="" style={{ position: 'relative', width: '100%', display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.6fr
+                        ) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px', alignItems: 'center', padding: '11px 18px', background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', cursor: 'pointer', textAlign: 'left', color: 'rgb(240, 230, 216)' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0px' }}>
+<span style={{ width: '22px', height: '22px', flexShrink: '0', borderRadius: '5px', background: 'linear-gradient(
+                            135deg,
+                            rgba(255, 122, 26, 0.22),
+                            rgba(201, 58, 18, 0.12)
+                          )', border: '1px solid rgba(255, 140, 42, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL VILA CACHOEIRA
+                      </span>
+</div>
+<div style={{ textAlign: 'center' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                        PRES
+                      </span>
+</div>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<span style={{ textAlign: 'right', fontFamily: ''JetBrains Mono'', fontSize: '11.5px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                      R$ 0,00
+                    </span>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 0
+                      </span>
+</div>
+<div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '11.5px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 0,00
+                      </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', marginTop: '2px' }}>
+                        acum R$ 22k
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 6px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.14em', color: 'rgb(61, 214, 140)' }}>
+                          ANTECIPADO
+                        </span>
+</div>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums' }}>
+                        R$ 22k
+                      </span>
+</div>
+</button>
+</div>
+</div>
+</div>
+</div>
+<div style={{ padding: '0px 24px 32px' }}>
+<div style={{ background: 'rgb(26, 22, 20)', border: '1px solid rgba(255, 160, 80, 0.08)', borderRadius: '10px', overflow: 'hidden' }}>
+<div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10.5px', letterSpacing: '0.22em', color: 'rgb(240, 230, 216)' }}>
+                  DEMONSTRATIVO DE CONTABILIZAÇÕES
+                </span>
+<span style={{ width: '1px', height: '12px', background: 'rgba(255, 160, 80, 0.08)' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(90, 78, 66)' }}>
+                  período · D/C por obra
+                </span>
+<span style={{ flex: '1 1 0%' }}> </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+                  3 LANÇAMENTOS · POR LINHA
+                </span>
+</div>
+<div style={{ overflowX: 'auto' }}>
+<div style={{ minWidth: '980px' }}>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '10px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', background: 'rgba(0, 0, 0, 0.22)', fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+<span> OBRA </span>
+<span>
+<span style={{ color: 'rgb(255, 128, 128)' }}> ● </span>
+                      VENDA / FATURAMENTO
+                      <span style={{ color: 'rgb(90, 78, 66)' }}>
+                        (competência)
+                      </span>
+</span>
+<span>
+<span style={{ color: 'rgb(61, 214, 140)' }}> ● </span>
+                      RECEBIMENTO
+                      <span style={{ color: 'rgb(90, 78, 66)' }}> (caixa) </span>
+</span>
+<span>
+<span style={{ color: 'rgb(200, 154, 240)' }}> ● </span>
+                      PROVISÃO DIFERIMENTO
+                      <span style={{ color: 'rgb(90, 78, 66)' }}> (ativo) </span>
+</span>
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '12px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', alignItems: 'flex-start' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 122, 26)' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        ED. LIV MORON
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        RECEITA DE VENDAS · DRE
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 0,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        BANCOS · CONTA MOVIMENTO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 281.151,94
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        PROVISÃO P/ TRIBUTOS S/ LUCRO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        TRIBUTOS DIFERIDOS · PASSIVO
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ -16.672,31
+                      </div>
+</div>
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '12px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', alignItems: 'flex-start' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 122, 26)' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        EDIFICIO PREMIER RESIDENCE
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        RECEITA DE VENDAS · DRE
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 1.615.000,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        BANCOS · CONTA MOVIMENTO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 1.323.478,07
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        PROVISÃO P/ TRIBUTOS S/ LUCRO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        TRIBUTOS DIFERIDOS · PASSIVO
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 11.660,88
+                      </div>
+</div>
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '12px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', alignItems: 'flex-start' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 122, 26)' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        JARDIM FLAMBOYANT RESIDENCE
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        RECEITA DE VENDAS · DRE
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 0,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        BANCOS · CONTA MOVIMENTO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 602.100,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        PROVISÃO P/ TRIBUTOS S/ LUCRO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        TRIBUTOS DIFERIDOS · PASSIVO
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ -35.704,53
+                      </div>
+</div>
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '12px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', alignItems: 'flex-start' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 122, 26)' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        JURERE - RUA DAS BALEIAS FRANCAS
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        RECEITA DE VENDAS · DRE
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 0,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        BANCOS · CONTA MOVIMENTO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 1.210.000,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        PROVISÃO P/ TRIBUTOS S/ LUCRO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        TRIBUTOS DIFERIDOS · PASSIVO
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ -71.753,00
+                      </div>
+</div>
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '12px 18px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)', alignItems: 'flex-start' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 122, 26)' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        PIER MONTE CARLO
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        RECEITA DE VENDAS · DRE
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 15.560.176,46
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        BANCOS · CONTA MOVIMENTO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 609.441,10
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        PROVISÃO P/ TRIBUTOS S/ LUCRO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        TRIBUTOS DIFERIDOS · PASSIVO
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ -371.832,32
+                      </div>
+</div>
+</div>
+<div style={{ display: 'grid', gridTemplateColumns: 'minmax(
+                          220px,
+                          1.4fr
+                        ) 1.1fr 1.1fr 1.1fr', padding: '12px 18px', borderBottomWidth: 'medium', borderBottomStyle: 'none', borderBottomColor: 'currentcolor', alignItems: 'flex-start' }}>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'rgb(255, 122, 26)' }}>
+</span>
+<span style={{ fontSize: '12.5px', color: 'rgb(240, 230, 216)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        RESIDENCIAL CACHOEIRA PALACE
+                      </span>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(255, 144, 144)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        RECEITA DE VENDAS · DRE
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(90, 78, 66)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 0,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        BANCOS · CONTA MOVIMENTO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(61, 214, 140)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        CLIENTES
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(240, 230, 216)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ 1.278.000,00
+                      </div>
+</div>
+<div style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '14px', borderLeft: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          D
+                        </span>
+                        PROVISÃO P/ TRIBUTOS S/ LUCRO
+                      </div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(200, 154, 240)', opacity: '0.85' }}>
+<span style={{ color: 'rgb(90, 78, 66)', marginRight: '4px' }}>
+                          C
+                        </span>
+                        TRIBUTOS DIFERIDOS · PASSIVO
+                      </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums', marginTop: '3px' }}>
+                        R$ -75.785,40
+                      </div>
+</div>
+</div>
+<div style={{ padding: '10px 18px', textAlign: 'center', borderTop: '1px solid rgba(255, 160, 80, 0.08)', background: 'rgba(0, 0, 0, 0.18)' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(90, 78, 66)', letterSpacing: '0.18em' }}>
+                      + 6 OBRAS ·
+                    </span>
+<button style={{ background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(255, 122, 26)', fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.18em', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+                      VER TUDO
+                    </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<aside style={{ width: '340px', flexShrink: '0', borderLeft: '1px solid rgba(255, 160, 80, 0.08)', background: 'rgb(18, 16, 14)', overflowY: 'auto' }}>
+<div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)' }}>
+                OBRA SELECIONADA
+              </span>
+<div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+<span className="pulse" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgb(61, 214, 140)', boxShadow: 'rgb(61, 214, 140) 0px 0px 8px' }}>
+</span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(61, 214, 140)' }}>
+                  ANTECIPADO
+                </span>
+</div>
+</div>
+<h2 style={{ fontFamily: ''Space Grotesk'', fontSize: '17px', fontWeight: '600', color: 'rgb(240, 230, 216)', lineHeight: '1.3', letterSpacing: '-0.005em', marginBottom: '8px' }}>
+              PIER MONTE CARLO
+            </h2>
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.16em', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', background: 'rgba(255, 160, 80, 0.06)', color: 'rgb(138, 122, 104)', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                PRES
+              </span>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '10px', color: 'rgb(90, 78, 66)' }}>
+                Lucro presumido · trimestral
+              </span>
+</div>
+</div>
+<div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)', marginBottom: '10px' }}>
+              BASE DE CÁLCULO
+            </div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0px', borderBottom: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+                VENDA COMPETÊNCIA
+              </span>
+<span style={{ fontSize: '12px', color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontVariantNumeric: 'tabular-nums' }}>
+                R$ 15.560.176,46
+              </span>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0px', borderBottom: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+                RECEBIDO CAIXA
+              </span>
+<span style={{ fontSize: '12px', color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontVariantNumeric: 'tabular-nums' }}>
+                R$ 609.441,10
+              </span>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0px', borderBottom: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+                ACUM. SOCIETÁRIO
+              </span>
+<span style={{ fontSize: '12px', color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontVariantNumeric: 'tabular-nums' }}>
+                R$ 961.086,36
+              </span>
+</div>
+<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0px', borderBottom: '1px dashed rgba(255, 160, 80, 0.08)' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(90, 78, 66)' }}>
+                ACUM. FISCAL
+              </span>
+<span style={{ fontSize: '12px', color: 'rgb(240, 230, 216)', fontFamily: ''JetBrains Mono'', fontVariantNumeric: 'tabular-nums' }}>
+                R$ 1.332.918,68
+              </span>
+</div>
+</div>
+<div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)', marginBottom: '10px' }}>
+              APURAÇÃO DO PERÍODO
+            </div>
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+<div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.2em', color: 'rgb(90, 78, 66)', marginBottom: '4px' }}>
+                  PIS/COFINS
+                </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13.5px', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: 'rgb(240, 230, 216)' }}>
+                  R$ 22.244,60
+                </div>
+</div>
+<div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.2em', color: 'rgb(90, 78, 66)', marginBottom: '4px' }}>
+                  CSLL+IRPJ
+                </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13.5px', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: 'rgb(240, 230, 216)' }}>
+                  R$ 13.895,26
+                </div>
+</div>
+<div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.2em', color: 'rgb(90, 78, 66)', marginBottom: '4px' }}>
+                  ADIC. IR
+                </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13.5px', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: 'rgb(255, 194, 71)' }}>
+                  R$ 3.061,11
+                </div>
+</div>
+<div>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9px', letterSpacing: '0.2em', color: 'rgb(90, 78, 66)', marginBottom: '4px' }}>
+                  RET 4%
+                </div>
+<div style={{ fontFamily: ''Space Grotesk'', fontSize: '13.5px', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: 'rgb(90, 78, 66)' }}>
+                  R$ 0,00
+                </div>
+</div>
+</div>
+<div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(255, 140, 42, 0.06)', border: '1px dashed rgba(255, 140, 42, 0.3)', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(255, 122, 26)' }}>
+                TOTAL A RECOLHER
+              </span>
+<span style={{ fontFamily: ''Space Grotesk'', fontSize: '16px', fontWeight: '600', color: 'rgb(255, 122, 26)', fontVariantNumeric: 'tabular-nums' }}>
+                R$ 39.200,97
+              </span>
+</div>
+</div>
+<div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)', marginBottom: '10px' }}>
+              DIFERIMENTO
+            </div>
+<div style={{ padding: '12px 14px', borderRadius: '8px', background: 'rgba(255, 194, 71, 0.06)', border: '1px solid rgba(255, 194, 71, 0.25)' }}>
+<div style={{ fontSize: '11px', color: 'rgb(138, 122, 104)', lineHeight: '1.5', marginBottom: '8px' }}>
+                Recolhimento
+                <span style={{ color: 'rgb(255, 194, 71)' }}>
+                  antecipado em relação à competência
+                </span>
+                — gera ativo fiscal diferido.
+              </div>
+<div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+<span style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.18em', color: 'rgb(255, 194, 71)' }}>
+                  SALDO
+                </span>
+<span style={{ fontFamily: ''Space Grotesk'', fontSize: '18px', fontWeight: '600', color: 'rgb(255, 194, 71)', fontVariantNumeric: 'tabular-nums' }}>
+                  R$ -371.832,32
+                </span>
+</div>
+</div>
+</div>
+<div style={{ padding: '14px 14px 18px' }}>
+<div style={{ fontFamily: ''JetBrains Mono'', fontSize: '9.5px', letterSpacing: '0.22em', color: 'rgb(90, 78, 66)', padding: '0px 6px 8px' }}>
+              AÇÕES
+            </div>
+<button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '6px', background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(240, 230, 216)', cursor: 'pointer', textAlign: 'left' }}>
+<span style={{ flex: '1 1 0%', fontSize: '12.5px' }}>
+                Aprovar apuração
+              </span>
+<kbd> ⌘↵ </kbd>
+</button>
+<button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '6px', background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(240, 230, 216)', cursor: 'pointer', textAlign: 'left' }}>
+<span style={{ flex: '1 1 0%', fontSize: '12.5px' }}>
+                Conciliar com Questor
+              </span>
+<kbd> ⇧⌘C </kbd>
+</button>
+<button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '6px', background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(240, 230, 216)', cursor: 'pointer', textAlign: 'left' }}>
+<span style={{ flex: '1 1 0%', fontSize: '12.5px' }}>
+                Ver razão analítico
+              </span>
+<kbd> ⇧⌘L </kbd>
+</button>
+<button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '6px', background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(240, 230, 216)', cursor: 'pointer', textAlign: 'left' }}>
+<span style={{ flex: '1 1 0%', fontSize: '12.5px' }}>
+                Baixar DARFs (.zip)
+              </span>
+<kbd> ⇧⌘E </kbd>
+</button>
+<button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '6px', background: 'transparent', borderWidth: 'medium', borderStyle: 'none', borderColor: 'currentcolor', borderImage: 'initial', color: 'rgb(230, 184, 112)', cursor: 'pointer', textAlign: 'left' }}>
+<span style={{ flex: '1 1 0%', fontSize: '12.5px' }}>
+                Marcar divergência
+              </span>
+<kbd> ⇧⌘! </kbd>
+</button>
+</div>
+</aside>
+</div>
+<footer style={{ borderTop: '1px solid rgba(255, 160, 80, 0.08)', background: 'rgb(18, 16, 14)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '18px', flexShrink: '0', fontFamily: ''JetBrains Mono'', fontSize: '10px', letterSpacing: '0.16em', color: 'rgb(90, 78, 66)' }}>
+<span>
+<kbd> ↑ </kbd>
+<kbd style={{ marginLeft: '2px' }}> ↓ </kbd>
+          NAVEGAR
+        </span>
+<span>
+<kbd> ↵ </kbd>
+          ABRIR
+        </span>
+<span>
+<kbd> ⌘K </kbd>
+          COMANDOS
+        </span>
+<span>
+<kbd> ⇧⌘R </kbd>
+          ATUALIZAR
+        </span>
+<span>
+<kbd> ⇧⌘E </kbd>
+          EXPORTAR
+        </span>
+<span style={{ flex: '1 1 0%' }}> </span>
+<span>
+          BASE
+          <span style={{ color: 'rgb(240, 230, 216)' }}> R$ 48,75M </span>
+</span>
+<span>
+          A RECOLHER
+          <span style={{ color: 'rgb(255, 122, 26)' }}> R$ 4,89M </span>
+</span>
+<span>
+          DIFERIMENTO
+          <span style={{ color: 'rgb(255, 194, 71)' }}> -R$ 2,57M </span>
+</span>
+</footer>
+</div>

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Testa a query LCTOGER para CC=35 (Stuttgart) - conta 5639
 Verifica o total mensal de custos que deveria aparecer na auditoria
 """

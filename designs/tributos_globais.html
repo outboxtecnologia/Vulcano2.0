@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vulcano ERP - Tributos Globais</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Magma UI Color Palette */
+            --bg-base: #0f1115;
+            --bg-surface: #1a1d24;
+            --bg-surface-elevated: #252932;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-strong: rgba(255, 255, 255, 0.15);
+            
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3af;
+            --text-tertiary: #6b7280;
+            
+            --accent-primary: #ef4444; /* Red / Magma */
+            --accent-primary-hover: #dc2626;
+            --accent-glow: rgba(239, 68, 68, 0.2);
+            
+            --status-success: #10b981;
+            --status-warning: #f59e0b;
+            --status-danger: #ef4444;
+            --status-info: #3b82f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar Mockup */
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-surface);
+            border-right: 1px solid var(--border-subtle);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .brand {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #ef4444, #f97316);
+            border-radius: 8px;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* Background Glow Effect */
+        .bg-glow {
+            position: absolute;
+            top: -100px;
+            right: -100px;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-title h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 16px;
+        }
+
+        .btn {
+            background-color: var(--bg-surface-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background-color: var(--border-strong);
+            border-color: var(--text-secondary);
+        }
+
+        .btn-primary {
+            background-color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-primary-hover);
+            border-color: var(--accent-primary-hover);
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .kpi-card {
+            background: rgba(26, 29, 36, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 24px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+            border-color: var(--border-strong);
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .kpi-trend {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .trend-up { color: var(--status-success); }
+        .trend-down { color: var(--status-danger); }
+
+        /* Data Table Section */
+        .table-section {
+            background: rgba(26, 29, 36, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+        }
+
+        .table-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .search-box {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            width: 250px;
+            transition: border-color 0.2s;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background-color: rgba(37, 41, 50, 0.5);
+            text-align: left;
+            padding: 16px 24px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 14px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr {
+            transition: background-color 0.2s;
+        }
+
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Status Pills */
+        .status {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .status-paid {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--status-success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-pending {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: var(--status-warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .status-overdue {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--status-danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .entity-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .entity-name {
+            font-weight: 500;
+        }
+
+        .entity-doc {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .amount {
+            font-weight: 600;
+            font-family: monospace;
+            font-size: 15px;
+        }
+
+    </style>
+</head>
+<body>
+    
+    <div class="sidebar">
+        <div class="brand">
+            <div class="brand-logo"></div>
+            Vulcano ERP
+        </div>
+        <!-- Mock sidebar items can go here -->
+    </div>
+
+    <div class="main-content">
+        <div class="bg-glow"></div>
+
+        <div class="header">
+            <div class="header-title">
+                <h1>Tributos Globais</h1>
+                <p>Consolidação e auditoria fiscal de todas as empresas e empreendimentos</p>
+            </div>
+            <div class="controls">
+                <select class="btn" style="appearance: none; padding-right: 32px;">
+                    <option>Competência: Maio/2026</option>
+                    <option>Competência: Abril/2026</option>
+                    <option>Competência: Março/2026</option>
+                </select>
+                <button class="btn">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Exportar
+                </button>
+                <button class="btn btn-primary">
+                    Auditar Competência
+                </button>
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    Total Retido (IRRF/CSRF)
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <div class="kpi-value">R$ 142.500,80</div>
+                <div class="kpi-trend trend-up">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                    +2.4% vs mês anterior
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    PIS / COFINS a Recolher
+                </div>
+                <div class="kpi-value">R$ 385.220,15</div>
+                <div class="kpi-trend trend-down">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                    -5.1% vs mês anterior
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    INSS Patronal + Terceiros
+                </div>
+                <div class="kpi-value">R$ 89.430,00</div>
+                <div class="kpi-trend trend-up">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                    +1.2% vs mês anterior
+                </div>
+            </div>
+
+            <div class="kpi-card" style="border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 0 15px rgba(245, 158, 11, 0.1);">
+                <div class="kpi-header">
+                    Divergências Encontradas
+                    <span class="status status-pending">Atenção</span>
+                </div>
+                <div class="kpi-value" style="color: var(--status-warning);">3</div>
+                <div class="kpi-trend">
+                    Requer conciliação no Questor
+                </div>
+            </div>
+        </div>
+
+        <div class="table-section">
+            <div class="table-header">
+                <h2>Relação de Tributos por Empresa</h2>
+                <input type="text" class="search-box" placeholder="Pesquisar empresa, CNO ou imposto...">
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Entidade / CNO</th>
+                        <th>Tipo Imposto</th>
+                        <th>Vencimento</th>
+                        <th>Valor Calculado</th>
+                        <th>Valor Questor</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div class="entity-info">
+                                <span class="entity-name">Residencial Stuttgart</span>
+                                <span class="entity-doc">CNO: 87.345.923/0001-35</span>
+                            </div>
+                        </td>
+                        <td>INSS Obras (SERO)</td>
+                        <td>20/06/2026</td>
+                        <td class="amount">R$ 45.200,00</td>
+                        <td class="amount">R$ 45.200,00</td>
+                        <td><span class="status status-paid">Conciliado</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="entity-info">
+                                <span class="entity-name">Marazul Apart Hotel Ltda</span>
+                                <span class="entity-doc">CNPJ: 12.345.678/0001-90</span>
+                            </div>
+                        </td>
+                        <td>IRRF (Folha)</td>
+                        <td>20/06/2026</td>
+                        <td class="amount">R$ 12.850,30</td>
+                        <td class="amount" style="color: var(--status-warning);">R$ 12.100,00</td>
+                        <td><span class="status status-pending">Divergente</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="entity-info">
+                                <span class="entity-name">Marazul Apart Hotel Ltda</span>
+                                <span class="entity-doc">CNPJ: 12.345.678/0001-90</span>
+                            </div>
+                        </td>
+                        <td>PIS/COFINS (Faturamento)</td>
+                        <td>25/06/2026</td>
+                        <td class="amount">R$ 185.000,00</td>
+                        <td class="amount">R$ 185.000,00</td>
+                        <td><span class="status status-paid">Conciliado</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="entity-info">
+                                <span class="entity-name">Empreendimento Aurora</span>
+                                <span class="entity-doc">CNO: 99.888.777/0001-22</span>
+                            </div>
+                        </td>
+                        <td>ISSQN Retido</td>
+                        <td>10/06/2026</td>
+                        <td class="amount">R$ 8.450,00</td>
+                        <td class="amount">R$ 0,00</td>
+                        <td><span class="status status-overdue">Não Lançado</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</body>
+</html>

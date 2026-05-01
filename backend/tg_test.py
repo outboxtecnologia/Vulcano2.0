@@ -1,4 +1,4 @@
-﻿from main import get_conn
+from main import get_conn
 import asyncio
 from core.agents.auditoria_graph import graph_app
 from main import AuditoriaGraphState, _serialize_agent_state

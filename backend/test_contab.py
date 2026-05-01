@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 sys.path.append(r'C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend')
 import asyncio
 from core.services.graph_logic_builder import AccountingGraphPipeline

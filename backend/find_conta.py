@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import re
 
 conn = sqlite3.connect('poc_database.sqlite')

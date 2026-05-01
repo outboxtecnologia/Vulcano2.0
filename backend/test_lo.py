@@ -1,4 +1,4 @@
-﻿import sys, os
+import sys, os
 sys.path.insert(0, os.path.abspath('backend'))
 import asyncio
 from core.services.graph_logic_builder import AccountingGraphPipeline

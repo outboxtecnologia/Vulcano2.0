@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 from main import get_conn

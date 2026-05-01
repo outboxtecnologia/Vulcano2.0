@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import sqlite3
 sys.path.append(os.path.join(os.getcwd(), 'backend'))

@@ -1,4 +1,4 @@
-﻿import json
+import json
 import sys
 
 with open(r'core/agents/auditoria_graph.py', 'r', encoding='utf-8') as f:

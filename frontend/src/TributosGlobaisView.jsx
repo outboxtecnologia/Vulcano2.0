@@ -1,300 +1,1268 @@
-import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Layers, RefreshCw, AlertCircle, TrendingUp, ChevronDown, Plus } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  Layers,
+  RefreshCw,
+  AlertCircle,
+  TrendingUp,
+  ChevronDown,
+  Plus,
+} from "lucide-react";
 
 const API_BASE = "http://127.0.0.1:8000";
 
 const formatCurrency = (val) => {
-    if (val === null || val === undefined) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  if (val === null || val === undefined) return "R$ 0,00";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(val);
 };
 
 export const TributosGlobaisView = ({ selectedEmpresa }) => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [dataIni, setDataIni] = useState(`${new Date().getFullYear()}-01`);
-    const [dataFim, setDataFim] = useState('');
-    const [fetchTrigger, setFetchTrigger] = useState(0);
-    const [expandedRow, setExpandedRow] = useState(null);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [dataIni, setDataIni] = useState(`${new Date().getFullYear()}-01`);
+  const [dataFim, setDataFim] = useState("");
+  const [fetchTrigger, setFetchTrigger] = useState(0);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [regimeFilter, setRegimeFilter] = useState("TODOS");
 
-    const isFiltered = Boolean(dataIni || dataFim);
+  const isFiltered = Boolean(dataIni || dataFim);
 
-    useEffect(() => {
-        if (!selectedEmpresa) return;
-        setLoading(true);
-        setError(null);
+  useEffect(() => {
+    if (!selectedEmpresa) return;
+    setLoading(true);
+    setError(null);
 
-        fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIni ? `&data_ini=${dataIni}` : ''}${dataFim ? `&data_fim=${dataFim}` : ''}`)
-            .then(res => {
-                if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
-                return res.json();
-            })
-            .then(json => {
-                setData(json);
-                setLoading(false);
-            })
-            .catch(err => {
-                setError(err.message);
-                setLoading(false);
-            });
-    }, [selectedEmpresa, fetchTrigger]);
+    fetch(
+      `${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIni ? `&data_ini=${dataIni}` : ""}${dataFim ? `&data_fim=${dataFim}` : ""}`,
+    )
+      .then((res) => {
+        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        setData(json);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [selectedEmpresa, fetchTrigger]);
 
-    // Calcular estatísticas tributárias globais (Visão Balanço Patrimonial)
-    let totalCaixaAcumulado = 0;
-    let totalSocAcumulado = 0;
-    if (data?.dashboard_meta) {
-        Object.values(data.dashboard_meta).forEach(meta => {
-            totalCaixaAcumulado += (meta.tributos_caixa_acumulado || 0);
-            totalSocAcumulado += (meta.tributos_soc_acumulado || 0);
-        });
-    }
+  let totalCaixaAcumulado = 0;
+  let totalSocAcumulado = 0;
+  let dashboardMetaKeys = [];
+  if (data?.dashboard_meta) {
+    dashboardMetaKeys = Object.keys(data.dashboard_meta);
+    Object.values(data.dashboard_meta).forEach((meta) => {
+      totalCaixaAcumulado += meta.tributos_caixa_acumulado || 0;
+      totalSocAcumulado += meta.tributos_soc_acumulado || 0;
+    });
+  }
+  const saldoDiferimento = totalSocAcumulado - totalCaixaAcumulado;
 
-    const pieData = [
-        { name: 'Carga Regime Caixa', value: totalCaixaAcumulado },
-        { name: 'Carga Regime Competência', value: totalSocAcumulado }
-    ];
+  const filteredRows = Object.entries(data?.dashboard_meta || {}).filter(
+    ([name, meta]) => {
+      const pisCofins = (meta.pis || 0) + (meta.cofins || 0);
+      const ret = meta.ret || 0;
+      const isRet = ret > 0 && pisCofins === 0;
+      if (regimeFilter === "PRESUMIDO" && isRet) return false;
+      if (regimeFilter === "RET 4%" && !isRet) return false;
+      return true;
+    },
+  );
 
-    const COLORS = ['var(--v-accent-4)', 'var(--v-accent-6)'];
-
-    return (
-        <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto w-full h-full flex flex-col pt-4">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h2 className="text-3xl font-black tracking-tighter uppercase mb-1 text-[var(--v-text-bold)] flex items-center gap-3">
-                        <Layers className="text-[var(--v-accent-4)]" size={32}/> 
-                        Tributos Globais (Caixa vs Competência)
-                    </h2>
-                    <p className="text-xs text-[var(--v-text-faint)] uppercase tracking-[0.2em] ml-11">Apur. Presumido (Pis 0.65%, Cofins 3%, CSLL 1.08%, IRPJ 1.2% + 10%) vs RET (4%)</p>
-                </div>
-                <div className="flex gap-4 p-3 bg-[var(--v-surface-container)] rounded-[var(--v-radius)] border border-[var(--v-border)] items-end">
-                    <div>
-                        <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Competência Inicial</label>
-                        <input type="month" value={dataIni} onChange={e => setDataIni(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-4)] text-white text-[11px] font-mono px-3 py-1.5 rounded-[var(--v-radius)] outline-none transition-colors dark-calendar" />
-                    </div>
-                    <div>
-                        <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Competência Final</label>
-                        <input type="month" value={dataFim} onChange={e => setDataFim(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-4)] text-white text-[11px] font-mono px-3 py-1.5 rounded-[var(--v-radius)] outline-none transition-colors dark-calendar" />
-                    </div>
-                    <div className="flex-1 flex justify-end">
-                        <button 
-                            onClick={() => setFetchTrigger(prev => prev + 1)}
-                            className="bg-[var(--v-accent-4)] text-black font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-[var(--v-radius)] hover:opacity-80 transition-opacity flex items-center gap-2"
-                        >
-                            <RefreshCw size={14} /> Atualizar Matriz
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-
-            {loading && (
-                <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-4">
-                    <RefreshCw className="animate-spin text-[var(--v-accent-4)]" size={48} />
-                    <p className="text-[10px] uppercase font-bold tracking-[0.3em] text-[var(--v-text-muted)]">Calculando Matriz Tributária...</p>
-                </div>
-            )}
-
-            {error && !loading && (
-                <div className="bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
-                    <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
-                </div>
-            )}
-
-            {!loading && !error && data && (
-                <>
-                    <div className="grid grid-cols-3 gap-6">
-                        <div className="magma-card p-6 flex flex-col justify-center border-l-4 border-l-[var(--v-accent-4)] relative overflow-hidden group">
-                            <span className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Base Acum. Faturamento (Soc)</span>
-                            <h4 className="text-3xl font-black text-[var(--v-text-bold)] mt-2 drop-shadow-lg">{formatCurrency(totalSocAcumulado)}</h4>
-                        </div>
-                        <div className="magma-card p-6 flex flex-col justify-center border-l-4 border-l-[var(--v-accent-5)] relative overflow-hidden group">
-                            <span className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Total Acum. p/ Recolher (Caixa)</span>
-                            <h4 className="text-3xl font-black text-[var(--v-accent-5)] mt-2 drop-shadow-lg">{formatCurrency(totalCaixaAcumulado)}</h4>
-                        </div>
-                        <div className="magma-card p-6 flex flex-col justify-center border-l-4 border-l-[var(--v-accent-6)] relative overflow-hidden group">
-                            <span className="text-[10px] text-[var(--v-text-faint)] uppercase tracking-widest font-bold">Saldo Diferimento Fiscal (Provisão)</span>
-                            <h4 className="text-3xl font-black text-[var(--v-accent-6)] mt-2 drop-shadow-lg">{formatCurrency(totalSocAcumulado - totalCaixaAcumulado)}</h4>
-                            <TrendingUp className="text-[var(--v-accent-6)] absolute -right-5 -bottom-5 opacity-10 group-hover:scale-125 transition-transform" size={100} />
-                        </div>
-                    </div>
-
-                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-[var(--v-radius)]">
-                        <table className="w-full text-left text-[11px] border-collapse">
-                            <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
-                                <tr>
-                                    <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Obras / Empreendimentos</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold text-center">Regime</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-text-bold)]/50 uppercase font-bold text-right">PIS/COFINS</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-text-bold)]/50 uppercase font-bold text-right">CSLL + IRPJ Base</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-accent-5)] uppercase font-bold text-right">Adicional IR (10%)</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-accent-3)] uppercase font-bold text-right">RET 4%</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-accent-2)] uppercase font-black text-right">TRIB. SOC.</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-accent-4)] uppercase font-black text-right">TRIB. FISCAL</th>
-                                    <th className="p-3 tracking-widest text-[var(--v-text-muted)] uppercase font-black text-center">STATUS (IR|CS)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {Object.entries(data.dashboard_meta || {}).map(([name, meta], idx) => {
-                                    const pisCofins = (meta.pis || 0) + (meta.cofins || 0);
-                                    const csllIrpj = (meta.csll || 0) + (meta.irpj || 0);
-                                    const ret = meta.ret || 0;
-                                    const isRet = ret > 0 && pisCofins === 0;
-                                    
-                                    // Using the accumulated balance to measure Deferred vs Anticipated (Account Status)
-                                    const balSoc = meta.tributos_soc_acumulado || 0;
-                                    const balFiscal = meta.tributos_caixa_acumulado || 0;
-                                    const statusDiff = balSoc - balFiscal;
-                                    
-                                    const mesSoc = isFiltered ? meta.tributos_soc_mes : balSoc;
-                                    const mesFiscal = isFiltered ? meta.tributos_caixa_mes : balFiscal;
-                                    
-                                    let statusLabel = "-";
-                                    let statusColor = "text-[var(--v-text-muted)]";
-                                    if (statusDiff > 10) {
-                                        statusLabel = `DIFERIDO PI (${formatCurrency(statusDiff)})`;
-                                        statusColor = "text-[var(--v-accent-6)] bg-[var(--v-accent-6)]/10 px-2 py-0.5 rounded";
-                                    } else if (statusDiff < -10) {
-                                        statusLabel = `ANTECIPADO (${formatCurrency(Math.abs(statusDiff))})`;
-                                        statusColor = "text-[var(--v-accent-3)] bg-[var(--v-accent-3)]/10 px-2 py-0.5 rounded";
-                                    }
-                                    
-                                    return (
-                                        <React.Fragment key={idx}>
-                                            <tr 
-                                                onClick={() => setExpandedRow(expandedRow === idx ? null : idx)}
-                                                className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors cursor-pointer"
-                                            >
-                                                <td className="p-3 font-bold text-[var(--v-text)] max-w-xs truncate flex items-center gap-2">
-                                                    {expandedRow === idx ? <ChevronDown size={14} /> : <Plus size={14} />} {name}
-                                                </td>
-                                                <td className="p-3 text-center">
-                                                    {isRet ? <span className="bg-[var(--v-accent-3)]/20 text-[var(--v-accent-3)] px-2 py-0.5 rounded text-[9px] uppercase font-black">RET</span> : <span className="bg-[var(--v-text-muted)]/20 text-[var(--v-text-muted)] px-2 py-0.5 rounded text-[9px] uppercase font-black">PRES</span>}
-                                                </td>
-                                                <td className="p-3 text-right font-mono text-[var(--v-text-muted)]">{formatCurrency(pisCofins)}</td>
-                                                <td className="p-3 text-right font-mono text-[var(--v-text-muted)]">{formatCurrency(csllIrpj)}</td>
-                                                <td className="p-3 text-right font-mono font-bold text-[var(--v-accent-5)]">{formatCurrency(meta.irpj_adicional)}</td>
-                                                <td className="p-3 text-right font-mono font-bold text-[var(--v-accent-3)]">{formatCurrency(ret)}</td>
-                                                <td className="p-3">
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="font-black text-[var(--v-accent-2)]">{formatCurrency(mesSoc)}</span>
-                                                        {isFiltered && <span className="text-[9px] text-[var(--v-text-muted)]">Acum: {formatCurrency(balSoc)}</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="p-3">
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="font-black text-[var(--v-accent-4)]">{formatCurrency(mesFiscal)}</span>
-                                                        {isFiltered && <span className="text-[9px] text-[var(--v-text-muted)]">Acum: {formatCurrency(balFiscal)}</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="p-3 text-center font-mono font-bold text-[9px] uppercase">
-                                                    <span className={statusColor}>{statusLabel}</span>
-                                                </td>
-                                            </tr>
-                                            {expandedRow === idx && meta.unidades && meta.unidades.length > 0 && (
-                                                <tr className="bg-[var(--v-deep)] border-b border-[var(--v-border)]">
-                                                    <td colSpan={9} className="p-4">
-                                                        <div className="overflow-x-auto max-h-[300px] custom-scrollbar border border-[var(--v-border)]">
-                                                            <table className="w-full text-left text-[10px]">
-                                                                <thead className="bg-[var(--v-hover)] sticky top-0">
-                                                                    <tr className="text-[var(--v-text-muted)] uppercase tracking-widest font-bold">
-                                                                        <th className="p-2 border-b border-[var(--v-border)]">Unidade</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)]">Comprador</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">VGV</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">POC Total</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Rec. Caixa</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Trib. Soc. ({isFiltered ? 'Mês' : 'Total'})</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Trib. Fiscal ({isFiltered ? 'Mês' : 'Total'})</th>
-                                                                        <th className="p-2 border-b border-[var(--v-border)] text-right">Saldo Dif.</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {meta.unidades.map((u, i) => {
-                                                                         const sDiff = u.tributos_soc_acumulado - u.tributos_caixa_acumulado;
-                                                                         const cxMes = isFiltered ? u.caixa_mes : u.caixa_acumulado;
-                                                                         const tSocMes = isFiltered ? u.soc_mes * (meta.irpj_adicional > 0 ? 0.0593 : 0.04) : u.tributos_soc_acumulado; // Approx unit rate
-                                                                         const tFisMes = isFiltered ? u.tributos_caixa_mes : u.tributos_caixa_acumulado;
-                                                                         return (
-                                                                        <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[#1f1f22]">
-                                                                            <td className="p-2 font-bold">{u.unidade}</td>
-                                                                            <td className="p-2 max-w-[200px] truncate">{u.comprador}</td>
-                                                                            <td className="p-2 text-right font-mono text-[#aa3333]">{formatCurrency(u.vgv)}</td>
-                                                                            <td className="p-2 text-right font-mono text-[var(--v-text-muted)]">{(meta.poc || 0).toFixed(2)}%</td>
-                                                                            <td className="p-2 text-right font-mono text-[var(--v-accent-3)]">{formatCurrency(cxMes)}</td>
-                                                                            <td className="p-2 text-right font-mono text-[var(--v-accent-2)]">{formatCurrency(isFiltered ? u.tributos_soc_mes : u.tributos_soc_acumulado)}</td>
-                                                                            <td className="p-2 text-right font-mono text-[var(--v-accent-4)]">{formatCurrency(tFisMes)}</td>
-                                                                            <td className={`p-2 text-right font-mono font-bold ${sDiff > 0 ? 'text-[var(--v-accent-6)]' : 'text-[var(--v-text-muted)]'}`}>{formatCurrency(sDiff)}</td>
-                                                                        </tr>
-                                                                    )})}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </React.Fragment>
-                                    );
-                                })}
-                                {Object.keys(data.dashboard_meta || {}).length === 0 && (
-                                    <tr><td colSpan="9" className="p-10 text-center text-[var(--v-text-faint)] uppercase text-[10px] tracking-widest">Sem base faturada</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="magma-card overflow-hidden border border-[var(--v-border)] rounded-[var(--v-radius)] mt-6">
-                        <div className="p-4 bg-[var(--v-surface-container)] border-b border-[var(--v-border)]">
-                            <h3 className="text-xs uppercase font-black tracking-widest text-[var(--v-accent-6)] flex items-center gap-2"><TrendingUp size={14} /> Demonstrativo das Contabilizações (Período)</h3>
-                        </div>
-                        <div className="overflow-x-auto custom-scrollbar">
-                            <table className="w-full text-left text-[11px] border-collapse">
-                                <thead className="bg-[var(--v-deep)] sticky top-0 border-b border-[var(--v-border)]">
-                                    <tr>
-                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Obras / Empreendimentos</th>
-                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Venda/Faturamento (Competência)</th>
-                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Recebimento (Caixa)</th>
-                                        <th className="p-3 tracking-widest text-[var(--v-text-faint)] uppercase font-bold">Provisão Diferimento (Ativo)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Object.entries(data.dashboard_meta || {}).map(([name, meta], idx) => {
-                                        const ct = meta.contas_contabeis || {};
-                                        // A receita no mes é "receita_soc_mes" ou o acumulado dependendo da view, mas vamos usar "receita_societaria" do diff acumulado caso dataIni e dataFim estejam juntos, o backend traz o do periodo
-                                        const fat = meta.receita_soc_mes || meta.receita_societaria || 0;
-                                        const cx = meta.caixa_mes || meta.caixa_acumulado || 0;
-                                        const dif = fat - cx;
-
-                                        return (
-                                            <tr key={idx} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
-                                                <td className="p-3 font-bold text-[var(--v-text)] truncate">{name}</td>
-                                                <td className="p-3 text-[#aa3333] font-mono text-[10px]">
-                                                    D - {ct.CONTACLI || 'CLIENTES'} <br/>
-                                                    C - {ct.CONTAREC || 'RECEITA DE VENDAS DRE'} <br/>
-                                                    <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(fat)}</span>
-                                                </td>
-                                                <td className="p-3 text-[#33aa33] font-mono text-[10px]">
-                                                    D - {ct.CONTACAIXA || 'BANCOS'} <br/>
-                                                    C - {ct.CONTACLI || 'CLIENTES'} <br/>
-                                                    <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(cx)}</span>
-                                                </td>
-                                                <td className="p-3 text-[#aa88aa] font-mono text-[10px]">
-                                                    D - PROVISÃƒO P/ TRIBUTOS SOBRE LUCRO <br/>
-                                                    C - TRIBUTOS DIFERIDOS (PASSIVO) <br/>
-                                                    <span className="font-bold text-[var(--v-text-bold)]/70">{formatCurrency(meta.tributos_soc_acumulado - meta.tributos_caixa_acumulado)}</span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    {Object.keys(data.dashboard_meta || {}).length === 0 && (
-                                        <tr><td colSpan="4" className="p-10 text-center text-[var(--v-text-faint)] uppercase text-[10px] tracking-widest">Sem contabilizações processadas no período</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </>
-            )}
+  return (
+    <div
+      style={{
+        flex: "1 1 0%",
+        display: "flex",
+        flexDirection: "column",
+        minWidth: 0,
+        height: "100%",
+      }}
+    >
+      {/* NOVO HEADER */}
+      <header
+        style={{
+          borderBottom: "1px solid rgba(255, 160, 80, 0.08)",
+          background: "rgb(18, 16, 14)",
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "9px",
+            paddingRight: "14px",
+            borderRight: "1px solid rgba(255, 160, 80, 0.08)",
+          }}
+        >
+          <div
+            className="pulse"
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              background: "rgb(255, 122, 26)",
+              boxShadow: "rgb(255, 122, 26) 0px 0px 8px",
+            }}
+          ></div>
+          <span
+            style={{
+              fontFamily: '"JetBrains Mono"',
+              fontSize: "10px",
+              letterSpacing: "0.22em",
+              color: "rgb(240, 230, 216)",
+            }}
+          >
+            TRIBUTOS GLOBAIS
+          </span>
+          <span
+            style={{
+              fontFamily: '"JetBrains Mono"',
+              fontSize: "10px",
+              color: "rgb(90, 78, 66)",
+            }}
+          >
+            · {dashboardMetaKeys.length} obras
+          </span>
         </div>
 
-    );
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "5px 10px 5px 12px",
+            borderRadius: "7px",
+            background: "rgba(255, 140, 42, 0.08)",
+            border: "1px solid rgba(255, 140, 42, 0.3)",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span
+              style={{
+                fontFamily: '"JetBrains Mono"',
+                fontSize: "8.5px",
+                letterSpacing: "0.2em",
+                color: "rgb(90, 78, 66)",
+                lineHeight: 1,
+              }}
+            >
+              COMPETÊNCIA INI
+            </span>
+            <input
+              type="month"
+              value={dataIni}
+              onChange={(e) => setDataIni(e.target.value)}
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "rgb(240, 230, 216)",
+                fontFamily: '"JetBrains Mono"',
+                fontSize: "11.5px",
+                padding: "2px 0 0",
+                width: "88px",
+              }}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "5px 10px 5px 12px",
+            borderRadius: "7px",
+            background: "rgb(26, 22, 20)",
+            border: "1px solid rgba(255, 160, 80, 0.08)",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span
+              style={{
+                fontFamily: '"JetBrains Mono"',
+                fontSize: "8.5px",
+                letterSpacing: "0.2em",
+                color: "rgb(90, 78, 66)",
+                lineHeight: 1,
+              }}
+            >
+              COMPETÊNCIA FIM
+            </span>
+            <input
+              type="month"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              placeholder="aberto"
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "rgb(240, 230, 216)",
+                fontFamily: '"JetBrains Mono"',
+                fontSize: "11.5px",
+                padding: "2px 0 0",
+                width: "88px",
+              }}
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            background: "rgb(26, 22, 20)",
+            border: "1px solid rgba(255, 160, 80, 0.08)",
+            borderRadius: "7px",
+            padding: "3px",
+            gap: "2px",
+          }}
+        >
+          <button
+            onClick={() => setRegimeFilter("TODOS")}
+            style={{
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+              background:
+                regimeFilter === "TODOS"
+                  ? "linear-gradient(135deg, rgba(255, 122, 26, 0.2), rgba(201, 58, 18, 0.1))"
+                  : "transparent",
+              border:
+                regimeFilter === "TODOS"
+                  ? "1px solid rgba(255, 140, 42, 0.35)"
+                  : "1px solid transparent",
+              color:
+                regimeFilter === "TODOS"
+                  ? "rgb(255, 122, 26)"
+                  : "rgb(138, 122, 104)",
+              fontFamily: '"JetBrains Mono"',
+              fontSize: "10px",
+              letterSpacing: "0.16em",
+            }}
+          >
+            TODOS
+          </button>
+          <button
+            onClick={() => setRegimeFilter("PRESUMIDO")}
+            style={{
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+              background:
+                regimeFilter === "PRESUMIDO"
+                  ? "linear-gradient(135deg, rgba(255, 122, 26, 0.2), rgba(201, 58, 18, 0.1))"
+                  : "transparent",
+              border:
+                regimeFilter === "PRESUMIDO"
+                  ? "1px solid rgba(255, 140, 42, 0.35)"
+                  : "1px solid transparent",
+              color:
+                regimeFilter === "PRESUMIDO"
+                  ? "rgb(255, 122, 26)"
+                  : "rgb(138, 122, 104)",
+              fontFamily: '"JetBrains Mono"',
+              fontSize: "10px",
+              letterSpacing: "0.16em",
+            }}
+          >
+            PRESUMIDO
+          </button>
+          <button
+            onClick={() => setRegimeFilter("RET 4%")}
+            style={{
+              padding: "5px 10px",
+              borderRadius: "5px",
+              cursor: "pointer",
+              background:
+                regimeFilter === "RET 4%"
+                  ? "linear-gradient(135deg, rgba(255, 122, 26, 0.2), rgba(201, 58, 18, 0.1))"
+                  : "transparent",
+              border:
+                regimeFilter === "RET 4%"
+                  ? "1px solid rgba(255, 140, 42, 0.35)"
+                  : "1px solid transparent",
+              color:
+                regimeFilter === "RET 4%"
+                  ? "rgb(255, 122, 26)"
+                  : "rgb(138, 122, 104)",
+              fontFamily: '"JetBrains Mono"',
+              fontSize: "10px",
+              letterSpacing: "0.16em",
+            }}
+          >
+            RET 4%
+          </button>
+        </div>
+
+        <div style={{ flex: "1 1 0%" }}></div>
+
+        <button
+          onClick={() => setFetchTrigger((prev) => prev + 1)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "8px 14px",
+            borderRadius: "7px",
+            background:
+              "linear-gradient(135deg, rgb(255, 122, 26), rgb(201, 58, 18))",
+            border: "none",
+            color: "rgb(26, 10, 4)",
+            fontSize: "12px",
+            fontWeight: 600,
+            fontFamily: "Inter",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            boxShadow:
+              "rgba(201, 58, 18, 0.35) 0px 4px 12px, rgba(255, 220, 180, 0.4) 0px 1px 0px inset",
+          }}
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />{" "}
+          <span> Atualizar matriz </span>
+        </button>
+      </header>
+
+      <div style={{ flex: "1 1 0%", display: "flex", minHeight: 0 }}>
+        <div style={{ flex: "1 1 0%", minWidth: 0, overflowY: "auto" }}>
+          <div style={{ padding: "24px 24px 16px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "8px",
+                  background:
+                    "linear-gradient(135deg, rgba(255, 122, 26, 0.2), rgba(201, 58, 18, 0.1))",
+                  border: "1px solid rgba(255, 140, 42, 0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "rgba(255, 140, 42, 0.18) 0px 0px 18px",
+                }}
+              >
+                <Layers className="text-[rgb(255,122,26)]" size={18} />
+              </div>
+              <h1
+                style={{
+                  fontFamily: '"Space Grotesk"',
+                  fontWeight: 600,
+                  fontSize: "22px",
+                  letterSpacing: "-0.01em",
+                  color: "rgb(240, 230, 216)",
+                }}
+              >
+                Tributos Globais{" "}
+                <span style={{ color: "rgb(90, 78, 66)", fontWeight: 400 }}>
+                  · Caixa vs Competência
+                </span>
+              </h1>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "3px 8px",
+                  borderRadius: "3px",
+                  background: "rgba(255, 122, 26, 0.12)",
+                  color: "rgb(255, 122, 26)",
+                  border: "1px solid rgba(255, 122, 26, 0.3)",
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                PRES vs RET
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: "12.5px",
+                color: "rgb(138, 122, 104)",
+                lineHeight: 1.55,
+                maxWidth: "780px",
+                paddingLeft: "44px",
+              }}
+            >
+              Apuração Presumido{" "}
+              <span
+                style={{
+                  color: "rgb(240, 230, 216)",
+                  fontFamily: '"JetBrains Mono"',
+                  fontSize: "11px",
+                }}
+              >
+                (PIS 0,65% · COFINS 3% · CSLL 1,08% · IRPJ 1,2% + 10%)
+              </span>{" "}
+              versus <span style={{ color: "rgb(240, 230, 216)" }}>RET 4%</span>{" "}
+              — diferimento entre regime de competência (faturamento societário)
+              e regime de caixa (recebimento fiscal).
+            </div>
+          </div>
+
+          {loading && !data && (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-4">
+              <RefreshCw
+                className="animate-spin text-[rgb(255,122,26)]"
+                size={48}
+              />
+              <p className="text-[10px] uppercase font-bold tracking-[0.3em] text-[var(--v-text-muted)]">
+                Calculando Matriz Tributária...
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="m-6 bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-[10px] flex items-center gap-3">
+              <AlertCircle size={20} />{" "}
+              <span className="text-sm font-bold">{error}</span>
+            </div>
+          )}
+
+          {!loading && !error && data && (
+            <>
+              {/* KPI CARDS */}
+              <div style={{ padding: "0px 24px 22px" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: "14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "relative",
+                      overflow: "hidden",
+                      background: "rgb(26, 22, 20)",
+                      borderWidth: "1px 1px 1px 3px",
+                      borderStyle: "solid",
+                      borderColor:
+                        "rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgb(255, 122, 26)",
+                      borderRadius: "10px",
+                      padding: "16px 18px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "-30px",
+                        right: "-30px",
+                        width: "120px",
+                        height: "120px",
+                        background:
+                          "radial-gradient(circle, rgba(255, 122, 26, 0.12), transparent 70%)",
+                        pointerEvents: "none",
+                      }}
+                    ></div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: '"JetBrains Mono"',
+                          fontSize: "9.5px",
+                          letterSpacing: "0.22em",
+                          color: "rgb(90, 78, 66)",
+                        }}
+                      >
+                        BASE ACUM. FATURAMENTO
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: '"Space Grotesk"',
+                        fontSize: "24px",
+                        fontWeight: 600,
+                        color: "rgb(240, 230, 216)",
+                        fontVariantNumeric: "tabular-nums",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      {formatCurrency(totalSocAcumulado)}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "rgb(138, 122, 104)",
+                        marginTop: "6px",
+                      }}
+                    >
+                      Regime de competência (Soc.)
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      position: "relative",
+                      overflow: "hidden",
+                      background: "rgb(26, 22, 20)",
+                      borderWidth: "1px 1px 1px 3px",
+                      borderStyle: "solid",
+                      borderColor:
+                        "rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgb(255, 122, 26)",
+                      borderRadius: "10px",
+                      padding: "16px 18px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "-30px",
+                        right: "-30px",
+                        width: "120px",
+                        height: "120px",
+                        background:
+                          "radial-gradient(circle, rgba(255, 122, 26, 0.12), transparent 70%)",
+                        pointerEvents: "none",
+                      }}
+                    ></div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: '"JetBrains Mono"',
+                          fontSize: "9.5px",
+                          letterSpacing: "0.22em",
+                          color: "rgb(90, 78, 66)",
+                        }}
+                      >
+                        TOTAL ACUM. A RECOLHER
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: '"Space Grotesk"',
+                        fontSize: "24px",
+                        fontWeight: 600,
+                        color: "rgb(255, 122, 26)",
+                        fontVariantNumeric: "tabular-nums",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      {formatCurrency(totalCaixaAcumulado)}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "rgb(138, 122, 104)",
+                        marginTop: "6px",
+                      }}
+                    >
+                      Regime de caixa (Fiscal)
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      position: "relative",
+                      overflow: "hidden",
+                      background: "rgb(26, 22, 20)",
+                      borderWidth: "1px 1px 1px 3px",
+                      borderStyle: "solid",
+                      borderColor:
+                        "rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgb(255, 194, 71)",
+                      borderRadius: "10px",
+                      padding: "16px 18px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "-30px",
+                        right: "-30px",
+                        width: "120px",
+                        height: "120px",
+                        background:
+                          "radial-gradient(circle, rgba(255, 194, 71, 0.12), transparent 70%)",
+                        pointerEvents: "none",
+                      }}
+                    ></div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: '"JetBrains Mono"',
+                          fontSize: "9.5px",
+                          letterSpacing: "0.22em",
+                          color: "rgb(90, 78, 66)",
+                        }}
+                      >
+                        SALDO DIFERIMENTO FISCAL
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: '"Space Grotesk"',
+                        fontSize: "24px",
+                        fontWeight: 600,
+                        color: "rgb(255, 194, 71)",
+                        fontVariantNumeric: "tabular-nums",
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
+                      {formatCurrency(saldoDiferimento)}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "rgb(138, 122, 104)",
+                        marginTop: "6px",
+                      }}
+                    >
+                      Provisão · ativo diferido
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* GRID TABELA */}
+              <div style={{ padding: "0px 24px 22px" }}>
+                <div
+                  style={{
+                    background: "rgb(26, 22, 20)",
+                    border: "1px solid rgba(255, 160, 80, 0.08)",
+                    borderRadius: "10px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "14px 18px",
+                      borderBottom: "1px solid rgba(255, 160, 80, 0.08)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: '"JetBrains Mono"',
+                        fontSize: "10.5px",
+                        letterSpacing: "0.22em",
+                        color: "rgb(240, 230, 216)",
+                      }}
+                    >
+                      MATRIZ POR EMPREENDIMENTO
+                    </span>
+                    <span
+                      style={{
+                        width: "1px",
+                        height: "12px",
+                        background: "rgba(255, 160, 80, 0.08)",
+                      }}
+                    ></span>
+                    <span
+                      style={{
+                        fontFamily: '"JetBrains Mono"',
+                        fontSize: "10px",
+                        color: "rgb(90, 78, 66)",
+                      }}
+                    >
+                      {filteredRows.length} obras ·{" "}
+                      {isFiltered ? "período filtrado" : "período aberto"}
+                    </span>
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <div style={{ minWidth: "1100px" }}>
+                      {/* GRID HEADER */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "minmax(220px, 1.6fr) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px",
+                          padding: "10px 18px",
+                          borderBottom: "1px solid rgba(255, 160, 80, 0.08)",
+                          background: "rgba(0, 0, 0, 0.22)",
+                          fontFamily: '"JetBrains Mono"',
+                          fontSize: "9.5px",
+                          letterSpacing: "0.18em",
+                          color: "rgb(90, 78, 66)",
+                        }}
+                      >
+                        <span>OBRA / EMPREENDIMENTO</span>
+                        <span style={{ textAlign: "center" }}>REGIME</span>
+                        <span style={{ textAlign: "right" }}>PIS/COFINS</span>
+                        <span style={{ textAlign: "right" }}>CSLL+IRPJ</span>
+                        <span
+                          style={{
+                            textAlign: "right",
+                            color: "rgb(255, 194, 71)",
+                          }}
+                        >
+                          ADIC. IR (10%)
+                        </span>
+                        <span
+                          style={{
+                            textAlign: "right",
+                            color: "rgb(61, 214, 140)",
+                          }}
+                        >
+                          RET 4%
+                        </span>
+                        <span style={{ textAlign: "right" }}>TRIB. SOC.</span>
+                        <span style={{ textAlign: "right" }}>TRIB. FISCAL</span>
+                        <span style={{ textAlign: "center" }}>STATUS</span>
+                      </div>
+
+                      {/* GRID ROWS */}
+                      {filteredRows.map(([name, meta], idx) => {
+                        const pisCofins = (meta.pis || 0) + (meta.cofins || 0);
+                        const csllIrpj = (meta.csll || 0) + (meta.irpj || 0);
+                        const ret = meta.ret || 0;
+                        const isRet = ret > 0 && pisCofins === 0;
+
+                        const balSoc = meta.tributos_soc_acumulado || 0;
+                        const balFiscal = meta.tributos_caixa_acumulado || 0;
+                        const statusDiff = balSoc - balFiscal;
+
+                        const mesSoc = isFiltered
+                          ? meta.tributos_soc_mes
+                          : balSoc;
+                        const mesFiscal = isFiltered
+                          ? meta.tributos_caixa_mes
+                          : balFiscal;
+
+                        let isAntecipado = statusDiff < -10;
+                        let isDiferido = statusDiff > 10;
+
+                        return (
+                          <React.Fragment key={idx}>
+                            <button
+                              onClick={() =>
+                                setExpandedRow(expandedRow === idx ? null : idx)
+                              }
+                              style={{
+                                position: "relative",
+                                width: "100%",
+                                display: "grid",
+                                gridTemplateColumns:
+                                  "minmax(220px, 1.6fr) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px",
+                                alignItems: "center",
+                                padding: "11px 18px",
+                                background:
+                                  expandedRow === idx
+                                    ? "rgba(255, 160, 80, 0.05)"
+                                    : "transparent",
+                                borderTop: "none",
+                                borderLeft: "none",
+                                borderRight: "none",
+                                borderBottom:
+                                  "1px solid rgba(255, 160, 80, 0.08)",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                color: "rgb(240, 230, 216)",
+                                transition: "background 0.2s",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  minWidth: 0,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: "22px",
+                                    height: "22px",
+                                    flexShrink: 0,
+                                    borderRadius: "5px",
+                                    background:
+                                      "linear-gradient(135deg, rgba(255, 122, 26, 0.22), rgba(201, 58, 18, 0.12))",
+                                    border:
+                                      "1px solid rgba(255, 140, 42, 0.22)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {expandedRow === idx ? (
+                                    <ChevronDown
+                                      size={12}
+                                      className="text-[rgb(255,122,26)]"
+                                    />
+                                  ) : (
+                                    <Plus
+                                      size={12}
+                                      className="text-[rgb(255,122,26)]"
+                                    />
+                                  )}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "12.5px",
+                                    color: "rgb(240, 230, 216)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {name}
+                                </span>
+                              </div>
+                              <div style={{ textAlign: "center" }}>
+                                {isRet ? (
+                                  <span
+                                    style={{
+                                      fontFamily: '"JetBrains Mono"',
+                                      fontSize: "9px",
+                                      letterSpacing: "0.16em",
+                                      fontWeight: 600,
+                                      padding: "2px 7px",
+                                      borderRadius: "3px",
+                                      background: "rgba(61, 214, 140, 0.1)",
+                                      color: "rgb(61, 214, 140)",
+                                      border:
+                                        "1px solid rgba(61, 214, 140, 0.2)",
+                                    }}
+                                  >
+                                    RET
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontFamily: '"JetBrains Mono"',
+                                      fontSize: "9px",
+                                      letterSpacing: "0.16em",
+                                      fontWeight: 600,
+                                      padding: "2px 7px",
+                                      borderRadius: "3px",
+                                      background: "rgba(255, 160, 80, 0.06)",
+                                      color: "rgb(138, 122, 104)",
+                                      border:
+                                        "1px solid rgba(255, 160, 80, 0.08)",
+                                    }}
+                                  >
+                                    PRES
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                style={{
+                                  textAlign: "right",
+                                  fontFamily: '"JetBrains Mono"',
+                                  fontSize: "11.5px",
+                                  color: "rgb(90, 78, 66)",
+                                  fontVariantNumeric: "tabular-nums",
+                                }}
+                              >
+                                {formatCurrency(pisCofins)}
+                              </span>
+                              <span
+                                style={{
+                                  textAlign: "right",
+                                  fontFamily: '"JetBrains Mono"',
+                                  fontSize: "11.5px",
+                                  color: "rgb(90, 78, 66)",
+                                  fontVariantNumeric: "tabular-nums",
+                                }}
+                              >
+                                {formatCurrency(csllIrpj)}
+                              </span>
+                              <span
+                                style={{
+                                  textAlign: "right",
+                                  fontFamily: '"JetBrains Mono"',
+                                  fontSize: "11.5px",
+                                  color: "rgb(255, 194, 71)",
+                                  fontVariantNumeric: "tabular-nums",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {formatCurrency(meta.irpj_adicional)}
+                              </span>
+                              <span
+                                style={{
+                                  textAlign: "right",
+                                  fontFamily: '"JetBrains Mono"',
+                                  fontSize: "11.5px",
+                                  color: "rgb(61, 214, 140)",
+                                  fontVariantNumeric: "tabular-nums",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {formatCurrency(ret)}
+                              </span>
+
+                              <div
+                                style={{
+                                  textAlign: "right",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontFamily: '"JetBrains Mono"',
+                                    fontSize: "11.5px",
+                                    fontWeight: 600,
+                                    color: "rgb(240, 230, 216)",
+                                    fontVariantNumeric: "tabular-nums",
+                                  }}
+                                >
+                                  {formatCurrency(mesSoc)}
+                                </span>
+                                {isFiltered && (
+                                  <span
+                                    style={{
+                                      fontFamily: '"JetBrains Mono"',
+                                      fontSize: "9px",
+                                      color: "rgb(90, 78, 66)",
+                                      marginTop: "2px",
+                                    }}
+                                  >
+                                    acum {formatCurrency(balSoc)}
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                style={{
+                                  textAlign: "right",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontFamily: '"JetBrains Mono"',
+                                    fontSize: "11.5px",
+                                    fontWeight: 600,
+                                    color: "rgb(255, 122, 26)",
+                                    fontVariantNumeric: "tabular-nums",
+                                  }}
+                                >
+                                  {formatCurrency(mesFiscal)}
+                                </span>
+                                {isFiltered && (
+                                  <span
+                                    style={{
+                                      fontFamily: '"JetBrains Mono"',
+                                      fontSize: "9px",
+                                      color: "rgb(90, 78, 66)",
+                                      marginTop: "2px",
+                                    }}
+                                  >
+                                    acum {formatCurrency(balFiscal)}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                }}
+                              >
+                                {isAntecipado && (
+                                  <>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "5px",
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: "5px",
+                                          height: "5px",
+                                          borderRadius: "50%",
+                                          background: "rgb(61, 214, 140)",
+                                          boxShadow:
+                                            "rgb(61, 214, 140) 0px 0px 6px",
+                                        }}
+                                      ></span>
+                                      <span
+                                        style={{
+                                          fontFamily: '"JetBrains Mono"',
+                                          fontSize: "9px",
+                                          letterSpacing: "0.14em",
+                                          color: "rgb(61, 214, 140)",
+                                        }}
+                                      >
+                                        ANTECIPADO
+                                      </span>
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontFamily: '"JetBrains Mono"',
+                                        fontSize: "9px",
+                                        color: "rgb(90, 78, 66)",
+                                        fontVariantNumeric: "tabular-nums",
+                                      }}
+                                    >
+                                      {formatCurrency(Math.abs(statusDiff))}
+                                    </span>
+                                  </>
+                                )}
+                                {isDiferido && (
+                                  <>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "5px",
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: "5px",
+                                          height: "5px",
+                                          borderRadius: "50%",
+                                          background: "rgb(255, 194, 71)",
+                                          boxShadow:
+                                            "rgb(255, 194, 71) 0px 0px 6px",
+                                        }}
+                                      ></span>
+                                      <span
+                                        style={{
+                                          fontFamily: '"JetBrains Mono"',
+                                          fontSize: "9px",
+                                          letterSpacing: "0.14em",
+                                          color: "rgb(255, 194, 71)",
+                                        }}
+                                      >
+                                        DIFERIDO PI
+                                      </span>
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontFamily: '"JetBrains Mono"',
+                                        fontSize: "9px",
+                                        color: "rgb(90, 78, 66)",
+                                        fontVariantNumeric: "tabular-nums",
+                                      }}
+                                    >
+                                      {formatCurrency(statusDiff)}
+                                    </span>
+                                  </>
+                                )}
+                                {!isAntecipado && !isDiferido && (
+                                  <span
+                                    style={{
+                                      fontFamily: '"JetBrains Mono"',
+                                      fontSize: "9px",
+                                      color: "rgb(90, 78, 66)",
+                                    }}
+                                  >
+                                    -
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+
+                            {expandedRow === idx &&
+                              meta.unidades &&
+                              meta.unidades.length > 0 && (
+                                <div
+                                  style={{
+                                    background: "rgba(0, 0, 0, 0.3)",
+                                    borderBottom:
+                                      "1px solid rgba(255, 160, 80, 0.08)",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      padding: "10px 18px",
+                                      display: "grid",
+                                      gridTemplateColumns:
+                                        "120px minmax(200px, 1fr) 1fr 1fr 1fr 1fr 1fr 1fr",
+                                      fontFamily: '"JetBrains Mono"',
+                                      fontSize: "9px",
+                                      letterSpacing: "0.18em",
+                                      color: "rgb(90, 78, 66)",
+                                    }}
+                                  >
+                                    <span>UNIDADE</span>
+                                    <span>COMPRADOR</span>
+                                    <span style={{ textAlign: "right" }}>
+                                      VGV
+                                    </span>
+                                    <span style={{ textAlign: "right" }}>
+                                      POC%
+                                    </span>
+                                    <span style={{ textAlign: "right" }}>
+                                      REC. CAIXA
+                                    </span>
+                                    <span style={{ textAlign: "right" }}>
+                                      TRIB. SOC.
+                                    </span>
+                                    <span style={{ textAlign: "right" }}>
+                                      TRIB. FISCAL
+                                    </span>
+                                    <span style={{ textAlign: "right" }}>
+                                      SALDO DIF.
+                                    </span>
+                                  </div>
+                                  {meta.unidades.map((u, i) => {
+                                    const sDiff =
+                                      u.tributos_soc_acumulado -
+                                      u.tributos_caixa_acumulado;
+                                    const cxMes = isFiltered
+                                      ? u.caixa_mes
+                                      : u.caixa_acumulado;
+                                    const tFisMes = isFiltered
+                                      ? u.tributos_caixa_mes
+                                      : u.tributos_caixa_acumulado;
+                                    const tSocMes = isFiltered
+                                      ? u.tributos_soc_mes
+                                      : u.tributos_soc_acumulado;
+                                    return (
+                                      <div
+                                        key={i}
+                                        style={{
+                                          padding: "8px 18px",
+                                          display: "grid",
+                                          gridTemplateColumns:
+                                            "120px minmax(200px, 1fr) 1fr 1fr 1fr 1fr 1fr 1fr",
+                                          fontFamily: '"JetBrains Mono"',
+                                          fontSize: "10.5px",
+                                          color: "rgb(138, 122, 104)",
+                                          borderTop:
+                                            "1px solid rgba(255, 160, 80, 0.03)",
+                                          hover: {
+                                            background:
+                                              "rgba(255, 160, 80, 0.02)",
+                                          },
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            fontWeight: 600,
+                                            color: "rgb(240, 230, 216)",
+                                          }}
+                                        >
+                                          {u.unidade}
+                                        </span>
+                                        <span
+                                          style={{
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {u.comprador}
+                                        </span>
+                                        <span
+                                          style={{
+                                            textAlign: "right",
+                                            color: "#aa3333",
+                                          }}
+                                        >
+                                          {formatCurrency(u.vgv)}
+                                        </span>
+                                        <span style={{ textAlign: "right" }}>
+                                          {(meta.poc || 0).toFixed(2)}%
+                                        </span>
+                                        <span
+                                          style={{
+                                            textAlign: "right",
+                                            color: "rgb(61, 214, 140)",
+                                          }}
+                                        >
+                                          {formatCurrency(cxMes)}
+                                        </span>
+                                        <span
+                                          style={{
+                                            textAlign: "right",
+                                            color: "rgb(240, 230, 216)",
+                                          }}
+                                        >
+                                          {formatCurrency(tSocMes)}
+                                        </span>
+                                        <span
+                                          style={{
+                                            textAlign: "right",
+                                            color: "rgb(255, 122, 26)",
+                                          }}
+                                        >
+                                          {formatCurrency(tFisMes)}
+                                        </span>
+                                        <span
+                                          style={{
+                                            textAlign: "right",
+                                            color:
+                                              sDiff > 10
+                                                ? "rgb(255, 194, 71)"
+                                                : sDiff < -10
+                                                  ? "rgb(61, 214, 140)"
+                                                  : "inherit",
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          {formatCurrency(sDiff)}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                          </React.Fragment>
+                        );
+                      })}
+                      {filteredRows.length === 0 && (
+                        <div
+                          style={{
+                            padding: "40px",
+                            textAlign: "center",
+                            fontFamily: '"JetBrains Mono"',
+                            fontSize: "10px",
+                            letterSpacing: "0.2em",
+                            color: "rgb(90, 78, 66)",
+                          }}
+                        >
+                          NENHUM DADO ENCONTRADO PARA OS FILTROS SELECIONADOS
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };

@@ -1,4 +1,4 @@
-﻿from main import get_conn
+from main import get_conn
 
 conn = get_conn("questor")
 cur = conn.cursor()
