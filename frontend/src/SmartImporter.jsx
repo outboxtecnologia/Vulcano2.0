@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Database, Sparkles, Save, ArrowUpRight, Download, X, Search, Terminal, AlertCircle, Trash2, Settings, Zap } from 'lucide-react';
+import { UploadCloud, CheckCircle2, ChevronRight, FileSpreadsheet, Database, Sparkles, Save, ArrowUpRight, Download, X, Search, Terminal, AlertCircle, Trash2, Settings, Zap, RefreshCw } from 'lucide-react';
 
 const API_BASE = import.meta?.env?.VITE_API_BASE || 'http://127.0.0.1:8000';
 

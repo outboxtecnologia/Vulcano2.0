@@ -7995,3 +7995,27 @@ def api_approve_queue(queue_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro processando JSON extraído: {e}")
+
+# ── Rotas de Teste de Escrita no Questor (Implementation Plan) ─────────────
+from core.services.questor_writer import inserir_lancamento_lctoger_teste
+
+class LancamentoTesteReq(BaseModel):
+    codigo_empresa: int = 959
+    codigo_estab: int = 1
+    data: str
+    codigo_centro_custo: int
+    valor: float
+    historico: str
+
+@app.post("/api/questor/lancamento_teste")
+def api_questor_lancamento_teste(req: LancamentoTesteReq):
+    """
+    Endpoint temporário para testar injeção no Firebird (Questor.fdb).
+    A injeção real está comentada dentro da função `inserir_lancamento_lctoger_teste` 
+    para evitar acidentes antes da aprovação do schema final.
+    """
+    resultado = inserir_lancamento_lctoger_teste(req.model_dump())
+    if not resultado.get("success"):
+        raise HTTPException(status_code=500, detail=resultado.get("error"))
+    return resultado
+
