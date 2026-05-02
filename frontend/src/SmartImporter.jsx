@@ -597,7 +597,19 @@ export default function SmartImporter({ selectedEmpresa }) {
                           {meta.label}
                         </span>
                       </td>
-                      <td className="p-3 font-semibold text-[var(--v-text)] truncate max-w-[200px]" title={r.cliente_planilha}>{r.cliente_planilha || '-'}</td>
+                      <td className="p-3 max-w-[200px]">
+                        <p className="font-semibold text-[var(--v-text)] truncate" title={r.cliente_planilha}>{r.cliente_planilha || '-'}</p>
+                        {r.status !== 'SEM_MATCH' && (
+                          <div className="mt-1 flex flex-col gap-0.5 border-t border-[var(--v-border)]/50 pt-1">
+                            <span className="text-[9.5px] font-mono tracking-widest text-[#3dd68c] uppercase font-bold">
+                              PARCELA: {r.numero_parcela || '-'} | VENC: {r.dt_venc_vulcano || '-'}
+                            </span>
+                            <span className="text-[10px] text-[var(--v-text-muted)] truncate" title={r.cliente_vulcano}>
+                              {r.unidade_vulcano ? `${r.unidade_vulcano} - ` : ''}{r.cliente_vulcano || ''}
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 font-mono text-[11px] text-[var(--v-text-muted)]">{r.dt_pagamento || '-'}</td>
                       <td className="p-3 text-right font-black text-[var(--v-text)]">{fmt(r.valor_planilha)}</td>
                       <td className="p-3 text-right font-black text-[var(--v-text-muted)]">{fmt(r.valor_vulcano)}</td>
