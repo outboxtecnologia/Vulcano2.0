@@ -3,7 +3,7 @@ import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, File
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import * as XLSX from 'xlsx';
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:6000";
 
 const fmt = (val) => {
     if (val === null || val === undefined || isNaN(val)) return 'R$ 0,00';

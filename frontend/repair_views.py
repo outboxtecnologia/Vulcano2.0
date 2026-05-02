@@ -1,7 +1,7 @@
 import sys
 import re
 
-file_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\VulcanoViews.jsx"
+file_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\VulcanoViews.jsx"
 
 with open(file_path, "r", encoding="utf-8") as f:
     code = f.read()
@@ -450,7 +450,7 @@ vendas_code = """export const VendasView = ({ selectedEmpresa }) => {
 # ==========================================
 # 2. PREPARAR RECEBIMENTOSVIEW C/ INFINITE SCROLL
 # ==========================================
-with open(r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\temp_receb.txt", "r", encoding="utf-8") as f:
+with open(r"c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\temp_receb.txt", "r", encoding="utf-8") as f:
     receb_code = f.read()
 
 # Modify receb_code to strip pagination completely

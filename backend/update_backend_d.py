@@ -1,6 +1,6 @@
 import re
 
-with open(r'D:\questor_explorer\backend\main.py', 'r', encoding='utf-8') as f:
+with open(r'D:\vulcano2.0\backend\main.py', 'r', encoding='utf-8') as f:
     code = f.read()
 
 # 1. TIMELINE FIX WITH FILTER + HISTORICO ARRAY
@@ -51,6 +51,6 @@ conta_replacement = '''"conta_custo": r[3], "conta_estoque": r[4], "conta_estcon
 '''
 code = code.replace(conta_target, conta_replacement)
 
-with open(r'D:\questor_explorer\backend\main.py', 'w', encoding='utf-8') as f:
+with open(r'D:\vulcano2.0\backend\main.py', 'w', encoding='utf-8') as f:
     f.write(code)
 print("UPDATED main.py OK")

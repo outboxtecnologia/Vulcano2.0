@@ -2,13 +2,13 @@
 setlocal
 
 REM Copia principal (ex.: Antigravity): portas 8002 + 5173.
-REM Para Cursor use a pasta questor_explorer_cursor e start_questor_explorer_cursor.cmd
+REM Para Cursor use a pasta vulcano2.0_cursor e start_vulcano2.0_cursor.cmd
 
-set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer
+set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0
 set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
 
-echo [questor_explorer] Iniciando backend e frontend...
+echo [vulcano2.0] Iniciando backend e frontend...
 
 REM Fecha processos que ocupam as portas 8002 e 5173
 for %%P in (8002 5173) do (
@@ -23,5 +23,5 @@ start "Questor Backend" cmd /k "cd /d %BACKEND% && if not exist .venv (python -m
 REM Frontend (nova janela cmd)
 start "Questor Frontend" cmd /k "cd /d %FRONTEND% && set VITE_API_BASE=http://127.0.0.1:8002 && if not exist node_modules npm install && npm run dev"
 
-echo [questor_explorer] Pronto. Abra http://localhost:5173
+echo [vulcano2.0] Pronto. Abra http://localhost:5173
 endlocal

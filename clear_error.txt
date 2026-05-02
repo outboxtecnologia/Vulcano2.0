@@ -133,7 +133,7 @@ node.js:32817:64)
     at async Object.build 
 (file:///C:/Users/dirfe/.g
 emini/antigravity/scratch/
-questor_explorer/frontend/
+vulcano2.0/frontend/
 node_modules/vite/dist/nod
 e/chunks/node.js:33239:19)
     at async 

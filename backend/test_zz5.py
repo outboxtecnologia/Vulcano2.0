@@ -4,6 +4,6 @@ try:
     cur = conn.cursor()
     cur.execute("SELECT FIRST 5 NUMERODCTO, CODIGOORIGLCTOCTB, VALORLCTOCTB, DATALCTOCTB FROM LCTOCTB WHERE CODIGOORIGLCTOCTB STARTING WITH 'ZZ'")
     res = cur.fetchall()
-    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_zz_out.txt', 'w', encoding='utf-8').write('LCTOs ZZ (CODIGOORIG): ' + str(res))
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_zz_out.txt', 'w', encoding='utf-8').write('LCTOs ZZ (CODIGOORIG): ' + str(res))
 except Exception as e:
-    open('c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/backend/test_zz_out.txt', 'w', encoding='utf-8').write(str(e))
+    open('c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/backend/test_zz_out.txt', 'w', encoding='utf-8').write(str(e))

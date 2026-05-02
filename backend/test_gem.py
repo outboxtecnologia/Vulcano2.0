@@ -1,5 +1,5 @@
 import os, sys, traceback, json
-sys.path.append(r'c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend')
+sys.path.append(r'c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\backend')
 from dotenv import load_dotenv
 load_dotenv(os.path.join(sys.path[-1], '.env'))
 import main

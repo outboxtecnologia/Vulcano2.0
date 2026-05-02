@@ -33,5 +33,5 @@ for c in candidates[:5]:
 
 if candidates:
     import shutil
-    shutil.copy2(candidates[0][0], r'C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\VulcanoViews.jsx')
+    shutil.copy2(candidates[0][0], r'C:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\VulcanoViews.jsx')
     print("Restored LATEST VulcanoViews!")

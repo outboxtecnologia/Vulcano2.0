@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "C:\projetos\Vulcano2.0\backend\start_and_log.py", line 6, in <module>
+    result = subprocess.run(
+        [python, "-m", "uvicorn", "main:app",
+    ...<2 lines>...
+        capture_output=True, text=True, timeout=20
+    )
+  File "C:\Users\dirfe\AppData\Local\Python\pythoncore-3.14-64\Lib\subprocess.py", line 556, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dirfe\AppData\Local\Python\pythoncore-3.14-64\Lib\subprocess.py", line 1220, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dirfe\AppData\Local\Python\pythoncore-3.14-64\Lib\subprocess.py", line 1663, in _communicate
+    raise TimeoutExpired(self.args, orig_timeout)
+subprocess.TimeoutExpired: Command '['C:\\projetos\\Vulcano2.0\\backend\\.venv\\Scripts\\python.exe', '-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '6000', '--log-level', 'info']' timed out after 20 seconds

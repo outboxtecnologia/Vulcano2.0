@@ -1,32 +1,20 @@
 @echo off
 setlocal
-title Reiniciando Questor Explorer - Claude
+title Vulcano2.0
 color 0A
-echo ==============================================================
-echo         REINICIANDO QUESTOR EXPLORER (BACK + FRONT)
-echo ==============================================================
-echo.
 
-set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer
-set BACKEND=%ROOT%\backend
-set FRONTEND=%ROOT%\frontend
+set ORIG=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\backend
+set NEW=C:\projetos\Vulcano2.0\backend
+set FRONTEND=C:\projetos\Vulcano2.0\frontend
+set VENV=%ORIG%\.venv
 
-echo [1/4] Encerrando processos antigos (Ignorado)...
+echo Iniciando Backend porta 6000 (codigo: Vulcano2.0)...
+start "Vulcano2 - Backend" cmd /k "cd /d "%ORIG%" && "%VENV%\Scripts\python.exe" -m uvicorn main:app --app-dir "%NEW%" --host 127.0.0.1 --port 6000 --log-level info"
 
-echo [2/4] Aguardando Windows...
-timeout /t 3 /nobreak >nul
+echo Iniciando Frontend porta 6001...
+start "Vulcano2 - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http://127.0.0.1:6000 && npm run dev -- --port 6001"
 
-echo [3/4] Iniciando Backend (FastAPI)...
-start "Questor - Backend" cmd /k "cd /d "%BACKEND%" && .venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8080 --log-level info"
-
-echo [4/4] Iniciando Frontend (Vite)...
-start "Questor - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http://127.0.0.1:8080 && npm run dev"
-
-echo.
-echo ==============================================================
-echo  Tudo iniciado! Abrindo navegador em 6 segundos...
-echo ==============================================================
-timeout /t 6 /nobreak >nul
-start http://localhost:5173/
-
+echo Aguardando 15s e abrindo http://localhost:6001
+timeout /t 15 /nobreak >nul
+start http://localhost:6001/
 endlocal

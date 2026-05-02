@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, CheckSquare, AlertCircle, RefreshCw, HandCoins, UploadCloud, Plus, Calendar, Building2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:6000";
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ --,--';

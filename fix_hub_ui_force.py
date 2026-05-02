@@ -1,7 +1,7 @@
 import os
 import re
 
-app_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\App.jsx"
+app_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\App.jsx"
 with open(app_path, "r", encoding="utf-8") as f:
     app_text = f.read()
 
@@ -9,7 +9,7 @@ app_text = re.sub(r'label=[\"\']Conversor XML[\"\']', 'label="IMPORTAÇÃO"', ap
 with open(app_path, "w", encoding="utf-8") as f:
     f.write(app_text)
 
-vulcano_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\VulcanoViews.jsx"
+vulcano_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\VulcanoViews.jsx"
 with open(vulcano_path, "r", encoding="utf-8") as f:
     vulcano_text = f.read()
 

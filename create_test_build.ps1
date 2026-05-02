@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$source_dir = "c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer"
-$target_dir = "c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer_test_build"
+$source_dir = "c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0"
+$target_dir = "c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0_test_build"
 
 Write-Host "Iniciando criacao do Build de Teste. Alvo: $target_dir"
 

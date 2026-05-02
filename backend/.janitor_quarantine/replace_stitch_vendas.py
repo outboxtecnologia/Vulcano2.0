@@ -1,7 +1,7 @@
 import sys
 import re
 
-file_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\VulcanoViews.jsx"
+file_path = r"c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\VulcanoViews.jsx"
 
 with open(file_path, "r", encoding="utf-8") as f:
     code = f.read()

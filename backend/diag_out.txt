@@ -1,0 +1,11 @@
+1. imports basicos OK
+2. firebirdsql OK
+3. pdfplumber OK
+4. google.generativeai OK
+5. numpy OK
+6. pandas OK
+7. dotenv OK
+8. genai.configure OK
+9. vertexai import OK - iniciando init...
+9. vertexai.init OK
+10. TUDO OK - problema nao esta nos imports basicos

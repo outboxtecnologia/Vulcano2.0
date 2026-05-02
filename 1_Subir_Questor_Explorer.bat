@@ -1,57 +1,28 @@
 @echo off
 setlocal
-title Subindo Questor Explorer
+title = Subindo Vulcano2.0
 echo ==============================================================
-echo             INICIANDO QUESTOR EXPLORER
+echo             INICIANDO VULCANO2.0
 echo ==============================================================
 echo.
 
-set ROOT=C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer
+set ROOT=C:\projetos\Vulcano2.0
 set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
-set FIREBIRD_BIN=C:\Users\dirfe\.gemini\antigravity\scratch\questor_mapping\Firebird\bin
+set VENV=%BACKEND%\.venv
 
-echo [0/3] Verificando servico Firebird (porta 3050)...
-netstat -aon | findstr ":3050 " | findstr "LISTENING" >nul 2>&1
-if errorlevel 1 (
-    echo   Firebird NAO esta rodando. Iniciando fbserver.exe...
-    start "Firebird Server" /MIN "%FIREBIRD_BIN%\fbserver.exe" -a
-    timeout /t 3 >nul
-    netstat -aon | findstr ":3050 " | findstr "LISTENING" >nul 2>&1
-    if errorlevel 1 (
-        echo   [AVISO] Firebird pode nao ter iniciado. Verifique se o arquivo existe em:
-        echo   %FIREBIRD_BIN%\fbserver.exe
-    ) else (
-        echo   Firebird iniciado com sucesso na porta 3050.
-    )
-) else (
-    echo   Firebird ja esta rodando na porta 3050. OK.
-)
-echo.
+echo [1/3] Iniciando o Backend API (FastAPI - porta 6000)...
+start "Vulcano2 - Backend" cmd /k "cd /d "%BACKEND%" && "%VENV%\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 6000 --log-level info"
 
-echo [1/3] Encerrando processos antigos nas portas 8000 e 5173...
-for /f "tokens=5" %%p in ('netstat -aon ^| findstr ":8000 " ^| findstr "LISTENING"') do (
-    echo   Matando PID %%p na porta 8000...
-    taskkill /PID %%p /F >nul 2>&1
-)
-for /f "tokens=5" %%p in ('netstat -aon ^| findstr ":5173 " ^| findstr "LISTENING"') do (
-    echo   Matando PID %%p na porta 5173...
-    taskkill /PID %%p /F >nul 2>&1
-)
-echo Aguardando portas serem liberadas...
-timeout /t 3 >nul
-
-echo [2/3] Iniciando o Backend API (FastAPI)...
-start "Questor - Backend" cmd /k "cd /d "%BACKEND%" && .venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info"
-
-echo [3/3] Iniciando o Frontend Visual (Vite)...
-start "Questor - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http://127.0.0.1:8000 && npm run dev"
+echo [2/3] Iniciando o Frontend Visual (Vite - porta 6001)...
+start "Vulcano2 - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http://127.0.0.1:6000 && npm run dev -- --port 6001"
 
 echo.
 echo ==============================================================
-echo CONCLUIDO! O navegador vai abrir em instantes.
+echo Aguarde 30s para o backend inicializar, depois acesse:
+echo http://localhost:6001
 echo ==============================================================
-timeout /t 6 >nul
-start http://localhost:5173/
+timeout /t 30 /nobreak >nul
+start http://localhost:6001/
 
 endlocal

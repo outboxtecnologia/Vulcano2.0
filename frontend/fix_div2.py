@@ -1,6 +1,6 @@
 import sys
 
-path = r"c:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\frontend\src\VulcanoViews.jsx"
+path = r"c:\Users\dirfe\.gemini\antigravity\scratch\vulcano2.0\frontend\src\VulcanoViews.jsx"
 with open(path, "r", encoding="utf-8") as f:
     text = f.read()
 

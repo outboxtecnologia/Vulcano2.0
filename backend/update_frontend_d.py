@@ -1,6 +1,6 @@
 import re
 
-with open(r'D:\questor_explorer\frontend\src\CustosView.jsx', 'r', encoding='utf-8') as f:
+with open(r'D:\vulcano2.0\frontend\src\CustosView.jsx', 'r', encoding='utf-8') as f:
     code = f.read()
 
 # REPLACE NAMES IN DÉBITO AND CRÉDITO
@@ -75,7 +75,7 @@ table_render_replacement = '''{timelineElements.map((t, idx, arr) => {
 code = code.replace(table_render_target, table_render_replacement)
 code = re.sub(r'\{timelineElements\.map\(\(t, idx\).*?</div>\s*\)\}', table_render_replacement, code, flags=re.DOTALL)
 
-with open(r'D:\questor_explorer\frontend\src\CustosView.jsx', 'w', encoding='utf-8') as f:
+with open(r'D:\vulcano2.0\frontend\src\CustosView.jsx', 'w', encoding='utf-8') as f:
     f.write(code)
 
 print("FRONTEND UPDATE OK")

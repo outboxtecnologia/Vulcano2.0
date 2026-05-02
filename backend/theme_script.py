@@ -1,6 +1,6 @@
 import re
 
-target = 'c:/Users/dirfe/.gemini/antigravity/scratch/questor_explorer/frontend/src/App.jsx'
+target = 'c:/Users/dirfe/.gemini/antigravity/scratch/vulcano2.0/frontend/src/App.jsx'
 
 with open(target, 'r', encoding='utf-8') as f:
     code = f.read()
