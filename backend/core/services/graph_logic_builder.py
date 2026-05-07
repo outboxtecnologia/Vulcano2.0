@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel
 import traceback
 from datetime import datetime

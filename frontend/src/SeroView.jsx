@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler, UploadCloud, Save, Download, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import * as XLSX from 'xlsx';
-
-const API_BASE = "http://127.0.0.1:6000";
+import { API_BASE } from './apiBase';
 
 const fmt = (val) => {
     if (val === null || val === undefined || isNaN(val)) return 'R$ 0,00';

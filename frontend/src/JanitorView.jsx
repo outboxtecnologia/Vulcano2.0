@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Zap, Activity, HardDrive, RefreshCw, Shield, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MoveRight } from 'lucide-react';
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from './apiBase';
 const fmt      = (v) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v || 0);
 const fmtKB    = (v) => v >= 1024 ? `${(v / 1024).toFixed(1)} MB` : `${v.toFixed(0)} KB`;
 

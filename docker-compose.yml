@@ -1,0 +1,53 @@
+# Vulcano2 / Questor Explorer — backend (FastAPI) + frontend (Nginx estático).
+#
+# Firebird fica FORA do Docker: em backend/.env defina FIREBIRD_HOST e DB_PATH_* como no servidor remoto.
+#
+# Uso:
+#   cp backend/.env.example backend/.env   # edite
+#   docker compose build
+#   docker compose up -d
+#
+# Frontend fala com a API na URL usada pelo navegador. Para máquina local com portas publicadas:
+#   VITE_API_BASE=http://localhost:8000 docker compose build frontend
+#
+# Persistência SQLite POC (crie o arquivo vazio se não existir:  touch backend/poc_database.sqlite)
+#
+# Vertex AI: monte o JSON da service account e aponte no .env:
+#   GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
+# (descomente o volume em backend abaixo)
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      POC_DATABASE_FILE: /data/poc_database.sqlite
+    volumes:
+      - poc_sqlite:/data
+      # Descomente se usar Vertex com arquivo JSON:
+      # - ./secrets/gcp-sa.json:/run/secrets/gcp-sa.json:ro
+    extra_hosts:
+      # Acessar serviços no host Linux a partir do container (ex.: Firebird exposto só no host)
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  poc_sqlite:

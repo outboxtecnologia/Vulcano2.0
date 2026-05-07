@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Download, ShieldCheck, AlertCircle, RefreshCw, Code2, CheckCircle2, ReceiptText } from 'lucide-react';
-
-const API_BASE = "http://127.0.0.1:6000";
+import { API_BASE } from './apiBase';
 
 const fmt = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';

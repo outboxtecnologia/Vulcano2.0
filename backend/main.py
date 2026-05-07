@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
 import pdfplumber
@@ -74,6 +74,9 @@ _DEFAULT_DB_VULCANO = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_explo
 DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", _DEFAULT_DB_QUESTOR)
 DB_PATH_VULCANO = os.environ.get("DB_PATH_VULCANO", _DEFAULT_DB_VULCANO)
 FIREBIRD_HOST = os.environ.get("FIREBIRD_HOST", "127.0.0.1")
+# Host por base (opcional): se ausente, usa FIREBIRD_HOST para ambos.
+FIREBIRD_HOST_QUESTOR = os.environ.get("FIREBIRD_HOST_QUESTOR", FIREBIRD_HOST)
+FIREBIRD_HOST_VULCANO = os.environ.get("FIREBIRD_HOST_VULCANO", FIREBIRD_HOST)
 FIREBIRD_PORT = int(os.environ.get("FIREBIRD_PORT", "3050"))
 FIREBIRD_USER = os.environ.get("FIREBIRD_USER", "SYSDBA")
 FIREBIRD_PASSWORD = os.environ.get("FIREBIRD_PASSWORD", "masterkey")
@@ -116,15 +119,18 @@ OLLAMA_API_BASE = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 OLLAMA_MODEL_ID = os.environ.get("OLLAMA_MODEL_ID", "qwen2.5:3b")
 
 # SQLite: prefere `backend/poc_database.sqlite`; se não existir, usa legado no cwd (onde o uvicorn foi iniciado).
-POC_DATABASE_FILE = os.environ.get("POC_DATABASE_FILE", "db.sqlite3")
-_poc_backend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_database.sqlite")
-_poc_cwd = os.path.join(os.getcwd(), "poc_database.sqlite")
-if os.path.isfile(_poc_backend):
-    POC_DATABASE_FILE = _poc_backend
-elif os.path.isfile(_poc_cwd):
-    POC_DATABASE_FILE = _poc_cwd
+# `POC_DATABASE_FILE` no ambiente força o caminho (útil em Docker com volume montado).
+if os.environ.get("POC_DATABASE_FILE"):
+    POC_DATABASE_FILE = os.environ["POC_DATABASE_FILE"]
 else:
-    POC_DATABASE_FILE = _poc_backend
+    _poc_backend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_database.sqlite")
+    _poc_cwd = os.path.join(os.getcwd(), "poc_database.sqlite")
+    if os.path.isfile(_poc_backend):
+        POC_DATABASE_FILE = _poc_backend
+    elif os.path.isfile(_poc_cwd):
+        POC_DATABASE_FILE = _poc_cwd
+    else:
+        POC_DATABASE_FILE = _poc_backend
 
 def _require_gemini_key():
     if HAS_VERTEXAI: return
@@ -404,7 +410,24 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
 #     yield
 #     _sa.stop_scheduler()
 
-app = FastAPI(title="Questor Data Explorer API")
+app = FastAPI(
+    title="Questor Explorer / Vulcano 2.0 API",
+    description=(
+        "API FastAPI para Questor, Vulcano, parsers PDF e fluxos de auditoria. "
+        "**Swagger UI:** [`/docs`](/docs) · **ReDoc:** [`/redoc`](/redoc) · **OpenAPI JSON:** [`/openapi.json`](/openapi.json)"
+    ),
+    version="2.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
+
+
+@app.get("/", include_in_schema=False)
+def _root_redirect_to_docs():
+    """Abre o Swagger ao acessar a raiz do servidor (ex.: http://localhost:8000/)."""
+    return RedirectResponse(url="/docs")
+
 
 # ── Janitor SRE Agent imports ───────────────────────────────────────────────
 from core.janitor.profiler import JanitorTimingMiddleware, start_profiler, get_performance_report
@@ -1536,7 +1559,7 @@ class DiagnosticoInput(BaseModel):
     linhas: list[DiagnosticoRow]
     top_n: int = 20
 
-from typing import Union
+from typing import Union, Optional
 
 class MemoriaArrasteInput(BaseModel):
     chave: Union[str, int]
@@ -2571,6 +2594,8 @@ def debug_env():
         "cwd": os.getcwd(),
         "python_exe": sys.executable if "sys" in globals() else "",
         "firebird_host": FIREBIRD_HOST,
+        "firebird_host_questor": FIREBIRD_HOST_QUESTOR,
+        "firebird_host_vulcano": FIREBIRD_HOST_VULCANO,
         "firebird_port": FIREBIRD_PORT,
         "db_path_vulcano": DB_PATH_VULCANO,
         "db_path_vulcano_exists": os.path.isfile(DB_PATH_VULCANO),
@@ -2766,8 +2791,9 @@ def get_conn(db_name="vulcano", empresa_id=None):
         if os.path.exists(possible_path):
             questor_db = possible_path
 
+    fb_host = FIREBIRD_HOST_QUESTOR if db_name == "questor" else FIREBIRD_HOST_VULCANO
     return firebirdsql.connect(
-        host=FIREBIRD_HOST,
+        host=fb_host,
         database=questor_db if db_name == "questor" else DB_PATH_VULCANO,
         port=FIREBIRD_PORT,
         user=FIREBIRD_USER,
@@ -2821,7 +2847,7 @@ class QuestorLoteItem(BaseModel):
 class QuestorLotePayload(BaseModel):
     competencia: str
     empresa: int
-    itens: List[QuestorLoteItem]
+    itens: list[QuestorLoteItem]
     
 # Rotas e Implementações
 
@@ -7799,8 +7825,7 @@ _SMART_IMPORTER_SCHEMAS = {
 import sqlite3 as _sqlite3
 
 def _get_smart_importer_db() -> _sqlite3.Connection:
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_database.sqlite")
-    conn = _sqlite3.connect(db_path)
+    conn = _sqlite3.connect(POC_DATABASE_FILE)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS smart_importer_templates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

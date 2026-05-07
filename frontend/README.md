@@ -8,7 +8,7 @@ npm install
 npm run dev
 ```
 
-O app espera o backend em `http://localhost:8000`.
+O app chama o backend na URL `VITE_API_BASE` (veja `src/apiBase.js`). Em dev, o padrão é `http://127.0.0.1:8000`. Copie `.env.example` para `.env` para alterar.
 
 Currently, two official plugins are available:
 

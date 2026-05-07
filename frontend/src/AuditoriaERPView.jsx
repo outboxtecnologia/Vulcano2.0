@@ -15,13 +15,12 @@ import {
 
 import { createPortal } from 'react-dom';
 import RacionalModalAsync from './RacionalModalAsync';
+import { API_BASE } from './apiBase';
 
 
 
 
 
-
-const API_BASE = "http://127.0.0.1:8000";
 
 const fmt = (v) =>
 

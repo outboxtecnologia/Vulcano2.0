@@ -3,8 +3,7 @@ import {
   RefreshCw, ExternalLink, AlertTriangle,
   CheckCircle2, Clock, FileX, ChevronDown, ChevronUp
 } from 'lucide-react';
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from './apiBase';
 
 const MESES = [
   '', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',

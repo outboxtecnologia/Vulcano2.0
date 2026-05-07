@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, ChevronDown, ChevronUp, DollarSign, Filter, Search, Zap, AlertTriangle, Building } from 'lucide-react';
+import { API_BASE } from './apiBase';
 
 const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
-const API_BASE = "http://127.0.0.1:8000";
 
 const getCategoryForAccount = (nomeConta = '', codigoConta = '') => {
   const n = nomeConta.toLowerCase();

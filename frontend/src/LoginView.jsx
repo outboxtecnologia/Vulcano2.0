@@ -5,6 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { API_BASE } from './apiBase';
 
 export default function LoginView({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -416,7 +417,7 @@ export default function LoginView({ onLogin }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/auth/login", {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ email, password })

@@ -4,7 +4,8 @@ import firebirdsql
 
 # Obtém variáveis de ambiente comuns do Questor
 DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", r"D:\Questor_Restore\Questor.fdb")
-FIREBIRD_HOST = os.environ.get("FIREBIRD_HOST", "127.0.0.1")
+_fb = os.environ.get("FIREBIRD_HOST", "127.0.0.1")
+FIREBIRD_HOST = os.environ.get("FIREBIRD_HOST_QUESTOR", _fb)
 FIREBIRD_PORT = int(os.environ.get("FIREBIRD_PORT", "3050"))
 FIREBIRD_USER = os.environ.get("FIREBIRD_USER", "SYSDBA")
 FIREBIRD_PASSWORD = os.environ.get("FIREBIRD_PASSWORD", "masterkey")

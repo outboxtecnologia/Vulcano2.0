@@ -7,8 +7,7 @@ import {
   ChevronDown,
   Plus,
 } from "lucide-react";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { API_BASE } from "./apiBase";
 
 const formatCurrency = (val) => {
   if (val === null || val === undefined) return "R$ 0,00";

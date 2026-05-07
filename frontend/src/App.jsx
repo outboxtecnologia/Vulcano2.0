@@ -14,6 +14,7 @@ import { SindicatosView } from './SindicatosView';
 import { JanitorView } from './JanitorView';
 import LoginView from './LoginView';
 import EmpresaSelectionView from './components/EmpresaSelectionView';
+import { API_BASE } from './apiBase';
 import './index.css';
 import {
   Building2, Database, TableProperties, Fingerprint, PieChart, Construction,
@@ -22,10 +23,6 @@ import {
   Terminal, ShieldCheck, ShoppingCart, DollarSign, LayoutDashboard, ShieldAlert, Landmark, Cpu, TrendingUp, Trash2
 } from 'lucide-react';
 import { Loader2, ArrowUpRight, ChevronRight, ChevronLeft } from 'lucide-react';
-
-const API_BASE = "http://127.0.0.1:6000";
-
-
 
   const NavItem = ({ icon, label, active, onClick, isSidebarOpen = true }) => {
     return (
@@ -74,11 +71,25 @@ export default function App() {
     // Avisa o usuario se estiver lento após 4s
     const slowTimer = setTimeout(() => setLoadingSlow(true), 4000);
     fetch(`${API_BASE}/api/vulcano/empresas`)
-      .then(r => r.json())
-      .then(d => { setGlobalEmpresas(Array.isArray(d) ? d : (d.data || [])); setEmpresasLoading(false); setLoadingSlow(false); })
-      .catch(e => {
-        setEmpresasError('Erro de conexão (porta 8000). Verifique o backend ou use entrada manual.');
-        setEmpresasLoading(false); setLoadingSlow(false);
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const msg = typeof d.detail === 'string' ? d.detail : (d.detail ? JSON.stringify(d.detail) : r.statusText);
+          throw new Error(msg || `HTTP ${r.status}`);
+        }
+        setGlobalEmpresas(Array.isArray(d) ? d : (d.data || []));
+        setEmpresasLoading(false);
+        setLoadingSlow(false);
+      })
+      .catch((e) => {
+        setEmpresasError(
+          e.message?.includes('Failed to fetch') || e.name === 'TypeError'
+            ? `Erro de conexão com o backend (${API_BASE}). Verifique se a API está no ar ou use entrada manual.`
+            : `Falha ao carregar empresas: ${e.message}`
+        );
+        setGlobalEmpresas([]);
+        setEmpresasLoading(false);
+        setLoadingSlow(false);
       })
       .finally(() => { clearTimeout(slowTimer); });
     return () => { clearTimeout(slowTimer); };

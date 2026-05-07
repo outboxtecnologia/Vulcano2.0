@@ -11,11 +11,10 @@ import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar,
   PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { API_BASE } from './apiBase';
 
 
 
-
-const API_BASE = "http://127.0.0.1:8000";
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';
