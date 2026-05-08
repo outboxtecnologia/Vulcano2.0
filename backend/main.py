@@ -69,6 +69,15 @@ else:
     _DOTENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=_DOTENV_PATH, override=True)
 
+from gemini_auth_env import (
+    resolve_google_application_credentials,
+    vertex_credentials_configured,
+    vertex_project_id,
+    vertex_location,
+)
+
+resolve_google_application_credentials()
+
 _DEFAULT_DB_QUESTOR = r"D:\Questor_Restore\Questor.fdb"
 _DEFAULT_DB_VULCANO = r"C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\Vulcano 2025\VULCANO 2025.fdb"
 DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", _DEFAULT_DB_QUESTOR)
@@ -82,7 +91,9 @@ FIREBIRD_USER = os.environ.get("FIREBIRD_USER", "SYSDBA")
 FIREBIRD_PASSWORD = os.environ.get("FIREBIRD_PASSWORD", "masterkey")
 
 if genai:
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+    _gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if _gemini_key:
+        genai.configure(api_key=_gemini_key)
 
 # Setup Cloud/Vertex para performance corporativa (JSON)
 _VERTEX_INIT_DONE = False
@@ -94,7 +105,7 @@ try:
         def __init__(self, *args, **kwargs):
             global _VERTEX_INIT_DONE
             if not _VERTEX_INIT_DONE:
-                vertexai.init(project="questor-explorer-prod", location="us-central1")
+                vertexai.init(project=vertex_project_id(), location=vertex_location())
                 _VERTEX_INIT_DONE = True
             self.model = OriginalVertexModel(*args, **kwargs)
             
@@ -107,6 +118,9 @@ try:
     HAS_VERTEXAI = True
 except ImportError:
     HAS_VERTEXAI = False
+
+# Vertex só quando o pacote existe e há JSON de credenciais (evita Vertex sem ADC).
+USE_VERTEX_FOR_GEMINI = bool(HAS_VERTEXAI and vertex_credentials_configured())
 
 # Modelo rápido por padrão; use GEMINI_MODEL no .env (ex.: gemini-2.5-flash) se quiser.
 GEMINI_MODEL_ID = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
@@ -132,10 +146,21 @@ else:
     else:
         POC_DATABASE_FILE = _poc_backend
 
+def _gemini_auth_configured() -> bool:
+    if vertex_credentials_configured():
+        return True
+    return bool(os.environ.get("GEMINI_API_KEY", "").strip())
+
+
 def _require_gemini_key():
-    if HAS_VERTEXAI: return
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
+    if not _gemini_auth_configured():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Credenciais Gemini não configuradas: use backend/chave_fernando.json "
+                "(ou GOOGLE_APPLICATION_CREDENTIALS / GEMINI_CREDENTIALS_JSON) ou GEMINI_API_KEY no .env"
+            ),
+        )
 
 def _gemini_parse_json_response(raw: str) -> dict:
     import json
@@ -315,7 +340,7 @@ async def _gemini_generate_json_async(
 
     contents = [prompt]
     if file_data and mime_type:
-        if HAS_VERTEXAI:
+        if USE_VERTEX_FOR_GEMINI:
             contents.append(Part.from_data(mime_type=mime_type, data=file_data))
         else:
             contents.append({"mime_type": mime_type, "data": file_data})
@@ -324,12 +349,12 @@ async def _gemini_generate_json_async(
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+            model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
             gen_cfg = {
                 "response_mime_type": "application/json",
                 "max_output_tokens": 8192,
             }
-            if HAS_VERTEXAI:
+            if USE_VERTEX_FOR_GEMINI:
                 gen_cfg["thinking_config"] = {"thinking_budget": 0}
                 # [OPT-2] Structured Outputs: injeta schema OpenAPI quando disponível
                 if response_schema:
@@ -345,18 +370,18 @@ async def _gemini_generate_json_async(
                     continue
             # Fallback sem schema (às vezes response_schema causa rejeição em modelos mais antigos)
             try:
-                model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+                model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
                 gen_cfg_fb = {
                     "response_mime_type": "application/json",
                     "max_output_tokens": 8192,
                 }
-                if HAS_VERTEXAI:
+                if USE_VERTEX_FOR_GEMINI:
                     gen_cfg_fb["thinking_config"] = {"thinking_budget": 0}
                 model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg_fb)
                 fallback_contents = [prompt + "\n\nResponda somente um objeto JSON válido, sem markdown nem texto fora do JSON."]
                 if mime_type and file_data:
                     fallback_contents.append(
-                        Part.from_data(mime_type=mime_type, data=file_data) if HAS_VERTEXAI
+                        Part.from_data(mime_type=mime_type, data=file_data) if USE_VERTEX_FOR_GEMINI
                         else {"mime_type": mime_type, "data": file_data}
                     )
                 resp = await model.generate_content_async(fallback_contents)
@@ -375,27 +400,27 @@ def _gemini_generate_json(prompt: str, file_data: bytes = None, mime_type: str =
     
     contents = [prompt]
     if file_data and mime_type:
-        if HAS_VERTEXAI:
+        if USE_VERTEX_FOR_GEMINI:
             contents.append(Part.from_data(mime_type=mime_type, data=file_data))
         else:
             contents.append({"mime_type": mime_type, "data": file_data})
 
     try:
-        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
         gen_cfg = {
             "response_mime_type": "application/json",
             "max_output_tokens": 8192,
         }
-        if HAS_VERTEXAI:
+        if USE_VERTEX_FOR_GEMINI:
             gen_cfg["thinking_config"] = {"thinking_budget": 0}
         model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         resp = model.generate_content(contents)
     except Exception:
-        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
         model = model_cls(GEMINI_MODEL_ID)
         fallback_contents = [prompt + "\n\nResponda somente JSON."]
         if file_data and mime_type:
-             if HAS_VERTEXAI:
+             if USE_VERTEX_FOR_GEMINI:
                  fallback_contents.append(Part.from_data(mime_type=mime_type, data=file_data))
              else:
                  fallback_contents.append({"mime_type": mime_type, "data": file_data})
@@ -2576,6 +2601,8 @@ def api_health():
     key = os.environ.get("GEMINI_API_KEY") or ""
     return {
         "ok": True,
+        "gemini_auth_configured": _gemini_auth_configured(),
+        "vertex_credentials_configured": vertex_credentials_configured(),
         "gemini_key_configured": bool(key.strip()),
         "gemini_key_len": len(key.strip()),
     }
@@ -2587,6 +2614,9 @@ def debug_env():
     return {
         "dotenv_path": _DOTENV_PATH,
         "dotenv_exists": os.path.isfile(_DOTENV_PATH),
+        "gemini_auth_configured": _gemini_auth_configured(),
+        "vertex_credentials_configured": vertex_credentials_configured(),
+        "vertex_runtime": USE_VERTEX_FOR_GEMINI,
         "gemini_key_configured": bool(key.strip()),
         "gemini_key_len": len(key.strip()),
         "gemini_model": GEMINI_MODEL_ID,
@@ -2667,9 +2697,8 @@ def api_janitor_cache_invalidate(path: str = None):
 
 @app.post("/api/generate-pdf-parser")
 async def generate_pdf_parser(file: UploadFile = File(...)):
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured in backend")
-        
+    _require_gemini_key()
+
     try:
         # Read the PDF into memory
         pdf_bytes = await file.read()
@@ -2691,11 +2720,11 @@ async def generate_pdf_parser(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Cannot extract text from this PDF (it might be an image/scanned).")
             
         # Prompt Gemini to generate the python script
-        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
         gen_cfg = {
             "max_output_tokens": 8192,
         }
-        if HAS_VERTEXAI:
+        if USE_VERTEX_FOR_GEMINI:
             gen_cfg["thinking_config"] = {"thinking_budget": 0}
         model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         prompt_instructions = f"""Você é um Engenheiro de Software Python Sênior especialista em ETL e processamento de finanças usando Pandas.
@@ -5082,9 +5111,10 @@ def _gemini_generate_python_plain(prompt: str) -> str:
     """Fallback quando JSON com python_code fica grande ou inválido."""
     _require_gemini_key()
     try:
-        model_cls = VertexModel if HAS_VERTEXAI else genai.GenerativeModel
+        model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
         gen_cfg = {"max_output_tokens": 8192}
-        if HAS_VERTEXAI: gen_cfg["thinking_config"] = {"thinking_budget": 0}
+        if USE_VERTEX_FOR_GEMINI:
+            gen_cfg["thinking_config"] = {"thinking_budget": 0}
         model = model_cls(GEMINI_MODEL_ID, generation_config=gen_cfg)
         resp = model.generate_content(
             prompt

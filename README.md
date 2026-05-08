@@ -76,3 +76,9 @@ O SQLite de POC usa volume Docker `poc_sqlite` em `/data/poc_database.sqlite` (v
 
 O frontend lê a URL da API de `VITE_API_BASE` no build (`src/apiBase.js`). Defina `VITE_API_BASE` ao construir a imagem do frontend para o domínio/porta públicos da API.
 
+No backend Docker, o bootstrap de schema roda automaticamente no startup (`bootstrap_schema.py`):
+
+- `BOOTSTRAP_ON_START=1` habilita execução automática
+- `BOOTSTRAP_TARGET=all|sqlite|firebird` escolhe o alvo
+- `BOOTSTRAP_STRICT=0|1` define se falha de bootstrap derruba o container (`1`) ou apenas loga e segue (`0`)
+

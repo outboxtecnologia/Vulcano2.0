@@ -12,9 +12,10 @@
 #
 # Persistência SQLite POC (crie o arquivo vazio se não existir:  touch backend/poc_database.sqlite)
 #
-# Vertex AI: monte o JSON da service account e aponte no .env:
-#   GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
-# (descomente o volume em backend abaixo)
+# Vertex AI: no env_file use só o nome, ex.: GOOGLE_APPLICATION_CREDENTIALS=chave_fernando.json
+# Monte o arquivo do host para /app/ (WORKDIR do backend):
+#   - ./backend/chave_fernando.json:/app/chave_fernando.json:ro
+# Alternativa: GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json + volume em ./secrets/
 
 services:
   backend:
@@ -27,9 +28,13 @@ services:
       - ./backend/.env
     environment:
       POC_DATABASE_FILE: /data/poc_database.sqlite
+      BOOTSTRAP_ON_START: "1"
+      BOOTSTRAP_TARGET: "all"
+      BOOTSTRAP_STRICT: "0"
     volumes:
       - poc_sqlite:/data
-      # Descomente se usar Vertex com arquivo JSON:
+      # Vertex JSON (mesmo nome que no .env, ex. chave_fernando.json):
+      # - ./backend/chave_fernando.json:/app/chave_fernando.json:ro
       # - ./secrets/gcp-sa.json:/run/secrets/gcp-sa.json:ro
     extra_hosts:
       # Acessar serviços no host Linux a partir do container (ex.: Firebird exposto só no host)

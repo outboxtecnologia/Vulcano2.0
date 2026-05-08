@@ -12,6 +12,7 @@ secrets/
 credentials.json
 service-account*.json
 google-credentials.json
+chave_fernando.json
 
 # ─── Dependências ────────────────────────────────────────────────────────────
 node_modules/
