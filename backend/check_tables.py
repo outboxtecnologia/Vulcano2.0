@@ -3,10 +3,24 @@ Verifica e cria a tabela POC_CUSTO_MENSAL_REAL no banco Vulcano se não existir.
 """
 import fdb
 import sys
+import os
+from dotenv import load_dotenv
 
-db = r'C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\Vulcano 2025\VULCANO 2025.fdb'
+# Carrega backend/.env para evitar path fixo em código.
+_dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(dotenv_path=_dotenv_path, override=True)
+
+db = os.environ.get(
+    "DB_PATH_VULCANO",
+    r'C:\Users\dirfe\.gemini\antigravity\scratch\questor_explorer\Vulcano 2025\VULCANO 2025.fdb'
+)
+host = os.environ.get("FIREBIRD_HOST_VULCANO") or os.environ.get("FIREBIRD_HOST", "localhost")
+port = int(os.environ.get("FIREBIRD_PORT", "3050"))
+user = os.environ.get("FIREBIRD_USER", "SYSDBA")
+password = os.environ.get("FIREBIRD_PASSWORD", "masterkey")
+
 try:
-    con = fdb.connect(host='localhost', database=db, user='SYSDBA', password='masterkey', charset='WIN1252')
+    con = fdb.connect(host=host, port=port, database=db, user=user, password=password, charset='WIN1252')
 except Exception as e:
     print(f"ERRO ao conectar: {e}")
     sys.exit(1)
