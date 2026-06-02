@@ -1,0 +1,41 @@
+# Dokploy: use este arquivo em "Compose path" (não o docker-compose.yml padrão).
+# Variáveis: aba Environment do Dokploy (gravadas em .env na raiz).
+# Chave GCP: File Mount em ../files/chave_fernando.json (Advanced → Mounts).
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      POC_DATABASE_FILE: /data/poc_database.sqlite
+      BOOTSTRAP_ON_START: "1"
+      BOOTSTRAP_TARGET: "all"
+      BOOTSTRAP_STRICT: "0"
+      GOOGLE_APPLICATION_CREDENTIALS: chave_fernando.json
+    volumes:
+      - poc_sqlite:/data
+      - ../files/chave_fernando.json:/app/chave_fernando.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  poc_sqlite:
