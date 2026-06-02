@@ -2,8 +2,9 @@
 
 ## Compose
 
-- **Compose path:** `docker-compose.dokploy.yml`
+- **Compose path:** `docker-compose.yml` (na raiz do repo, pasta `code/` após clone)
 - **Tipo:** Docker Compose (não Stack)
+- Use **Deploy** (não **Rebuild**): Rebuild não clona o Git de novo; sem clone o arquivo some e aparece `Compose file not found`.
 
 ## Environment (obrigatório editar no painel)
 
