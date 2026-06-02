@@ -28,7 +28,8 @@ services:
     environment:
       POC_DATABASE_FILE: /data/poc_database.sqlite
       BOOTSTRAP_ON_START: "1"
-      BOOTSTRAP_TARGET: "all"
+      # Dokploy: use sqlite até FIREBIRD_* reais no Environment; depois mude para "all"
+      BOOTSTRAP_TARGET: "sqlite"
       BOOTSTRAP_STRICT: "0"
       GOOGLE_APPLICATION_CREDENTIALS: chave_fernando.json
     volumes:

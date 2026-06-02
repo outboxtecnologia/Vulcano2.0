@@ -40,3 +40,20 @@ Após criar domínios, ajuste `VITE_API_BASE` e faça redeploy com rebuild do fr
 ## Firebird
 
 Liberar TCP **3050** no servidor Firebird para o IP do host Dokploy.
+
+Quando `FIREBIRD_HOST` ainda for placeholder, mantenha no Environment:
+
+```env
+BOOTSTRAP_TARGET=sqlite
+```
+
+Depois de preencher Firebird de verdade, mude para `BOOTSTRAP_TARGET=all` e redeploy.
+
+## Backend unhealthy
+
+Se o log mostrar `backend-1 is unhealthy`:
+
+1. `BOOTSTRAP_TARGET=sqlite` (evita bootstrap travar no Firebird inválido)
+2. Preencha Firebird real ou use só `GEMINI_API_KEY` se não tiver Vertex ainda
+3. File Mount da `chave_fernando.json` se usar Vertex
+4. Logs do container `backend`: aba Logs no Dokploy
