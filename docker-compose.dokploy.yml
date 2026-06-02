@@ -19,7 +19,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: chave_fernando.json
     volumes:
       - poc_sqlite:/data
-      - ../files/chave_fernando.json:/app/chave_fernando.json:ro
+      # Adicione no Dokploy: Advanced → Mounts → ../files/chave_fernando.json → /app/chave_fernando.json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
