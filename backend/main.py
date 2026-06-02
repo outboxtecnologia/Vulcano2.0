@@ -467,24 +467,71 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+
+class PrimeiroAcessoVerificarRequest(BaseModel):
+    email: str
+
+
+class PrimeiroAcessoDefinirSenhaRequest(BaseModel):
+    email: str
+    password: str
+    password_confirm: str
+
+
+def _validar_nova_senha(password: str, password_confirm: str) -> None:
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="A senha deve ter no mínimo 8 caracteres.")
+    if password != password_confirm:
+        raise HTTPException(status_code=400, detail="As senhas não coincidem.")
+
+
 @app.post("/api/auth/login")
 def api_auth_login(payload: LoginRequest):
-    conn = get_conn("vulcano")
+    from core.auth.password import senhav2_preenchida, verify_password
+    from core.auth.usuario import buscar_usuario_por_login, usuario_para_json
+
+    u = buscar_usuario_por_login(get_conn, payload.email)
+    if not u:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
+    if not senhav2_preenchida(u.senhav2):
+        raise HTTPException(
+            status_code=401,
+            detail="Primeiro acesso necessário — defina sua senha pelo botão Primeiro acesso.",
+        )
+    if not verify_password(payload.password, u.senhav2):
+        raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
+    return {"success": True, "user": usuario_para_json(u)}
+
+
+@app.post("/api/auth/primeiro-acesso/verificar")
+def api_primeiro_acesso_verificar(payload: PrimeiroAcessoVerificarRequest):
+    from core.auth.password import senhav2_preenchida
+    from core.auth.usuario import buscar_usuario_por_login
+
+    u = buscar_usuario_por_login(get_conn, payload.email)
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado ou inativo.")
+    if senhav2_preenchida(u.senhav2):
+        raise HTTPException(status_code=409, detail="Senha já cadastrada. Use Entrar.")
+    return {"eligible": True, "nome": u.nome}
+
+
+@app.post("/api/auth/primeiro-acesso/definir-senha")
+def api_primeiro_acesso_definir_senha(payload: PrimeiroAcessoDefinirSenhaRequest):
+    from core.auth.password import hash_password, senhav2_preenchida
+    from core.auth.usuario import atualizar_senhav2, buscar_usuario_por_login
+
+    _validar_nova_senha(payload.password, payload.password_confirm)
+    u = buscar_usuario_por_login(get_conn, payload.email)
+    if not u:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado ou inativo.")
+    if senhav2_preenchida(u.senhav2):
+        raise HTTPException(status_code=409, detail="Senha já cadastrada. Use Entrar.")
     try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT FIRST 1 ID, USUARIOID, NOMECOMPLETO, TIPOPERMISSAO, EMAIL 
-            FROM USUARIO 
-            WHERE (UPPER(EMAIL) = UPPER(?) OR UPPER(USUARIOID) = UPPER(?)) 
-              AND SENHA = ? 
-              AND ATIVO = 'T'
-        """, (payload.email, payload.email, payload.password))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
-        return {"success": True, "user": {"id": row[0], "usuarioId": row[1], "nome": row[2], "tipoPermissao": row[3], "email": row[4]}}
-    finally:
-        conn.close()
+        atualizar_senhav2(get_conn, u.id, hash_password(payload.password))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Não foi possível salvar a senha: {e}")
+    return {"success": True, "message": "Senha definida com sucesso. Você já pode entrar."}
 
 @app.post("/api/explorer/query")
 def api_explorer_query(payload: RawQuery):
