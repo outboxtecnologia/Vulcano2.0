@@ -13,10 +13,10 @@ services:
       - .env
     environment:
       POC_DATABASE_FILE: /data/poc_database.sqlite
-      BOOTSTRAP_ON_START: "1"
-      BOOTSTRAP_TARGET: "sqlite"
-      BOOTSTRAP_STRICT: "0"
-      GOOGLE_APPLICATION_CREDENTIALS: chave_fernando.json
+      BOOTSTRAP_ON_START: ${BOOTSTRAP_ON_START:-1}
+      BOOTSTRAP_TARGET: ${BOOTSTRAP_TARGET:-sqlite}
+      BOOTSTRAP_STRICT: ${BOOTSTRAP_STRICT:-0}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-chave_fernando.json}
     volumes:
       - poc_sqlite:/data
       # Adicione no Dokploy: Advanced → Mounts → ../files/chave_fernando.json → /app/chave_fernando.json
