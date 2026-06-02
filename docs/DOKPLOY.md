@@ -28,14 +28,31 @@ GOOGLE_APPLICATION_CREDENTIALS=chave_fernando.json
 
 Sem este arquivo o deploy do backend falha no bind mount.
 
-## Domínios
+## Domínios e acesso na rede (LAN)
+
+**Servidor Dokploy:** `http://192.168.19.70:3000` (painel — não é o app).
+
+**Não use** domínios `sslip.io` com IP público errado (ex.: `187-94-101-190`) — o DNS aponta para outro host (ex.: Zimbra). Use IP **LAN** `192-168-19-70` no hostname ou portas publicadas.
+
+| Acesso | URL |
+|--------|-----|
+| UI (porta publicada) | `http://192.168.19.70:8080` |
+| API (porta publicada) | `http://192.168.19.70:8000` |
+| UI via Traefik (Host) | `http://192.168.19.70` ou `http://vulcano-explorer-i2rgly-*-192-168-19-70.sslip.io` |
+| API via Traefik | `http://api-vulcano-explorer-i2rgly-*-192-168-19-70.sslip.io` |
+
+Environment obrigatório para build do frontend:
+
+```env
+VITE_API_BASE=http://192.168.19.70:8000
+```
 
 | Serviço    | Porta container |
 |-----------|-----------------|
-| frontend  | 80              |
+| frontend  | 80 (host `8080:80`) |
 | backend   | 8000            |
 
-Após criar domínios, ajuste `VITE_API_BASE` e faça redeploy com rebuild do frontend.
+Após alterar domínios ou `VITE_API_BASE`, faça **Deploy** (rebuild do frontend).
 
 ## Firebird
 
