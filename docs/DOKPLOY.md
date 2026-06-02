@@ -54,6 +54,7 @@ Depois de preencher Firebird de verdade, mude para `BOOTSTRAP_TARGET=all` e rede
 Se o log mostrar `backend-1 is unhealthy`:
 
 1. `BOOTSTRAP_TARGET=sqlite` (evita bootstrap travar no Firebird inválido)
-2. Preencha Firebird real ou use só `GEMINI_API_KEY` se não tiver Vertex ainda
-3. File Mount da `chave_fernando.json` se usar Vertex
-4. Logs do container `backend`: aba Logs no Dokploy
+2. **Obrigatório para subir o Uvicorn:** Vertex **ou** API key — sem os dois o import do LangGraph quebrava com `API key required for Gemini Developer API`. Corrigido: o app sobe sem IA; configure um dos itens abaixo para agentes/Gemini.
+3. **Vertex:** File Mount `../files/chave_fernando.json` → `/app/chave_fernando.json` e `GOOGLE_APPLICATION_CREDENTIALS=chave_fernando.json`
+4. **Ou** `GEMINI_API_KEY=` no Environment (Google AI Studio)
+5. Logs do container `backend`: aba Logs no Dokploy — procure `ValidationError` / `ChatGoogleGenerativeAI`

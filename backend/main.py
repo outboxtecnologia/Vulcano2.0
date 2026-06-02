@@ -2598,6 +2598,8 @@ def api_saldo_contas(
 @app.get("/api/health")
 
 def api_health():
+    from core.agents.llm_provider import gemini_auth_available
+
     key = os.environ.get("GEMINI_API_KEY") or ""
     return {
         "ok": True,
@@ -2605,6 +2607,7 @@ def api_health():
         "vertex_credentials_configured": vertex_credentials_configured(),
         "gemini_key_configured": bool(key.strip()),
         "gemini_key_len": len(key.strip()),
+        "langgraph_llm_ready": gemini_auth_available(),
     }
 
 @app.get("/api/debug/env")
@@ -7391,9 +7394,16 @@ def _serialize_agent_state(res: dict) -> dict:
                 safe[k] = str(v)
     return safe
 
+_IA_NAO_CONFIGURADA = (
+    "IA não configurada: monte chave_fernando.json (Vertex) no Dokploy ou defina GEMINI_API_KEY."
+)
+
+
 @app.post("/api/agentes/iniciar_auditoria")
 async def api_agentes_iniciar(req: AuditStartReq):
     import asyncio
+    if graph_app is None:
+        raise HTTPException(status_code=503, detail=_IA_NAO_CONFIGURADA)
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -7450,6 +7460,8 @@ class AuditResumeReq(BaseModel):
 
 @app.post("/api/agentes/resumir_auditoria")
 def api_agentes_resumir(req: AuditResumeReq):
+    if graph_app is None:
+        raise HTTPException(status_code=503, detail=_IA_NAO_CONFIGURADA)
     config = {"configurable": {"thread_id": req.thread_id}}
     state = graph_app.get_state(config)
     if not state.next:

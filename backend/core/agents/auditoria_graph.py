@@ -54,7 +54,7 @@ tools_list = [
     dossie_amostral_unidades_vulcano,
 ]
 tool_node = ToolNode(tools_list)
-llm_with_tools = llm.bind_tools(tools_list)
+llm_with_tools = llm.bind_tools(tools_list) if llm is not None else None
 
 # ── Prompts Especializados ───────────────────────────────────────────────────
 
@@ -317,7 +317,10 @@ workflow.add_conditional_edges("Revisao", lambda state: "Finalizacao" if state.g
 })
 workflow.add_edge("Finalizacao", END)
 
-graph_app = workflow.compile(
-    checkpointer=memory,
-    interrupt_before=["SupervisorRouter", "Revisao"]
-)
+# Sem Vertex/GEMINI_API_KEY o LLM não instancia — API sobe; rotas de agentes retornam 503.
+graph_app = None
+if llm is not None:
+    graph_app = workflow.compile(
+        checkpointer=memory,
+        interrupt_before=["SupervisorRouter", "Revisao"],
+    )
