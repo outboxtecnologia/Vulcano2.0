@@ -2,6 +2,10 @@ import os
 import sys
 import firebirdsql
 
+# Ponte Questor Firebird->Postgres (mesma usada em main.get_conn).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from db_pg import connect_questor_pg, questor_kind
+
 # Obtém variáveis de ambiente comuns do Questor
 DB_PATH_QUESTOR = os.environ.get("DB_PATH_QUESTOR", r"D:\Questor_Restore\Questor.fdb")
 _fb = os.environ.get("FIREBIRD_HOST", "127.0.0.1")
@@ -12,9 +16,11 @@ FIREBIRD_PASSWORD = os.environ.get("FIREBIRD_PASSWORD", "masterkey")
 
 def get_questor_write_conn():
     """
-    Retorna uma conexão específica para ESCRITA no Questor (Firebird).
-    Garante o isolamento correto para transações com commits seguros.
+    Retorna uma conexão específica para ESCRITA no Questor.
+    Postgres (QUESTOR_DB_KIND=postgres) ou Firebird, conforme o backend ativo.
     """
+    if questor_kind() == "postgres":
+        return connect_questor_pg()
     return firebirdsql.connect(
         host=FIREBIRD_HOST,
         port=FIREBIRD_PORT,
@@ -30,11 +36,19 @@ def get_next_generator_id(conn, generator_name: str) -> int:
     """
     Obtém o próximo ID seguro gerado pelo banco para a entidade solicitada,
     evitando colisões e corrupção de concorrência.
+
+    NOTA (migração PG): no Postgres o Questor usa sequences (`nextval`) OU triggers
+    BEFORE INSERT que já atribuem a chave — nesse caso NÃO chame esta função, deixe o
+    trigger gerar. O nome da sequence no PG pode diferir do generator Firebird; confirmar
+    no banco antes de ativar escrita manual de ID.
     """
     cur = conn.cursor()
     try:
-        # A sintaxe GEN_ID avança a sequence no momento da execução
-        cur.execute(f"SELECT GEN_ID({generator_name}, 1) FROM RDB$DATABASE")
+        if getattr(conn, "kind", "firebird") == "postgres":
+            cur.execute("SELECT nextval(?)", (generator_name,))
+        else:
+            # A sintaxe GEN_ID avança a sequence no momento da execução
+            cur.execute(f"SELECT GEN_ID({generator_name}, 1) FROM RDB$DATABASE")
         row = cur.fetchone()
         if not row or row[0] is None:
             raise Exception(f"Falha ao obter ID do generator {generator_name}")
