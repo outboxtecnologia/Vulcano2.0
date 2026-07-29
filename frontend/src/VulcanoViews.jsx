@@ -1017,7 +1017,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
       await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          id_receber: r_id.toString().replace('prazo_', ''),
+          id_receber: r_id.toString(),
           empresa_id: parseInt(selectedEmpresa, 10),
           valor_pago: parseFloat(baixaForm.valor_pago) || 0,
           data_pagamento: baixaForm.data_pagamento,
