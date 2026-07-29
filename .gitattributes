@@ -1,3 +1,7 @@
+# Normaliza fim de linha: repo guarda LF; evita a arvore inteira aparecer
+# como modificada quando uma ferramenta Windows regrava tudo em CRLF.
+* text=auto
+
 # Scripts para Linux no Docker precisam de LF (CRLF quebra o shebang).
 backend/docker-entrypoint.sh text eol=lf
 *.sh text eol=lf

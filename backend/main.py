@@ -4027,7 +4027,8 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             s_conn = sqlite3.connect(POC_DATABASE_FILE)
             s_curr = s_conn.cursor()
             s_curr.execute("SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos FROM operacoes_baixas WHERE empresa_id = ?", (empresa_id,))
-            locais = {row[0]: row for row in s_curr.fetchall()}
+            # Chaves como str: id_receber pode ser o ID da RECEBER ou "prazo_<id>" (projetada)
+            locais = {str(row[0]): row for row in s_curr.fetchall()}
         except Exception as e:
             pass
         finally:
@@ -4107,8 +4108,8 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             if v_id and d_iso:
                 assinaturas_receber.add((v_id, d_iso, round(val, 2)))
                 
-            if rid in locais:
-                db_l = locais[rid]
+            if str(rid) in locais:
+                db_l = locais[str(rid)]
                 item['total'] = db_l[1]
                 item['data_pagamento'] = db_l[2]
                 item['desconto_local'] = db_l[3]
@@ -4174,7 +4175,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                         except:
                             d_fmt = d_str
                             
-                        result_list.append({
+                        item_proj = {
                             'id': f"prazo_{p[0]}",
                             'data': d_fmt,
                             'vencimento_iso': d_str,
@@ -4192,7 +4193,15 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                             'desconto_local': 0.0,
                             'acrescimo_local': 0.0,
                             'status_sistema': 'ABERTO'
-                        })
+                        }
+                        db_l = locais.get(f"prazo_{p[0]}")
+                        if db_l:
+                            item_proj['total'] = db_l[1]
+                            item_proj['data_pagamento'] = db_l[2]
+                            item_proj['desconto_local'] = db_l[3]
+                            item_proj['acrescimo_local'] = db_l[4]
+                            item_proj['status_sistema'] = 'BAIXADO_NOVO'
+                        result_list.append(item_proj)
             conn_sq.close()
         except Exception as e_sq:
             print("Erro ao integrar parcelas projetadas:", e_sq)
@@ -4207,7 +4216,9 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
         if conn: conn.close()
 
 class BaixaInput(BaseModel):
-    id_receber: int
+    # ID da RECEBER ou "prazo_<id>" para parcela projetada — o prefixo evita
+    # colisao entre prazo_id e um ID legitimo da RECEBER em operacoes_baixas.
+    id_receber: int | str
     valor_pago: float
     data_pagamento: str | None = None
     acrescimos: float = 0.0
@@ -4232,7 +4243,7 @@ def baixa_recebimento(data: BaixaInput):
                valor_pago=excluded.valor_pago, 
                descontos=excluded.descontos, 
                acrescimos=excluded.acrescimos
-        """, (data.id_receber, emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
+        """, (str(data.id_receber), emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
         s_conn.commit()
         return {"success": True, "message": "Baixada no sistema auxiliar SQLite com sucesso"}
     except Exception as e:
@@ -4240,6 +4251,20 @@ def baixa_recebimento(data: BaixaInput):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if s_conn: s_conn.close()
+
+@app.post("/api/vulcano/recebimentos/sync-projetadas")
+def sync_recebimentos_projetadas():
+    """Recarrega parcelas_abertas_projetadas do Firebird (vulcano) no SQLite.
+
+    Rodar apos cada deploy (a tabela e criada vazia pelo bootstrap) ou quando
+    novas vendas/prazos entrarem no legado.
+    """
+    from sync_projetadas import sync_parcelas_projetadas
+    try:
+        total = sync_parcelas_projetadas(get_conn, POC_DATABASE_FILE)
+        return {"success": True, "total_sincronizadas": total}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Falha ao sincronizar parcelas projetadas: {e}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SINCRONIZAR PARCELAS EM ABERTO — VENDAFORMAPAGTOPRAZO → RECEBER
