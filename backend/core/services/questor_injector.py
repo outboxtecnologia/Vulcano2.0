@@ -42,11 +42,20 @@ def inject_batch_to_questor(empresa_id: int, target_ym: str, virtual_entries: li
               AND CODIGOORIGLCTOCTB = 'VU'
         """, [empresa_id, y, m])
         deleted_count = cur_q.rowcount
-        
-        # B. Encontrar o último CHAVELCTOCTB para simular SEQUENCE
-        cur_q.execute("SELECT MAX(CHAVELCTOCTB) FROM LCTOCTB")
-        max_chave = cur_q.fetchone()[0] or 0
-        
+
+        # Postgres: o Questor-PG tem trigger BEFORE INSERT (lctoctbbichavef) que atribui
+        # CHAVELCTOCTB via SEQUENCE POR EMPRESA quando o valor vem NULL. NUNCA informar a
+        # chave manualmente aqui: um MAX(CHAVELCTOCTB) GLOBAL faria o trigger avançar a
+        # sequence da empresa em loop (nextval) até alcançar o valor global -> trava.
+        _pg = getattr(conn_q, "kind", "firebird") == "postgres"
+
+        # B. Encontrar o último CHAVELCTOCTB para simular SEQUENCE (só no Firebird).
+        if _pg:
+            max_chave = 0  # não usado: o trigger gera a chave
+        else:
+            cur_q.execute("SELECT MAX(CHAVELCTOCTB) FROM LCTOCTB")
+            max_chave = cur_q.fetchone()[0] or 0
+
         # C. Encontrar o último CODIGOLCTOPROG para simular SEQUENCE (Lançamento Programado Genérico)
         cur_q.execute("SELECT MAX(CODIGOLCTOPROG) FROM LCTOCTB")
         max_prog = cur_q.fetchone()[0] or 0
@@ -70,9 +79,10 @@ def inject_batch_to_questor(empresa_id: int, target_ym: str, virtual_entries: li
             valor = float(entry.get('mov', 0.0))
             hist = str(entry.get('historico', 'Injeção VU'))[:250]
             
-            # Geração de ID primário simulado
-            current_chave = max_chave + idx + 1
-            
+            # Geração de ID primário: no PG deixa NULL (trigger por-empresa atribui);
+            # no Firebird mantém o MAX+idx+1 histórico.
+            current_chave = None if _pg else (max_chave + idx + 1)
+
             inserts.append((
                 empresa_id,
                 max_prog,

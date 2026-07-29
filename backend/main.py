@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Form, Backg
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
+from db_pg import connect_questor_pg, questor_kind  # ponte Questor Firebird->Postgres
 import pdfplumber
 import platform
 import functools
@@ -559,7 +560,10 @@ def api_tables(db: str = "questor"):
     conn = get_conn(db)
     try:
         cur = conn.cursor()
-        cur.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL ORDER BY RDB$RELATION_NAME")
+        if getattr(conn, "kind", "firebird") == "postgres":
+            cur.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename")
+        else:
+            cur.execute("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$SYSTEM_FLAG=0 AND RDB$VIEW_BLR IS NULL ORDER BY RDB$RELATION_NAME")
         tables = [str(r[0]).strip() for r in cur.fetchall()]
         return {"tables": tables}
     finally:
@@ -2862,6 +2866,13 @@ def get_conn(db_name="vulcano", empresa_id=None):
         import sqlite3
         return sqlite3.connect(POC_DATABASE_FILE)
 
+    # Questor migrou Firebird->Postgres. Quando QUESTOR_DB_KIND=postgres, o banco
+    # `questor` abre via psycopg (queries Firebird traduzidas em runtime, ver db_pg).
+    # O `vulcano` (VULCANO.FDB) segue Firebird sempre. O per-empresa .FDB nao se aplica
+    # ao PG (base unica com todas as empresas, filtradas por CODIGOEMPRESA).
+    if db_name == "questor" and questor_kind() == "postgres":
+        return connect_questor_pg()
+
     questor_db = DB_PATH_QUESTOR
     if db_name == "questor" and empresa_id is not None:
         import os
@@ -2882,9 +2893,19 @@ def get_conn(db_name="vulcano", empresa_id=None):
 
 def _table_has_column(cur, table_name: str, column_name: str) -> bool:
     """
-    Checks if a Firebird table has a given column name.
-    Uses system metadata (RDB$RELATION_FIELDS).
+    Checks if a table has a given column. Usa metadados de sistema:
+    RDB$RELATION_FIELDS no Firebird, information_schema.columns no Postgres.
     """
+    if getattr(cur, "kind", "firebird") == "postgres":
+        cur.execute(
+            """
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema='public'
+              AND lower(table_name)=lower(?) AND lower(column_name)=lower(?)
+            """,
+            (table_name, column_name),
+        )
+        return cur.fetchone() is not None
     cur.execute(
         """
         SELECT 1
@@ -3045,6 +3066,18 @@ def export_razao():
 def get_schema(table_name: str, db: str = "questor"):
     conn = get_conn(db)
     cur = conn.cursor()
+    if getattr(conn, "kind", "firebird") == "postgres":
+        cur.execute(
+            """
+            SELECT column_name, data_type FROM information_schema.columns
+            WHERE table_schema='public' AND lower(table_name)=lower(?)
+            ORDER BY ordinal_position
+            """,
+            (table_name,),
+        )
+        cols = [{"name": str(row[0]).strip(), "type": str(row[1]).upper()} for row in cur.fetchall()]
+        conn.close()
+        return {"columns": cols}
     query = """
     SELECT rf.RDB$FIELD_NAME, f.RDB$FIELD_TYPE
     FROM RDB$RELATION_FIELDS rf
@@ -3053,7 +3086,7 @@ def get_schema(table_name: str, db: str = "questor"):
     ORDER BY rf.RDB$FIELD_POSITION
     """
     cur.execute(query, (table_name.upper(),))
-    
+
     type_map = {7: "SMALLINT", 8: "INTEGER", 10: "REAL", 12: "DATE", 13: "TIME", 14: "CHAR", 16: "BIGINT", 27: "DOUBLE PRECISION", 35: "TIMESTAMP", 37: "VARCHAR", 261: "BLOB"}
     cols = [{"name": row[0].strip(), "type": type_map.get(row[1], "UNKNOWN")} for row in cur.fetchall()]
     conn.close()
