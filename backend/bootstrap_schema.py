@@ -117,24 +117,6 @@ def bootstrap_sqlite() -> None:
         """
     )
 
-    # sync_projetadas.py — cache das parcelas em aberto (VENDAFORMAPAGTOPRAZO)
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS parcelas_abertas_projetadas (
-            prazo_id INTEGER PRIMARY KEY,
-            data_venc TEXT,
-            valor REAL,
-            parcela_ref TEXT,
-            forma_pagto_id INTEGER,
-            venda_id INTEGER,
-            cliente_id INTEGER,
-            cliente_nome TEXT,
-            unidade_descricao TEXT,
-            empreendimento_id INTEGER
-        )
-        """
-    )
-
     # create_sero_importacoes_table.py
     cur.execute(
         """

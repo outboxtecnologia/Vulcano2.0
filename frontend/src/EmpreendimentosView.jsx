@@ -6,10 +6,6 @@ import {
 } from 'lucide-react';
 import { API_BASE } from './apiBase';
 
-// A API devolve {"detail": "..."} nos erros 500 (ex.: Firebird fora do ar).
-// Sem esta guarda o objeto de erro cai direto no estado e quebra o .map() na renderizacao.
-const asArray = (v) => (Array.isArray(v) ? v : []);
-
 export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const [empreendimentos, setEmpreendimentos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -76,12 +72,9 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     try {
       const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
-      setEmpreendimentos(asArray(data));
-      setError(null);
+      setEmpreendimentos(data);
       setLoading(false);
     } catch (err) {
-      setEmpreendimentos([]);
       setError("Falha ao comunicar com node Vulcano");
       setLoading(false);
     }
@@ -95,14 +88,11 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
             fetch(`${API_BASE}/api/questor/centrocusto`).then(r => r.json()),
             fetch(`${API_BASE}/api/questor/historicos`).then(r => r.json())
         ]);
-        setPlanoContas(asArray(pc?.contas));
-        setCentrosCusto(asArray(cc));
-        setHistoricos(asArray(hi));
+        setPlanoContas(pc.contas || []);
+        setCentrosCusto(cc || []);
+        setHistoricos(hi || []);
     } catch (e) {
         console.error("Erro Questor Mapping:", e);
-        setPlanoContas([]);
-        setCentrosCusto([]);
-        setHistoricos([]);
     } finally {
         setLoadingQuestor(false);
     }
@@ -113,11 +103,9 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     try {
         const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/detalhes`);
         const data = await res.json();
-        setBlocos(asArray(data?.blocos));
-        setUnidades(asArray(data?.unidades));
+        setBlocos(data.blocos || []);
+        setUnidades(data.unidades || []);
     } catch (e) {
-        setBlocos([]);
-        setUnidades([]);
         console.error("Erro Estrutura:", e);
     } finally {
         setLoadingEstrutura(false);

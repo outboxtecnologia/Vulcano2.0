@@ -7,24 +7,12 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { API_BASE } from './apiBase';
 
-function apiErrorDetail(data) {
-  const d = data?.detail;
-  if (typeof d === 'string') return d;
-  if (Array.isArray(d) && d[0]?.msg) return d[0].msg;
-  return 'Erro na requisição';
-}
-
 export default function LoginView({ onLogin }) {
-  const [view, setView] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [primeiroNome, setPrimeiroNome] = useState('');
-  const [successMsg, setSuccessMsg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showPass, setShowPass] = useState(false);
-  const [showPassConfirm, setShowPassConfirm] = useState(false);
 
   const sceneRef = useRef(null);
 
@@ -424,19 +412,6 @@ export default function LoginView({ onLogin }) {
     card.style.transform = 'rotateY(0) rotateX(0)';
   };
 
-  const resetCardError = () => {
-    setError(null);
-    setSuccessMsg(null);
-  };
-
-  const goLogin = () => {
-    resetCardError();
-    setPassword('');
-    setPasswordConfirm('');
-    setPrimeiroNome('');
-    setView('login');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -449,67 +424,13 @@ export default function LoginView({ onLogin }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(apiErrorDetail(data));
+        throw new Error(data.detail || "Erro na autenticação");
       }
       if (data.success && onLogin) {
         onLogin(data.user);
       }
-    } catch (err) {
+    } catch(err) {
       setError(err.message);
-      setLoading(false);
-    }
-  };
-
-  const handlePrimeiroVerificar = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/primeiro-acesso/verificar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(apiErrorDetail(data));
-      }
-      setPrimeiroNome(data.nome || '');
-      setPassword('');
-      setPasswordConfirm('');
-      setView('primeiro-acesso-senha');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePrimeiroDefinirSenha = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/primeiro-acesso/definir-senha`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          password_confirm: passwordConfirm,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(apiErrorDetail(data));
-      }
-      setSuccessMsg(data.message || 'Senha definida com sucesso. Você já pode entrar.');
-      setPassword('');
-      setPasswordConfirm('');
-      setView('login');
-    } catch (err) {
-      setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -571,12 +492,6 @@ export default function LoginView({ onLogin }) {
         .login-wrapper .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(201,58,18,0.55), 0 0 48px rgba(255,140,42,0.4); }
         .login-wrapper .btn-primary::before { content:''; position:absolute; top:0; left:-50%; width:50%; height:100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); transform: skewX(-20deg); transition: left 600ms; }
         .login-wrapper .btn-primary:hover::before { left: 150%; }
-        .login-wrapper .btn-primary:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
-        .login-wrapper .btn-secondary { width: 100%; margin-top: 10px; padding: 12px 18px; border: 1px solid rgba(255,160,80,0.28); border-radius: 8px; background: rgba(255,255,255,0.04); color: rgba(240,230,216,0.95); font-family: 'Inter', sans-serif; font-weight: 500; font-size: 13px; letter-spacing: 0.06em; cursor: pointer; transition: all 140ms; }
-        .login-wrapper .btn-secondary:hover { border-color: rgba(255,140,42,0.5); background: rgba(255,140,42,0.08); color: #f0e6d8; }
-        .login-wrapper .btn-link { background: none; border: none; color: rgba(255,176,0,0.95); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; cursor: pointer; padding: 0; margin-top: 14px; }
-        .login-wrapper .btn-link:hover { color: #FFB000; }
-        .login-wrapper .msg-success { color: #3dd68c; font-size: 13px; margin-bottom: 12px; border: 1px solid rgba(61,214,140,0.35); background: rgba(61,214,140,0.08); padding: 8px; border-radius: 4px; }
         .login-wrapper .divider { margin: 22px 0 16px; display: flex; align-items: center; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.22em; color: rgba(240,230,216,0.6); }
         .login-wrapper .divider::before, .login-wrapper .divider::after { content:''; flex:1; height:1px; background: linear-gradient(90deg, transparent, rgba(255,160,80,0.14), transparent); }
         .login-wrapper .sso { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -643,104 +558,38 @@ export default function LoginView({ onLogin }) {
 
           <aside className="card-wrap reveal d3" onMouseMove={handleMouseMoveCard} onMouseLeave={handleMouseLeaveCard}>
             <div className="card" id="loginCard">
-              <div className="card-eyebrow"><span className="dot"></span>{view === 'login' ? 'ACESSO RESTRITO' : 'PRIMEIRO ACESSO'}</div>
-              {view === 'login' && (
-                <>
-                  <h2>Entrar no Vulcano</h2>
-                  <div className="card-sub">Use o e-mail corporativo da sua organização contábil.</div>
-                </>
-              )}
-              {view === 'primeiro-acesso' && (
-                <>
-                  <h2>Primeiro acesso</h2>
-                  <div className="card-sub">Informe seu e-mail ou usuário para cadastrar sua senha.</div>
-                </>
-              )}
-              {view === 'primeiro-acesso-senha' && (
-                <>
-                  <h2>Defina sua senha</h2>
-                  <div className="card-sub">
-                    {primeiroNome ? `Olá, ${primeiroNome}. ` : ''}
-                    Mínimo de 8 caracteres.
-                  </div>
-                </>
-              )}
-              {successMsg && <div className="msg-success">{successMsg}</div>}
+              <div className="card-eyebrow"><span className="dot"></span>ACESSO RESTRITO</div>
+              <h2>Entrar no Vulcano</h2>
+              <div className="card-sub">Use o e-mail corporativo da sua organização contábil.</div>
               {error && <div style={{ color: '#ff4a4a', fontSize: '13px', marginBottom: '12px', border: '1px solid #ff4a4a40', background: '#ff4a4a10', padding: '8px', borderRadius: '4px' }}>{error}</div>}
-
-              {view === 'login' && (
-                <form id="loginForm" autoComplete="on" onSubmit={handleSubmit}>
-                  <div className="field">
-                    <div className="field-label"><span>USUÁRIO / E-MAIL</span></div>
-                    <div className="input-wrap" id="iw-user">
-                      <input type="text" name="email" placeholder="voce@empresa.com.br" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
-                      <span className="input-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 7l9 6 9-6M5 19h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z"></path></svg></span>
-                    </div>
+              <form id="loginForm" autoComplete="on" onSubmit={handleSubmit}>
+                <div className="field">
+                  <div className="field-label"><span>USUÁRIO / E-MAIL</span></div>
+                  <div className="input-wrap" id="iw-user">
+                    <input type="text" name="email" placeholder="voce@empresa.com.br" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+                    <span className="input-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 7l9 6 9-6M5 19h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z"></path></svg></span>
                   </div>
-                  <div className="field">
-                    <div className="field-label"><span>SENHA</span></div>
-                    <div className="input-wrap" id="iw-pass">
-                      <input type={showPass ? "text" : "password"} id="passInput" placeholder="••••••••••••" required value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
-                      <span className="input-icon" id="togglePass" onClick={() => setShowPass(!showPass)} style={{cursor: 'pointer'}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
-                    </div>
+                </div>
+                <div className="field">
+                  <div className="field-label"><span>SENHA</span><a href="#">RECUPERAR ACESSO →</a></div>
+                  <div className="input-wrap" id="iw-pass">
+                    <input type={showPass ? "text" : "password"} id="passInput" placeholder="••••••••••••" required value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+                    <span className="input-icon" id="togglePass" onClick={() => setShowPass(!showPass)} style={{cursor: 'pointer'}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
                   </div>
-                  <div className="options">
-                    <label className="check"><input type="checkbox" defaultChecked /><span className="box"></span>Manter conectado por 30 dias</label>
-                  </div>
-                  <button className="btn-primary" type="submit" disabled={loading}>
-                    <span>{loading ? 'AUTENTICANDO...' : 'ENTRAR'}</span>
-                    {!loading && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={loading}
-                    onClick={() => { resetCardError(); setView('primeiro-acesso'); }}
-                  >
-                    PRIMEIRO ACESSO
-                  </button>
-                </form>
-              )}
-
-              {view === 'primeiro-acesso' && (
-                <form autoComplete="on" onSubmit={handlePrimeiroVerificar}>
-                  <div className="field">
-                    <div className="field-label"><span>USUÁRIO / E-MAIL</span></div>
-                    <div className="input-wrap">
-                      <input type="text" placeholder="voce@empresa.com.br" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
-                      <span className="input-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 7l9 6 9-6M5 19h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z"></path></svg></span>
-                    </div>
-                  </div>
-                  <button className="btn-primary" type="submit" disabled={loading}>
-                    <span>{loading ? 'VERIFICANDO...' : 'CONTINUAR'}</span>
-                  </button>
-                  <button type="button" className="btn-link" onClick={goLogin}>← Voltar ao login</button>
-                </form>
-              )}
-
-              {view === 'primeiro-acesso-senha' && (
-                <form autoComplete="on" onSubmit={handlePrimeiroDefinirSenha}>
-                  <div className="field">
-                    <div className="field-label"><span>NOVA SENHA</span></div>
-                    <div className="input-wrap">
-                      <input type={showPass ? "text" : "password"} placeholder="Mínimo 8 caracteres" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
-                      <span className="input-icon" onClick={() => setShowPass(!showPass)} style={{cursor: 'pointer'}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
-                    </div>
-                  </div>
-                  <div className="field">
-                    <div className="field-label"><span>CONFIRMAR SENHA</span></div>
-                    <div className="input-wrap">
-                      <input type={showPassConfirm ? "text" : "password"} placeholder="Repita a senha" required minLength={8} value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} autoComplete="new-password" />
-                      <span className="input-icon" onClick={() => setShowPassConfirm(!showPassConfirm)} style={{cursor: 'pointer'}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
-                    </div>
-                  </div>
-                  <button className="btn-primary" type="submit" disabled={loading}>
-                    <span>{loading ? 'SALVANDO...' : 'DEFINIR SENHA'}</span>
-                  </button>
-                  <button type="button" className="btn-link" onClick={() => { resetCardError(); setView('primeiro-acesso'); }}>← Voltar</button>
-                </form>
-              )}
-
+                </div>
+                <div className="options">
+                  <label className="check"><input type="checkbox" defaultChecked /><span className="box"></span>Manter conectado por 30 dias</label>
+                </div>
+                <button className="btn-primary" type="submit" disabled={loading}>
+                  <span>{loading ? 'AUTENTICANDO...' : 'ENTRAR'}</span>
+                  {!loading && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>}
+                </button>
+                <div className="divider">OU</div>
+                <div className="sso">
+                  <button type="button"><svg viewBox="0 0 48 48"><path fill="#fbc02d" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.5-5.9 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.5 29.5 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.4-.4-3.5z"></path><path fill="#e53935" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 7 29.5 5 24 5 16.3 5 9.7 9 6.3 14.7z"></path><path fill="#4caf50" d="M24 43.5c5.3 0 10.2-2 14-5.4l-6.5-5.5c-2.1 1.5-4.7 2.4-7.5 2.4-5.4 0-9.6-3.4-11.3-8L6.4 32C9.7 38.5 16.3 43.5 24 43.5z"></path><path fill="#1565c0" d="M43.6 20.5H42V20H24v8h11.3c-.7 2-2.1 3.7-3.8 4.9l6.5 5.5C42.6 35.4 45.5 30.1 45.5 24c0-1.2-.1-2.4-.4-3.5z"></path></svg>SSO Google</button>
+                  <button type="button"><svg viewBox="0 0 24 24" fill="#f0e6d8"><path d="M12 2C6.5 2 2 6.5 2 12c0 4.4 2.9 8.2 6.8 9.5.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 3 .8.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.5-1.3.1-2.7 0 0 .8-.3 2.7 1 .8-.2 1.7-.3 2.5-.3.9 0 1.7.1 2.5.3 1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.8v2.6c0 .3.2.6.7.5 4-1.3 6.8-5 6.8-9.5C22 6.5 17.5 2 12 2z"></path></svg>SAML / SSO</button>
+                </div>
+              </form>
               <div className="card-foot">Sem acesso? Solicite ao seu <a href="#">administrador</a> · <a href="#">Status</a></div>
             </div>
           </aside>

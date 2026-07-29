@@ -468,71 +468,24 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-
-class PrimeiroAcessoVerificarRequest(BaseModel):
-    email: str
-
-
-class PrimeiroAcessoDefinirSenhaRequest(BaseModel):
-    email: str
-    password: str
-    password_confirm: str
-
-
-def _validar_nova_senha(password: str, password_confirm: str) -> None:
-    if len(password) < 8:
-        raise HTTPException(status_code=400, detail="A senha deve ter no mínimo 8 caracteres.")
-    if password != password_confirm:
-        raise HTTPException(status_code=400, detail="As senhas não coincidem.")
-
-
 @app.post("/api/auth/login")
 def api_auth_login(payload: LoginRequest):
-    from core.auth.password import senhav2_preenchida, verify_password
-    from core.auth.usuario import buscar_usuario_por_login, usuario_para_json
-
-    u = buscar_usuario_por_login(get_conn, payload.email)
-    if not u:
-        raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
-    if not senhav2_preenchida(u.senhav2):
-        raise HTTPException(
-            status_code=401,
-            detail="Primeiro acesso necessário — defina sua senha pelo botão Primeiro acesso.",
-        )
-    if not verify_password(payload.password, u.senhav2):
-        raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
-    return {"success": True, "user": usuario_para_json(u)}
-
-
-@app.post("/api/auth/primeiro-acesso/verificar")
-def api_primeiro_acesso_verificar(payload: PrimeiroAcessoVerificarRequest):
-    from core.auth.password import senhav2_preenchida
-    from core.auth.usuario import buscar_usuario_por_login
-
-    u = buscar_usuario_por_login(get_conn, payload.email)
-    if not u:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado ou inativo.")
-    if senhav2_preenchida(u.senhav2):
-        raise HTTPException(status_code=409, detail="Senha já cadastrada. Use Entrar.")
-    return {"eligible": True, "nome": u.nome}
-
-
-@app.post("/api/auth/primeiro-acesso/definir-senha")
-def api_primeiro_acesso_definir_senha(payload: PrimeiroAcessoDefinirSenhaRequest):
-    from core.auth.password import hash_password, senhav2_preenchida
-    from core.auth.usuario import atualizar_senhav2, buscar_usuario_por_login
-
-    _validar_nova_senha(payload.password, payload.password_confirm)
-    u = buscar_usuario_por_login(get_conn, payload.email)
-    if not u:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado ou inativo.")
-    if senhav2_preenchida(u.senhav2):
-        raise HTTPException(status_code=409, detail="Senha já cadastrada. Use Entrar.")
+    conn = get_conn("vulcano")
     try:
-        atualizar_senhav2(get_conn, u.id, hash_password(payload.password))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Não foi possível salvar a senha: {e}")
-    return {"success": True, "message": "Senha definida com sucesso. Você já pode entrar."}
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT FIRST 1 ID, USUARIOID, NOMECOMPLETO, TIPOPERMISSAO, EMAIL 
+            FROM USUARIO 
+            WHERE (UPPER(EMAIL) = UPPER(?) OR UPPER(USUARIOID) = UPPER(?)) 
+              AND SENHA = ? 
+              AND ATIVO = 'T'
+        """, (payload.email, payload.email, payload.password))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
+        return {"success": True, "user": {"id": row[0], "usuarioId": row[1], "nome": row[2], "tipoPermissao": row[3], "email": row[4]}}
+    finally:
+        conn.close()
 
 @app.post("/api/explorer/query")
 def api_explorer_query(payload: RawQuery):
@@ -2649,8 +2602,6 @@ def api_saldo_contas(
 @app.get("/api/health")
 
 def api_health():
-    from core.agents.llm_provider import gemini_auth_available
-
     key = os.environ.get("GEMINI_API_KEY") or ""
     return {
         "ok": True,
@@ -2658,7 +2609,6 @@ def api_health():
         "vertex_credentials_configured": vertex_credentials_configured(),
         "gemini_key_configured": bool(key.strip()),
         "gemini_key_len": len(key.strip()),
-        "langgraph_llm_ready": gemini_auth_available(),
     }
 
 @app.get("/api/debug/env")
@@ -4077,8 +4027,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             s_conn = sqlite3.connect(POC_DATABASE_FILE)
             s_curr = s_conn.cursor()
             s_curr.execute("SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos FROM operacoes_baixas WHERE empresa_id = ?", (empresa_id,))
-            # Chaves como str: id_receber pode ser o ID da RECEBER ou "prazo_<id>" (projetada)
-            locais = {str(row[0]): row for row in s_curr.fetchall()}
+            locais = {row[0]: row for row in s_curr.fetchall()}
         except Exception as e:
             pass
         finally:
@@ -4158,8 +4107,8 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             if v_id and d_iso:
                 assinaturas_receber.add((v_id, d_iso, round(val, 2)))
                 
-            if str(rid) in locais:
-                db_l = locais[str(rid)]
+            if rid in locais:
+                db_l = locais[rid]
                 item['total'] = db_l[1]
                 item['data_pagamento'] = db_l[2]
                 item['desconto_local'] = db_l[3]
@@ -4225,7 +4174,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                         except:
                             d_fmt = d_str
                             
-                        item_proj = {
+                        result_list.append({
                             'id': f"prazo_{p[0]}",
                             'data': d_fmt,
                             'vencimento_iso': d_str,
@@ -4243,15 +4192,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                             'desconto_local': 0.0,
                             'acrescimo_local': 0.0,
                             'status_sistema': 'ABERTO'
-                        }
-                        db_l = locais.get(f"prazo_{p[0]}")
-                        if db_l:
-                            item_proj['total'] = db_l[1]
-                            item_proj['data_pagamento'] = db_l[2]
-                            item_proj['desconto_local'] = db_l[3]
-                            item_proj['acrescimo_local'] = db_l[4]
-                            item_proj['status_sistema'] = 'BAIXADO_NOVO'
-                        result_list.append(item_proj)
+                        })
             conn_sq.close()
         except Exception as e_sq:
             print("Erro ao integrar parcelas projetadas:", e_sq)
@@ -4266,9 +4207,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
         if conn: conn.close()
 
 class BaixaInput(BaseModel):
-    # ID da RECEBER ou "prazo_<id>" para parcela projetada — o prefixo evita
-    # colisao entre prazo_id e um ID legitimo da RECEBER em operacoes_baixas.
-    id_receber: int | str
+    id_receber: int
     valor_pago: float
     data_pagamento: str | None = None
     acrescimos: float = 0.0
@@ -4293,7 +4232,7 @@ def baixa_recebimento(data: BaixaInput):
                valor_pago=excluded.valor_pago, 
                descontos=excluded.descontos, 
                acrescimos=excluded.acrescimos
-        """, (str(data.id_receber), emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
+        """, (data.id_receber, emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
         s_conn.commit()
         return {"success": True, "message": "Baixada no sistema auxiliar SQLite com sucesso"}
     except Exception as e:
@@ -4301,20 +4240,6 @@ def baixa_recebimento(data: BaixaInput):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if s_conn: s_conn.close()
-
-@app.post("/api/vulcano/recebimentos/sync-projetadas")
-def sync_recebimentos_projetadas():
-    """Recarrega parcelas_abertas_projetadas do Firebird (vulcano) no SQLite.
-
-    Rodar apos cada deploy (a tabela e criada vazia pelo bootstrap) ou quando
-    novas vendas/prazos entrarem no legado.
-    """
-    from sync_projetadas import sync_parcelas_projetadas
-    try:
-        total = sync_parcelas_projetadas(get_conn, POC_DATABASE_FILE)
-        return {"success": True, "total_sincronizadas": total}
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Falha ao sincronizar parcelas projetadas: {e}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SINCRONIZAR PARCELAS EM ABERTO — VENDAFORMAPAGTOPRAZO → RECEBER
@@ -7499,16 +7424,9 @@ def _serialize_agent_state(res: dict) -> dict:
                 safe[k] = str(v)
     return safe
 
-_IA_NAO_CONFIGURADA = (
-    "IA não configurada: monte chave_fernando.json (Vertex) no Dokploy ou defina GEMINI_API_KEY."
-)
-
-
 @app.post("/api/agentes/iniciar_auditoria")
 async def api_agentes_iniciar(req: AuditStartReq):
     import asyncio
-    if graph_app is None:
-        raise HTTPException(status_code=503, detail=_IA_NAO_CONFIGURADA)
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -7565,8 +7483,6 @@ class AuditResumeReq(BaseModel):
 
 @app.post("/api/agentes/resumir_auditoria")
 def api_agentes_resumir(req: AuditResumeReq):
-    if graph_app is None:
-        raise HTTPException(status_code=503, detail=_IA_NAO_CONFIGURADA)
     config = {"configurable": {"thread_id": req.thread_id}}
     state = graph_app.get_state(config)
     if not state.next:

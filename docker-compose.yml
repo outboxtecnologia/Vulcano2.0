@@ -24,16 +24,19 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       POC_DATABASE_FILE: /data/poc_database.sqlite
-      BOOTSTRAP_ON_START: ${BOOTSTRAP_ON_START:-1}
-      BOOTSTRAP_TARGET: ${BOOTSTRAP_TARGET:-sqlite}
-      BOOTSTRAP_STRICT: ${BOOTSTRAP_STRICT:-0}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-chave_fernando.json}
+      BOOTSTRAP_ON_START: "1"
+      BOOTSTRAP_TARGET: "all"
+      BOOTSTRAP_STRICT: "0"
+      # Resolvido para /app/chave_fernando.json (WORKDIR); mesmo basename que no backend/.env
+      GOOGLE_APPLICATION_CREDENTIALS: chave_fernando.json
     volumes:
       - poc_sqlite:/data
-      # Dokploy: Mounts → ../files/chave_fernando.json → /app/chave_fernando.json
+      - ./backend/chave_fernando.json:/app/chave_fernando.json:ro
+      # Alternativa: GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
+      # - ./secrets/gcp-sa.json:/run/secrets/gcp-sa.json:ro
     extra_hosts:
       # Acessar serviços no host Linux a partir do container (ex.: Firebird exposto só no host)
       - "host.docker.internal:host-gateway"
@@ -49,19 +52,8 @@ services:
       - "8080:80"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   poc_sqlite:
-
-networks:
-  default:
-    ipam:
-      config:
-        # Subnet fixa de proposito. Quando o pool padrao do Docker (172.17-172.31) se
-        # esgota, ele sorteia a bridge em faixas 192.168.x, que podem colidir com a LAN
-        # onde estao os servidores Firebird/Postgres. Nesse caso o container passa a
-        # trata-los como vizinhos locais e toda conexao falha com "No route to host".
-        # Ajuste este valor se 172.16.240.0/24 ja estiver em uso no seu host.
-        - subnet: 172.16.240.0/24

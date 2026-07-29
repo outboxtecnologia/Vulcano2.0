@@ -76,19 +76,6 @@ O SQLite de POC usa volume Docker `poc_sqlite` em `/data/poc_database.sqlite` (v
 
 O frontend lê a URL da API de `VITE_API_BASE` no build (`src/apiBase.js`). Defina `VITE_API_BASE` ao construir a imagem do frontend para o domínio/porta públicos da API.
 
-## Checklist de deploy (Recebimentos)
-
-Sem estes passos, a tela de Recebimentos sobe sem o formulário de baixa e sem as parcelas projetadas:
-
-1. **Rebuild do frontend** — `frontend/dist` é gitignored; servir um build antigo = tela antiga.
-   No Docker o `docker compose build` já faz o `npm run build`; fora do Docker, rode
-   `npm run build` em `frontend/` após cada atualização.
-2. **Bootstrap do schema** — cria `operacoes_baixas` e `parcelas_abertas_projetadas` no SQLite
-   (automático no startup do container; fora do Docker, rode `python bootstrap_schema.py`).
-3. **Sincronizar parcelas projetadas** — a tabela nasce vazia. Após subir (e sempre que novas
-   vendas/prazos entrarem no legado), dispare:
-   `curl -X POST http://localhost:8000/api/vulcano/recebimentos/sync-projetadas`
-
 No backend Docker, o bootstrap de schema roda automaticamente no startup (`bootstrap_schema.py`):
 
 - `BOOTSTRAP_ON_START=1` habilita execução automática
