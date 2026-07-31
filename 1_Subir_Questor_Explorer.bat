@@ -11,11 +11,11 @@ set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
 set VENV=%BACKEND%\.venv
 
-echo [1/3] Iniciando o Backend API (FastAPI - porta 6000)...
-start "Vulcano2 - Backend" cmd /k "cd /d "%BACKEND%" && "%VENV%\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 6000 --log-level info"
+echo [1/3] Iniciando o Backend API (FastAPI - porta 6060)...
+start "Vulcano2 - Backend" cmd /k "cd /d "%BACKEND%" && "%VENV%\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 6060 --log-level info"
 
 echo [2/3] Iniciando o Frontend Visual (Vite - porta 6001)...
-start "Vulcano2 - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http://127.0.0.1:6000 && npm run dev -- --port 6001"
+start "Vulcano2 - Frontend" cmd /k "cd /d "%FRONTEND%" && set VITE_API_BASE=http://127.0.0.1:6060 && npm run dev -- --port 6001"
 
 echo.
 echo ==============================================================
