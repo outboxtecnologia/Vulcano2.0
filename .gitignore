@@ -77,3 +77,5 @@ desktop.ini
 tmp_*.json
 tmp_*.txt
 temp_*.txt
+firebird25/
+dados/
