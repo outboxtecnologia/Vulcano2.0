@@ -8163,6 +8163,10 @@ if os.path.exists(frontend_dist):
 
     @app.exception_handler(404)
     async def custom_404_handler(request, exc):
+        # 404 de API continua JSON; o fallback pro index.html e so pro roteamento da SPA.
+        if request.url.path.startswith("/api"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=404, content={"detail": getattr(exc, "detail", "Not Found")})
         index_file = os.path.join(frontend_dist, "index.html")
         if os.path.exists(index_file):
             return FileResponse(index_file)
