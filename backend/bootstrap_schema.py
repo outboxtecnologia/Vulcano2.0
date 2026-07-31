@@ -117,6 +117,22 @@ def bootstrap_sqlite() -> None:
         """
     )
 
+    # api_auth_login — usuários locais (login sem o Firebird do vulcano)
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS usuarios_local (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id TEXT UNIQUE NOT NULL,
+            nome TEXT,
+            email TEXT,
+            senha TEXT NOT NULL,
+            tipo_permissao TEXT DEFAULT 'ADMIN',
+            ativo TEXT DEFAULT 'T',
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
     # sync_projetadas.py — cache das parcelas em aberto (VENDAFORMAPAGTOPRAZO)
     cur.execute(
         """
