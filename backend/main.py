@@ -470,7 +470,30 @@ class LoginRequest(BaseModel):
 
 @app.post("/api/auth/login")
 def api_auth_login(payload: LoginRequest):
-    conn = get_conn("vulcano")
+    # 1) usuarios_local (SQLite): permite logar sem o Firebird do vulcano no ar.
+    import sqlite3
+    try:
+        s_conn = sqlite3.connect(POC_DATABASE_FILE)
+        s_cur = s_conn.cursor()
+        s_cur.execute("""
+            SELECT id, usuario_id, nome, tipo_permissao, email
+            FROM usuarios_local
+            WHERE (UPPER(email) = UPPER(?) OR UPPER(usuario_id) = UPPER(?))
+              AND senha = ?
+              AND ativo = 'T'
+        """, (payload.email, payload.email, payload.password))
+        s_row = s_cur.fetchone()
+        s_conn.close()
+        if s_row:
+            return {"success": True, "user": {"id": s_row[0], "usuarioId": s_row[1], "nome": s_row[2], "tipoPermissao": s_row[3], "email": s_row[4]}}
+    except Exception:
+        pass
+
+    # 2) USUARIO do vulcano (Firebird)
+    try:
+        conn = get_conn("vulcano")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas ou usuário inativo")
     try:
         cur = conn.cursor()
         cur.execute("""
