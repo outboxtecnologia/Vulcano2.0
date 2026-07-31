@@ -5,6 +5,7 @@ python-dotenv
 firebirdsql
 psycopg[binary]>=3.1  # Questor migrado para Postgres (db_pg.py); firebirdsql segue p/ o banco vulcano
 passlib>=1.7.4
+bcrypt>=4.0
 pdfplumber
 pandas
 openpyxl
