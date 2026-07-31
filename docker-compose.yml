@@ -54,3 +54,14 @@ services:
 
 volumes:
   poc_sqlite:
+
+networks:
+  default:
+    ipam:
+      config:
+        # Subnet fixa de proposito. Quando o pool padrao do Docker (172.17-172.31) se
+        # esgota, ele sorteia a bridge em faixas 192.168.x, que podem colidir com a LAN
+        # onde estao os servidores Firebird/Postgres. Nesse caso o container passa a
+        # trata-los como vizinhos locais e toda conexao falha com "No route to host".
+        # Ajuste este valor se 172.16.240.0/24 ja estiver em uso no seu host.
+        - subnet: 172.16.240.0/24
