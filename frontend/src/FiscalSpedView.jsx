@@ -48,6 +48,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
     const [ano, setAno] = useState(new Date().getFullYear().toString());
     const [mes, setMes] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
     const [retData, setRetData] = useState(null);
+    const [resumoData, setResumoData] = useState(null);
     const [f200Data, setF200Data] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -77,6 +78,17 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             const res = await fetch(`${API_BASE}/api/sped/f200/preview?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
             if (!res.ok) throw new Error("Apuração F200 falhou.");
             setF200Data(await res.json()); setActiveTab('F200');
+        } catch (err) { setError(err.message); } finally { setLoading(false); }
+    };
+
+    const fetchResumo = async () => {
+        if (!selectedEmpresa || !ano || !mes) return;
+        setLoading(true); setError(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/sped/resumo?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
+            const d = await res.json();
+            if (!res.ok) throw new Error(typeof d.detail === 'string' ? d.detail : "Quadro Resumo falhou.");
+            setResumoData(d); setActiveTab('RESUMO');
         } catch (err) { setError(err.message); } finally { setLoading(false); }
     };
 
@@ -172,6 +184,8 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                         icon={ShieldCheck} label="Apurar RET 4%" accent="#22c55e" />
                     <MagmaBtn onClick={fetchF200} disabled={loading} loading={loading && activeTab === 'F200'}
                         icon={FileText} label="Apurar F200 (Presumido)" accent="#60a5fa" />
+                    <MagmaBtn onClick={fetchResumo} disabled={loading} loading={loading && activeTab === 'RESUMO'}
+                        icon={FileText} label="Quadro Resumo" accent="#f59e0b" />
                 </div>
                 <div className="ml-auto text-right hidden sm:block">
                     <div className="text-[9px] text-[#444] uppercase tracking-widest">Competência</div>
@@ -194,16 +208,78 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                 <Tab active={activeTab === 'F200'} onClick={() => setActiveTab('F200')} accent="#60a5fa">
                     Operações F200 (EFD)
                 </Tab>
+                <Tab active={activeTab === 'RESUMO'} onClick={() => setActiveTab('RESUMO')} accent="#f59e0b">
+                    Quadro Resumo
+                </Tab>
             </div>
 
             {/* ── Conteúdo das tabs ── */}
             <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
 
                 {/* Estado vazio */}
-                {!retData && !f200Data && !loading && (
+                {!retData && !f200Data && !resumoData && !loading && (
                     <div className="flex flex-col items-center justify-center py-24 text-[#2a2a2a]">
                         <ShieldCheck size={52} className="mb-4" />
                         <p className="text-[10px] font-bold uppercase tracking-widest">Selecione uma competência e apure</p>
+                    </div>
+                )}
+
+                {/* ── Quadro Resumo (F200 + 1800 por empreendimento) ── */}
+                {activeTab === 'RESUMO' && resumoData && (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-[11px]">
+                            <thead>
+                                <tr className="bg-[#0e0e0e]">
+                                    <Th>Empreendimento</Th>
+                                    <Th right>Recebimentos</Th>
+                                    <Th right>Valor Parcela</Th>
+                                    <Th right>Valor Variação</Th>
+                                    <Th right>Distrato</Th>
+                                    <Th right accent="#60a5fa">Base Cálculo</Th>
+                                    <Th right accent="#60a5fa">Valor PIS</Th>
+                                    <Th right accent="#60a5fa">Valor COFINS</Th>
+                                    <Th right accent="#22c55e">Base Cálculo RET</Th>
+                                    <Th right accent="#22c55e">Valor RET</Th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(resumoData.data || []).map((r, i) => (
+                                    <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111]">
+                                        <td className="px-4 py-2.5 text-[#bbb] font-bold whitespace-nowrap">{r.empreendimento}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-white">{fmt(r.recebimentos)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#999]">{fmt(r.valor_parcela)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#777]">{fmt(r.variacao)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#777]">{fmt(r.distrato)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#60a5fa]">{fmt(r.bc_f200)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#60a5fa]">{fmt(r.pis)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#60a5fa]">{fmt(r.cofins)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[#22c55e]">{fmt(r.bc_ret)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right font-black text-[#22c55e]">{fmt(r.valor_ret)}</td>
+                                    </tr>
+                                ))}
+                                {(resumoData.data || []).length === 0 && (
+                                    <tr><td colSpan={10} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                        Sem movimento na competência.
+                                    </td></tr>
+                                )}
+                            </tbody>
+                            {(resumoData.data || []).length > 0 && (
+                                <tfoot>
+                                    <tr className="bg-[#0e0e0e] border-t border-[#1e1e1e] font-mono font-bold">
+                                        <td className="px-4 py-3 text-[9px] uppercase tracking-widest text-[#444]">Totais</td>
+                                        <td className="px-4 py-3 text-right text-white">{fmt(resumoData.totais?.recebimentos)}</td>
+                                        <td className="px-4 py-3 text-right text-[#999]">{fmt(resumoData.totais?.valor_parcela)}</td>
+                                        <td className="px-4 py-3 text-right text-[#777]">{fmt(resumoData.totais?.variacao)}</td>
+                                        <td className="px-4 py-3 text-right text-[#777]">{fmt(resumoData.totais?.distrato)}</td>
+                                        <td className="px-4 py-3 text-right text-[#60a5fa]">{fmt(resumoData.totais?.bc_f200)}</td>
+                                        <td className="px-4 py-3 text-right text-[#60a5fa]">{fmt(resumoData.totais?.pis)}</td>
+                                        <td className="px-4 py-3 text-right text-[#60a5fa]">{fmt(resumoData.totais?.cofins)}</td>
+                                        <td className="px-4 py-3 text-right text-[#22c55e]">{fmt(resumoData.totais?.bc_ret)}</td>
+                                        <td className="px-4 py-3 text-right text-[#22c55e]">{fmt(resumoData.totais?.valor_ret)}</td>
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
                     </div>
                 )}
 
@@ -287,9 +363,14 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                     <thead>
                                         <tr className="bg-[#0e0e0e]">
                                             <Th>Unidade · Obra</Th>
+                                            <Th>Cliente</Th>
                                             <Th>Status</Th>
+                                            <Th>Data Venda</Th>
+                                            <Th right>Total Venda</Th>
+                                            <Th right>Rec. Acum.</Th>
+                                            <Th right>Valor Parcela</Th>
+                                            <Th right>Variação</Th>
                                             <Th right>Recebido no Mês</Th>
-                                            <Th right>Acumulado</Th>
                                             <Th right accent="#60a5fa">PIS</Th>
                                             <Th right accent="#60a5fa">COFINS</Th>
                                         </tr>
@@ -297,23 +378,28 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                     <tbody>
                                         {(f200Data.data || []).map((r, i) => (
                                             <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                <td className="px-4 py-3 font-mono text-[#888] max-w-xs truncate">
-                                                    #{r.numcadimob ?? '?'} {r.unidade || r.cliente}
+                                                <td className="px-4 py-3 font-mono text-[#888] max-w-52 truncate whitespace-nowrap">
+                                                    #{r.numcadimob ?? '?'} {(r.unidade || '').replace(/\s+/g, ' ')}
                                                     <span className="text-[#444]"> · {r.obra}</span>
                                                 </td>
+                                                <td className="px-4 py-3 text-[#777] max-w-40 truncate whitespace-nowrap">{r.cliente}</td>
                                                 <td className="px-4 py-3 font-mono text-[10px]">
                                                     <span style={{ color: (r.status === 'PRONTO' || r.status === 'NOVO_CADASTRO') ? '#22c55e' : r.status === 'JA_LANCADO' ? '#888' : '#f97316' }}>
                                                         {r.status === 'JA_LANCADO' ? 'JÁ LANÇADO' : r.status?.replace(/_/g, ' ')}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.vltotrec)}</td>
+                                                <td className="px-4 py-3 font-mono text-[#666] whitespace-nowrap">{r.dtoper ? r.dtoper.split('-').reverse().join('/') : ''}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[#999]">{fmt(r.vltotvend)}</td>
                                                 <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.vlrecacum)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[#999]">{fmt(r.valor_parcela ?? r.vltotrec)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[#777]">{fmt(r.variacao)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.vltotrec)}</td>
                                                 <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.vlpis)} <span className="text-[#444]">({r.aliqpis}%)</span></td>
                                                 <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.vlcofins)} <span className="text-[#444]">({r.aliqcofins}%)</span></td>
                                             </tr>
                                         ))}
                                         {(f200Data.data || []).length === 0 && (
-                                            <tr><td colSpan={6} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                            <tr><td colSpan={11} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
                                                 Sem recebimentos F200 (fora do RET) para a competência.
                                             </td></tr>
                                         )}

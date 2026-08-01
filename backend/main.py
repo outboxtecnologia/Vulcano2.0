@@ -7445,6 +7445,194 @@ def sped_ret_commit(empresa_id: int, ano: int, mes: int):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
 
+@app.get("/api/sped/resumo")
+def sped_resumo(empresa_id: int, ano: int, mes: int):
+    """Quadro Resumo por empreendimento (tela legada 'Consultar F200'):
+    F200 (parcela/variação/base/PIS/COFINS) + RET (base/valor) + distratos do mês."""
+    from injector_sped import processar_ret, processar_f200
+    ret = processar_ret(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
+    if not ret.get("success"):
+        raise HTTPException(status_code=500, detail=f"RET: {ret.get('error')}")
+    f200 = processar_f200(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
+    if not f200.get("success"):
+        raise HTTPException(status_code=500, detail=f"F200: {f200.get('error')}")
+
+    obras = {}
+    def _slot(nome):
+        nome = (nome or "(sem empreendimento)").strip() or "(sem empreendimento)"
+        return obras.setdefault(nome.upper(), {
+            "empreendimento": nome, "recebimentos": 0.0, "valor_parcela": 0.0,
+            "variacao": 0.0, "bc_f200": 0.0, "pis": 0.0, "cofins": 0.0,
+            "bc_ret": 0.0, "valor_ret": 0.0, "aliq_ret": None, "distrato": 0.0,
+        })
+
+    for r in f200.get("data", []):
+        s = _slot(r.get("obra"))
+        s["recebimentos"] += r["vltotrec"]
+        s["valor_parcela"] += r.get("valor_parcela", r["vltotrec"])
+        s["variacao"] += r.get("variacao", 0.0)
+        s["bc_f200"] += r["vlbc"]
+        s["pis"] += r["vlpis"]
+        s["cofins"] += r["vlcofins"]
+    for r in ret.get("data", []):
+        s = _slot(r.get("unidade"))
+        s["recebimentos"] += r["base_calculo"]
+        s["valor_parcela"] += r["receita_principal"]
+        s["variacao"] += r["receita_financeira"]
+        s["bc_ret"] += r["base_calculo"]
+        s["valor_ret"] += r["total_ret"]
+        s["aliq_ret"] = r["aliqret"]
+
+    # Distratos do mês (informativo)
+    import calendar as _cal
+    import datetime as _dt
+    dt_ini = _dt.date(ano, mes, 1)
+    dt_fim = _dt.date(ano, mes, _cal.monthrange(ano, mes)[1])
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT E.NOME, SUM(V.TOTALVENDA)
+            FROM VENDA V
+            LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
+            WHERE V.CODIGOEMPRESA = ? AND V.DISTRATO = 'S'
+              AND V.DATADISTRATO >= ? AND V.DATADISTRATO <= ?
+            GROUP BY E.NOME
+        """, (empresa_id, dt_ini, dt_fim))
+        for nome, valor in cur.fetchall():
+            nome = nome.decode("cp1252", "ignore") if isinstance(nome, bytes) else str(nome or "")
+            _slot(nome)["distrato"] += float(valor or 0)
+    except Exception:
+        pass
+    finally:
+        if conn: conn.close()
+
+    rows = sorted(obras.values(), key=lambda x: x["empreendimento"])
+    for r in rows:
+        for k in ("recebimentos", "valor_parcela", "variacao", "bc_f200", "pis",
+                  "cofins", "bc_ret", "valor_ret", "distrato"):
+            r[k] = round(r[k], 2)
+    tot = {k: round(sum(r[k] for r in rows), 2)
+           for k in ("recebimentos", "valor_parcela", "variacao", "bc_f200", "pis",
+                     "cofins", "bc_ret", "valor_ret", "distrato")}
+    return {"success": True, "data": rows, "totais": tot}
+
+@app.get("/api/vulcano/recebimentos-mensal")
+def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_id: int = None):
+    """Visão mensal legada (tela do analista): parcelas do mês de referência + abertas
+    vencidas até o fim do mês, com saldos da venda e totais de rodapé."""
+    import sqlite3
+    import calendar as _cal
+    import datetime as _dt
+    dt_ini = _dt.date(ano, mes, 1)
+    dt_fim = _dt.date(ano, mes, _cal.monthrange(ano, mes)[1])
+    conn = None
+    try:
+        # baixas novas (SQLite): valor/data/variação/desconto — fundidas na visão
+        baixas = {}
+        try:
+            s_conn = sqlite3.connect(POC_DATABASE_FILE)
+            s_cur = s_conn.cursor()
+            s_cur.execute("""SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos
+                             FROM operacoes_baixas WHERE empresa_id = ?""", (empresa_id,))
+            baixas = {str(r[0]): {"valor_pago": float(r[1] or 0), "data": r[2],
+                                  "desconto": float(r[3] or 0), "variacao": float(r[4] or 0)}
+                      for r in s_cur.fetchall()}
+            s_conn.close()
+        except Exception:
+            pass
+
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        filtro_emp = " AND V.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+        params = [empresa_id, dt_ini, dt_fim, dt_fim]
+        if empreendimento_id:
+            params.append(empreendimento_id)
+        cur.execute(f"""
+            SELECT R.ID, V.ID, C.NOME, C.CNPJ, V.DESCUNIDIMOB, V.TOTALVENDA,
+                   R.DATA, R.VALORPARCELA, R.DESCONTO, R.VALORVARIACAO, R.TOTALPAGO,
+                   R.PARCELA, R.OBS, E.NOME
+            FROM RECEBER R
+            JOIN VENDA V ON R.IDVENDA = V.ID
+            LEFT JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
+            LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
+            WHERE V.CODIGOEMPRESA = ?
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND ((R.DATA >= ? AND R.DATA <= ?)
+                   OR (COALESCE(R.TOTALPAGO, 0) = 0 AND R.DATA <= ?))
+              {filtro_emp}
+            ORDER BY C.NOME, R.DATA, R.ID
+        """, tuple(params))
+        rows = cur.fetchall()
+
+        # acumulados por venda: pago total e pago antes do mês (saldos)
+        def _acum(extra_sql, extra_params):
+            cur.execute(f"""
+                SELECT R.IDVENDA, SUM(R.TOTALPAGO)
+                FROM RECEBER R
+                JOIN VENDA V ON R.IDVENDA = V.ID
+                WHERE V.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0 {extra_sql}
+                GROUP BY R.IDVENDA
+            """, tuple([empresa_id] + extra_params))
+            return {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+        pago_total = _acum("", [])
+        pago_antes = _acum(" AND R.DATA < ?", [dt_ini])
+
+        def _s(v):
+            return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
+
+        # baixas novas ainda não refletidas no FDB reduzem o saldo da venda
+        baixa_extra = {}
+        result = []
+        for r in rows:
+            (rid, vid, cliente, cnpj, unidade, totalvenda, data, vparc,
+             desc, var, pago, parcela, obs, obra) = r
+            if isinstance(data, _dt.datetime):
+                data = data.date()
+            totalvenda = float(totalvenda or 0)
+            pago_f = float(pago or 0)
+            bx = baixas.get(str(rid))
+            if bx and pago_f <= 0:
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+            item = {
+                "id": rid, "venda_id": vid,
+                "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
+                "unidade": _s(unidade), "empreendimento": _s(obra),
+                "vlr_venda": round(totalvenda, 2),
+                "saldo_anterior": round(totalvenda - pago_antes.get(vid, 0.0), 2),
+                "vencimento": data.isoformat() if data else None,
+                "data_pagto": bx["data"] if bx else "",
+                "valor_parcela": round(float(vparc or 0), 2),
+                "desconto": round(float(desc or 0), 2),
+                "variacao": round(float(var or 0), 2),
+                "total_pago": round(pago_f, 2),
+                "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
+                "parcela": _s(parcela), "obs": _s(obs),
+                "status": "PAGO" if pago_f > 0 else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+            }
+            if bx and pago_f <= 0:  # baixada pelo Vulcano 2.0 (SQLite), FDB ainda em aberto
+                item["total_pago"] = round(bx["valor_pago"], 2)
+                item["variacao"] = round(bx["variacao"], 2)
+                item["desconto"] = round(bx["desconto"], 2)
+                item["status"] = "PAGO"
+            result.append(item)
+
+        for x in result:
+            x["saldo_atual"] = round(x["saldo_atual"] - baixa_extra.get(x["venda_id"], 0.0), 2)
+
+        tot = {k: round(sum(x[k] for x in result), 2)
+               for k in ("valor_parcela", "desconto", "variacao", "total_pago")}
+        tot["saldo_atual"] = round(sum({x["venda_id"]: x["saldo_atual"] for x in result}.values()), 2)
+        return {"success": True, "data": result, "totais": tot,
+                "periodo": {"ano": ano, "mes": mes}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
+
 @app.post("/api/sero/config")
 def sero_salvar_config():
     return {"success": True, "message": "Expectativa de INSS da Obra/CNO salva com sucesso."}

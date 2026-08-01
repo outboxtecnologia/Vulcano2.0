@@ -77,7 +77,8 @@ def processar_f200(empresa_id: int, ano: int, mes: int, dry_run: bool = True, ge
         cur_v.execute(f"""
             SELECT V.ID, V.NUMCADIMOB, V.CODIGOESTAB, V.TOTALVENDA, V.DTOPER,
                    V.INDOPER, V.UNIDIMOB, V.DESCUNIDIMOB, V.INDNATEMP, V.CNPJ,
-                   C.NOME, E.NOME, SUM(R.TOTALPAGO)
+                   C.NOME, E.NOME, SUM(R.TOTALPAGO),
+                   SUM(COALESCE(R.VALORVARIACAO, 0)), E.CUSTOORCADO
             FROM RECEBER R
             JOIN VENDA V ON R.IDVENDA = V.ID
             JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
@@ -90,7 +91,7 @@ def processar_f200(empresa_id: int, ano: int, mes: int, dry_run: bool = True, ge
               {_F200_PARCELA_FORA_DO_RET}
             GROUP BY V.ID, V.NUMCADIMOB, V.CODIGOESTAB, V.TOTALVENDA, V.DTOPER,
                      V.INDOPER, V.UNIDIMOB, V.DESCUNIDIMOB, V.INDNATEMP, V.CNPJ,
-                     C.NOME, E.NOME
+                     C.NOME, E.NOME, E.CUSTOORCADO
         """, (empresa_id, ano, mes))
         vendas_mes = cur_v.fetchall()
 
@@ -152,8 +153,10 @@ def processar_f200(empresa_id: int, ano: int, mes: int, dry_run: bool = True, ge
         itens = []
         for v in vendas_mes:
             (vid, numcad, estab, totalvenda, dtoper, indoper, unidimob,
-             descunid, indnatemp, cnpj, cliente, obra, rec_mes) = v
+             descunid, indnatemp, cnpj, cliente, obra, rec_mes,
+             variacao_mes, custo_orcado) = v
             rec_mes = round(float(rec_mes or 0), 2)
+            variacao_mes = round(float(variacao_mes or 0), 2)
             if rec_mes <= 0:
                 continue
             estab = int(estab or 1)
@@ -186,6 +189,8 @@ def processar_f200(empresa_id: int, ano: int, mes: int, dry_run: bool = True, ge
                 "indoper": _dec(indoper) or "04", "unidimob": _dec(unidimob) or "04",
                 "indnatemp": int(indnatemp) if indnatemp is not None else 3,
                 "compreceb": dt_comp.isoformat(),
+                "variacao": variacao_mes, "valor_parcela": round(rec_mes - variacao_mes, 2),
+                "custo_orcado": round(float(custo_orcado or 0), 2),
                 "vltotvend": totalvenda, "vlrecacum": acum, "vltotrec": rec_mes,
                 "percrecreceb": round((acum + rec_mes) / totalvenda * 100, 2) if totalvenda > 0 else 0.0,
                 "vlbc": rec_mes,
