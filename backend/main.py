@@ -7416,7 +7416,7 @@ def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
 @app.get("/api/sped/f200/preview")
 def sped_f200_preview(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_f200
-    res = processar_f200(empresa_id, ano, mes, dry_run=True)
+    res = processar_f200(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
@@ -7424,7 +7424,7 @@ def sped_f200_preview(empresa_id: int, ano: int, mes: int):
 @app.post("/api/sped/f200/commit")
 def sped_f200_commit(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_f200
-    res = processar_f200(empresa_id, ano, mes, dry_run=False)
+    res = processar_f200(empresa_id, ano, mes, dry_run=False, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
@@ -7432,7 +7432,7 @@ def sped_f200_commit(empresa_id: int, ano: int, mes: int):
 @app.get("/api/sped/ret/preview")
 def sped_ret_preview(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_ret
-    res = processar_ret(empresa_id, ano, mes, dry_run=True)
+    res = processar_ret(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
@@ -7440,7 +7440,7 @@ def sped_ret_preview(empresa_id: int, ano: int, mes: int):
 @app.post("/api/sped/ret/commit")
 def sped_ret_commit(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_ret
-    res = processar_ret(empresa_id, ano, mes, dry_run=False)
+    res = processar_ret(empresa_id, ano, mes, dry_run=False, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res

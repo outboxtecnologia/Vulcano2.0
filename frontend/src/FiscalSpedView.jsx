@@ -65,7 +65,8 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
         try {
             const res = await fetch(`${API_BASE}/api/sped/ret/preview?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
             if (!res.ok) throw new Error("Apuração RET falhou.");
-            setRetData(await res.json()); setActiveTab('RET');
+            const d = await res.json();
+            setRetData(Array.isArray(d) ? d : (d.data || [])); setActiveTab('RET');
         } catch (err) { setError(err.message); } finally { setLoading(false); }
     };
 
@@ -86,8 +87,9 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
         try {
             const res = await fetch(`${API_BASE}/api/sped/ret/commit?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`, { method: 'POST' });
             const data = await res.json();
-            if (!data.success) throw new Error(data.error || "Erro ao injetar RET.");
+            if (!data.success) throw new Error(data.error || data.detail || "Erro ao injetar RET.");
             alert("Sucesso: " + data.message);
+            fetchRetPreview(); // recarrega para refletir os JÁ LANÇADO
         } catch (err) { alert(err.message); } finally { setRetCommitting(false); }
     };
 
@@ -212,19 +214,27 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             <table className="w-full text-[11px]">
                                 <thead>
                                     <tr className="bg-[#0e0e0e]">
-                                        <Th>Unidade</Th>
+                                        <Th>Obra (RET)</Th>
+                                        <Th>Estab</Th>
+                                        <Th>Status</Th>
                                         <Th right>Base de Cálculo</Th>
-                                        <Th right accent="#22c55e">PIS (0,37%)</Th>
-                                        <Th right accent="#22c55e">COFINS (1,71%)</Th>
-                                        <Th right accent="#22c55e">CSLL (0,66%)</Th>
-                                        <Th right accent="#22c55e">IRPJ (1,26%)</Th>
-                                        <Th right accent="#f97316">RET Total (4%)</Th>
+                                        <Th right accent="#22c55e">PIS</Th>
+                                        <Th right accent="#22c55e">COFINS</Th>
+                                        <Th right accent="#22c55e">CSLL</Th>
+                                        <Th right accent="#22c55e">IRPJ</Th>
+                                        <Th right accent="#f97316">Guia RET</Th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {retData.map((r, i) => (
                                         <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                            <td className="px-4 py-3 font-mono font-bold text-[#888]">{r.unidade || 'N/A'}</td>
+                                            <td className="px-4 py-3 font-mono font-bold text-[#888]">{r.unidade || 'N/A'}<span className="text-[#444]"> · {r.aliqret}%</span></td>
+                                            <td className="px-4 py-3 font-mono text-[#666]">{r.codigoestab ?? '—'}</td>
+                                            <td className="px-4 py-3 font-mono text-[10px]">
+                                                <span style={{ color: r.status === 'PRONTO' ? '#22c55e' : r.status === 'JA_LANCADO' ? '#888' : '#f97316' }}>
+                                                    {r.status === 'SEM_DE_PARA' ? 'SEM DE-PARA' : r.status === 'JA_LANCADO' ? 'JÁ LANÇADO' : r.status}
+                                                </span>
+                                            </td>
                                             <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.base_calculo)}</td>
                                             <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.pis)}</td>
                                             <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.cofins)}</td>
@@ -234,15 +244,15 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                         </tr>
                                     ))}
                                     {retData.length === 0 && (
-                                        <tr><td colSpan={7} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
-                                            Sem base de cálculo para o período.
+                                        <tr><td colSpan={9} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                            Sem recebimento de obra optante pelo RET nesta competência — confira mês/ano (há baixas até fev/2026 na base local).
                                         </td></tr>
                                     )}
                                 </tbody>
                                 {retData.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-[#0e0e0e] border-t border-[#1e1e1e]">
-                                            <td colSpan={6} className="px-4 py-3 text-[9px] uppercase tracking-widest text-[#444] font-bold">Total RET a Recolher</td>
+                                            <td colSpan={8} className="px-4 py-3 text-[9px] uppercase tracking-widest text-[#444] font-bold">Total RET a Recolher</td>
                                             <td className="px-4 py-3 text-right font-black text-[#f97316]">
                                                 {fmt(retData.reduce((s, r) => s + (r.total_ret || 0), 0))}
                                             </td>
@@ -276,37 +286,46 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                 <table className="w-full text-[11px]">
                                     <thead>
                                         <tr className="bg-[#0e0e0e]">
-                                            <Th>Unidade / Operação</Th>
-                                            <Th>Tabela Destino</Th>
-                                            <Th right>Base Rec. Caixa</Th>
-                                            <Th right accent="#60a5fa">PIS Estimado</Th>
-                                            <Th right accent="#60a5fa">COFINS Estimado</Th>
+                                            <Th>Unidade · Obra</Th>
+                                            <Th>Status</Th>
+                                            <Th right>Recebido no Mês</Th>
+                                            <Th right>Acumulado</Th>
+                                            <Th right accent="#60a5fa">PIS</Th>
+                                            <Th right accent="#60a5fa">COFINS</Th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {(f200Data.data || []).filter(r => r.tabela === 'EFDUNIDIMOBVENDIDA').map((r, i) => (
+                                        {(f200Data.data || []).map((r, i) => (
                                             <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                <td className="px-4 py-3 font-mono text-[#888] max-w-xs truncate">{r.chaves}</td>
-                                                <td className="px-4 py-3 font-mono text-[#555] text-[10px]">{r.tabela}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.valores?.VLBC || 0)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.valores?.VLPIS || 0)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.valores?.VLCOFINS || 0)}</td>
+                                                <td className="px-4 py-3 font-mono text-[#888] max-w-xs truncate">
+                                                    #{r.numcadimob ?? '?'} {r.unidade || r.cliente}
+                                                    <span className="text-[#444]"> · {r.obra}</span>
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-[10px]">
+                                                    <span style={{ color: (r.status === 'PRONTO' || r.status === 'NOVO_CADASTRO') ? '#22c55e' : r.status === 'JA_LANCADO' ? '#888' : '#f97316' }}>
+                                                        {r.status === 'JA_LANCADO' ? 'JÁ LANÇADO' : r.status?.replace(/_/g, ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.vltotrec)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.vlrecacum)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.vlpis)} <span className="text-[#444]">({r.aliqpis}%)</span></td>
+                                                <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.vlcofins)} <span className="text-[#444]">({r.aliqcofins}%)</span></td>
                                             </tr>
                                         ))}
                                         {(f200Data.data || []).length === 0 && (
-                                            <tr><td colSpan={5} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
-                                                Sem alienações F200 para a competência.
+                                            <tr><td colSpan={6} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                                Sem recebimentos F200 (fora do RET) para a competência.
                                             </td></tr>
                                         )}
                                     </tbody>
                                 </table>
                             ) : (
                                 <div className="p-4 flex flex-col gap-3">
-                                    {(f200Data.data || []).filter(r => r.tabela === 'EFDUNIDIMOBVENDIDA').map((r, i) => (
+                                    {(f200Data.data || []).map((r, i) => (
                                         <div key={i} className="border-l-2 border-[#60a5fa] pl-4 bg-[#0e0e0e] rounded-r-lg p-3">
-                                            <p className="text-[9px] uppercase tracking-widest text-[#444] font-bold mb-2">{r.tabela} · {r.chaves}</p>
+                                            <p className="text-[9px] uppercase tracking-widest text-[#444] font-bold mb-2">EFDUNIDIMOBVENDIDA · #{r.numcadimob} · {r.status}</p>
                                             <pre className="text-[10px] text-[#60a5fa] font-mono bg-black p-3 rounded-lg border border-[#1a1a1a] overflow-auto">
-                                                {JSON.stringify(r.valores, null, 2)}
+                                                {JSON.stringify(r, null, 2)}
                                             </pre>
                                         </div>
                                     ))}
