@@ -7529,13 +7529,16 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
     dt_fim = _dt.date(ano, mes, _cal.monthrange(ano, mes)[1])
     conn = None
     try:
-        # baixas novas (SQLite) p/ data de pagamento
+        # baixas novas (SQLite): valor/data/variação/desconto — fundidas na visão
         baixas = {}
         try:
             s_conn = sqlite3.connect(POC_DATABASE_FILE)
             s_cur = s_conn.cursor()
-            s_cur.execute("SELECT id_receber, data_pagamento FROM operacoes_baixas WHERE empresa_id = ?", (empresa_id,))
-            baixas = {str(r[0]): r[1] for r in s_cur.fetchall()}
+            s_cur.execute("""SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos
+                             FROM operacoes_baixas WHERE empresa_id = ?""", (empresa_id,))
+            baixas = {str(r[0]): {"valor_pago": float(r[1] or 0), "data": r[2],
+                                  "desconto": float(r[3] or 0), "variacao": float(r[4] or 0)}
+                      for r in s_cur.fetchall()}
             s_conn.close()
         except Exception:
             pass
@@ -7580,6 +7583,8 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         def _s(v):
             return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
 
+        # baixas novas ainda não refletidas no FDB reduzem o saldo da venda
+        baixa_extra = {}
         result = []
         for r in rows:
             (rid, vid, cliente, cnpj, unidade, totalvenda, data, vparc,
@@ -7588,14 +7593,17 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 data = data.date()
             totalvenda = float(totalvenda or 0)
             pago_f = float(pago or 0)
-            result.append({
+            bx = baixas.get(str(rid))
+            if bx and pago_f <= 0:
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+            item = {
                 "id": rid, "venda_id": vid,
                 "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
                 "unidade": _s(unidade), "empreendimento": _s(obra),
                 "vlr_venda": round(totalvenda, 2),
                 "saldo_anterior": round(totalvenda - pago_antes.get(vid, 0.0), 2),
                 "vencimento": data.isoformat() if data else None,
-                "data_pagto": baixas.get(str(rid), ""),
+                "data_pagto": bx["data"] if bx else "",
                 "valor_parcela": round(float(vparc or 0), 2),
                 "desconto": round(float(desc or 0), 2),
                 "variacao": round(float(var or 0), 2),
@@ -7603,7 +7611,16 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
                 "parcela": _s(parcela), "obs": _s(obs),
                 "status": "PAGO" if pago_f > 0 else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
-            })
+            }
+            if bx and pago_f <= 0:  # baixada pelo Vulcano 2.0 (SQLite), FDB ainda em aberto
+                item["total_pago"] = round(bx["valor_pago"], 2)
+                item["variacao"] = round(bx["variacao"], 2)
+                item["desconto"] = round(bx["desconto"], 2)
+                item["status"] = "PAGO"
+            result.append(item)
+
+        for x in result:
+            x["saldo_atual"] = round(x["saldo_atual"] - baixa_extra.get(x["venda_id"], 0.0), 2)
 
         tot = {k: round(sum(x[k] for x in result), 2)
                for k in ("valor_parcela", "desconto", "variacao", "total_pago")}

@@ -132,7 +132,11 @@ Reproduzem as telas de trabalho do sistema anterior ("Arquivo Contabilidade"):
    CPF/CNPJ, Comprador, Unidade, Vlr Venda, Saldo Ant. (antes do mês), Data Pagto
    (das baixas novas — o legado não guarda a data no FDB), Valor Parcela, Desconto,
    Variação, Total Pago, Saldo Atual, Parcela, Observação; totais no rodapé
-   (saldo atual somado por venda, sem duplicar).
+   (saldo atual somado por venda, sem duplicar). **Baixa inline**: clicar numa
+   parcela em aberto abre Data/Valor/Variação/Desconto na própria linha (Enter
+   salva, Esc cancela) → grava via `POST /api/vulcano/recebimentos/baixa`
+   (`operacoes_baixas` no SQLite; total = valor + variação − desconto) e a visão
+   funde as baixas novas (status PAGO, saldo da venda reduzido).
 2. **Quadro Resumo** (aba na tela Fiscal/SPED, `GET /api/sped/resumo`): por
    empreendimento — Recebimentos, Valor Parcela, Variação, Distrato (vendas
    distratadas no mês via `DATADISTRATO`), Base/PIS/COFINS do F200 e Base/Valor do
