@@ -3,6 +3,7 @@ import SmartImporter from './SmartImporter';
 import { DashboardMeta, VendasView, RecebimentosView, ConciliadorView } from './VulcanoViews';
 import { EmpreendimentosView } from './EmpreendimentosView';
 import { FiscalSpedView } from './FiscalSpedView';
+import { RecebimentosMensalView } from './RecebimentosMensalView';
 import { TributosGlobaisView } from './TributosGlobaisView';
 import { EvolucaoPOCView } from './EvolucaoPOCView';
 import { SeroView } from './SeroView';
@@ -156,6 +157,7 @@ return (
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<Building2 size={16}/>} label="Empreendimentos" active={currentView === 'empreendimentos'} onClick={() => setCurrentView('empreendimentos')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<ShoppingCart size={16}/>} label="Vendas" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<DollarSign size={16}/>} label="Recebimentos" active={currentView === 'recebimentos'} onClick={() => setCurrentView('recebimentos')} />
+                    <NavItem isSidebarOpen={isSidebarOpen} icon={<DollarSign size={16}/>} label="Receb. Mensal" active={currentView === 'recebimentos-mensal'} onClick={() => setCurrentView('recebimentos-mensal')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<FileSpreadsheet size={16}/>} label="Smart Importer" active={currentView === 'importer'} onClick={() => setCurrentView('importer')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<UploadCloud size={16}/>} label="Conversor Universal" active={currentView === 'conciliador'} onClick={() => setCurrentView('conciliador')} />
                 </div>
@@ -258,6 +260,7 @@ return (
                       {currentView === 'empreendimentos' && <EmpreendimentosView selectedEmpresa={selectedEmpresa} onNavigate={(view) => setCurrentView(view)} />}
                       {currentView === 'vendas' && <VendasView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'recebimentos' && <RecebimentosView selectedEmpresa={selectedEmpresa} />}
+                      {currentView === 'recebimentos-mensal' && <RecebimentosMensalView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'receitas' && <DashboardMeta selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'conciliador' && <ConciliadorView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'importer' && <SmartImporter dbPath="poc_database.sqlite" selectedEmpresa={selectedEmpresa} />}

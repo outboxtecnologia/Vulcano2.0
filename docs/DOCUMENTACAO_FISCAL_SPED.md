@@ -121,6 +121,30 @@ idempotência) · `SEM_ESPELHO` (VENDA sem NUMCADIMOB — corrigir no vulcano) �
 
 ---
 
+# Telas do analista (layouts herdados do sistema legado)
+
+Reproduzem as telas de trabalho do sistema anterior ("Arquivo Contabilidade"):
+
+1. **Recebimentos — Mensal** (menu `Receb. Mensal`, `RecebimentosMensalView.jsx` +
+   `GET /api/vulcano/recebimentos-mensal?empresa_id&ano&mes[&empreendimento_id]`):
+   seleção por **mês de referência** (navegação ◀ ▶) e empreendimento; lista as
+   parcelas do mês **mais** as abertas vencidas, com as colunas legadas: Nº (venda),
+   CPF/CNPJ, Comprador, Unidade, Vlr Venda, Saldo Ant. (antes do mês), Data Pagto
+   (das baixas novas — o legado não guarda a data no FDB), Valor Parcela, Desconto,
+   Variação, Total Pago, Saldo Atual, Parcela, Observação; totais no rodapé
+   (saldo atual somado por venda, sem duplicar).
+2. **Quadro Resumo** (aba na tela Fiscal/SPED, `GET /api/sped/resumo`): por
+   empreendimento — Recebimentos, Valor Parcela, Variação, Distrato (vendas
+   distratadas no mês via `DATADISTRATO`), Base/PIS/COFINS do F200 e Base/Valor do
+   RET, com linha de totais. Une os previews dos dois motores; cada obra aparece em
+   UM dos lados (regra de ouro RET×F200).
+3. **Analítico F200/1800** (abas RET e F200 da mesma tela): os registros exatos que
+   serão populados no Questor — F200 por unidade (cliente, data/total da venda,
+   acumulado, parcela, variação, PIS/COFINS) e 1800 por obra (estab, alíquota, base,
+   valor da guia) — com status de injeção por linha.
+
+---
+
 # Limitações conhecidas / pendências (RET e F200)
 
 1. **Competência pelo vencimento da parcela** (`RECEBER.DATA`), não pela data do
