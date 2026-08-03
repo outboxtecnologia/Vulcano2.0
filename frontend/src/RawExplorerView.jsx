@@ -100,9 +100,9 @@ export const RawExplorerView = () => {
             <div className="flex flex-1 gap-6 min-h-0 overflow-hidden">
                 {/* SIDEBAR DAS TABELAS */}
                 <div className="w-72 bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] flex flex-col shrink-0 overflow-hidden shadow-2xl">
-                    <div className="flex gap-2 p-4 pb-2 bg-[#0b0b0b]">
-                        <button onClick={() => setDbSelected('questor')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[var(--v-radius)] transition-all ${dbSelected === 'questor' ? 'bg-[var(--v-accent)]/20 text-[var(--v-accent)] border border-[#ff4d00]/50' : 'bg-[var(--v-hover)] text-[var(--v-text-muted)] border border-transparent'}`}>Questor</button>
-                        <button onClick={() => setDbSelected('vulcano')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[var(--v-radius)] transition-all ${dbSelected === 'vulcano' ? 'bg-[var(--v-accent-2)]/20 text-[var(--v-accent-2)] border border-[var(--v-accent-2)]/50' : 'bg-[var(--v-hover)] text-[var(--v-text-muted)] border border-transparent'}`}>Vulcano</button>
+                    <div className="flex gap-2 p-4 pb-2 bg-[var(--v-deep)]">
+                        <button onClick={() => setDbSelected('questor')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[var(--v-radius)] transition-all ${dbSelected === 'questor' ? 'bg-[rgb(var(--v-accent-rgb)_/_0.2)] text-[var(--v-accent)] border border-[var(--v-accent)]/50' : 'bg-[var(--v-hover)] text-[var(--v-text-muted)] border border-transparent'}`}>Questor</button>
+                        <button onClick={() => setDbSelected('vulcano')} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[var(--v-radius)] transition-all ${dbSelected === 'vulcano' ? 'bg-[rgb(var(--v-accent-2-rgb)_/_0.2)] text-[var(--v-accent-2)] border border-[rgb(var(--v-accent-2-rgb)_/_0.5)]' : 'bg-[var(--v-hover)] text-[var(--v-text-muted)] border border-transparent'}`}>Vulcano</button>
                     </div>
                     <div className="px-4 py-2 border-b border-[var(--v-border)]">
                         <div className="relative">
@@ -119,7 +119,7 @@ export const RawExplorerView = () => {
                             <div 
                                 key={t} 
                                 onClick={() => handleTableClick(t)} 
-                                className="px-3 py-2 text-[11px] font-black tracking-wider text-[var(--v-text-muted)] font-mono cursor-pointer hover:bg-[#1f1f22] hover:text-[var(--v-accent-2)] border-l-2 border-transparent hover:border-[var(--v-accent-2)] mb-1 truncate transition-colors"
+                                className="px-3 py-2 text-[11px] font-black tracking-wider text-[var(--v-text-muted)] font-mono cursor-pointer hover:bg-[var(--v-hover)] hover:text-[var(--v-accent-2)] border-l-2 border-transparent hover:border-[var(--v-accent-2)] mb-1 truncate transition-colors"
                             >
                                 {t}
                             </div>
@@ -139,7 +139,7 @@ export const RawExplorerView = () => {
                                 spellCheck={false}
                             />
                             <div className="absolute top-2 right-2 flex gap-2">
-                                <span className="text-[9px] uppercase tracking-widest font-black text-[var(--v-accent-2)] bg-[var(--v-accent-2)]/10 px-2 py-1 rounded-[var(--v-radius)] border border-[var(--v-accent-2)]/30 shadow-lg backdrop-blur-md">FREE TEXT SQL (VULCANO)</span>
+                                <span className="text-[9px] uppercase tracking-widest font-black text-[var(--v-accent-2)] bg-[rgb(var(--v-accent-2-rgb)_/_0.1)] px-2 py-1 rounded-[var(--v-radius)] border border-[rgb(var(--v-accent-2-rgb)_/_0.3)] shadow-lg backdrop-blur-md">FREE TEXT SQL (VULCANO)</span>
                             </div>
                         </div>
                         
@@ -147,7 +147,7 @@ export const RawExplorerView = () => {
                              <button 
                                  onClick={runRawSql}
                                  disabled={loading}
-                                 className="h-16 w-full bg-[var(--v-accent-2)] hover:bg-white text-black font-black uppercase tracking-widest text-[11px] rounded-[var(--v-radius)] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_var(--v-accent-2)]"
+                                 className="h-16 w-full bg-[var(--v-accent-2)] hover:bg-[var(--v-hover)] text-[var(--v-text-inv)] font-black uppercase tracking-widest text-[11px] rounded-[var(--v-radius)] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_var(--v-accent-2)]"
                              >
                                  {loading ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />} Executar SQL
                              </button>
@@ -156,24 +156,24 @@ export const RawExplorerView = () => {
                     </div>
 
                     {error && (
-                        <div className="bg-[var(--v-error)]/10 border border-[var(--v-error)] p-4 rounded-[var(--v-radius)] text-[var(--v-error)] font-mono text-[10px] flex gap-3 shadow-2xl shrink-0">
+                        <div className="bg-[rgb(var(--v-error-rgb)_/_0.1)] border border-[var(--v-error)] p-4 rounded-[var(--v-radius)] text-[var(--v-error)] font-mono text-[10px] flex gap-3 shadow-2xl shrink-0">
                             <AlertCircle size={16} /> <span>{error}</span>
                         </div>
                     )}
 
-                    <div className="flex-1 min-h-[300px] magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden flex flex-col shadow-2xl bg-[#0b0b0b]">
+                    <div className="flex-1 min-h-[300px] magma-card border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden flex flex-col shadow-2xl bg-[var(--v-deep)]">
                         <div className="p-3 bg-[var(--v-surface-container)] border-b border-[var(--v-border)] flex justify-between items-center shrink-0">
                             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-text-muted)]">DataGrid Output</h3>
-                            <span className="text-[10px] font-bold text-[var(--v-text-muted)] bg-black/40 px-3 py-1 rounded-[var(--v-radius)] border border-[var(--v-border)] tabular-nums tracking-widest">{data.rows.length} REGISTROS</span>
+                            <span className="text-[10px] font-bold text-[var(--v-text-muted)] bg-[var(--v-scrim)] px-3 py-1 rounded-[var(--v-radius)] border border-[var(--v-border)] tabular-nums tracking-widest">{data.rows.length} REGISTROS</span>
                         </div>
                         
                         <div className="flex-1 overflow-auto custom-scrollbar">
                             <table className="w-full text-left text-[11px] relative border-collapse whitespace-nowrap">
                                 <thead className="bg-[var(--v-deep)] sticky top-0 z-10">
                                     <tr>
-                                        <th className="p-3 text-[var(--v-text-faint)] tracking-widest font-black font-mono border-b border-[var(--v-border)] text-center bg-[#151515]">#</th>
+                                        <th className="p-3 text-[var(--v-text-faint)] tracking-widest font-black font-mono border-b border-[var(--v-border)] text-center bg-[var(--v-bg)]">#</th>
                                         {data.columns.map((col, i) => (
-                                            <th key={i} className="p-3 text-[var(--v-accent-2)] tracking-widest font-black uppercase font-mono border-b border-[var(--v-border)] bg-[#151515]">
+                                            <th key={i} className="p-3 text-[var(--v-accent-2)] tracking-widest font-black uppercase font-mono border-b border-[var(--v-border)] bg-[var(--v-bg)]">
                                                 {col}
                                             </th>
                                         ))}
@@ -181,7 +181,7 @@ export const RawExplorerView = () => {
                                 </thead>
                                 <tbody>
                                     {data.rows.map((row, i) => (
-                                        <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[#1f1f22] transition-colors">
+                                        <tr key={i} className="border-b border-[var(--v-border)] hover:bg-[var(--v-hover)] transition-colors">
                                             <td className="p-2 text-center text-[var(--v-text-faint)] font-mono text-[9px] font-bold border-r border-[var(--v-border)]">
                                                 {i + 1}
                                             </td>

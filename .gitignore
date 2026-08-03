@@ -77,3 +77,10 @@ desktop.ini
 tmp_*.json
 tmp_*.txt
 temp_*.txt
+
+# ─── Saídas de execução ──────────────────────────────────────────────────────
+# Logs de rodada real: trazem ids de producao (empresa, RECEBER, prazos) e o SQL
+# de rollback. O repositorio e publico.
+backend/logs/
+# Relatorio do Janitor: retrato dos arquivos DESTA maquina, sem sentido fora dela.
+backend/janitor_disk_report.json

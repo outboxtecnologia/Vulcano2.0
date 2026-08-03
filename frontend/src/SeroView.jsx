@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParamState } from './hooks/useSearchParamState';
 import { Activity, ShieldCheck, AlertCircle, RefreshCw, Building2, HardHat, FileBarChart2, TrendingUp, Ruler, UploadCloud, Save, Download, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import * as XLSX from 'xlsx';
@@ -14,7 +15,7 @@ const fmtM2 = (val) =>
 
 // ── Card de KPI ──────────────────────────────────────────────────────────────
 const KpiCard = ({ icon: Icon, label, value, sub, accent = 'var(--v-accent-2)', glow = false, large = false, onClick }) => (
-    <div onClick={onClick} style={{ borderTopColor: accent }} className={`relative bg-[#0e0e0e] border border-[#1e1e1e] border-t-2 rounded-xl p-5 flex flex-col gap-1 overflow-hidden group hover:border-[#2e2e2e] transition-all duration-300 ${onClick ? 'cursor-pointer' : ''}`}>
+    <div onClick={onClick} style={{ borderTopColor: accent }} className={`relative bg-[var(--v-deep)] border border-[var(--v-line)] border-t-2 rounded-xl p-5 flex flex-col gap-1 overflow-hidden group hover:border-[#2e2e2e] transition-all duration-300 ${onClick ? 'cursor-pointer' : ''}`}>
         {glow && <div style={{ background: accent }} className="absolute inset-0 opacity-[0.04] pointer-events-none rounded-xl" />}
         <div className="flex items-center gap-2 mb-1">
             <Icon size={12} style={{ color: accent }} />
@@ -24,7 +25,7 @@ const KpiCard = ({ icon: Icon, label, value, sub, accent = 'var(--v-accent-2)', 
               className={`${large ? 'text-2xl' : 'text-xl'} font-black leading-tight ${glow ? 'drop-shadow-[0_0_12px_rgba(255,100,50,0.4)]' : ''}`}>
             {value}
         </span>
-        {sub && <span className="text-[9px] text-[#444] mt-0.5">{sub}</span>}
+        {sub && <span className="text-[9px] text-[var(--v-text-ghost)] mt-0.5">{sub}</span>}
     </div>
 );
 
@@ -32,13 +33,13 @@ const KpiCard = ({ icon: Icon, label, value, sub, accent = 'var(--v-accent-2)', 
 const ChartTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     return (
-        <div className="bg-[#111] border border-[#2a2a2a] rounded-lg p-3 text-[11px] shadow-xl">
-            <p className="text-[#666] font-mono mb-2 text-[10px]">{label}</p>
+        <div className="bg-[var(--v-bg)] border border-[var(--v-border)] rounded-lg p-3 text-[11px] shadow-xl">
+            <p className="text-[var(--v-text-muted)] font-mono mb-2 text-[10px]">{label}</p>
             {payload.map((p, i) => (
                 <div key={i} className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-                    <span className="text-[#888]">{p.name === 'previsto' ? 'Previsto' : 'Realizado'}</span>
-                    <span className="font-black text-white ml-auto pl-4">
+                    <span className="text-[var(--v-text-muted)]">{p.name === 'previsto' ? 'Previsto' : 'Realizado'}</span>
+                    <span className="font-black text-[var(--v-text-bold)] ml-auto pl-4">
                         {fmt(p.value)}
                     </span>
                 </div>
@@ -49,8 +50,11 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export const SeroView = ({ selectedEmpresa }) => {
-    const [ano, setAno] = useState((new Date().getFullYear() - (new Date().getMonth() < 3 ? 1 : 0)).toString());
-    const [mes, setMes] = useState(new Date().getMonth() < 3 ? '12' : (new Date().getMonth()).toString().padStart(2, '0'));
+    // Competencia na URL para que a troca de empresa (que remonta a view) nao jogue o
+    // usuario de volta para o mes corrente — o fluxo aqui e a mesma competencia,
+    // empresa por empresa.
+    const [ano, setAno] = useSearchParamState('ano', (new Date().getFullYear() - (new Date().getMonth() < 3 ? 1 : 0)).toString());
+    const [mes, setMes] = useSearchParamState('mes', new Date().getMonth() < 3 ? '12' : (new Date().getMonth()).toString().padStart(2, '0'));
     const [seroData, setSeroData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -64,27 +68,30 @@ export const SeroView = ({ selectedEmpresa }) => {
 
     useEffect(() => {
         if (!selectedEmpresa) return;
-        fetch(`${API_BASE}/api/sero/obras?empresa_id=${selectedEmpresa}`, { cache: 'no-cache' })
+        const ac = new AbortController();
+        fetch(`${API_BASE}/api/sero/obras?empresa_id=${selectedEmpresa}`, { cache: 'no-cache', signal: ac.signal })
             .then(res => {
                 const ct = res.headers.get('content-type') || '';
                 if (!ct.includes('application/json')) return [];
                 return res.json();
             })
             .then(data => setObras(Array.isArray(data) ? data : []))
-            .catch(console.error);
+            .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+        return () => ac.abort();
     }, [selectedEmpresa]);
 
-    const fetchSero = async () => {
+    const fetchSero = async (signal) => {
         if (!selectedEmpresa || !ano || !mes) return;
         setLoading(true); setError(null);
         try {
             const ep = selectedObraId
                 ? `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}&cno=${selectedObraId}`
                 : `${API_BASE}/api/sero/maodeobra?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`;
-            const res = await fetch(ep);
+            const res = await fetch(ep, { signal });
             if (!res.ok) { const t = await res.text(); throw new Error(`HTTP ${res.status}: ${t}`); }
             setSeroData(await res.json());
         } catch (err) {
+            if (err.name === 'AbortError') return;
             setError(err.message); setSeroData(null);
         } finally { setLoading(false); }
     };
@@ -148,7 +155,10 @@ export const SeroView = ({ selectedEmpresa }) => {
 
 
     useEffect(() => {
-        if (selectedEmpresa && ano && mes) fetchSero();
+        if (!(selectedEmpresa && ano && mes)) return;
+        const ac = new AbortController();
+        fetchSero(ac.signal);
+        return () => ac.abort();
     }, [selectedEmpresa, selectedObraId, ano, mes]);
 
     const r = seroData?.resumo || {};
@@ -243,43 +253,43 @@ export const SeroView = ({ selectedEmpresa }) => {
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
-                        <div className="w-8 h-8 rounded-lg bg-[var(--v-accent-2)]/10 border border-[var(--v-accent-2)]/20 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-lg bg-[rgb(var(--v-accent-2-rgb)_/_0.1)] border border-[rgb(var(--v-accent-2-rgb)_/_0.2)] flex items-center justify-center">
                             <Activity size={16} className="text-[var(--v-accent-2)]" />
                         </div>
                         <h2 className="text-2xl font-black tracking-tighter uppercase text-[var(--v-text-bold)]">
                             Painel SERO / INSS
                         </h2>
                     </div>
-                    <p className="text-[10px] text-[#444] uppercase tracking-[0.25em] ml-11">
+                    <p className="text-[10px] text-[var(--v-text-ghost)] uppercase tracking-[0.25em] ml-11">
                         Auditoria de Mão de Obra · CNO · GPS
                     </p>
                 </div>
 
                 {/* Badge da obra selecionada */}
                 {obraAtual && (
-                    <div className="flex items-center gap-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 bg-[var(--v-card)] border border-[var(--v-border)] rounded-lg px-3 py-2">
                         <HardHat size={12} className="text-[var(--v-accent-2)]" />
-                        <span className="text-[10px] text-[#888] uppercase tracking-widest">Obra filtrada:</span>
-                        <span className="text-[11px] font-black text-white">{obraAtual.nome}</span>
-                        <span className="text-[9px] font-mono text-[#555]">{obraAtual.inscricao}</span>
+                        <span className="text-[10px] text-[var(--v-text-muted)] uppercase tracking-widest">Obra filtrada:</span>
+                        <span className="text-[11px] font-black text-[var(--v-text-bold)]">{obraAtual.nome}</span>
+                        <span className="text-[9px] font-mono text-[var(--v-text-faint)]">{obraAtual.inscricao}</span>
                     </div>
                 )}
             </div>
 
             {/* ── Barra de Filtros ── */}
-            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-4 flex flex-wrap gap-3 items-end">
+            <div className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl p-4 flex flex-wrap gap-3 items-end">
 
                 {/* Select Obra */}
                 <div className="flex-1 min-w-[240px]">
-                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">
                         Obra / CEI / CNO
                     </label>
                     <div className="relative">
-                        <Building2 size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#444] pointer-events-none" />
+                        <Building2 size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--v-text-ghost)] pointer-events-none" />
                         <select
                             value={selectedObraId}
                             onChange={e => setSelectedObraId(e.target.value)}
-                            className="w-full bg-[#111] border border-[#222] hover:border-[#333] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono pl-7 pr-3 py-2 rounded-lg outline-none transition-colors appearance-none"
+                            className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] hover:border-[#333] focus:border-[var(--v-accent-2)] text-[var(--v-text-bold)] text-[11px] font-mono pl-7 pr-3 py-2 rounded-lg outline-none transition-colors appearance-none"
                         >
                             <option value="">Todas as Obras (Consolidado)</option>
                             {obras.map(o => (
@@ -293,11 +303,11 @@ export const SeroView = ({ selectedEmpresa }) => {
 
                 {/* Ano */}
                 <div className="w-20">
-                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Ano</label>
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">Ano</label>
                     <select
                         value={ano}
                         onChange={e => setAno(e.target.value)}
-                        className="w-full bg-[#111] border border-[#222] hover:border-[#333] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors"
+                        className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] hover:border-[#333] focus:border-[var(--v-accent-2)] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors"
                     >
                         {[2022, 2023, 2024, 2025, 2026].map(y => <option key={y} value={String(y)}>{y}</option>)}
                     </select>
@@ -305,11 +315,11 @@ export const SeroView = ({ selectedEmpresa }) => {
 
                 {/* Mês */}
                 <div className="w-20">
-                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Mês</label>
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">Mês</label>
                     <select
                         value={mes}
                         onChange={e => setMes(e.target.value)}
-                        className="w-full bg-[#111] border border-[#222] hover:border-[#333] focus:border-[var(--v-accent-2)] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors"
+                        className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] hover:border-[#333] focus:border-[var(--v-accent-2)] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors"
                     >
                         {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
                             <option key={m} value={m}>{m}</option>
@@ -320,9 +330,9 @@ export const SeroView = ({ selectedEmpresa }) => {
                 {/* Botão */}
                 <button
                     id="btn-processar-inss"
-                    onClick={fetchSero}
+                    onClick={() => fetchSero()}
                     disabled={loading}
-                    className="flex items-center gap-2 bg-[var(--v-accent-2)]/10 border border-[var(--v-accent-2)]/25 text-[var(--v-accent-2)] hover:bg-[var(--v-accent-2)] hover:text-black transition-all duration-200 font-black text-[9px] tracking-[0.2em] uppercase rounded-lg px-5 py-2 h-[34px] disabled:opacity-40"
+                    className="flex items-center gap-2 bg-[rgb(var(--v-accent-2-rgb)_/_0.1)] border border-[rgb(var(--v-accent-2-rgb)_/_0.25)] text-[var(--v-accent-2)] hover:bg-[var(--v-accent-2)] hover:text-[var(--v-text-inv)] transition-all duration-200 font-black text-[9px] tracking-[0.2em] uppercase rounded-lg px-5 py-2 h-[34px] disabled:opacity-40"
                 >
                     {loading
                         ? <RefreshCw size={12} className="animate-spin" />
@@ -342,7 +352,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                         />
                         <button
                             disabled={importingPdf}
-                            className="flex items-center gap-2 bg-[#222]/50 border border-[#333] text-[#aaa] hover:bg-[#333] hover:text-white transition-all duration-200 font-black text-[9px] tracking-[0.2em] uppercase rounded-lg px-5 py-2 h-[34px] disabled:opacity-40"
+                            className="flex items-center gap-2 bg-[var(--v-hover)]/50 border border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-[#333] hover:text-[var(--v-text-bold)] transition-all duration-200 font-black text-[9px] tracking-[0.2em] uppercase rounded-lg px-5 py-2 h-[34px] disabled:opacity-40"
                         >
                             {importingPdf 
                                 ? <RefreshCw size={12} className="animate-spin" /> 
@@ -353,7 +363,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                     {pdfData && (
                         <button
                             onClick={() => { setPdfData(null); setError(null); }}
-                            className="flex items-center justify-center w-[34px] h-[34px] bg-[#222] border border-[#333] text-[#888] hover:bg-red-900/40 hover:text-red-400 hover:border-red-900/50 transition-all duration-200 rounded-lg"
+                            className="flex items-center justify-center w-[34px] h-[34px] bg-[var(--v-hover)] border border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-red-900/40 hover:text-red-400 hover:border-red-900/50 transition-all duration-200 rounded-lg"
                             title="Descartar Importação"
                         >
                             <X size={14} />
@@ -363,8 +373,8 @@ export const SeroView = ({ selectedEmpresa }) => {
 
                 {/* Competência ativa */}
                 <div className="ml-auto text-right hidden sm:block">
-                    <div className="text-[9px] text-[#444] uppercase tracking-widest">Competência</div>
-                    <div className="text-[13px] font-black font-mono text-[#666]">{ano}-{mes}</div>
+                    <div className="text-[9px] text-[var(--v-text-ghost)] uppercase tracking-widest">Competência</div>
+                    <div className="text-[13px] font-black font-mono text-[var(--v-text-muted)]">{ano}-{mes}</div>
                 </div>
             </div>
 
@@ -386,9 +396,9 @@ export const SeroView = ({ selectedEmpresa }) => {
             {loading && !seroData && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {[...Array(6)].map((_, i) => (
-                        <div key={i} className="bg-[#0e0e0e] border border-[#1a1a1a] rounded-xl p-5 h-24 animate-pulse">
-                            <div className="bg-[#1a1a1a] h-2 w-20 rounded mb-3" />
-                            <div className="bg-[#1a1a1a] h-6 w-32 rounded" />
+                        <div key={i} className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl p-5 h-24 animate-pulse">
+                            <div className="bg-[var(--v-card)] h-2 w-20 rounded mb-3" />
+                            <div className="bg-[var(--v-card)] h-6 w-32 rounded" />
                         </div>
                     ))}
                 </div>
@@ -410,7 +420,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                             label="Folha Própria"
                             value={fmt(r.mao_de_obra_folha)}
                             sub="VER DETALHAMENTO (CLIQUE)"
-                            accent="#60a5fa"
+                            accent="var(--v-src-questor)"
                             onClick={() => setModalDetail('folha')}
                         />
                         <KpiCard
@@ -425,7 +435,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                             label="INSS a Recolher"
                             value={fmt(r.total_inss)}
                             sub="Passivo apurado"
-                            accent="#f97316"
+                            accent="var(--v-accent)"
                             glow
                             large
                         />
@@ -447,19 +457,19 @@ export const SeroView = ({ selectedEmpresa }) => {
 
                     {/* ── Divisor visual ── */}
                     <div className="flex items-center gap-3">
-                        <div className="h-px flex-1 bg-[#1a1a1a]" />
-                        <span className="text-[9px] uppercase tracking-[0.25em] text-[#333] font-bold">Análise Histórica</span>
-                        <div className="h-px flex-1 bg-[#1a1a1a]" />
+                        <div className="h-px flex-1 bg-[var(--v-card)]" />
+                        <span className="text-[9px] uppercase tracking-[0.25em] text-[var(--v-text-ghost)] font-bold">Análise Histórica</span>
+                        <div className="h-px flex-1 bg-[var(--v-card)]" />
                     </div>
 
                     {/* ── Gráfico Curva-S ── */}
-                    <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-5">
+                    <div className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl p-5">
                         <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#555]">
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-text-faint)]">
                                     Avanço Físico-Financeiro — Curva-S
                                 </h4>
-                                <p className="text-[9px] text-[#333] mt-0.5">Previsto (CUB × m²) vs Realizado (Folha + GPS)</p>
+                                <p className="text-[9px] text-[var(--v-text-ghost)] mt-0.5">Previsto (CUB × m²) vs Realizado (Folha + GPS)</p>
                             </div>
                             <div className="flex items-center gap-4 text-[9px]">
                                 <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-px border-t border-dashed border-[#555]" />Previsto</span>
@@ -471,8 +481,8 @@ export const SeroView = ({ selectedEmpresa }) => {
                                 <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="gradPrev" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#444" stopOpacity={0.15} />
-                                            <stop offset="95%" stopColor="#444" stopOpacity={0} />
+                                            <stop offset="5%" stopColor="var(--v-text-ghost)" stopOpacity={0.15} />
+                                            <stop offset="95%" stopColor="var(--v-text-ghost)" stopOpacity={0} />
                                         </linearGradient>
                                         <linearGradient id="gradReal" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="var(--v-accent-2)" stopOpacity={0.2} />
@@ -480,10 +490,10 @@ export const SeroView = ({ selectedEmpresa }) => {
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#181818" vertical={false} />
-                                    <XAxis dataKey="mes" stroke="#333" fontSize={9} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#333" fontSize={9} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                                    <XAxis dataKey="mes" stroke="var(--v-text-ghost)" fontSize={9} tickLine={false} axisLine={false} />
+                                    <YAxis stroke="var(--v-text-ghost)" fontSize={9} tickLine={false} axisLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
                                     <Tooltip content={<ChartTooltip />} />
-                                    <Area type="monotone" dataKey="previsto" stroke="#444" strokeWidth={1} strokeDasharray="5 5" fill="url(#gradPrev)" dot={false} name="previsto" />
+                                    <Area type="monotone" dataKey="previsto" stroke="var(--v-text-ghost)" strokeWidth={1} strokeDasharray="5 5" fill="url(#gradPrev)" dot={false} name="previsto" />
                                     <Area type="monotone" dataKey="realizado" stroke="var(--v-accent-2)" strokeWidth={2.5} fill="url(#gradReal)" dot={{ fill: 'var(--v-accent-2)', r: 3, strokeWidth: 0 }} name="realizado" />
                                 </AreaChart>
                             </ResponsiveContainer>
@@ -492,26 +502,26 @@ export const SeroView = ({ selectedEmpresa }) => {
 
                     {/* ── Tabela Terceiros GPS ── */}
                     {(seroData.alocacoes_terceiros?.length > 0 || pdfData?.length > 0) && (
-                        <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden mt-6">
-                            <div className="flex items-center justify-between px-5 py-3 border-b border-[#161616]">
+                        <div className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl overflow-hidden mt-6">
+                            <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--v-line)]">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-4 rounded-full bg-[#34d399]" />
-                                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#34d399]">
+                                    <div className="w-1.5 h-4 rounded-full bg-[var(--v-ok)]" />
+                                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-ok)]">
                                         {pdfData ? 'Terceiros SERO (Fonte: PDF)' : 'Terceiros GPS (Questor)'}
                                     </h4>
-                                    <span className="text-[9px] text-[#444] font-mono">
+                                    <span className="text-[9px] text-[var(--v-text-ghost)] font-mono">
                                         {pdfData ? pdfData.length : seroData.alocacoes_terceiros.length} registros
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={handleExportXLSX}
-                                        className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[#888] hover:text-[#34d399] transition-colors"
+                                        className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[var(--v-text-muted)] hover:text-[var(--v-ok)] transition-colors"
                                     >
                                         <Download size={12} />
                                         Exportar XLSX
                                     </button>
-                                    <span className="text-[9px] text-[#555] uppercase tracking-widest hidden sm:block">
+                                    <span className="text-[9px] text-[var(--v-text-faint)] uppercase tracking-widest hidden sm:block">
                                         {pdfData ? 'DADOS EXTRAÍDOS DO PDF ORIGINAL' : 'TERCEIROPGTO · VALORORIGEMGPS'}
                                     </span>
                                 </div>
@@ -519,17 +529,17 @@ export const SeroView = ({ selectedEmpresa }) => {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-[11px]">
                                     <thead>
-                                        <tr className="border-b border-[#161616]">
-                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Competência</th>
-                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
+                                        <tr className="border-b border-[var(--v-line)]">
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">Competência</th>
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">
                                                 {pdfData ? 'CPF / CNPJ' : 'Tomador / Obra'}
                                             </th>
-                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
+                                            <th className="text-left px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">
                                                 {pdfData ? 'Origem' : 'CNO / CNPJ'}
                                             </th>
-                                            {pdfData && <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Valor Original</th>}
-                                            {pdfData && <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">Taxa</th>}
-                                            <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#333] font-bold">
+                                            {pdfData && <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">Valor Original</th>}
+                                            {pdfData && <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">Taxa</th>}
+                                            <th className="text-right px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">
                                                 {pdfData ? 'Valor Atualizado' : 'GPS Recolhido'}
                                             </th>
                                         </tr>
@@ -537,32 +547,32 @@ export const SeroView = ({ selectedEmpresa }) => {
                                     <tbody>
                                         {pdfData ? (
                                             mergedData.map((t, i) => (
-                                                <tr key={i} className={`border-b border-[#0f0f0f] hover:bg-[#111] transition-colors ${t.is_system ? 'opacity-60' : ''}`}>
-                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.competencia}</td>
-                                                    <td className="px-5 py-2 font-mono text-[#888] text-[10px]">{t.cnpj_cpf}</td>
-                                                    <td className="px-5 py-2 text-white max-w-[200px] truncate" title={t.origem}>{t.origem}</td>
-                                                    <td className="px-5 py-2 text-right font-mono text-[#666]">{t.valor_original !== null ? fmt(t.valor_original) : '-'}</td>
-                                                    <td className="px-5 py-2 text-right font-mono text-[#666]">{t.taxa_correcao !== null ? Number(t.taxa_correcao).toFixed(4) : '-'}</td>
-                                                    <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor_atualizado)}</td>
+                                                <tr key={i} className={`border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors ${t.is_system ? 'opacity-60' : ''}`}>
+                                                    <td className="px-5 py-2 font-mono text-[var(--v-text-ghost)] text-[10px]">{t.competencia}</td>
+                                                    <td className="px-5 py-2 font-mono text-[var(--v-text-muted)] text-[10px]">{t.cnpj_cpf}</td>
+                                                    <td className="px-5 py-2 text-[var(--v-text-bold)] max-w-[200px] truncate" title={t.origem}>{t.origem}</td>
+                                                    <td className="px-5 py-2 text-right font-mono text-[var(--v-text-muted)]">{t.valor_original !== null ? fmt(t.valor_original) : '-'}</td>
+                                                    <td className="px-5 py-2 text-right font-mono text-[var(--v-text-muted)]">{t.taxa_correcao !== null ? Number(t.taxa_correcao).toFixed(4) : '-'}</td>
+                                                    <td className="px-5 py-2 text-right font-black text-[var(--v-ok)]">{fmt(t.valor_atualizado)}</td>
                                                 </tr>
                                             ))
                                         ) : (
                                             seroData.alocacoes_terceiros.slice(0, 60).map((t, i) => (
-                                                <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.compet}</td>
-                                                    <td className="px-5 py-2 text-[#888] max-w-[260px] truncate">{t.nome_obra}</td>
-                                                    <td className="px-5 py-2 font-mono text-[#444] text-[10px]">{t.cno}</td>
-                                                    <td className="px-5 py-2 text-right font-black text-[#34d399]">{fmt(t.valor_recolhido)}</td>
+                                                <tr key={i} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors">
+                                                    <td className="px-5 py-2 font-mono text-[var(--v-text-ghost)] text-[10px]">{t.compet}</td>
+                                                    <td className="px-5 py-2 text-[var(--v-text-muted)] max-w-[260px] truncate">{t.nome_obra}</td>
+                                                    <td className="px-5 py-2 font-mono text-[var(--v-text-ghost)] text-[10px]">{t.cno}</td>
+                                                    <td className="px-5 py-2 text-right font-black text-[var(--v-ok)]">{fmt(t.valor_recolhido)}</td>
                                                 </tr>
                                             ))
                                         )}
                                     </tbody>
                                     <tfoot>
-                                        <tr className="border-t border-[#1e1e1e] bg-[#0e0e0e]">
-                                            <td colSpan={pdfData ? 5 : 3} className="px-5 py-2.5 text-[9px] uppercase tracking-widest text-[#444] font-bold">
+                                        <tr className="border-t border-[var(--v-line)] bg-[var(--v-deep)]">
+                                            <td colSpan={pdfData ? 5 : 3} className="px-5 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">
                                                 {pdfData ? 'Total Atualizado' : 'Total GPS'}
                                             </td>
-                                            <td className="px-5 py-2.5 text-right font-black text-[#34d399]">
+                                            <td className="px-5 py-2.5 text-right font-black text-[var(--v-ok)]">
                                                 {pdfData 
                                                     ? fmt(mergedData.reduce((s, t) => s + (t.valor_atualizado || 0), 0))
                                                     : fmt(seroData.alocacoes_terceiros.reduce((s, t) => s + (t.valor_recolhido || 0), 0))}
@@ -574,11 +584,11 @@ export const SeroView = ({ selectedEmpresa }) => {
                             
                             {/* ── Botões de Ação (Apenas se tiver PDF Data) ── */}
                             {pdfData && (
-                                <div className="px-5 py-4 border-t border-[#161616] bg-[#0e0e0e] flex justify-end gap-3">
+                                <div className="px-5 py-4 border-t border-[var(--v-line)] bg-[var(--v-deep)] flex justify-end gap-3">
                                     <button
                                         onClick={() => { setPdfData(null); setError(null); }}
                                         disabled={savingPdf}
-                                        className="flex items-center gap-2 bg-[#222] border border-[#333] text-[#aaa] hover:bg-red-900/40 hover:border-red-900/50 hover:text-red-400 transition-all duration-200 font-black text-[10px] tracking-[0.15em] uppercase rounded-lg px-5 py-2.5 h-[36px] disabled:opacity-40"
+                                        className="flex items-center gap-2 bg-[var(--v-hover)] border border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-red-900/40 hover:border-red-900/50 hover:text-red-400 transition-all duration-200 font-black text-[10px] tracking-[0.15em] uppercase rounded-lg px-5 py-2.5 h-[36px] disabled:opacity-40"
                                     >
                                         <X size={14} />
                                         Descartar
@@ -586,7 +596,7 @@ export const SeroView = ({ selectedEmpresa }) => {
                                     <button
                                         onClick={handleSavePdfData}
                                         disabled={savingPdf}
-                                        className="flex items-center gap-2 bg-[#10b981]/10 border border-[#10b981]/30 text-[#10b981] hover:bg-[#10b981] hover:text-black transition-all duration-200 font-black text-[10px] tracking-[0.15em] uppercase rounded-lg px-5 py-2.5 h-[36px] disabled:opacity-40"
+                                        className="flex items-center gap-2 bg-[var(--v-ok)]/10 border border-[var(--v-ok)]/30 text-[var(--v-ok)] hover:bg-[var(--v-ok)] hover:text-[var(--v-text-inv)] transition-all duration-200 font-black text-[10px] tracking-[0.15em] uppercase rounded-lg px-5 py-2.5 h-[36px] disabled:opacity-40"
                                     >
                                         {savingPdf ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                                         {savingPdf ? 'Salvando...' : 'Salvar Extrato no Vulcano'}
@@ -600,7 +610,7 @@ export const SeroView = ({ selectedEmpresa }) => {
 
             {/* ── Estado vazio ── */}
             {!seroData && !loading && !error && (
-                <div className="flex flex-col items-center justify-center py-24 text-[#333]">
+                <div className="flex flex-col items-center justify-center py-24 text-[var(--v-text-ghost)]">
                     <ShieldCheck size={48} className="mb-4 opacity-20" />
                     <p className="text-sm font-bold uppercase tracking-widest">Selecione uma empresa e clique em Apurar INSS</p>
                 </div>
@@ -608,47 +618,47 @@ export const SeroView = ({ selectedEmpresa }) => {
 
             {/* ── Modal Detalhamento Folha ── */}
             {modalDetail === 'folha' && seroData?.alocacoes_folha && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                    <div className="bg-[#0a0a0a] border border-[#222] rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-[#222] bg-[#111]">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--v-overlay)] backdrop-blur-sm p-4">
+                    <div className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--v-line)] bg-[var(--v-bg)]">
                             <div className="flex items-center gap-3">
-                                <TrendingUp size={16} className="text-[#60a5fa]" />
+                                <TrendingUp size={16} className="text-[var(--v-src-questor)]" />
                                 <div>
-                                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Detalhamento: Folha Própria</h3>
-                                    <p className="text-[10px] text-[#888]">Eventos 5041 Rateados (Acumulado até a competência selecionada)</p>
+                                    <h3 className="text-sm font-black text-[var(--v-text-bold)] uppercase tracking-widest">Detalhamento: Folha Própria</h3>
+                                    <p className="text-[10px] text-[var(--v-text-muted)]">Eventos 5041 Rateados (Acumulado até a competência selecionada)</p>
                                 </div>
                             </div>
-                            <button onClick={() => setModalDetail(null)} className="text-[#888] hover:text-white transition-colors">
+                            <button onClick={() => setModalDetail(null)} className="text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)] transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
                         <div className="p-0 overflow-y-auto custom-scrollbar">
                             <table className="w-full text-left text-[11px]">
-                                <thead className="bg-[#111] sticky top-0 border-b border-[#222]">
+                                <thead className="bg-[var(--v-bg)] sticky top-0 border-b border-[var(--v-line)]">
                                     <tr>
-                                        <th className="px-6 py-3 font-bold text-[#888] uppercase tracking-widest">Competência</th>
-                                        <th className="px-6 py-3 font-bold text-[#888] uppercase tracking-widest">Obra / Cadastro Questor</th>
-                                        <th className="px-6 py-3 font-bold text-[#888] uppercase tracking-widest text-right">Valor Rateado</th>
+                                        <th className="px-6 py-3 font-bold text-[var(--v-text-muted)] uppercase tracking-widest">Competência</th>
+                                        <th className="px-6 py-3 font-bold text-[var(--v-text-muted)] uppercase tracking-widest">Obra / Cadastro Questor</th>
+                                        <th className="px-6 py-3 font-bold text-[var(--v-text-muted)] uppercase tracking-widest text-right">Valor Rateado</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#1a1a1a]">
                                     {seroData.alocacoes_folha.map((t, idx) => (
-                                        <tr key={idx} className="hover:bg-[#111] transition-colors">
-                                            <td className="px-6 py-3 font-mono text-[#aaa] text-[10px]">{t.compet}</td>
-                                            <td className="px-6 py-3 text-[#eee]">{t.nome_obra} <span className="text-[9px] text-[#555] ml-2">[{t.codigooutemp}]</span></td>
-                                            <td className="px-6 py-3 font-black text-[#60a5fa] text-right">{fmt(t.valor)}</td>
+                                        <tr key={idx} className="hover:bg-[var(--v-hover)] transition-colors">
+                                            <td className="px-6 py-3 font-mono text-[var(--v-text-muted)] text-[10px]">{t.compet}</td>
+                                            <td className="px-6 py-3 text-[var(--v-text)]">{t.nome_obra} <span className="text-[9px] text-[var(--v-text-faint)] ml-2">[{t.codigooutemp}]</span></td>
+                                            <td className="px-6 py-3 font-black text-[var(--v-src-questor)] text-right">{fmt(t.valor)}</td>
                                         </tr>
                                     ))}
                                     {seroData.alocacoes_folha.length === 0 && (
                                         <tr>
-                                            <td colSpan={3} className="px-6 py-8 text-center text-[#555]">Nenhum registro encontrado.</td>
+                                            <td colSpan={3} className="px-6 py-8 text-center text-[var(--v-text-faint)]">Nenhum registro encontrado.</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
-                        <div className="px-6 py-4 border-t border-[#222] bg-[#111] flex justify-end">
-                            <button onClick={() => setModalDetail(null)} className="px-6 py-2 bg-[#222] hover:bg-[#333] text-white rounded-lg text-[10px] uppercase tracking-widest font-bold transition-colors">
+                        <div className="px-6 py-4 border-t border-[var(--v-line)] bg-[var(--v-bg)] flex justify-end">
+                            <button onClick={() => setModalDetail(null)} className="px-6 py-2 bg-[var(--v-hover)] hover:bg-[#333] text-[var(--v-text-bold)] rounded-lg text-[10px] uppercase tracking-widest font-bold transition-colors">
                                 Fechar
                             </button>
                         </div>

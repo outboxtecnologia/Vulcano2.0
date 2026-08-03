@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { FileText, Download, ShieldCheck, AlertCircle, RefreshCw, Code2, CheckCircle2, ReceiptText } from 'lucide-react';
 import { API_BASE } from './apiBase';
+import { useSearchParamState } from './hooks/useSearchParamState';
+
+const TABS = ['RET', 'F200', 'RESUMO'];
 
 const fmt = (val) => {
     if (val === null || val === undefined) return 'R$ 0,00';
@@ -12,7 +16,7 @@ const Tab = ({ active, onClick, accent, children }) => (
     <button
         onClick={onClick}
         className="relative pb-3 px-1 text-[10px] font-black uppercase tracking-[0.2em] transition-colors"
-        style={{ color: active ? accent : '#444' }}
+        style={{ color: active ? accent : 'var(--v-text-ghost)' }}
     >
         {children}
         {active && (
@@ -38,21 +42,33 @@ const MagmaBtn = ({ onClick, disabled, loading, icon: Icon, label, accent, fille
 
 // ── Cabeçalho de tabela padrão ────────────────────────────────────────────────
 const Th = ({ children, right = false, accent }) => (
-    <th className={`px-4 py-3 text-[9px] font-black uppercase tracking-[0.2em] border-b border-[#161616] ${right ? 'text-right' : 'text-left'}`}
-        style={{ color: accent || '#444' }}>
+    <th className={`px-4 py-3 text-[9px] font-black uppercase tracking-[0.2em] border-b border-[var(--v-line)] ${right ? 'text-right' : 'text-left'}`}
+        style={{ color: accent || 'var(--v-text-ghost)' }}>
         {children}
     </th>
 );
 
 export const FiscalSpedView = ({ selectedEmpresa }) => {
-    const [ano, setAno] = useState(new Date().getFullYear().toString());
-    const [mes, setMes] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
+    const [ano, setAno] = useSearchParamState('ano', new Date().getFullYear().toString());
+    const [mes, setMes] = useSearchParamState('mes', (new Date().getMonth() + 1).toString().padStart(2, '0'));
     const [retData, setRetData] = useState(null);
     const [resumoData, setResumoData] = useState(null);
     const [f200Data, setF200Data] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useState('RET');
+
+    // A aba e um segmento da rota (/fiscal/ret, /fiscal/f200, /fiscal/resumo).
+    // setActiveTab mantem a assinatura antiga porque tambem e chamado como efeito
+    // colateral das apuracoes (fetchRetPreview/fetchF200/fetchResumo), nao so pelos
+    // cliques nas abas. Sempre replace: apurar tres vezes nao deve encher o historico,
+    // e o Voltar do navegador deve sair da tela, nao passear pelas abas.
+    const { tab } = useParams();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const activeTab = TABS.includes(String(tab).toUpperCase()) ? String(tab).toUpperCase() : 'RET';
+    const setActiveTab = useCallback((next) => {
+        navigate(`/empresa/${selectedEmpresa}/fiscal/${String(next).toLowerCase()}`, { replace: true });
+    }, [navigate, selectedEmpresa]);
     const [anoDimob, setAnoDimob] = useState(new Date().getFullYear().toString());
     const [loadingDimob, setLoadingDimob] = useState(false);
     const [dimobPreviewData, setDimobPreviewData] = useState(null);
@@ -60,8 +76,15 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
     const [f200Committing, setF200Committing] = useState(false);
     const [visaoTecnica, setVisaoTecnica] = useState(false);
 
+    // Marca qual combinacao (empresa|ano|mes|aba) ja foi apurada. Sem isto, clicar em
+    // "Apurar F200" dispararia a chamada duas vezes: uma pelo botao e outra pelo efeito
+    // de deep-link, que reage a troca de aba feita pelo proprio fetch.
+    const apuracaoFeita = useRef(null);
+    const chaveApuracao = (aba) => `${selectedEmpresa}|${ano}|${mes}|${aba}`;
+
     const fetchRetPreview = async () => {
         if (!selectedEmpresa || !ano || !mes) return;
+        apuracaoFeita.current = chaveApuracao('RET');
         setLoading(true); setError(null);
         try {
             const res = await fetch(`${API_BASE}/api/sped/ret/preview?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
@@ -73,6 +96,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
 
     const fetchF200 = async () => {
         if (!selectedEmpresa || !ano || !mes) return;
+        apuracaoFeita.current = chaveApuracao('F200');
         setLoading(true); setError(null);
         try {
             const res = await fetch(`${API_BASE}/api/sped/f200/preview?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
@@ -83,6 +107,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
 
     const fetchResumo = async () => {
         if (!selectedEmpresa || !ano || !mes) return;
+        apuracaoFeita.current = chaveApuracao('RESUMO');
         setLoading(true); setError(null);
         try {
             const res = await fetch(`${API_BASE}/api/sped/resumo?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
@@ -91,6 +116,21 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             setResumoData(d); setActiveTab('RESUMO');
         } catch (err) { setError(err.message); } finally { setLoading(false); }
     };
+
+    // Deep-link: /empresa/959/fiscal/f200?ano=2025&mes=03 ja abre apurado, senao o link
+    // levaria a pessoa a uma tela com os filtros certos e nenhum dado.
+    //
+    // So vale quando a URL traz a competencia de fato. Entrar na tela pelo menu
+    // continua abrindo em branco, esperando o clique em Apurar — apuracao nao e
+    // consulta, nao deve rodar so porque alguem passou por aqui.
+    const veioDeLink = searchParams.has('ano') && searchParams.has('mes');
+    useEffect(() => {
+        if (!veioDeLink || !selectedEmpresa || !ano || !mes) return;
+        if (apuracaoFeita.current === chaveApuracao(activeTab)) return;
+        if (activeTab === 'F200') fetchF200();
+        else if (activeTab === 'RESUMO') fetchResumo();
+        else fetchRetPreview();
+    }, [veioDeLink, selectedEmpresa, ano, mes, activeTab]);
 
     const commitRet = async () => {
         if (!selectedEmpresa || !ano || !mes || !retData) return;
@@ -148,32 +188,32 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
 
             {/* ── Cabeçalho ── */}
             <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <ShieldCheck size={16} className="text-[#f97316]" />
+                <div className="w-8 h-8 rounded-lg bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/20 flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck size={16} className="text-[var(--v-accent)]" />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-black tracking-tighter uppercase text-white">
+                    <h2 className="text-2xl font-black tracking-tighter uppercase text-[var(--v-text-bold)]">
                         Painel Fiscal &amp; SPED
                     </h2>
-                    <p className="text-[10px] text-[#444] uppercase tracking-[0.25em]">
+                    <p className="text-[10px] text-[var(--v-text-ghost)] uppercase tracking-[0.25em]">
                         Auditoria e Compliance Tributário
                     </p>
                 </div>
             </div>
 
             {/* ── Barra de filtros ── */}
-            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-4 flex flex-wrap gap-3 items-end">
+            <div className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl p-4 flex flex-wrap gap-3 items-end">
                 <div className="w-24">
-                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Ano</label>
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">Ano</label>
                     <select value={ano} onChange={e => setAno(e.target.value)}
-                        className="w-full bg-[#111] border border-[#222] hover:border-[#333] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors">
+                        className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] hover:border-[#333] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors">
                         {[2022, 2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                 </div>
                 <div className="w-20">
-                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Mês</label>
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">Mês</label>
                     <select value={mes} onChange={e => setMes(e.target.value)}
-                        className="w-full bg-[#111] border border-[#222] hover:border-[#333] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors">
+                        className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] hover:border-[#333] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-2 rounded-lg outline-none transition-colors">
                         {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
                             <option key={m} value={m}>{m}</option>
                         ))}
@@ -181,15 +221,15 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     <MagmaBtn onClick={fetchRetPreview} disabled={loading} loading={loading && activeTab === 'RET'}
-                        icon={ShieldCheck} label="Apurar RET 4%" accent="#22c55e" />
+                        icon={ShieldCheck} label="Apurar RET 4%" accent="var(--v-ok)" />
                     <MagmaBtn onClick={fetchF200} disabled={loading} loading={loading && activeTab === 'F200'}
-                        icon={FileText} label="Apurar F200 (Presumido)" accent="#60a5fa" />
+                        icon={FileText} label="Apurar F200 (Presumido)" accent="var(--v-src-questor)" />
                     <MagmaBtn onClick={fetchResumo} disabled={loading} loading={loading && activeTab === 'RESUMO'}
                         icon={FileText} label="Quadro Resumo" accent="#f59e0b" />
                 </div>
                 <div className="ml-auto text-right hidden sm:block">
-                    <div className="text-[9px] text-[#444] uppercase tracking-widest">Competência</div>
-                    <div className="text-[13px] font-black font-mono text-[#555]">{ano}-{mes}</div>
+                    <div className="text-[9px] text-[var(--v-text-ghost)] uppercase tracking-widest">Competência</div>
+                    <div className="text-[13px] font-black font-mono text-[var(--v-text-faint)]">{ano}-{mes}</div>
                 </div>
             </div>
 
@@ -201,11 +241,11 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             )}
 
             {/* ── Tabs ── */}
-            <div className="flex gap-6 border-b border-[#1a1a1a]">
-                <Tab active={activeTab === 'RET'} onClick={() => setActiveTab('RET')} accent="#22c55e">
+            <div className="flex gap-6 border-b border-[var(--v-line)]">
+                <Tab active={activeTab === 'RET'} onClick={() => setActiveTab('RET')} accent="var(--v-ok)">
                     Configuração RET 4%
                 </Tab>
-                <Tab active={activeTab === 'F200'} onClick={() => setActiveTab('F200')} accent="#60a5fa">
+                <Tab active={activeTab === 'F200'} onClick={() => setActiveTab('F200')} accent="var(--v-src-questor)">
                     Operações F200 (EFD)
                 </Tab>
                 <Tab active={activeTab === 'RESUMO'} onClick={() => setActiveTab('RESUMO')} accent="#f59e0b">
@@ -214,7 +254,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             </div>
 
             {/* ── Conteúdo das tabs ── */}
-            <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
+            <div className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl overflow-hidden">
 
                 {/* Estado vazio */}
                 {!retData && !f200Data && !resumoData && !loading && (
@@ -229,53 +269,53 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                     <div className="overflow-x-auto">
                         <table className="w-full text-[11px]">
                             <thead>
-                                <tr className="bg-[#0e0e0e]">
+                                <tr className="bg-[var(--v-deep)]">
                                     <Th>Empreendimento</Th>
                                     <Th right>Recebimentos</Th>
                                     <Th right>Valor Parcela</Th>
                                     <Th right>Valor Variação</Th>
                                     <Th right>Distrato</Th>
-                                    <Th right accent="#60a5fa">Base Cálculo</Th>
-                                    <Th right accent="#60a5fa">Valor PIS</Th>
-                                    <Th right accent="#60a5fa">Valor COFINS</Th>
-                                    <Th right accent="#22c55e">Base Cálculo RET</Th>
-                                    <Th right accent="#22c55e">Valor RET</Th>
+                                    <Th right accent="var(--v-src-questor)">Base Cálculo</Th>
+                                    <Th right accent="var(--v-src-questor)">Valor PIS</Th>
+                                    <Th right accent="var(--v-src-questor)">Valor COFINS</Th>
+                                    <Th right accent="var(--v-ok)">Base Cálculo RET</Th>
+                                    <Th right accent="var(--v-ok)">Valor RET</Th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {(resumoData.data || []).map((r, i) => (
-                                    <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111]">
-                                        <td className="px-4 py-2.5 text-[#bbb] font-bold whitespace-nowrap">{r.empreendimento}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-white">{fmt(r.recebimentos)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#999]">{fmt(r.valor_parcela)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#777]">{fmt(r.variacao)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#777]">{fmt(r.distrato)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#60a5fa]">{fmt(r.bc_f200)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#60a5fa]">{fmt(r.pis)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#60a5fa]">{fmt(r.cofins)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right text-[#22c55e]">{fmt(r.bc_ret)}</td>
-                                        <td className="px-4 py-2.5 font-mono text-right font-black text-[#22c55e]">{fmt(r.valor_ret)}</td>
+                                    <tr key={i} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)]">
+                                        <td className="px-4 py-2.5 text-[var(--v-text-muted)] font-bold whitespace-nowrap">{r.empreendimento}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-text-bold)]">{fmt(r.recebimentos)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.valor_parcela)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.variacao)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.distrato)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-src-questor)]">{fmt(r.bc_f200)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-src-questor)]">{fmt(r.pis)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-src-questor)]">{fmt(r.cofins)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right text-[var(--v-ok)]">{fmt(r.bc_ret)}</td>
+                                        <td className="px-4 py-2.5 font-mono text-right font-black text-[var(--v-ok)]">{fmt(r.valor_ret)}</td>
                                     </tr>
                                 ))}
                                 {(resumoData.data || []).length === 0 && (
-                                    <tr><td colSpan={10} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                    <tr><td colSpan={10} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
                                         Sem movimento na competência.
                                     </td></tr>
                                 )}
                             </tbody>
                             {(resumoData.data || []).length > 0 && (
                                 <tfoot>
-                                    <tr className="bg-[#0e0e0e] border-t border-[#1e1e1e] font-mono font-bold">
-                                        <td className="px-4 py-3 text-[9px] uppercase tracking-widest text-[#444]">Totais</td>
-                                        <td className="px-4 py-3 text-right text-white">{fmt(resumoData.totais?.recebimentos)}</td>
-                                        <td className="px-4 py-3 text-right text-[#999]">{fmt(resumoData.totais?.valor_parcela)}</td>
-                                        <td className="px-4 py-3 text-right text-[#777]">{fmt(resumoData.totais?.variacao)}</td>
-                                        <td className="px-4 py-3 text-right text-[#777]">{fmt(resumoData.totais?.distrato)}</td>
-                                        <td className="px-4 py-3 text-right text-[#60a5fa]">{fmt(resumoData.totais?.bc_f200)}</td>
-                                        <td className="px-4 py-3 text-right text-[#60a5fa]">{fmt(resumoData.totais?.pis)}</td>
-                                        <td className="px-4 py-3 text-right text-[#60a5fa]">{fmt(resumoData.totais?.cofins)}</td>
-                                        <td className="px-4 py-3 text-right text-[#22c55e]">{fmt(resumoData.totais?.bc_ret)}</td>
-                                        <td className="px-4 py-3 text-right text-[#22c55e]">{fmt(resumoData.totais?.valor_ret)}</td>
+                                    <tr className="bg-[var(--v-deep)] border-t border-[var(--v-line)] font-mono font-bold">
+                                        <td className="px-4 py-3 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)]">Totais</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-text-bold)]">{fmt(resumoData.totais?.recebimentos)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-text-muted)]">{fmt(resumoData.totais?.valor_parcela)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-text-muted)]">{fmt(resumoData.totais?.variacao)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-text-muted)]">{fmt(resumoData.totais?.distrato)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-src-questor)]">{fmt(resumoData.totais?.bc_f200)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-src-questor)]">{fmt(resumoData.totais?.pis)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-src-questor)]">{fmt(resumoData.totais?.cofins)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-ok)]">{fmt(resumoData.totais?.bc_ret)}</td>
+                                        <td className="px-4 py-3 text-right text-[var(--v-ok)]">{fmt(resumoData.totais?.valor_ret)}</td>
                                     </tr>
                                 </tfoot>
                             )}
@@ -289,47 +329,47 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                         <div className="overflow-x-auto">
                             <table className="w-full text-[11px]">
                                 <thead>
-                                    <tr className="bg-[#0e0e0e]">
+                                    <tr className="bg-[var(--v-deep)]">
                                         <Th>Obra (RET)</Th>
                                         <Th>Estab</Th>
                                         <Th>Status</Th>
                                         <Th right>Base de Cálculo</Th>
-                                        <Th right accent="#22c55e">PIS</Th>
-                                        <Th right accent="#22c55e">COFINS</Th>
-                                        <Th right accent="#22c55e">CSLL</Th>
-                                        <Th right accent="#22c55e">IRPJ</Th>
-                                        <Th right accent="#f97316">Guia RET</Th>
+                                        <Th right accent="var(--v-ok)">PIS</Th>
+                                        <Th right accent="var(--v-ok)">COFINS</Th>
+                                        <Th right accent="var(--v-ok)">CSLL</Th>
+                                        <Th right accent="var(--v-ok)">IRPJ</Th>
+                                        <Th right accent="var(--v-accent)">Guia RET</Th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {retData.map((r, i) => (
-                                        <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                            <td className="px-4 py-3 font-mono font-bold text-[#888]">{r.unidade || 'N/A'}<span className="text-[#444]"> · {r.aliqret}%</span></td>
-                                            <td className="px-4 py-3 font-mono text-[#666]">{r.codigoestab ?? '—'}</td>
+                                        <tr key={i} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors">
+                                            <td className="px-4 py-3 font-mono font-bold text-[var(--v-text-muted)]">{r.unidade || 'N/A'}<span className="text-[var(--v-text-ghost)]"> · {r.aliqret}%</span></td>
+                                            <td className="px-4 py-3 font-mono text-[var(--v-text-muted)]">{r.codigoestab ?? '—'}</td>
                                             <td className="px-4 py-3 font-mono text-[10px]">
-                                                <span style={{ color: r.status === 'PRONTO' ? '#22c55e' : r.status === 'JA_LANCADO' ? '#888' : '#f97316' }}>
+                                                <span style={{ color: r.status === 'PRONTO' ? 'var(--v-ok)' : r.status === 'JA_LANCADO' ? 'var(--v-text-muted)' : 'var(--v-accent)' }}>
                                                     {r.status === 'SEM_DE_PARA' ? 'SEM DE-PARA' : r.status === 'JA_LANCADO' ? 'JÁ LANÇADO' : r.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.base_calculo)}</td>
-                                            <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.pis)}</td>
-                                            <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.cofins)}</td>
-                                            <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.csll)}</td>
-                                            <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.irpj)}</td>
-                                            <td className="px-4 py-3 font-mono text-right font-black text-[#f97316]">{fmt(r.total_ret)}</td>
+                                            <td className="px-4 py-3 font-mono text-right text-[var(--v-text-bold)]">{fmt(r.base_calculo)}</td>
+                                            <td className="px-4 py-3 font-mono text-right text-[var(--v-text-faint)]">{fmt(r.pis)}</td>
+                                            <td className="px-4 py-3 font-mono text-right text-[var(--v-text-faint)]">{fmt(r.cofins)}</td>
+                                            <td className="px-4 py-3 font-mono text-right text-[var(--v-text-faint)]">{fmt(r.csll)}</td>
+                                            <td className="px-4 py-3 font-mono text-right text-[var(--v-text-faint)]">{fmt(r.irpj)}</td>
+                                            <td className="px-4 py-3 font-mono text-right font-black text-[var(--v-accent)]">{fmt(r.total_ret)}</td>
                                         </tr>
                                     ))}
                                     {retData.length === 0 && (
-                                        <tr><td colSpan={9} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                        <tr><td colSpan={9} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
                                             Sem recebimento de obra optante pelo RET nesta competência — confira mês/ano (há baixas até fev/2026 na base local).
                                         </td></tr>
                                     )}
                                 </tbody>
                                 {retData.length > 0 && (
                                     <tfoot>
-                                        <tr className="bg-[#0e0e0e] border-t border-[#1e1e1e]">
-                                            <td colSpan={8} className="px-4 py-3 text-[9px] uppercase tracking-widest text-[#444] font-bold">Total RET a Recolher</td>
-                                            <td className="px-4 py-3 text-right font-black text-[#f97316]">
+                                        <tr className="bg-[var(--v-deep)] border-t border-[var(--v-line)]">
+                                            <td colSpan={8} className="px-4 py-3 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold">Total RET a Recolher</td>
+                                            <td className="px-4 py-3 text-right font-black text-[var(--v-accent)]">
                                                 {fmt(retData.reduce((s, r) => s + (r.total_ret || 0), 0))}
                                             </td>
                                         </tr>
@@ -338,10 +378,10 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             </table>
                         </div>
                         {retData.length > 0 && (
-                            <div className="border-t border-[#161616] p-4 flex justify-end">
+                            <div className="border-t border-[var(--v-line)] p-4 flex justify-end">
                                 <MagmaBtn onClick={commitRet} disabled={retCommitting} loading={retCommitting}
                                     icon={CheckCircle2} label="Confirmar e Injetar Lote RET no Questor"
-                                    accent="#22c55e" filled />
+                                    accent="var(--v-ok)" filled />
                             </div>
                         )}
                     </div>
@@ -350,9 +390,9 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                 {/* ── F200 ── */}
                 {activeTab === 'F200' && f200Data && (
                     <div>
-                        <div className="flex justify-end px-4 py-2 border-b border-[#161616]">
+                        <div className="flex justify-end px-4 py-2 border-b border-[var(--v-line)]">
                             <button onClick={() => setVisaoTecnica(!visaoTecnica)}
-                                className="flex items-center gap-1.5 text-[9px] text-[#60a5fa] uppercase tracking-widest font-bold hover:opacity-70 transition-opacity">
+                                className="flex items-center gap-1.5 text-[9px] text-[var(--v-src-questor)] uppercase tracking-widest font-bold hover:opacity-70 transition-opacity">
                                 <Code2 size={11} />
                                 {visaoTecnica ? 'Visão Resumida' : 'Modo Técnico JSON'}
                             </button>
@@ -361,7 +401,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             {!visaoTecnica ? (
                                 <table className="w-full text-[11px]">
                                     <thead>
-                                        <tr className="bg-[#0e0e0e]">
+                                        <tr className="bg-[var(--v-deep)]">
                                             <Th>Unidade · Obra</Th>
                                             <Th>Cliente</Th>
                                             <Th>Status</Th>
@@ -371,35 +411,35 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                             <Th right>Valor Parcela</Th>
                                             <Th right>Variação</Th>
                                             <Th right>Recebido no Mês</Th>
-                                            <Th right accent="#60a5fa">PIS</Th>
-                                            <Th right accent="#60a5fa">COFINS</Th>
+                                            <Th right accent="var(--v-src-questor)">PIS</Th>
+                                            <Th right accent="var(--v-src-questor)">COFINS</Th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {(f200Data.data || []).map((r, i) => (
-                                            <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                <td className="px-4 py-3 font-mono text-[#888] max-w-52 truncate whitespace-nowrap">
+                                            <tr key={i} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors">
+                                                <td className="px-4 py-3 font-mono text-[var(--v-text-muted)] max-w-52 truncate whitespace-nowrap">
                                                     #{r.numcadimob ?? '?'} {(r.unidade || '').replace(/\s+/g, ' ')}
-                                                    <span className="text-[#444]"> · {r.obra}</span>
+                                                    <span className="text-[var(--v-text-ghost)]"> · {r.obra}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-[#777] max-w-40 truncate whitespace-nowrap">{r.cliente}</td>
+                                                <td className="px-4 py-3 text-[var(--v-text-muted)] max-w-40 truncate whitespace-nowrap">{r.cliente}</td>
                                                 <td className="px-4 py-3 font-mono text-[10px]">
-                                                    <span style={{ color: (r.status === 'PRONTO' || r.status === 'NOVO_CADASTRO') ? '#22c55e' : r.status === 'JA_LANCADO' ? '#888' : '#f97316' }}>
+                                                    <span style={{ color: (r.status === 'PRONTO' || r.status === 'NOVO_CADASTRO') ? 'var(--v-ok)' : r.status === 'JA_LANCADO' ? 'var(--v-text-muted)' : 'var(--v-accent)' }}>
                                                         {r.status === 'JA_LANCADO' ? 'JÁ LANÇADO' : r.status?.replace(/_/g, ' ')}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 font-mono text-[#666] whitespace-nowrap">{r.dtoper ? r.dtoper.split('-').reverse().join('/') : ''}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#999]">{fmt(r.vltotvend)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#555]">{fmt(r.vlrecacum)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#999]">{fmt(r.valor_parcela ?? r.vltotrec)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#777]">{fmt(r.variacao)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-white">{fmt(r.vltotrec)}</td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.vlpis)} <span className="text-[#444]">({r.aliqpis}%)</span></td>
-                                                <td className="px-4 py-3 font-mono text-right text-[#60a5fa]">{fmt(r.vlcofins)} <span className="text-[#444]">({r.aliqcofins}%)</span></td>
+                                                <td className="px-4 py-3 font-mono text-[var(--v-text-muted)] whitespace-nowrap">{r.dtoper ? r.dtoper.split('-').reverse().join('/') : ''}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.vltotvend)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-text-faint)]">{fmt(r.vlrecacum)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.valor_parcela ?? r.vltotrec)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.variacao)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-text-bold)]">{fmt(r.vltotrec)}</td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-src-questor)]">{fmt(r.vlpis)} <span className="text-[var(--v-text-ghost)]">({r.aliqpis}%)</span></td>
+                                                <td className="px-4 py-3 font-mono text-right text-[var(--v-src-questor)]">{fmt(r.vlcofins)} <span className="text-[var(--v-text-ghost)]">({r.aliqcofins}%)</span></td>
                                             </tr>
                                         ))}
                                         {(f200Data.data || []).length === 0 && (
-                                            <tr><td colSpan={11} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                            <tr><td colSpan={11} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
                                                 Sem recebimentos F200 (fora do RET) para a competência.
                                             </td></tr>
                                         )}
@@ -408,9 +448,9 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             ) : (
                                 <div className="p-4 flex flex-col gap-3">
                                     {(f200Data.data || []).map((r, i) => (
-                                        <div key={i} className="border-l-2 border-[#60a5fa] pl-4 bg-[#0e0e0e] rounded-r-lg p-3">
-                                            <p className="text-[9px] uppercase tracking-widest text-[#444] font-bold mb-2">EFDUNIDIMOBVENDIDA · #{r.numcadimob} · {r.status}</p>
-                                            <pre className="text-[10px] text-[#60a5fa] font-mono bg-black p-3 rounded-lg border border-[#1a1a1a] overflow-auto">
+                                        <div key={i} className="border-l-2 border-[var(--v-src-questor)] pl-4 bg-[var(--v-deep)] rounded-r-lg p-3">
+                                            <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)] font-bold mb-2">EFDUNIDIMOBVENDIDA · #{r.numcadimob} · {r.status}</p>
+                                            <pre className="text-[10px] text-[var(--v-src-questor)] font-mono bg-[var(--v-deep)] p-3 rounded-lg border border-[var(--v-line)] overflow-auto">
                                                 {JSON.stringify(r, null, 2)}
                                             </pre>
                                         </div>
@@ -419,10 +459,10 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             )}
                         </div>
                         {(f200Data.data || []).length > 0 && (
-                            <div className="border-t border-[#161616] p-4 flex justify-end">
+                            <div className="border-t border-[var(--v-line)] p-4 flex justify-end">
                                 <MagmaBtn onClick={commitF200} disabled={f200Committing} loading={f200Committing}
                                     icon={CheckCircle2} label="Confirmar e Injetar Lote F200 no Questor"
-                                    accent="#60a5fa" filled />
+                                    accent="var(--v-src-questor)" filled />
                             </div>
                         )}
                     </div>
@@ -433,30 +473,30 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             <div className="border-t border-[#141414] pt-6">
                 <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
                     <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-[#f97316]/10 border border-[#f97316]/20 flex items-center justify-center shrink-0 mt-0.5">
-                            <ReceiptText size={15} className="text-[#f97316]" />
+                        <div className="w-8 h-8 rounded-lg bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/20 flex items-center justify-center shrink-0 mt-0.5">
+                            <ReceiptText size={15} className="text-[var(--v-accent)]" />
                         </div>
                         <div>
-                            <h3 className="text-[13px] font-black uppercase tracking-tight text-[#f97316]">
+                            <h3 className="text-[13px] font-black uppercase tracking-tight text-[var(--v-accent)]">
                                 DIMOB — Declaração de Informações Imobiliárias
                             </h3>
-                            <p className="text-[9px] text-[#444] uppercase tracking-[0.2em] mt-0.5">
+                            <p className="text-[9px] text-[var(--v-text-ghost)] uppercase tracking-[0.2em] mt-0.5">
                                 Obrigação Acessória Anual · Geração de Arquivo PGD
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-end gap-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl p-3">
+                    <div className="flex items-end gap-3 bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl p-3">
                         <div className="w-24">
-                            <label className="block text-[9px] uppercase tracking-[0.2em] text-[#444] mb-1.5 font-bold">Ano Calendário</label>
+                            <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">Ano Calendário</label>
                             <select value={anoDimob} onChange={e => setAnoDimob(e.target.value)}
-                                className="w-full bg-[#111] border border-[#222] text-white text-[11px] font-mono px-2 py-2 rounded-lg outline-none">
+                                className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-2 rounded-lg outline-none">
                                 {[2022, 2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                             </select>
                         </div>
                         <MagmaBtn onClick={fetchDimobPreview} disabled={loadingDimob} loading={loadingDimob}
-                            icon={FileText} label="Auditar Registros" accent="#f97316" />
+                            icon={FileText} label="Auditar Registros" accent="var(--v-accent)" />
                         <MagmaBtn onClick={fetchDimob} disabled={loadingDimob} loading={loadingDimob}
-                            icon={Download} label="Baixar PGD DIMOB (.txt)" accent="#f97316" filled />
+                            icon={Download} label="Baixar PGD DIMOB (.txt)" accent="var(--v-accent)" filled />
                     </div>
                 </div>
 
@@ -468,25 +508,25 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             const totalPago = registros.reduce((s, r) => s + (r.valor_pago || 0), 0);
                             const totalVenda = registros.reduce((s, r) => s + (r.valor_venda || 0), 0);
                             return (
-                                <div key={tipo} className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl overflow-hidden">
-                                    <div className="flex items-center justify-between px-5 py-3 border-b border-[#161616] bg-[#0e0e0e]">
+                                <div key={tipo} className="bg-[var(--v-deep)] border border-[var(--v-line)] rounded-xl overflow-hidden">
+                                    <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--v-line)] bg-[var(--v-deep)]">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-1.5 h-4 rounded-full bg-[#f97316]" />
-                                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#f97316]">
+                                            <div className="w-1.5 h-4 rounded-full bg-[var(--v-accent)]" />
+                                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--v-accent)]">
                                                 {tipo === 'venda' ? 'R03 — Alienação de Imóveis' : 'R02 — Rendimentos de Locações'}
                                             </h4>
-                                            <span className="text-[9px] font-mono text-[#444]">{registros.length} registros</span>
+                                            <span className="text-[9px] font-mono text-[var(--v-text-ghost)]">{registros.length} registros</span>
                                         </div>
                                         <div className="flex gap-6 text-right">
                                             {tipo === 'venda' && (
                                                 <div>
-                                                    <div className="text-[8px] text-[#444] uppercase tracking-widest">Venda Total</div>
-                                                    <div className="text-[12px] font-black font-mono text-[#666]">{fmt(totalVenda)}</div>
+                                                    <div className="text-[8px] text-[var(--v-text-ghost)] uppercase tracking-widest">Venda Total</div>
+                                                    <div className="text-[12px] font-black font-mono text-[var(--v-text-muted)]">{fmt(totalVenda)}</div>
                                                 </div>
                                             )}
                                             <div>
-                                                <div className="text-[8px] text-[#444] uppercase tracking-widest">Recebido (Caixa)</div>
-                                                <div className="text-[12px] font-black font-mono text-white">{fmt(totalPago)}</div>
+                                                <div className="text-[8px] text-[var(--v-text-ghost)] uppercase tracking-widest">Recebido (Caixa)</div>
+                                                <div className="text-[12px] font-black font-mono text-[var(--v-text-bold)]">{fmt(totalPago)}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -496,19 +536,19 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                                 <Th>Cliente / CPF·CNPJ</Th>
                                                 <Th>Unidade</Th>
                                                 {tipo === 'venda' && <Th right>Valor Total Venda</Th>}
-                                                <Th right accent="#f97316">Rendimentos Pagos</Th>
+                                                <Th right accent="var(--v-accent)">Rendimentos Pagos</Th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {registros.map((r, i) => (
-                                                <tr key={i} className="border-b border-[#0f0f0f] hover:bg-[#111] transition-colors">
-                                                    <td className="px-4 py-2.5 text-[#888]">
+                                                <tr key={i} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors">
+                                                    <td className="px-4 py-2.5 text-[var(--v-text-muted)]">
                                                         {r.cliente_nome}
-                                                        <br /><span className="text-[9px] font-mono text-[#444]">{r.cliente_cpf}</span>
+                                                        <br /><span className="text-[9px] font-mono text-[var(--v-text-ghost)]">{r.cliente_cpf}</span>
                                                     </td>
-                                                    <td className="px-4 py-2.5 font-mono text-[#555]">{r.unidade}</td>
-                                                    {tipo === 'venda' && <td className="px-4 py-2.5 font-mono text-right text-[#555]">{fmt(r.valor_venda)}</td>}
-                                                    <td className="px-4 py-2.5 font-mono text-right font-black text-[#f97316]">{fmt(r.valor_pago)}</td>
+                                                    <td className="px-4 py-2.5 font-mono text-[var(--v-text-faint)]">{r.unidade}</td>
+                                                    {tipo === 'venda' && <td className="px-4 py-2.5 font-mono text-right text-[var(--v-text-faint)]">{fmt(r.valor_venda)}</td>}
+                                                    <td className="px-4 py-2.5 font-mono text-right font-black text-[var(--v-accent)]">{fmt(r.valor_pago)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

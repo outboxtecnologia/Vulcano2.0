@@ -42,11 +42,11 @@ const TARGET_SCHEMAS = {
 };
 
 const STATUS_META = {
-  JA_QUITADO:    { label: 'JÁ QUITADO',   color: '#34c759' },
-  MATCH_PERFEITO:{ label: 'MATCH',        color: '#007aff' },
-  MATCH_MANUAL:  { label: 'MATCH MANUAL', color: '#a259ff' },
-  SEM_MATCH:     { label: 'SEM MATCH',    color: '#ff4d00' },
-  DIVERGENCIA:   { label: 'DIVERGÊNCIA',  color: '#ffcc00' },
+  JA_QUITADO:    { label: 'JÁ QUITADO',   color: 'var(--v-ok)' },
+  MATCH_PERFEITO:{ label: 'MATCH',        color: 'var(--v-info)' },
+  MATCH_MANUAL:  { label: 'MATCH MANUAL', color: 'var(--v-src-vu1)' },
+  SEM_MATCH:     { label: 'SEM MATCH',    color: 'var(--v-accent)' },
+  DIVERGENCIA:   { label: 'DIVERGÊNCIA',  color: 'var(--v-warn-hi)' },
 };
 
 export default function SmartImporter({ selectedEmpresa }) {
@@ -261,8 +261,8 @@ export default function SmartImporter({ selectedEmpresa }) {
   };
 
   const getConfidenceColor = (val) => {
-    if (val >= 0.9) return '#3dd68c'; // Green
-    if (val >= 0.7) return '#ffc247'; // Yellow
+    if (val >= 0.9) return 'var(--v-ok)'; // Green
+    if (val >= 0.7) return 'var(--v-warn)'; // Yellow
     return '#ff5c5c'; // Red
   };
 
@@ -273,13 +273,13 @@ export default function SmartImporter({ selectedEmpresa }) {
       <div className="flex flex-col md:flex-row items-start justify-between gap-6 px-2">
         <div className="max-w-2xl">
           <div className="flex items-center gap-4 mb-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[var(--v-accent)]/30 bg-gradient-to-br from-[var(--v-accent)]/20 to-transparent shadow-[0_0_15px_rgba(255,122,26,0.15)]">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-[rgb(var(--v-accent-rgb)_/_0.3)] bg-gradient-to-br from-[rgb(var(--v-accent-rgb)_/_0.2)] to-transparent shadow-[0_0_15px_rgba(255,122,26,0.15)]">
               <Sparkles className="text-[var(--v-accent)]" size={20} />
             </div>
             <h1 className="font-headline font-semibold text-2xl tracking-tight text-[var(--v-text)] flex items-center gap-2">
               Smart Importer <span className="text-[var(--v-accent)]">IA</span>
             </h1>
-            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[var(--v-accent)]/30 text-[var(--v-accent)] bg-[var(--v-accent)]/10">
+            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[rgb(var(--v-accent-rgb)_/_0.3)] text-[var(--v-accent)] bg-[rgb(var(--v-accent-rgb)_/_0.1)]">
               BETA
             </span>
           </div>
@@ -291,7 +291,7 @@ export default function SmartImporter({ selectedEmpresa }) {
         <div className="flex items-center gap-3 shrink-0">
           {[
             { label: 'ARQUIVOS HOJE', value: '38', sub: '+12 vs. ontem', color: 'text-[var(--v-accent)]' },
-            { label: 'ACURÁCIA MÉDIA', value: '96.4%', sub: '↑ 2,1pp', color: 'text-[#3dd68c]' },
+            { label: 'ACURÁCIA MÉDIA', value: '96.4%', sub: '↑ 2,1pp', color: 'text-[var(--v-ok)]' },
             { label: 'TEMPO POUPADO', value: '4h 12m', sub: 'vs. manual', color: 'text-[var(--v-text-bold)]' }
           ].map((kpi, i) => (
             <div key={i} className="min-w-[120px] p-3 bg-[var(--v-card)] border border-[var(--v-border)] rounded-lg">
@@ -314,8 +314,8 @@ export default function SmartImporter({ selectedEmpresa }) {
             <div key={s.num} className="flex items-center gap-4 relative z-10">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-headline font-bold text-sm shrink-0 shadow-sm
                 ${step >= s.num 
-                  ? 'bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] border-none text-black shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_0_15px_rgba(255,140,42,0.3)]' 
-                  : 'bg-[var(--v-border)]/10 border border-[var(--v-border)] text-[var(--v-text-faint)]'}`}>
+                  ? 'bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] border-none text-[var(--v-text-inv)] shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_0_15px_rgba(255,140,42,0.3)]' 
+                  : 'bg-[rgb(var(--v-border-rgb)_/_0.1)] border border-[var(--v-border)] text-[var(--v-text-faint)]'}`}>
                 {step > s.num ? <CheckCircle2 size={16} /> : s.num}
               </div>
               <div>
@@ -334,19 +334,19 @@ export default function SmartImporter({ selectedEmpresa }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
         {/* Upload Manual */}
-        <div className="relative bg-[var(--v-card)] border border-dashed border-[var(--v-border)] hover:border-[var(--v-accent)]/50 transition-colors duration-300 rounded-xl p-6 flex flex-col min-h-[280px]">
+        <div className="relative bg-[var(--v-card)] border border-dashed border-[var(--v-border)] hover:border-[rgb(var(--v-accent-rgb)_/_0.5)] transition-colors duration-300 rounded-xl p-6 flex flex-col min-h-[280px]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <FileSpreadsheet size={16} className="text-[var(--v-text-muted)]" />
               <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">Upload Manual</span>
             </div>
-            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[var(--v-border)] text-[var(--v-text-muted)] bg-white/5">
+            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[var(--v-border)] text-[var(--v-text-muted)] bg-[var(--v-tint)]">
               XLS · XLSX · CSV
             </span>
           </div>
           
           <form onSubmit={handleFileUpload} className="flex-1 flex flex-col items-center justify-center text-center">
-            <div className="w-14 h-14 rounded-xl bg-[var(--v-accent)]/5 border border-[var(--v-accent)]/20 flex items-center justify-center mb-4 shadow-[inset_0_0_24px_rgba(255,140,42,0.08)]">
+            <div className="w-14 h-14 rounded-xl bg-[rgb(var(--v-accent-rgb)_/_0.05)] border border-[rgb(var(--v-accent-rgb)_/_0.2)] flex items-center justify-center mb-4 shadow-[inset_0_0_24px_rgba(255,140,42,0.08)]">
               <UploadCloud size={24} className="text-[var(--v-accent)]" />
             </div>
             <h3 className="font-headline font-semibold text-base text-[var(--v-text-bold)] mb-1">Arraste & solte um arquivo</h3>
@@ -366,7 +366,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                 <Search size={14} /> Selecionar
               </label>
               
-              <button type="submit" disabled={!file || loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] text-black font-semibold text-xs whitespace-nowrap shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_4px_12px_rgba(201,58,18,0.35)] disabled:opacity-50 hover:brightness-110 transition-all cursor-pointer border-none">
+              <button type="submit" disabled={!file || loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] text-[var(--v-text-inv)] font-semibold text-xs whitespace-nowrap shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_4px_12px_rgba(201,58,18,0.35)] disabled:opacity-50 hover:brightness-110 transition-all cursor-pointer border-none">
                 {loading ? <div className="animate-spin w-3 h-3 border-2 border-black border-t-transparent rounded-full" /> : <ChevronRight size={14} />}
                 {loading ? 'Analisando...' : 'Iniciar'}
               </button>
@@ -381,11 +381,11 @@ export default function SmartImporter({ selectedEmpresa }) {
           
           <div className="flex items-center justify-between mb-3 z-10">
             <div className="flex items-center gap-2">
-              <Terminal size={16} className="text-[#3dd68c]" />
+              <Terminal size={16} className="text-[var(--v-ok)]" />
               <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">Copiloto de Importação</span>
             </div>
-            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[#3dd68c]/30 text-[#3dd68c] bg-[#3dd68c]/10 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3dd68c] animate-pulse"></span> ONLINE
+            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest border border-[var(--v-ok)]/30 text-[var(--v-ok)] bg-[var(--v-ok)]/10 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--v-ok)] animate-pulse"></span> ONLINE
             </span>
           </div>
           
@@ -399,15 +399,15 @@ export default function SmartImporter({ selectedEmpresa }) {
                 <Database size={12} className="text-[var(--v-accent)]" /> Fila Automática ({queueItems.length})
               </h4>
               {queueItems.map(item => (
-                <div key={item.id} className="bg-black/30 border border-[var(--v-border)] p-2 rounded flex flex-col gap-1">
+                <div key={item.id} className="bg-[var(--v-scrim)] border border-[var(--v-border)] p-2 rounded flex flex-col gap-1">
                   <div className="flex justify-between items-start">
                     <p className="text-[10px] font-bold text-[var(--v-text)] truncate max-w-[150px]" title={item.filename}>{item.filename}</p>
                     <div className="flex gap-1">
-                      <button onClick={() => handleDeleteQueue(item.id)} className="text-[var(--v-text-faint)] hover:text-[#ff4d00]">
+                      <button onClick={() => handleDeleteQueue(item.id)} className="text-[var(--v-text-faint)] hover:text-[var(--v-accent)]">
                         <X size={12} />
                       </button>
                       {item.status === 'AGUARDANDO_REVISAO' && (
-                        <button onClick={() => handleApproveQueue(item.id, item.target_table)} disabled={queueLoading} className="text-[#007aff] hover:underline text-[9px] font-bold uppercase tracking-widest">
+                        <button onClick={() => handleApproveQueue(item.id, item.target_table)} disabled={queueLoading} className="text-[var(--v-info)] hover:underline text-[9px] font-bold uppercase tracking-widest">
                           Revisar
                         </button>
                       )}
@@ -415,7 +415,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                   </div>
                   <div className="text-[8px] uppercase tracking-widest text-[var(--v-text-muted)] flex justify-between">
                     <span>Destino: <span className="text-[var(--v-accent)]">{item.target_table}</span></span>
-                    <span className="text-[#ffcc00]">{item.status}</span>
+                    <span className="text-[var(--v-warn-hi)]">{item.status}</span>
                   </div>
                 </div>
               ))}
@@ -428,7 +428,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                 { icon: <AlertCircle size={14}/>, label: 'Marcar divergências', value: 'auto' },
                 { icon: <Zap size={14}/>, label: 'Aprender com correções', value: 'on' }
               ].map((f, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 bg-black/30 border border-[var(--v-border)] rounded-md">
+                <div key={i} className="flex items-center gap-2 p-2 bg-[var(--v-scrim)] border border-[var(--v-border)] rounded-md">
                   <div className="text-[var(--v-text-muted)]">{f.icon}</div>
                   <span className="flex-1 text-[11px] text-[var(--v-text-bold)] truncate">{f.label}</span>
                   <span className="font-mono text-[9px] text-[var(--v-text-faint)]">{f.value}</span>
@@ -437,10 +437,10 @@ export default function SmartImporter({ selectedEmpresa }) {
             </div>
           )}
 
-          <div className="mt-4 p-3 bg-[var(--v-accent)]/5 border border-dashed border-[var(--v-accent)]/30 rounded-lg flex gap-3 z-10">
+          <div className="mt-4 p-3 bg-[rgb(var(--v-accent-rgb)_/_0.05)] border border-dashed border-[rgb(var(--v-accent-rgb)_/_0.3)] rounded-lg flex gap-3 z-10">
             <Settings size={14} className="text-[var(--v-text-muted)] shrink-0 mt-0.5" />
             <p className="text-[11px] text-[var(--v-text-muted)] leading-snug">
-              Sempre que uma coluna fica abaixo de <span className="text-[#ffc247]">0.85 de confiança</span>, eu peço sua confirmação e aprendo o padrão para os próximos arquivos.
+              Sempre que uma coluna fica abaixo de <span className="text-[var(--v-warn)]">0.85 de confiança</span>, eu peço sua confirmação e aprendo o padrão para os próximos arquivos.
             </p>
           </div>
         </div>
@@ -449,7 +449,7 @@ export default function SmartImporter({ selectedEmpresa }) {
       {/* DE-PARA Table Section */}
       {step >= 2 && columns.length > 0 && step < 3 && (
         <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-          <div className="p-4 border-b border-[var(--v-border)] flex items-center justify-between bg-black/20">
+          <div className="p-4 border-b border-[var(--v-border)] flex items-center justify-between bg-[var(--v-zebra)]">
             <div className="flex items-center gap-3">
               <Database size={16} className="text-[var(--v-text-muted)]" />
               <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">DE-PARA SUGERIDO PELA IA</span>
@@ -485,7 +485,7 @@ export default function SmartImporter({ selectedEmpresa }) {
               <button onClick={() => callGeminiMatching(columns)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
                 <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Re-analisar
               </button>
-              <button onClick={handlePreviewMatch} disabled={matchLoading} className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[var(--v-accent)]/30 rounded text-[11px] font-bold hover:bg-[var(--v-accent)]/20 transition-colors disabled:opacity-50">
+              <button onClick={handlePreviewMatch} disabled={matchLoading} className="flex items-center gap-1.5 px-4 py-1.5 bg-[rgb(var(--v-accent-rgb)_/_0.1)] text-[var(--v-accent)] border border-[rgb(var(--v-accent-rgb)_/_0.3)] rounded text-[11px] font-bold hover:bg-[rgb(var(--v-accent-rgb)_/_0.2)] transition-colors disabled:opacity-50">
                 {matchLoading ? 'Aguarde...' : 'Gerar Preview de Match'} <ArrowUpRight size={12} />
               </button>
             </div>
@@ -494,7 +494,7 @@ export default function SmartImporter({ selectedEmpresa }) {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-black/40 font-mono text-[9.5px] tracking-[0.2em] text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
+                <tr className="bg-[var(--v-scrim)] font-mono text-[9.5px] tracking-[0.2em] text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
                   <th className="p-3 w-12 text-center">#</th>
                   <th className="p-3">COLUNA NA PLANILHA</th>
                   <th className="p-3 w-8 text-center"></th>
@@ -517,7 +517,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                           onChange={(e) => {
                             setMapping(prev => ({ ...prev, [col]: e.target.value }));
                           }}
-                          className={`w-full max-w-[220px] bg-[var(--v-deep)] border ${val ? 'border-[#3dd68c]/30 text-[#3dd68c]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'} py-1.5 px-2 rounded outline-none text-[11px] font-mono font-medium appearance-none cursor-pointer hover:border-[var(--v-accent)]/50 transition-colors`}
+                          className={`w-full max-w-[220px] bg-[var(--v-deep)] border ${val ? 'border-[var(--v-ok)]/30 text-[var(--v-ok)]' : 'border-[var(--v-border)] text-[var(--v-text-muted)]'} py-1.5 px-2 rounded outline-none text-[11px] font-mono font-medium appearance-none cursor-pointer hover:border-[rgb(var(--v-accent-rgb)_/_0.5)] transition-colors`}
                         >
                           <option value="null">-- Ignorar --</option>
                           {(TARGET_SCHEMAS[targetTable] || []).map(field => (
@@ -530,9 +530,9 @@ export default function SmartImporter({ selectedEmpresa }) {
                       </td>
                       <td className="p-3 text-right">
                         {val ? (
-                          <span className="font-mono text-[9.5px] tracking-widest text-[#3dd68c] px-2 py-1 bg-[#3dd68c]/10 rounded border border-[#3dd68c]/20">MAPPED</span>
+                          <span className="font-mono text-[9.5px] tracking-widest text-[var(--v-ok)] px-2 py-1 bg-[var(--v-ok)]/10 rounded border border-[var(--v-ok)]/20">MAPPED</span>
                         ) : (
-                          <span className="font-mono text-[9.5px] tracking-widest text-[var(--v-text-faint)] px-2 py-1 bg-black/40 rounded border border-[var(--v-border)]">IGNORADO</span>
+                          <span className="font-mono text-[9.5px] tracking-widest text-[var(--v-text-faint)] px-2 py-1 bg-[var(--v-scrim)] rounded border border-[var(--v-border)]">IGNORADO</span>
                         )}
                       </td>
                     </tr>
@@ -547,7 +547,7 @@ export default function SmartImporter({ selectedEmpresa }) {
       {/* MATCH PREVIEW Section */}
       {step === 3 && (
         <div className="bg-[var(--v-card)] border border-[var(--v-border)] rounded-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
-          <div className="p-4 border-b border-[var(--v-border)] flex items-center justify-between bg-black/20">
+          <div className="p-4 border-b border-[var(--v-border)] flex items-center justify-between bg-[var(--v-zebra)]">
             <div className="flex items-center gap-3">
               <Database size={16} className="text-[var(--v-text-muted)]" />
               <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">PREVIEW DE MATCH E INTEGRAÇÃO</span>
@@ -558,13 +558,13 @@ export default function SmartImporter({ selectedEmpresa }) {
               <button onClick={handleSaveTemplate} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-[var(--v-border)] rounded text-[11px] text-[var(--v-text-muted)] hover:text-[var(--v-text)] transition-colors">
                 <Save size={12} /> Salvar Template
               </button>
-              <button onClick={handleDownloadTxt} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-[var(--v-border)] rounded text-[11px] text-[#007aff] hover:bg-[#007aff]/10 transition-colors">
+              <button onClick={handleDownloadTxt} className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-[var(--v-border)] rounded text-[11px] text-[var(--v-info)] hover:bg-[var(--v-info)]/10 transition-colors">
                 <Download size={12} /> Baixar TXT
               </button>
               <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
                 Voltar
               </button>
-              <button onClick={() => alert("Gravação será implementada na API")} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#3dd68c]/10 text-[#3dd68c] border border-[#3dd68c]/30 rounded text-[11px] font-bold hover:bg-[#3dd68c]/20 transition-colors shadow-sm">
+              <button onClick={() => alert("Gravação será implementada na API")} className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-ok)]/10 text-[var(--v-ok)] border border-[var(--v-ok)]/30 rounded text-[11px] font-bold hover:bg-[var(--v-ok)]/20 transition-colors shadow-sm">
                 <Save size={14} /> Gravar no ERP
               </button>
             </div>
@@ -572,7 +572,7 @@ export default function SmartImporter({ selectedEmpresa }) {
           
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left text-xs border-collapse min-w-[1000px]">
-              <thead className="bg-black/40 sticky top-0 z-10 backdrop-blur-md">
+              <thead className="bg-[var(--v-scrim)] sticky top-0 z-10 backdrop-blur-md">
                 <tr className="font-mono text-[9.5px] tracking-[0.1em] text-[var(--v-text-faint)] border-b border-[var(--v-border)]">
                   <th className="p-3">STATUS</th>
                   <th className="p-3">CLIENTE (Planilha)</th>
@@ -585,7 +585,7 @@ export default function SmartImporter({ selectedEmpresa }) {
               </thead>
               <tbody>
                 {matchData.map((r, idx) => {
-                  const meta = STATUS_META[r.status] || { label: r.status, color: '#888' };
+                  const meta = STATUS_META[r.status] || { label: r.status, color: 'var(--v-text-muted)' };
                   const fmt = v => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '-';
                   const diff = Math.abs((r.valor_planilha || 0) - (r.valor_vulcano || 0));
                   
@@ -599,8 +599,8 @@ export default function SmartImporter({ selectedEmpresa }) {
                       <td className="p-3 max-w-[200px]">
                         <p className="font-semibold text-[var(--v-text)] truncate" title={r.cliente_planilha}>{r.cliente_planilha || '-'}</p>
                         {r.status !== 'SEM_MATCH' && (
-                          <div className="mt-1 flex flex-col gap-0.5 border-t border-[var(--v-border)]/50 pt-1">
-                            <span className="text-[9.5px] font-mono tracking-widest text-[#3dd68c] uppercase font-bold">
+                          <div className="mt-1 flex flex-col gap-0.5 border-t border-[rgb(var(--v-border-rgb)_/_0.5)] pt-1">
+                            <span className="text-[9.5px] font-mono tracking-widest text-[var(--v-ok)] uppercase font-bold">
                               PARCELA: {r.numero_parcela || '-'} | VENC: {r.dt_venc_vulcano || '-'}
                             </span>
                             <span className="text-[10px] text-[var(--v-text-muted)] truncate" title={r.cliente_vulcano}>
@@ -613,11 +613,11 @@ export default function SmartImporter({ selectedEmpresa }) {
                       <td className="p-3 text-right font-black text-[var(--v-text)]">{fmt(r.valor_planilha)}</td>
                       <td className="p-3 text-right font-black text-[var(--v-text-muted)]">{fmt(r.valor_vulcano)}</td>
                       <td className="p-3 text-right font-bold text-[11px]">
-                        {diff > 0.01 ? <span className="text-[#ffc247]">{fmt(diff)}</span> : <span className="text-[var(--v-text-faint)]">Exato</span>}
+                        {diff > 0.01 ? <span className="text-[var(--v-warn)]">{fmt(diff)}</span> : <span className="text-[var(--v-text-faint)]">Exato</span>}
                       </td>
                       <td className="p-3 text-center">
                         {r.status === 'SEM_MATCH' ? (
-                          <button onClick={() => setManualMatchModal({ open: true, rowData: r, rowIndex: idx })} className="px-2 py-1 bg-[var(--v-deep)] border border-[var(--v-border)] hover:border-[#a259ff] text-[var(--v-text-muted)] hover:text-[#a259ff] rounded text-[9px] font-bold uppercase tracking-widest transition-colors inline-flex items-center gap-1">
+                          <button onClick={() => setManualMatchModal({ open: true, rowData: r, rowIndex: idx })} className="px-2 py-1 bg-[var(--v-deep)] border border-[var(--v-border)] hover:border-[var(--v-src-vu1)] text-[var(--v-text-muted)] hover:text-[var(--v-src-vu1)] rounded text-[9px] font-bold uppercase tracking-widest transition-colors inline-flex items-center gap-1">
                             Vincular
                           </button>
                         ) : (
@@ -634,8 +634,8 @@ export default function SmartImporter({ selectedEmpresa }) {
       )}
 
       {manualMatchModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#111] border border-[var(--v-border)] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--v-overlay)] backdrop-blur-sm p-4">
+          <div className="bg-[var(--v-bg)] border border-[var(--v-border)] rounded-xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="p-6 border-b border-[var(--v-border)] flex justify-between items-center bg-[var(--v-deep)]">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-widest text-[var(--v-text-bold)] flex items-center gap-2">
@@ -648,22 +648,22 @@ export default function SmartImporter({ selectedEmpresa }) {
               </button>
             </div>
             
-            <div className="p-6 border-b border-[var(--v-border)] bg-[#0b0b0b]">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#a259ff] mb-3">Dados da Planilha (Pagamento Efetuado)</h4>
+            <div className="p-6 border-b border-[var(--v-border)] bg-[var(--v-deep)]">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-src-vu1)] mb-3">Dados da Planilha (Pagamento Efetuado)</h4>
               <div className="grid grid-cols-4 gap-4">
-                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                <div className="bg-[var(--v-card)] p-3 rounded border border-[var(--v-border)]">
                   <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Cliente</p>
                   <p className="text-xs font-bold text-[var(--v-text)] truncate">{manualMatchModal.rowData?.cliente_planilha || '-'}</p>
                 </div>
-                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                <div className="bg-[var(--v-card)] p-3 rounded border border-[var(--v-border)]">
                   <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Vencimento</p>
                   <p className="text-xs font-mono text-[var(--v-text-muted)]">{manualMatchModal.rowData?.dt_vencimento || '-'}</p>
                 </div>
-                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                <div className="bg-[var(--v-card)] p-3 rounded border border-[var(--v-border)]">
                   <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Pagamento</p>
                   <p className="text-xs font-mono text-[var(--v-text-muted)]">{manualMatchModal.rowData?.dt_pagamento || '-'}</p>
                 </div>
-                <div className="bg-[#1a1a1a] p-3 rounded border border-[var(--v-border)]">
+                <div className="bg-[var(--v-card)] p-3 rounded border border-[var(--v-border)]">
                   <p className="text-[9px] uppercase tracking-widest text-[var(--v-text-faint)] mb-1">Valor Pago</p>
                   <p className="text-sm font-black text-[var(--v-accent)]">R$ {Number(manualMatchModal.rowData?.valor_planilha || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
                 </div>
@@ -686,9 +686,9 @@ export default function SmartImporter({ selectedEmpresa }) {
                     const isDesconto = diff < 0;
                     
                     return (
-                      <div key={p.id} className="flex items-center justify-between p-3 border border-[var(--v-border)] bg-[#0b0b0b] rounded hover:border-[#a259ff] transition-colors group">
+                      <div key={p.id} className="flex items-center justify-between p-3 border border-[var(--v-border)] bg-[var(--v-deep)] rounded hover:border-[var(--v-src-vu1)] transition-colors group">
                         <div className="flex items-center gap-4 flex-1">
-                          <div className="bg-[#1a1a1a] px-3 py-1 rounded text-xs font-mono text-[var(--v-text-muted)] w-16 text-center border border-[var(--v-border)]">
+                          <div className="bg-[var(--v-card)] px-3 py-1 rounded text-xs font-mono text-[var(--v-text-muted)] w-16 text-center border border-[var(--v-border)]">
                             Nº {p.numero_parcela}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -698,7 +698,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                           <div className="text-right px-4">
                             <p className="text-sm font-black text-[var(--v-accent)]">R$ {p.valor_parcela.toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
                             {diff !== 0 && (
-                              <p className={`text-[9px] font-bold uppercase tracking-widest ${isAcrescimo ? 'text-[#ffcc00]' : 'text-[#34c759]'}`}>
+                              <p className={`text-[9px] font-bold uppercase tracking-widest ${isAcrescimo ? 'text-[var(--v-warn-hi)]' : 'text-[var(--v-ok)]'}`}>
                                 {isAcrescimo ? '+ Acréscimo' : '- Desconto'}: R$ {Math.abs(diff).toLocaleString('pt-BR', {minimumFractionDigits:2})}
                               </p>
                             )}
@@ -723,7 +723,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                             setMatchData(newData);
                             setManualMatchModal({open: false, rowData: null, rowIndex: null});
                           }}
-                          className="px-4 py-2 bg-[var(--v-deep)] border border-[#a259ff]/30 text-[#a259ff] rounded text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 hover:bg-[#a259ff] hover:text-white transition-all ml-4"
+                          className="px-4 py-2 bg-[var(--v-deep)] border border-[var(--v-src-vu1)]/30 text-[var(--v-src-vu1)] rounded text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 hover:bg-[var(--v-src-vu1)] hover:text-[var(--v-text-bold)] transition-all ml-4"
                         >
                           Vincular
                         </button>
@@ -742,17 +742,17 @@ export default function SmartImporter({ selectedEmpresa }) {
         <div className="flex items-center gap-3 mb-4">
           <Database size={16} className="text-[var(--v-text-faint)]" />
           <span className="font-mono text-[10.5px] tracking-[0.22em] text-[var(--v-text-bold)] uppercase">Importações Recentes</span>
-          <div className="flex-1 h-px bg-[var(--v-border)]/50"></div>
+          <div className="flex-1 h-px bg-[rgb(var(--v-border-rgb)_/_0.5)]"></div>
           <span className="font-mono text-[9.5px] text-[var(--v-text-faint)]">ÚLTIMAS 24H · 38 ARQUIVOS</span>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { name: 'recebimentos_quinzena.csv', time: 'há 2 min', lines: 218, acc: '98.0%', saved: '14m', icon: <FileSpreadsheet size={16}/>, color: '#007aff' },
-            { name: 'extrato_caixa_06.pdf', time: 'há 8 min', lines: 412, acc: '95.0%', saved: '22m', icon: <UploadCloud size={16}/>, color: '#ff4d00' },
-            { name: 'NF_emit_05.xlsx', time: 'há 47 min', lines: 174, acc: '97.0%', saved: '11m', icon: <FileSpreadsheet size={16}/>, color: '#3dd68c' }
+            { name: 'recebimentos_quinzena.csv', time: 'há 2 min', lines: 218, acc: '98.0%', saved: '14m', icon: <FileSpreadsheet size={16}/>, color: 'var(--v-info)' },
+            { name: 'extrato_caixa_06.pdf', time: 'há 8 min', lines: 412, acc: '95.0%', saved: '22m', icon: <UploadCloud size={16}/>, color: 'var(--v-accent)' },
+            { name: 'NF_emit_05.xlsx', time: 'há 47 min', lines: 174, acc: '97.0%', saved: '11m', icon: <FileSpreadsheet size={16}/>, color: 'var(--v-ok)' }
           ].map((item, i) => (
-            <div key={i} className="bg-black/30 border border-[var(--v-border)] hover:border-[var(--v-border)]/80 rounded-xl p-4 transition-colors cursor-pointer group">
+            <div key={i} className="bg-[var(--v-scrim)] border border-[var(--v-border)] hover:border-[rgb(var(--v-border-rgb)_/_0.8)] rounded-xl p-4 transition-colors cursor-pointer group">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2 text-[var(--v-text-bold)]">
                   <div style={{color: item.color}} className="opacity-80 group-hover:opacity-100 transition-opacity">{item.icon}</div>
@@ -766,7 +766,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                   <div className="font-mono text-[9px] tracking-widest text-[var(--v-text-faint)] mt-0.5">LINHAS</div>
                 </div>
                 <div>
-                  <div className="font-headline font-semibold text-lg text-[#3dd68c]">{item.acc}</div>
+                  <div className="font-headline font-semibold text-lg text-[var(--v-ok)]">{item.acc}</div>
                   <div className="font-mono text-[9px] tracking-widest text-[var(--v-text-faint)] mt-0.5">ACURÁCIA</div>
                 </div>
                 <div>

@@ -3485,7 +3485,8 @@ def get_vulcano_empreendimentos(empresa_id: int):
             {col_or('ADQUIRIDO_TERCEIROS', "'N'")}, {col_or('SEM_CUSTOS', "'N'")},
             {col_or('CONSIDERAR_POC_RECEITA', "'N'")},
             {col_or('CODIGOHISTADIANTAMENTO', '0')}, {col_or('CODIGOHISTAPRCUSTO', '0')},
-            {col_or('CODIGOHISTDESPESA', '0')}, {col_or('CODIGO_HIST_ESTORNO_CUSTO', '0')}
+            {col_or('CODIGOHISTDESPESA', '0')}, {col_or('CODIGO_HIST_ESTORNO_CUSTO', '0')},
+            {col_or('CNPJ', "''")}
             FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ?"""
         cur.execute(query, (empresa_id,))
         
@@ -3519,10 +3520,15 @@ def get_vulcano_empreendimentos(empresa_id: int):
             "aliqret": float(r[35] or 0), "codigoimposto": r[36] or 0, "variacaoimposto": r[37] or 0,
             "tributarnormalaposconclusao": dec(r[38]),
             
-            "ajustefinalpoc": dec(r[39]), "reajustar_pelo_cub": dec(r[40]), "adquirido_terceiros": dec(r[41]),
+            # AJUSTEFINALPOC e DOUBLE (valor de ajuste do POC, ha registros na casa dos
+            # milhoes), nao um flag S/N. Devolver como numero para que o round-trip do
+            # formulario reescreva o mesmo valor em vez de corrompe-lo.
+            "ajustefinalpoc": float(r[39]) if r[39] is not None else None,
+            "reajustar_pelo_cub": dec(r[40]), "adquirido_terceiros": dec(r[41]),
             "sem_custos": dec(r[42]), "considerar_poc_receita": dec(r[43]),
             
-            "hist_adiantamento": r[44] or 0, "hist_aprcusto": r[45] or 0, "hist_despesa": r[46] or 0, "hist_estorno_custo": r[47] or 0
+            "hist_adiantamento": r[44] or 0, "hist_aprcusto": r[45] or 0, "hist_despesa": r[46] or 0, "hist_estorno_custo": r[47] or 0,
+            "cnpj": dec(r[48])
         } for r in cur.fetchall()]
         conn.close()
         return emps
@@ -3537,6 +3543,7 @@ class EmpreendimentoInput(BaseModel):
     custo: float = 0
     ret: str = 'N'
     cno: str = ''
+    cnpj: str = ''
     ativo: str = 'S'
     obra_concluida: str = 'N'
     endereco: str = ''
@@ -3557,7 +3564,8 @@ class EmpreendimentoInput(BaseModel):
     
     reajustar_pelo_cub: str = 'N'
     considerar_poc_receita: str = 'N'
-    ajustefinalpoc: str = 'N'
+    # DOUBLE no banco, nao flag S/N — ver nota no GET.
+    ajustefinalpoc: Optional[float] = None
     adquirido_terceiros: str = 'N'
     sem_custos: str = 'N'
     
@@ -3580,7 +3588,8 @@ class EmpreendimentoInput(BaseModel):
     hist_venda: int = 0
     hist_recebimento: int = 0
     hist_variacao: int = 0
-    hist_distrato: int = 0
+    # Sem hist_distrato: nao existe coluna de historico de distrato em EMPREENDIMENTO.
+    # O distrato e tratado por DISTRATOCTB e por VENDA.DISTRATO/DATADISTRATO.
     hist_estorno: int = 0
     hist_adiantamento: int = 0
     hist_baixaadi: int = 0
@@ -3590,6 +3599,27 @@ class EmpreendimentoInput(BaseModel):
     hist_estorno_custo: int = 0
     
     empresa_id: int
+
+
+def _num_or_none(v):
+    """Numero para colunas numericas, ou NULL.
+
+    CODIGOMUNIC (SMALLINT), CODIGOESTAB, CODIGOFILIAL e CODIGOMATRIZ (INTEGER) sao
+    numericas no banco mas chegam como string do formulario. Mandar '' direto fazia
+    o Firebird recusar o INSERT/UPDATE inteiro com
+    "SQL error code = -303, conversion error from string" — ou seja, bastava um
+    desses campos em branco (o caso normal) para nenhum empreendimento salvar.
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return int(float(s))
+    except ValueError:
+        return None
+
 
 @app.post("/api/vulcano/empreendimentos")
 def post_vulcano_empreendimento(data: EmpreendimentoInput):
@@ -3601,7 +3631,7 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
         new_id = cur.fetchone()[0]
         
         query = """INSERT INTO EMPREENDIMENTO (
-            ID, CODIGOEMPRESA, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, CNO, ATIVO, OBRACONCLUIDA, ENDERECO, DATACONCLUSAO,
+            ID, CODIGOEMPRESA, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, CNO, CNPJ, ATIVO, OBRACONCLUIDA, ENDERECO, DATACONCLUSAO,
             CONTACAIXA, CONTACLI, CONTAADICLI, CONTAESTAND, CONTAESTCON, CONTADESPESA, CONTAREC, 
             CONTAVARIACAO, CONTADEVOLUCAO, CODIGOCENTROCUSTO, CONTACUSTO, CONTALUCROACUM, CONTA_ESTORNO_DEVOLUCAO,
             CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI, CODIGO_HIST_ESTORNO_SALDO,
@@ -3609,7 +3639,7 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             CEP, SIGLAESTADO, CODIGOMUNIC, CODIGOESTAB, CODIGOFILIAL, CODIGOMATRIZ,
             DATAINICIORET, ALIQRET, CODIGOIMPOSTO, VARIACAOIMPOSTO, TRIBUTARNORMALAPOSCONCLUSAO,
             AJUSTEFINALPOC, REAJUSTAR_PELO_CUB, ADQUIRIDO_TERCEIROS, SEM_CUSTOS, CONSIDERAR_POC_RECEITA
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         
         params = (
             new_id, 
@@ -3618,8 +3648,9 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             data.metragem, 
             data.custo, 
             data.ret, 
-            data.cno.encode("cp1252", "ignore"), 
-            data.ativo, 
+            data.cno.encode("cp1252", "ignore"),
+            data.cnpj.encode("cp1252", "ignore") if data.cnpj else None,
+            data.ativo,
             data.obra_concluida,
             data.endereco.encode("cp1252", "ignore") if data.endereco else None, 
             data.data_conclusao or None,
@@ -3628,7 +3659,8 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             data.contacusto, data.contalucroacum, data.conta_estorno_devolucao,
             data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_baixaadi, data.hist_estorno_saldo,
             data.hist_adiantamento, data.hist_aprcusto, data.hist_despesa, data.hist_estorno_custo,
-            data.cep, data.siglaestado, data.codigomunic, data.codigoestab, data.codigofilial, data.codigomatriz,
+            data.cep, data.siglaestado, _num_or_none(data.codigomunic), _num_or_none(data.codigoestab),
+            _num_or_none(data.codigofilial), _num_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
             data.ajustefinalpoc, data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita
         )
@@ -3647,7 +3679,7 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
         conn = get_conn("vulcano")
         cur = conn.cursor()
         query = """UPDATE EMPREENDIMENTO SET 
-            NOME = ?, METRAGEMTOTAL = ?, CUSTOORCADO = ?, RET = ?, CNO = ?, ATIVO = ?, OBRACONCLUIDA = ?, ENDERECO = ?, DATACONCLUSAO = ?,
+            NOME = ?, METRAGEMTOTAL = ?, CUSTOORCADO = ?, RET = ?, CNO = ?, CNPJ = ?, ATIVO = ?, OBRACONCLUIDA = ?, ENDERECO = ?, DATACONCLUSAO = ?,
             CONTACAIXA = ?, CONTACLI = ?, CONTAADICLI = ?, CONTAESTAND = ?, CONTAESTCON = ?, CONTADESPESA = ?, 
             CONTAREC = ?, CONTAVARIACAO = ?, CONTADEVOLUCAO = ?, CODIGOCENTROCUSTO = ?, CONTACUSTO = ?, CONTALUCROACUM = ?, CONTA_ESTORNO_DEVOLUCAO = ?,
             CODIGOHISTVENDA = ?, CODIGOHISTRECEBIMENTO = ?, CODIGOHISTVARIACAO = ?, CODIGOHISTBAIXAADI = ?, CODIGO_HIST_ESTORNO_SALDO = ?,
@@ -3662,7 +3694,8 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
             data.metragem, 
             data.custo, 
             data.ret, 
-            data.cno.encode("cp1252", "ignore"), 
+            data.cno.encode("cp1252", "ignore"),
+            data.cnpj.encode("cp1252", "ignore") if data.cnpj else None,
             data.ativo,
             data.obra_concluida,
             data.endereco.encode("cp1252", "ignore") if data.endereco else None, 
@@ -3672,7 +3705,8 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
             data.contacusto, data.contalucroacum, data.conta_estorno_devolucao,
             data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_baixaadi, data.hist_estorno_saldo,
             data.hist_adiantamento, data.hist_aprcusto, data.hist_despesa, data.hist_estorno_custo,
-            data.cep, data.siglaestado, data.codigomunic, data.codigoestab, data.codigofilial, data.codigomatriz,
+            data.cep, data.siglaestado, _num_or_none(data.codigomunic), _num_or_none(data.codigoestab),
+            _num_or_none(data.codigofilial), _num_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
             data.ajustefinalpoc, data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
             emp_id
@@ -4317,178 +4351,56 @@ def sync_recebimentos_projetadas():
         raise HTTPException(status_code=503, detail=f"Falha ao sincronizar parcelas projetadas: {e}")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# SINCRONIZAR PARCELAS EM ABERTO — VENDAFORMAPAGTOPRAZO → RECEBER
-# Popula RECEBER com parcelas projetadas que ainda não possuem linha efetiva.
+# GERAR PARCELAS — VENDAFORMAPAGTOPRAZO → RECEBER
+#
+# Motor compartilhado em core/services/receber_generator.py, usado tambem pelo CLI
+# gerar_receber_vendas_sem_parcela.py e pela tela "Geracao de Parcelas".
+#
+# Modo A: venda sem NENHUMA parcela em RECEBER -> gera a matriz inteira dela.
+# Modo B: parcelas orfas (prazo sem linha), inclusive de vendas ja lancadas. B ⊇ A.
+#
+# O ID NAO e informado no INSERT: quem atribui e a trigger RECEBER_BI via
+# GEN_RECEBER_ID. Calcular MAX(ID)+1 na mao (como estas rotas faziam) nao avanca o
+# generator e quebra as insercoes seguintes do Vulcano legado com violacao de PK.
+#
+# Execucao e sincrona e pode levar minutos. Se algum dia entrar um reverse proxy na
+# frente da API, estas rotas precisam de proxy_read_timeout 600s.
 # ──────────────────────────────────────────────────────────────────────────────
-class PopularReceberInput(BaseModel):
-    empresa_id: int | None = None       # None = todas as empresas
-    data_inicio: str | None = None      # "YYYY-MM-DD", None = sem filtro
-    dry_run: bool = True                # True = só preview, False = grava
-    limite: int | None = None           # None = sem limite (testes: 10)
+class GerarParcelasInput(BaseModel):
+    modo: str = "A"                  # "A" = venda sem parcela | "B" = parcelas orfas
+    empresa_id: int | None = None    # None = todas as empresas
+    data_inicio: str | None = None   # "YYYY-MM-DD" — so vale no modo B
+    data_fim: str | None = None      # "YYYY-MM-DD" — so vale no modo B
+    dry_run: bool = True             # True = so simula
+    limite: int | None = None        # FIRST N, para piloto
 
-@app.post("/api/vulcano/popular-receber-abertas")
-def popular_receber_abertas(data: PopularReceberInput):
-    """
-    Cruza VENDAFORMAPAGTOPRAZO (parcelas projetadas) com RECEBER (efetivas).
-    Insere as que ainda não possuem registro em RECEBER com TOTALPAGO = 0 (em aberto).
 
-    Regras de inclusão:
-    - VENDAFORMAPAGTO.ATIVA = 'S'
-    - VENDA.DISTRATO <> 'S'
-    - VENDAFORMAPAGTOPRAZO.VALOR_PAGO = 0 (ainda não quitadas)
-    - NOT EXISTS em RECEBER por IDVENDAFORMAPAGTOPRAZO
-    """
+def _rodar_geracao(modo, empresa_id, data_inicio, data_fim, dry_run, limite):
+    """Executa o motor e devolve o resultado pronto para virar JSON."""
+    from core.services.receber_generator import executar
+
     conn_v = None
     try:
         conn_v = get_conn("vulcano")
-        cur = conn_v.cursor()
-
-        # 1. Próximo ID disponível
-        cur.execute("SELECT MAX(ID) FROM RECEBER")
-        max_id = cur.fetchone()[0] or 0
-        next_id = max_id + 1
-
-        # 2. Montar condicionais
-        empresa_cond  = f"AND v.CODIGOEMPRESA = {data.empresa_id}" if data.empresa_id else ""
-        data_ini_cond = f"AND vpp.DATA >= '{data.data_inicio}'" if data.data_inicio else ""
-        limite_cond   = f"ROWS 1 TO {data.limite}" if data.limite else ""
-
-        query = f"""
-            SELECT
-                vpp.ID             AS prazo_id,
-                vpp.DATA           AS vencimento,
-                vpp.VALOR          AS valor_parcela,
-                vpp.REFERENCIA,
-                vfp.ID             AS idvendaformapagto,
-                vfp.IDVENDA,
-                vfp.DESCRICAO      AS obs_descricao,
-                v.ID_CLIENTE,
-                v.CODIGOEMPRESA
-            FROM VENDAFORMAPAGTOPRAZO vpp
-            JOIN VENDAFORMAPAGTO vfp ON vfp.ID = vpp.IDVENDAFORMAPAGTO
-            JOIN VENDA v ON v.ID = vfp.IDVENDA
-            WHERE NOT EXISTS (
-                SELECT 1 FROM RECEBER r
-                WHERE r.IDVENDAFORMAPAGTOPRAZO = vpp.ID
-            )
-            AND vfp.ATIVA = 'S'
-            AND (v.DISTRATO IS NULL OR v.DISTRATO <> 'S')
-            AND (vpp.VALOR_PAGO = 0 OR vpp.VALOR_PAGO IS NULL)
-            {empresa_cond}
-            {data_ini_cond}
-            ORDER BY v.CODIGOEMPRESA, vfp.IDVENDA, vpp.DATA
-            {limite_cond}
-        """
-        cur.execute(query)
-        cols = [d[0] for d in cur.description]
-        orfas = [dict(zip(cols, row)) for row in cur.fetchall()]
-
-        if not orfas:
-            return {
-                "modo": "dry_run" if data.dry_run else "execucao",
-                "empresa": data.empresa_id,
-                "data_inicio": data.data_inicio,
-                "total_orfas": 0,
-                "valor_total": 0.0,
-                "preview": [],
-                "inseridos": 0,
-                "mensagem": "Nenhuma parcela orfã encontrada. Banco já está completo."
-            }
-
-        # 3. Preparar inserts
-        from datetime import datetime as _dt
-        insercoes = []
-        for row in orfas:
-            venc = row["VENCIMENTO"]
-            if hasattr(venc, 'strftime'):
-                parcela_str = venc.strftime("%m/%Y")
-                data_ins = venc
-            else:
-                parcela_str = "00/0000"
-                data_ins = _dt.now()
-
-            insercoes.append({
-                "id":                     next_id,
-                "idvenda":                row["IDVENDA"],
-                "idcliente":              row["ID_CLIENTE"],
-                "data":                   data_ins,
-                "valorparcela":           float(row["VALOR_PARCELA"] or 0),
-                "valorvariacao":          0.0,
-                "totalpago":              0.0,
-                "parcela":                parcela_str,
-                "obs":                    (str(row["OBS_DESCRICAO"] or "PARCELA"))[:50],
-                "idvendaformapagto":      row["IDVENDAFORMAPAGTO"],
-                "desconto":               0.0,
-                "idvendaformapagtoprazo": row["PRAZO_ID"],
-            })
-            next_id += 1
-
-        valor_total = sum(r["valorparcela"] for r in insercoes)
-        preview = [
-            {
-                "prazo_id":  ins["idvendaformapagtoprazo"],
-                "idvenda":   ins["idvenda"],
-                "data":      ins["data"].strftime("%Y-%m-%d") if hasattr(ins["data"], 'strftime') else str(ins["data"])[:10],
-                "valor":     ins["valorparcela"],
-                "parcela":   ins["parcela"],
-                "obs":       ins["obs"],
-                "empresa":   orfas[i].get("CODIGOEMPRESA"),
-            }
-            for i, ins in enumerate(insercoes[:20])
-        ]
-
-        if data.dry_run:
-            return {
-                "modo": "dry_run",
-                "empresa": data.empresa_id,
-                "data_inicio": data.data_inicio,
-                "total_orfas": len(insercoes),
-                "valor_total": valor_total,
-                "preview": preview,
-                "inseridos": 0,
-                "mensagem": f"Simulação: {len(insercoes)} parcelas seriam inseridas totalizando R$ {valor_total:,.2f}. Envie dry_run=false para gravar."
-            }
-
-        # 4. EXECUÇÃO REAL
-        insert_sql = """
-            INSERT INTO RECEBER
-                (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO,
-                 TOTALPAGO, PARCELA, OBS, IDVENDAFORMAPAGTO, DESCONTO,
-                 IDVENDAFORMAPAGTOPRAZO)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        inseridos = 0
-        erros_detalhe = []
-        cur2 = conn_v.cursor()
-        for ins in insercoes:
-            try:
-                cur2.execute(insert_sql, (
-                    ins["id"], ins["idvenda"], ins["idcliente"], ins["data"],
-                    ins["valorparcela"], ins["valorvariacao"], ins["totalpago"],
-                    ins["parcela"], ins["obs"], ins["idvendaformapagto"],
-                    ins["desconto"], ins["idvendaformapagtoprazo"],
-                ))
-                inseridos += 1
-                if inseridos % 200 == 0:
-                    conn_v.commit()
-            except Exception as e_ins:
-                erros_detalhe.append({"id": ins["id"], "erro": str(e_ins)[:120]})
-
-        conn_v.commit()
-
-        return {
-            "modo": "execucao",
-            "empresa": data.empresa_id,
-            "data_inicio": data.data_inicio,
-            "total_orfas": len(insercoes),
-            "valor_total": valor_total,
-            "preview": preview,
-            "inseridos": inseridos,
-            "erros": len(erros_detalhe),
-            "erros_detalhe": erros_detalhe[:10],
-            "mensagem": f"{inseridos} parcelas inseridas em RECEBER com TOTALPAGO=0 (em aberto)."
-        }
-
+        resultado = executar(
+            conn_v,
+            modo=modo,
+            empresa_id=empresa_id,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            limite=limite,
+            dry_run=dry_run,
+            log_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"),
+        )
+        # Lista de ate ~10k ids: vai para o JSON de rollback em disco, nao para a
+        # resposta HTTP. O caminho do arquivo volta em log_rollback.
+        resultado.pop("prazos_gravados", None)
+        resultado["erros_detalhe"] = resultado.get("erros_detalhe", [])[:20]
+        return resultado
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         if conn_v:
             try: conn_v.rollback()
@@ -4497,6 +4409,57 @@ def popular_receber_abertas(data: PopularReceberInput):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn_v: conn_v.close()
+
+
+@app.post("/api/vulcano/gerar-parcelas")
+def gerar_parcelas(data: GerarParcelasInput):
+    """
+    Simula (dry_run=True) ou grava (dry_run=False) parcelas em RECEBER com
+    TOTALPAGO = 0, a partir dos prazos de VENDAFORMAPAGTOPRAZO.
+
+    Filtros fixos: VENDAFORMAPAGTO.ATIVA = 'S' e VENDA.DISTRATO <> 'S'.
+
+    Acima do teto (core.services.receber_generator.TETO_PARCELAS) a execucao volta
+    com HTTP 200, acima_do_teto=True e inseridos=0 — nao e erro, e um pedido para
+    estreitar o filtro, e a tela precisa continuar mostrando o resumo. A simulacao
+    nunca e recusada: e assim que o operador descobre como fatiar.
+    """
+    return _rodar_geracao(
+        modo=data.modo,
+        empresa_id=data.empresa_id,
+        data_inicio=data.data_inicio,
+        data_fim=data.data_fim,
+        dry_run=data.dry_run,
+        limite=data.limite,
+    )
+
+
+class PopularReceberInput(BaseModel):
+    empresa_id: int | None = None
+    data_inicio: str | None = None
+    dry_run: bool = True
+    limite: int | None = None
+
+
+@app.post("/api/vulcano/popular-receber-abertas")
+def popular_receber_abertas(data: PopularReceberInput):
+    """
+    Mantido por compatibilidade: equivale a /api/vulcano/gerar-parcelas no modo B.
+    Prefira a rota nova, que expõe os dois modos e o filtro de data final.
+    """
+    resultado = _rodar_geracao(
+        modo="B",
+        empresa_id=data.empresa_id,
+        data_inicio=data.data_inicio,
+        data_fim=None,
+        dry_run=data.dry_run,
+        limite=data.limite,
+    )
+    # Chaves do contrato antigo, para nao quebrar quem ja chamava esta rota.
+    resultado["modo"] = "dry_run" if data.dry_run else "execucao"
+    resultado["empresa"] = data.empresa_id
+    resultado["total_orfas"] = resultado.get("total_parcelas", 0)
+    return resultado
 
 import pandas as pd
 import re

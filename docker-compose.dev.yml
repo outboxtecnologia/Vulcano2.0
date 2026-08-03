@@ -1,0 +1,83 @@
+# Vulcano2 / Questor Explorer — stack de DESENVOLVIMENTO (hot reload).
+#
+# Diferencas para o docker-compose.yml (producao):
+#   - backend  : codigo por bind mount + `uvicorn --reload` (nao precisa rebuild ao editar .py)
+#   - frontend : Vite dev server em vez de build estatico + Nginx (HMR no navegador)
+#   - projeto/volumes/subnet separados, entao a stack de prod local continua intacta
+#
+# Uso:
+#   docker compose -f docker-compose.dev.yml up -d --build   # primeira vez
+#   docker compose -f docker-compose.dev.yml up -d           # nas proximas
+#   docker compose -f docker-compose.dev.yml logs -f
+#   docker compose -f docker-compose.dev.yml down
+#
+# Frontend: http://localhost:5173   Backend: http://localhost:8000/docs
+#
+# Rebuild so e necessario quando mudar backend/requirements.txt ou frontend/package.json.
+
+name: vulcano-dev
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      POC_DATABASE_FILE: /data/poc_database.sqlite
+      # Bind mount de disco Windows nao propaga inotify para o container:
+      # sem polling o --reload nunca dispara.
+      WATCHFILES_FORCE_POLLING: "true"
+      WATCHFILES_POLL_DELAY: "1"
+    volumes:
+      - ./backend:/app
+      - poc_sqlite_dev:/data
+    extra_hosts:
+      # Acessar servicos no host a partir do container (ex.: Firebird/Postgres locais)
+      - "host.docker.internal:host-gateway"
+    command: >
+      sh -c "if [ \"$${BOOTSTRAP_ON_START:-1}\" = \"1\" ]; then
+               python bootstrap_schema.py --target \"$${BOOTSTRAP_TARGET:-sqlite}\" || echo '[dev] bootstrap falhou, seguindo assim mesmo';
+             fi;
+             exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app"
+    restart: unless-stopped
+
+  frontend:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    environment:
+      # URL que o NAVEGADOR usa para falar com a API (nao usar http://backend:8000).
+      VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+      # Liga o polling do chokidar no vite.config.js (mesmo motivo do backend).
+      VITE_USE_POLLING: "1"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # node_modules em volume nomeado: nao vaza o do host (Windows) para dentro
+      # do container nem o de dentro para o host.
+      - frontend_node_modules:/app/node_modules
+    command: >
+      sh -c "npm install --no-audit --no-fund &&
+             exec npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  poc_sqlite_dev:
+  frontend_node_modules:
+
+networks:
+  default:
+    ipam:
+      config:
+        # Subnet fixa (mesmo motivo do compose de producao): o pool padrao do Docker
+        # (172.17-172.31) esta esgotado nesta maquina, e ao sortear uma faixa 192.168.x
+        # a bridge colide com a LAN dos servidores Firebird/Postgres -> "No route to host".
+        # 172.16.241.0/24 para nao bater com a stack de prod, que usa 172.16.240.0/24.
+        - subnet: 172.16.241.0/24

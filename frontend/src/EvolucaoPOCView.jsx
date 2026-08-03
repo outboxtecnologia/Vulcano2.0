@@ -174,7 +174,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                             <button onClick={toggleAllEmps} className="text-[var(--v-accent-4)] hover:text-[#fff] transition-colors">{selectedEmps.length === empreendimentos.length && empreendimentos.length > 0 ? "Desmarcar Todos" : "Marcar Todos"}</button>
                         </div>
                         {/* Altura aumentada para melhor visualização: max-h-[300px] */}
-                        <div className="bg-black/50 border border-[var(--v-border)] rounded-[var(--v-radius)] max-h-[300px] overflow-y-auto custom-scrollbar p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <div className="bg-[var(--v-scrim)] border border-[var(--v-border)] rounded-[var(--v-radius)] max-h-[300px] overflow-y-auto custom-scrollbar p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                             {loadingEmps ? (
                                 <div className="text-center p-2 text-xs text-[var(--v-text-faint)] uppercase col-span-full">Carregando Obras...</div>
                             ) : empreendimentos.length === 0 ? (
@@ -186,7 +186,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                         e.preventDefault();
                                         setSelectedEmps(prev => prev.includes(emp.id) ? prev.filter(x => x !== emp.id) : [...prev, emp.id]);
                                     }}
-                                    className={`flex items-start gap-2 p-1.5 rounded-[var(--v-radius)] cursor-pointer border transition-colors select-none ${selectedEmps.includes(emp.id) ? 'border-[#007aff]/30 bg-[#007aff]/5 text-[var(--v-text-bold)]' : 'border-transparent text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}
+                                    className={`flex items-start gap-2 p-1.5 rounded-[var(--v-radius)] cursor-pointer border transition-colors select-none ${selectedEmps.includes(emp.id) ? 'border-[var(--v-info)]/30 bg-[var(--v-info)]/5 text-[var(--v-text-bold)]' : 'border-transparent text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}
                                 >
                                     <div className="mt-0.5 text-[var(--v-accent-4)]">
                                         {selectedEmps.includes(emp.id) ? <CheckSquare size={14}/> : <Square size={14} className="opacity-50"/>}
@@ -206,17 +206,17 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                         <div className="flex gap-3">
                             <div className="flex-1 space-y-1">
                                 <label className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)] flex items-center gap-1"><Calendar size={12}/> Dt. Inicio</label>
-                                <input type="month" value={dataIni} onChange={(e) => setDataIni(e.target.value)} className="w-full bg-black/50 border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" />
+                                <input type="month" value={dataIni} onChange={(e) => setDataIni(e.target.value)} className="w-full bg-[var(--v-scrim)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" />
                             </div>
                             <div className="flex-1 space-y-1">
                                 <label className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)] flex items-center gap-1"><Calendar size={12}/> Dt. Fim</label>
-                                <input type="month" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full bg-black/50 border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" />
+                                <input type="month" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full bg-[var(--v-scrim)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" />
                             </div>
                         </div>
                         <button 
                             onClick={handleSearch}
                             disabled={loading || selectedEmps.length === 0}
-                            className="bg-[#007aff] hover:bg-[#005bb5] text-[var(--v-text-bold)] py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto shadow-[0_0_15px_rgba(0,122,255,0.4)]"
+                            className="bg-[var(--v-info)] hover:bg-[var(--v-info)] text-[var(--v-text-bold)] py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto shadow-[0_0_15px_rgba(0,122,255,0.4)]"
                         >
                             {loading ? <RefreshCw size={14} className="animate-spin" /> : <Layers size={14} />}
                             {loading ? "Calculando VGV/POC..." : "Processar Evolução POC"}
@@ -234,7 +234,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
             )}
 
             {error && !loading && (
-                <div className="bg-[var(--v-accent)]/10 text-[var(--v-accent)] border border-[#ff4d00]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
+                <div className="bg-[rgb(var(--v-accent-rgb)_/_0.1)] text-[var(--v-accent)] border border-[var(--v-accent)]/30 p-4 rounded-[var(--v-radius)] flex items-center gap-3">
                     <AlertCircle size={20} /> <span className="text-sm font-bold">{error}</span>
                 </div>
             )}
@@ -261,9 +261,9 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                                <XAxis dataKey="period" stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#444" fontSize={10} tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                                <Tooltip contentStyle={{ backgroundColor: '#131313', border: '1px solid #333' }} />
+                                <XAxis dataKey="period" stroke="var(--v-text-ghost)" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="var(--v-text-ghost)" fontSize={10} tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                                <Tooltip contentStyle={{ backgroundColor: '#131313', border: '1px solid var(--v-text-ghost)' }} />
                                 <Area type="monotone" dataKey="poc_esperado" stroke="var(--v-accent-3)" strokeWidth={3} fillOpacity={1} fill="url(#colorPoc)" />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -293,14 +293,14 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                             </td>
                                             <td className="p-4 font-black text-[var(--v-text-bold)] uppercase text-[10px] tracking-wider">{name}</td>
                                             <td className="p-4 text-right font-mono text-[var(--v-text-muted)]">{formatCurrency(meta.vgv)}</td>
-                                            <td className="p-4 text-center font-mono font-black text-[var(--v-accent-4)] bg-[#007aff]/5">{(meta.poc || 0).toFixed(2)}%</td>
+                                            <td className="p-4 text-center font-mono font-black text-[var(--v-accent-4)] bg-[var(--v-info)]/5">{(meta.poc || 0).toFixed(2)}%</td>
                                             <td className="p-4 text-right font-mono text-[var(--v-accent-3)] font-bold">{formatCurrency(meta.receita_societaria)}</td>
                                         </tr>
                                         {/* Painel Interno (Drill-Down / Formulário POC) */}
                                         {expandedEmp === name && (
                                             <tr className="bg-[#0f0f10] border-b border-[var(--v-border)]">
                                                 <td colSpan="5" className="p-0">
-                                                    <div className="p-6 border-l-4 border-[#007aff] flex gap-8 animate-in slide-in-from-top-2 duration-300">
+                                                    <div className="p-6 border-l-4 border-[var(--v-info)] flex gap-8 animate-in slide-in-from-top-2 duration-300">
                                                         
                                                         {/* Painel: Lançamento Manual / Adição POC */}
                                                         <div className="w-[300px] border border-[var(--v-border)] bg-[#141416] p-4 rounded-[var(--v-radius)] space-y-4 shadow-inner">
@@ -315,7 +315,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                         type="month" 
                                                                         value={pocFormPeriod} 
                                                                         onChange={(e) => setPocFormPeriod(e.target.value)} 
-                                                                        className="w-full bg-black border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" 
+                                                                        className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] [color-scheme:dark]" 
                                                                     />
                                                                 </div>
                                                                 <div className="space-y-1.5">
@@ -327,7 +327,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                             placeholder="Ex: 5.45"
                                                                             value={pocFormPercent} 
                                                                             onChange={(e) => setPocFormPercent(e.target.value)} 
-                                                                            className="w-full bg-black border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] pr-6" 
+                                                                            className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#007aff] rounded-[var(--v-radius)] pr-6" 
                                                                         />
                                                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--v-text-faint)] font-black text-[10px] group-focus-within:text-[var(--v-accent-4)]">%</span>
                                                                     </div>
@@ -335,7 +335,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                 <button 
                                                                     onClick={() => handleSaveManualPoc(name)}
                                                                     disabled={savingPoc}
-                                                                    className="w-full bg-[#34c759] hover:bg-[#28a745] text-black font-black text-[10px] uppercase tracking-widest py-2.5 flex justify-center items-center gap-2 rounded-[var(--v-radius)] transition-colors disabled:opacity-50 mt-2"
+                                                                    className="w-full bg-[var(--v-ok)] hover:bg-[#28a745] text-[var(--v-text-inv)] font-black text-[10px] uppercase tracking-widest py-2.5 flex justify-center items-center gap-2 rounded-[var(--v-radius)] transition-colors disabled:opacity-50 mt-2"
                                                                 >
                                                                   {savingPoc ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
                                                                   GRAVAR SISTEMA
@@ -355,7 +355,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                      <p className="text-[8px] uppercase tracking-widest text-[var(--v-text-faint)] font-black mb-1">Tributação Sobre Recebimentos</p>
                                                                      <p className="text-[var(--v-accent)] font-mono text-sm">{formatCurrency(meta.tributos_caixa_acumulado)}</p>
                                                                  </div>
-                                                                 <div className="bg-[var(--v-deep)] p-3 rounded-[var(--v-radius)] border border-[var(--v-accent-3)]/30">
+                                                                 <div className="bg-[var(--v-deep)] p-3 rounded-[var(--v-radius)] border border-[rgb(var(--v-accent-3-rgb)_/_0.3)]">
                                                                      <p className="text-[8px] uppercase tracking-widest text-[var(--v-accent-3)] font-black mb-1">Provisão de Tributos (POC)</p>
                                                                      <p className="text-[var(--v-accent-3)] font-mono text-sm">{formatCurrency(meta.tributos_soc_acumulado)}</p>
                                                                  </div>
@@ -373,7 +373,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                         </thead>
                                                                         <tbody>
                                                                             {meta.historico_poc?.length > 0 ? [...meta.historico_poc].sort((a, b) => b.periodo.localeCompare(a.periodo)).map((h, i) => (
-                                                                                <tr key={i} className="border-b border-[var(--v-border)]/50 hover:bg-[var(--v-hover)] transition-colors">
+                                                                                <tr key={i} className="border-b border-[rgb(var(--v-border-rgb)_/_0.5)] hover:bg-[var(--v-hover)] transition-colors">
                                                                                     <td className="p-2 text-[var(--v-text-bold)] font-mono">{h.periodo}</td>
                                                                                     <td className="p-2 text-right font-mono text-[var(--v-accent-3)] font-black">{h.poc.toFixed(2)}%</td>
                                                                                 </tr>

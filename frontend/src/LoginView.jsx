@@ -393,22 +393,9 @@ export default function LoginView({ onLogin }) {
     };
   }, []);
 
-  useEffect(() => {
-    // loader curtain removal
-    const curtain = document.getElementById('curtain');
-    const lbar = document.getElementById('lbar');
-    let loaded = 0;
-    const fakeLoad = setInterval(() => {
-      loaded += 4 + Math.random()*8;
-      if (loaded >= 100) { 
-        loaded = 100; 
-        clearInterval(fakeLoad); 
-        setTimeout(() => { if (curtain) curtain.classList.add('hidden'); }, 350); 
-      }
-      if (lbar) lbar.style.width = loaded + '%';
-    }, 60);
-    return () => clearInterval(fakeLoad);
-  }, []);
+  // Removido: um efeito que animava #curtain/#lbar, elementos que nao existem neste
+  // componente (sao do EmpresaSelectionView). Com as duas telas em rotas, ele passaria
+  // a escrever na barra de progresso da outra durante a transicao.
 
   const handleMouseMoveCard = (e) => {
     const card = document.getElementById('loginCard');
@@ -515,7 +502,10 @@ export default function LoginView({ onLogin }) {
   };
 
   return (
-    <div className="login-wrapper">
+    /* data-theme="dark" fixo: esta tela e escura por design (cena three.js + CSS
+       proprio). Sem isto, com o tema claro ativo os <input> herdariam o color-scheme
+       light e ganhariam fundo branco nativo sobre a cena escura. */
+    <div className="login-wrapper" data-theme="dark">
       <style>{`
         /* Minimal css injection to avoid conflicting with existing app css */
         .login-wrapper { position: fixed; inset: 0; z-index: 99999; background: #050304; color: #f0e6d8; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }

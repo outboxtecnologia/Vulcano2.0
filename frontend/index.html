@@ -4,7 +4,39 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
     <title>Vulcano 2.0</title>
+
+    <!-- Cor de fundo antes de qualquer CSS carregar. Em `vite dev` o index.css e
+         injetado por JS, entao sem isto o primeiro paint e branco mesmo no tema
+         escuro. Os valores batem com --v-bg de cada tema. -->
+    <style>
+      html { background: #131314; }
+      html[data-theme="light"] { background: #f9f9f9; }
+    </style>
+
+    <!-- Aplica o tema salvo ANTES do primeiro paint. Precisa ser script classico
+         (module e deferido) e rodar antes do body. O fallback e 'dark', o mesmo do
+         ThemeContext — se divergirem, troca-se um flash por outro. -->
+    <script>
+      (function () {
+        var t = 'dark';
+        try {
+          var s = localStorage.getItem('vulcano.theme');
+          if (s === 'light') {
+            t = 'light';
+          } else if (s === 'night') {
+            // Nome antigo do tema escuro; normaliza aqui e o ThemeContext regrava.
+            try { localStorage.setItem('vulcano.theme', 'dark'); } catch (e) { /* storage read-only */ }
+          }
+        } catch (e) {
+          /* storage bloqueado (modo restrito): segue no fallback */
+        }
+        var r = document.documentElement;
+        r.setAttribute('data-theme', t);
+        r.style.colorScheme = t;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
