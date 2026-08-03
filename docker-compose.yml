@@ -56,7 +56,7 @@ services:
       POSTGRES_USER: ${APP_PG_USER:-vulcano}
       POSTGRES_PASSWORD: ${APP_PG_PASS:-troque_esta_senha}
     volumes:
-      - app_pg:/var/lib/postgresql/data
+      - app_pg_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   frontend:
@@ -74,7 +74,7 @@ services:
 
 volumes:
   poc_sqlite:
-  app_pg:
+  app_pg_data:
 
 networks:
   default:
