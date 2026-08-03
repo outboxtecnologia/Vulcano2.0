@@ -165,8 +165,8 @@ class AccountingGraphPipeline:
             import sqlite3
             memoria_arraste = {}
             try:
-                from main import POC_DATABASE_FILE
-                conn_poc = sqlite3.connect(POC_DATABASE_FILE)
+                from db_app import connect_app
+                conn_poc = connect_app()
                 cur_poc = conn_poc.cursor()
                 cur_poc.execute('CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (chave_lancamento TEXT PRIMARY KEY, conta_destino TEXT, origem TEXT, data_modificacao TIMESTAMP)')
                 cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
