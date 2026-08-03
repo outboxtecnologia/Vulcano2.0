@@ -393,9 +393,28 @@ export default function LoginView({ onLogin }) {
     };
   }, []);
 
-  // Removido: um efeito que animava #curtain/#lbar, elementos que nao existem neste
-  // componente (sao do EmpresaSelectionView). Com as duas telas em rotas, ele passaria
-  // a escrever na barra de progresso da outra durante a transicao.
+  // Cortina de abertura: cobre a tela inteira (.login-wrapper .curtain, z-index 99) e
+  // SO sai quando este efeito adiciona a classe `hidden`. Sem ele o login fica preto
+  // para sempre, com o texto "FORJANDO O TERRENO" no meio — foi exatamente o que
+  // aconteceu quando este bloco foi removido por engano.
+  // Os ids #curtain e #lbar estao no JSX deste arquivo (o EmpresaSelectionView tem os
+  // seus proprios, com o mesmo nome, mas as duas telas nunca coexistem).
+  useEffect(() => {
+    const curtain = document.getElementById('curtain');
+    const lbar = document.getElementById('lbar');
+    let loaded = 0;
+    let timer = null;
+    const fakeLoad = setInterval(() => {
+      loaded += 4 + Math.random() * 8;
+      if (loaded >= 100) {
+        loaded = 100;
+        clearInterval(fakeLoad);
+        timer = setTimeout(() => { if (curtain) curtain.classList.add('hidden'); }, 350);
+      }
+      if (lbar) lbar.style.width = loaded + '%';
+    }, 60);
+    return () => { clearInterval(fakeLoad); if (timer) clearTimeout(timer); };
+  }, []);
 
   const handleMouseMoveCard = (e) => {
     const card = document.getElementById('loginCard');
