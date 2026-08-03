@@ -31,12 +31,32 @@ services:
       BOOTSTRAP_TARGET: ${BOOTSTRAP_TARGET:-sqlite}
       BOOTSTRAP_STRICT: ${BOOTSTRAP_STRICT:-0}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-chave_fernando.json}
+      # Banco operacional do app — opt-in: mude para postgres apos rodar
+      # `python bootstrap_schema.py --target app-pg` e (se quiser) a migracao.
+      APP_DB_KIND: ${APP_DB_KIND:-sqlite}
+      APP_PG_HOST: ${APP_PG_HOST:-postgres}
+      APP_PG_PORT: ${APP_PG_PORT:-5432}
+      APP_PG_DB: ${APP_PG_DB:-vulcano2}
+      APP_PG_USER: ${APP_PG_USER:-vulcano}
+      APP_PG_PASS: ${APP_PG_PASS:-troque_esta_senha}
     volumes:
       - poc_sqlite:/data
       # Dokploy: Mounts → ../files/chave_fernando.json → /app/chave_fernando.json
     extra_hosts:
       # Acessar serviços no host Linux a partir do container (ex.: Firebird exposto só no host)
       - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  postgres:
+    # PG PROPRIO do Vulcano 2.0 (banco operacional do app: baixas, projetadas,
+    # usuarios, parsers...). Ligue no backend com APP_DB_KIND=postgres.
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${APP_PG_DB:-vulcano2}
+      POSTGRES_USER: ${APP_PG_USER:-vulcano}
+      POSTGRES_PASSWORD: ${APP_PG_PASS:-troque_esta_senha}
+    volumes:
+      - app_pg:/var/lib/postgresql/data
     restart: unless-stopped
 
   frontend:
@@ -54,6 +74,7 @@ services:
 
 volumes:
   poc_sqlite:
+  app_pg:
 
 networks:
   default:
