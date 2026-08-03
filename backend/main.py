@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
 from db_pg import connect_questor_pg, questor_kind  # ponte Questor Firebird->Postgres
+from db_app import connect_app  # banco operacional do app: SQLite ou Postgres (APP_DB_KIND)
 import pdfplumber
 import platform
 import functools
@@ -797,7 +798,7 @@ def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int 
         spends = cur.fetchall()
 
         import sqlite3
-        conn_lite = sqlite3.connect(POC_DATABASE_FILE)
+        conn_lite = connect_app()
         cur_lite = conn_lite.cursor()
         
         cur_lite.execute("SELECT periodo, percentual FROM evolucao_obras WHERE empreendimento = ?", (nome_emp,))
@@ -1218,7 +1219,7 @@ def api_sero_salvar_importacao(payload: SeroSalvarInput):
     conn = None
     try:
         import sqlite3
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         cur = conn.cursor()
         
         def norm_comp(c):
@@ -1476,7 +1477,7 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
         # Os terceiros virão exclusivamente do PDF SERO importado.
 
         import sqlite3
-        conn_lite = sqlite3.connect(POC_DATABASE_FILE)
+        conn_lite = connect_app()
         cur_lite = conn_lite.cursor()
         cur_lite.execute("SELECT competencia, cnpj_cpf, origem, valor_atualizado FROM SERO_IMPORTACOES WHERE empresa_id = ?", (empresa_id,))
         sero_importados = cur_lite.fetchall()
@@ -1702,7 +1703,7 @@ async def salvar_memoria_arraste(payload: MemoriaArrasteInput):
             return JSONResponse({"status": "error", "message": "Chave ou destino vazio"}, status_code=400)
             
         import sqlite3
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         conn.execute('''
             CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (
                 chave_lancamento TEXT PRIMARY KEY,
@@ -2047,7 +2048,7 @@ class CrossMatchFeedbackInput(BaseModel):
 
 def _ensure_feedback_table():
     import sqlite3
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cross_match_feedback (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2082,7 +2083,7 @@ def _tokenize_hist(text: str) -> set:
 def _load_cross_match_feedback(empresa_id: int) -> list:
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT veredicto, q_conta, q_historico, q_valor, v_conta, v_historico, v_valor, q_tokens, v_tokens "
             "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
@@ -2139,7 +2140,7 @@ def _feedback_score_override(match: dict, feedback: list, rules: list = None) ->
 # ── Pattern analysis pipeline ────────────────────────────────────────────────
 def _ensure_rules_table():
     import sqlite3
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cross_match_rules (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2161,7 +2162,7 @@ _ensure_rules_table()
 def _load_cross_match_rules(empresa_id: int) -> list:
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT rule_type, q_conta, v_conta, confidence, n_samples, payload "
             "FROM cross_match_rules WHERE empresa_id=? ORDER BY confidence DESC",
@@ -2178,7 +2179,7 @@ def _run_pattern_analysis(empresa_id: int):
     import sqlite3, threading
     from collections import Counter
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT veredicto, q_conta, v_conta, q_historico, v_historico, score_algoritmo "
             "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
@@ -2262,7 +2263,7 @@ def _run_llm_pattern_extraction(empresa_id: int, matches, rejects):
 
         if regras:
             import sqlite3
-            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn = connect_app()
             conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='LLM_RULE'", (empresa_id,))
             for reg in regras:
                 conn.execute(
@@ -2283,7 +2284,7 @@ def api_cross_match_feedback_post(data: CrossMatchFeedbackInput):
     try:
         q_tok = _json.dumps(list(_tokenize_hist(data.q_historico)))
         v_tok = _json.dumps(list(_tokenize_hist(data.v_historico)))
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         conn.execute(
             "INSERT INTO cross_match_feedback "
             "(empresa_id, veredicto, obs, score_algoritmo, "
@@ -2323,7 +2324,7 @@ def api_cross_match_rules_get(empresa_id: int = 959):
     """Retorna regras derivadas da base de conhecimento."""
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         conta_pairs = conn.execute(
             "SELECT q_conta, v_conta, confidence, n_samples FROM cross_match_rules "
             "WHERE empresa_id=? AND rule_type='CONTA_PAIR' ORDER BY confidence DESC",
@@ -2358,7 +2359,7 @@ def api_cross_match_rules_get(empresa_id: int = 959):
 def api_cross_match_feedback_get(empresa_id: int = 959, limit: int = 300):
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT id, created_at, veredicto, obs, score_algoritmo, "
             "       q_conta, q_historico, q_valor, q_data, "
@@ -2441,7 +2442,7 @@ def api_saldo_contas(
         memoria_arraste = {}
         try:
             import sqlite3
-            conn_poc = sqlite3.connect(POC_DATABASE_FILE)
+            conn_poc = connect_app()
             cur_poc = conn_poc.cursor()
             cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
             for chv, dest in cur_poc.fetchall():
@@ -2818,7 +2819,7 @@ import sqlite3
 from pydantic import BaseModel
 
 def init_sqlite():
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS evolucao_obras (
@@ -2864,7 +2865,7 @@ init_sqlite()
 def get_conn(db_name="vulcano", empresa_id=None):
     if db_name == "sqlite":
         import sqlite3
-        return sqlite3.connect(POC_DATABASE_FILE)
+        return connect_app()
 
     # Questor migrou Firebird->Postgres. Quando QUESTOR_DB_KIND=postgres, o banco
     # `questor` abre via psycopg (queries Firebird traduzidas em runtime, ver db_pg).
@@ -2923,7 +2924,7 @@ class PocInput(BaseModel):
 
 @app.post("/api/poc")
 def save_poc(input_data: PocInput):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute('''
         INSERT INTO evolucao_obras (empreendimento, periodo, percentual) 
@@ -2955,7 +2956,7 @@ class QuestorLotePayload(BaseModel):
 
 @app.get("/api/poc")
 def get_poc():
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras ORDER BY periodo DESC')
     rows = c.fetchall()
@@ -3232,7 +3233,7 @@ def get_compare_receitas(emp: str = None, empresa_id: int | None = None):
             cur_v.execute(venda_query)
         vendas_v = cur_v.fetchall()
         
-        conn_sq = sqlite3.connect(POC_DATABASE_FILE)
+        conn_sq = connect_app()
         c_sq = conn_sq.cursor()
         c_sq.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras')
         poc_map = {(r[0], r[1]): r[2] for r in c_sq.fetchall()}
@@ -3990,19 +3991,25 @@ def get_vulcano_venda_condicoes(venda_id: int):
                 }
             )
 
-        # GERAÇÃO DAS PARCELAS ABERTAS (A partir do SQLite Vulcano 2.0)
-        conn_sq = get_conn("sqlite")
-        cur_sq = conn_sq.cursor()
-        cur_sq.execute(
-            """
-            SELECT prazo_id, data_venc, parcela_ref, valor, forma_pagto_id
-            FROM parcelas_abertas_projetadas
-            WHERE venda_id = ?
-            ORDER BY data_venc, prazo_id
-            """,
-            (int(venda_id),),
-        )
-        for p in cur_sq.fetchall():
+        # PARCELAS PROJETADAS — desativadas por padrão: na base viva as parcelas em
+        # aberto JÁ estão no RECEBER com TOTALPAGO=0. Reative com PROJETADAS_ATIVAS=1
+        # apenas para bases cujo RECEBER não contém as parcelas futuras.
+        _proj_rows = []
+        if os.environ.get("PROJETADAS_ATIVAS") == "1":
+            conn_sq = get_conn("sqlite")
+            cur_sq = conn_sq.cursor()
+            cur_sq.execute(
+                """
+                SELECT prazo_id, data_venc, parcela_ref, valor, forma_pagto_id
+                FROM parcelas_abertas_projetadas
+                WHERE venda_id = ?
+                ORDER BY data_venc, prazo_id
+                """,
+                (int(venda_id),),
+            )
+            _proj_rows = cur_sq.fetchall()
+            conn_sq.close()
+        for p in _proj_rows:
             data_str = p[1]
             valor = float(p[3] or 0)
             # Evita duplicar se a parcela já foi efetivada no Firebird (RECEBER)
@@ -4024,8 +4031,7 @@ def get_vulcano_venda_condicoes(venda_id: int):
                     "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
                 }
             )
-        conn_sq.close()
-            
+
         # Reordena o array combinado de parcelas (recebidas e previstas) pela data
         parcelas.sort(key=lambda x: (x["data"] or "", str(x["id"])))
 
@@ -4074,7 +4080,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
     try:
         locais = {}
         try:
-            s_conn = sqlite3.connect(POC_DATABASE_FILE)
+            s_conn = connect_app()
             s_curr = s_conn.cursor()
             s_curr.execute("SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos FROM operacoes_baixas WHERE empresa_id = ?", (empresa_id,))
             # Chaves como str: id_receber pode ser o ID da RECEBER ou "prazo_<id>" (projetada)
@@ -4171,8 +4177,11 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                 item['acrescimo_local'] = 0.0
                 item['status_sistema'] = 'BAIXADO_LEGADO' if float(item.get('total', 0) or 0) > 0 else 'ABERTO'
                 
-        # --- PARCELAS ABERTAS PROJETADAS ---
+        # --- PARCELAS ABERTAS PROJETADAS (desativadas por padrão: abertas = RECEBER
+        #     com TOTALPAGO=0 na base viva; reative com PROJETADAS_ATIVAS=1) ---
         try:
+            if os.environ.get("PROJETADAS_ATIVAS") != "1":
+                raise InterruptedError("projetadas desativadas")
             conn_sq = get_conn("sqlite")
             cur_sq = conn_sq.cursor()
             
@@ -4253,6 +4262,8 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                             item_proj['status_sistema'] = 'BAIXADO_NOVO'
                         result_list.append(item_proj)
             conn_sq.close()
+        except InterruptedError:
+            pass  # projeção desligada (PROJETADAS_ATIVAS != 1)
         except Exception as e_sq:
             print("Erro ao integrar parcelas projetadas:", e_sq)
 
@@ -4280,7 +4291,7 @@ def baixa_recebimento(data: BaixaInput):
     import sqlite3
     s_conn = None
     try:
-        s_conn = sqlite3.connect(POC_DATABASE_FILE)
+        s_conn = connect_app()
         s_curr = s_conn.cursor()
         import datetime
         data_pgto = data.data_pagamento if data.data_pagamento else datetime.date.today().isoformat()
@@ -4567,7 +4578,7 @@ def _sanitize_extracted_rows(rows: list) -> list:
 
 
 def _extract_with_saved_parser(content: bytes, filename: str, template_id: int):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute("SELECT python_code FROM pdf_parser_templates WHERE id = ?", (int(template_id),))
     row = c.fetchone()
@@ -4731,7 +4742,7 @@ async def conversor_salvar_extraidos(payload: ConversorSavePayload):
     Grava a extração no SQLite, dividindo em um Batch Pai (onde mora o texto do PDF)
     e os Registros Filhos (o JSON). Converte automaticamente as datas D/M/Y em ISO.
     """
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     cur = conn.cursor()
     try:
         cur.execute('''
@@ -4789,7 +4800,7 @@ async def conversor_salvar_extraidos(payload: ConversorSavePayload):
 @app.get("/api/conversor/listar-extraidos")
 def conversor_listar_extraidos():
     """Retorna os batches pai já gravados"""
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     try:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -4938,7 +4949,7 @@ async def extract_pdf(
         # Só busca template padrão da empresa se force_ai=False
         # (force_ai=True deve mandar SEMPRE ao Gemini sem nenhum parser intermediário)
         if not force_ai and tid is None and empresa_id is not None and import_mode == 'recebimentos':
-            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn = connect_app()
             c = conn.cursor()
             c.execute(
                 "SELECT parser_template_id FROM empresa_parser_padrao WHERE empresa_id = ?",
@@ -5295,7 +5306,7 @@ Retorne APENAS um JSON com a chave `python_code` cujo valor seja este pequeno gu
         filename = "sem_codigo_ollama.txt"
         
         try:
-            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn = connect_app()
             c = conn.cursor()
             sample_store = json.dumps(sample, ensure_ascii=False)[:80000]
             c.execute(
@@ -5339,7 +5350,7 @@ class ParserTemplateSetDefault(BaseModel):
 
 @app.get("/api/parser/templates")
 def list_parser_templates(empresa_id: int | None = None):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     padrao_id = None
     if empresa_id is not None:
@@ -5372,7 +5383,7 @@ def list_parser_templates(empresa_id: int | None = None):
 @app.delete("/api/parser/template/{template_id}")
 def delete_parser_template(template_id: int):
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         c = conn.cursor()
         c.execute("SELECT arquivo_gerado FROM pdf_parser_templates WHERE id = ?", (template_id,))
         row = c.fetchone()
@@ -5402,7 +5413,7 @@ def delete_parser_template(template_id: int):
 @app.delete("/api/parser/template/{template_id}")
 def delete_parser_template(template_id: int):
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         c = conn.cursor()
         c.execute("SELECT arquivo_gerado FROM pdf_parser_templates WHERE id = ?", (template_id,))
         row = c.fetchone()
@@ -5431,7 +5442,7 @@ def delete_parser_template(template_id: int):
 
 @app.get("/api/parser/templates/{template_id}")
 def get_parser_template(template_id: int):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute(
         "SELECT id, nome, descricao, python_code, sample_json, data_criacao, arquivo_gerado FROM pdf_parser_templates WHERE id = ?",
@@ -5454,7 +5465,7 @@ def get_parser_template(template_id: int):
 
 @app.post("/api/parser/templates/set-default")
 def set_parser_template_default(body: ParserTemplateSetDefault):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute("SELECT 1 FROM pdf_parser_templates WHERE id = ?", (body.parser_template_id,))
     if not c.fetchone():
@@ -7532,7 +7543,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         # baixas novas (SQLite): valor/data/variação/desconto — fundidas na visão
         baixas = {}
         try:
-            s_conn = sqlite3.connect(POC_DATABASE_FILE)
+            s_conn = connect_app()
             s_cur = s_conn.cursor()
             s_cur.execute("""SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos
                              FROM operacoes_baixas WHERE empresa_id = ?""", (empresa_id,))
@@ -7864,23 +7875,27 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 val = round(float(p[3] or 0), 2)
                 assinaturas_fb.add((dt_str, val))
             
-            # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO SQLITE VULCANO 2.0
-            conn_sq = get_conn("sqlite")
-            cur_sq = conn_sq.cursor()
-            sq_where = ["1=1"]
-            sq_params = []
-            if payload.empreendimento_id:
-                sq_where.append("empreendimento_id = ?")
-                sq_params.append(payload.empreendimento_id)
-                
-            cur_sq.execute(f"""
-                SELECT prazo_id, parcela_ref, data_venc, valor, 0.0,
-                       cliente_nome, unidade_descricao
-                FROM parcelas_abertas_projetadas
-                WHERE {" AND ".join(sq_where)}
-            """, sq_params)
-            
-            for row in cur_sq.fetchall():
+            # PROJETADAS — desativadas por padrão (abertas = RECEBER TOTALPAGO<=0,
+            # já carregadas acima da base viva); reative com PROJETADAS_ATIVAS=1.
+            _proj_rows = []
+            if os.environ.get("PROJETADAS_ATIVAS") == "1":
+                conn_sq = get_conn("sqlite")
+                cur_sq = conn_sq.cursor()
+                sq_where = ["1=1"]
+                sq_params = []
+                if payload.empreendimento_id:
+                    sq_where.append("empreendimento_id = ?")
+                    sq_params.append(payload.empreendimento_id)
+                cur_sq.execute(f"""
+                    SELECT prazo_id, parcela_ref, data_venc, valor, 0.0,
+                           cliente_nome, unidade_descricao
+                    FROM parcelas_abertas_projetadas
+                    WHERE {" AND ".join(sq_where)}
+                """, sq_params)
+                _proj_rows = cur_sq.fetchall()
+                conn_sq.close()
+
+            for row in _proj_rows:
                 try:
                     dt_venc = datetime.datetime.strptime(row[2], "%Y-%m-%d").date() if row[2] else None
                 except:
@@ -7893,7 +7908,6 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                     continue
                     
                 abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
-            conn_sq.close()
             TOLE = 1.0
 
             from collections import defaultdict
@@ -8159,8 +8173,8 @@ _SMART_IMPORTER_SCHEMAS = {
 # SQLite para persistência de templates do Smart Importer
 import sqlite3 as _sqlite3
 
-def _get_smart_importer_db() -> _sqlite3.Connection:
-    conn = _sqlite3.connect(POC_DATABASE_FILE)
+def _get_smart_importer_db():
+    conn = connect_app()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS smart_importer_templates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
