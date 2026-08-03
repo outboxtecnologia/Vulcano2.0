@@ -77,3 +77,8 @@ desktop.ini
 tmp_*.json
 tmp_*.txt
 temp_*.txt
+# runtimes locais (instancia Windows)
+firebird25/
+dados/
+pg16/
+Telas Anteriores/

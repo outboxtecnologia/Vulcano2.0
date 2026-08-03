@@ -78,8 +78,8 @@ def verificar_receitas_custos_poc(conta_alvo: str, empresa_id: int = 959) -> str
     Retorna POC por empreendimento, VGV acumulado e receita reconhecida. Use para contas de resultado IFRS 15."""
     try:
         import sqlite3, re
-        db_path = _get_poc_db()
-        conn = sqlite3.connect(db_path)
+        from db_app import connect_app
+        conn = connect_app()
         conn.row_factory = sqlite3.Row
 
         # Pega os empreendimentos mais relevantes
