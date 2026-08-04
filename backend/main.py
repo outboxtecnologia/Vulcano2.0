@@ -3747,6 +3747,23 @@ class EmpreendimentoInput(BaseModel):
     
     empresa_id: int
 
+def _int_or_none(v):
+    """Colunas INTEGER/SMALLINT do EMPREENDIMENTO (CODIGOESTAB/FILIAL/MATRIZ/MUNIC)
+    chegam como str do frontend; '' vira NULL (senao Firebird da SQL -303)."""
+    try:
+        s = str(v).strip()
+        return int(s) if s else None
+    except (TypeError, ValueError):
+        return None
+
+def _float_or_none(v):
+    """AJUSTEFINALPOC e DOUBLE na base atual (era CHAR S/N na antiga) — o model
+    manda 'N' por default e o Firebird da SQL -303. Aceita numero; resto vira NULL."""
+    try:
+        return float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
 @app.post("/api/vulcano/empreendimentos")
 def post_vulcano_empreendimento(data: EmpreendimentoInput):
     conn = None
@@ -3785,9 +3802,9 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             data.contacusto, data.contalucroacum, data.conta_estorno_devolucao,
             data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_baixaadi, data.hist_estorno_saldo,
             data.hist_adiantamento, data.hist_aprcusto, data.hist_despesa, data.hist_estorno_custo,
-            data.cep, data.siglaestado, data.codigomunic, data.codigoestab, data.codigofilial, data.codigomatriz,
+            data.cep, data.siglaestado, _int_or_none(data.codigomunic), _int_or_none(data.codigoestab), _int_or_none(data.codigofilial), _int_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
-            data.ajustefinalpoc, data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
+            _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
             data.cnpj.encode("cp1252", "ignore") if data.cnpj else None
         )
         cur.execute(query, params)
@@ -3831,9 +3848,9 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
             data.contacusto, data.contalucroacum, data.conta_estorno_devolucao,
             data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_baixaadi, data.hist_estorno_saldo,
             data.hist_adiantamento, data.hist_aprcusto, data.hist_despesa, data.hist_estorno_custo,
-            data.cep, data.siglaestado, data.codigomunic, data.codigoestab, data.codigofilial, data.codigomatriz,
+            data.cep, data.siglaestado, _int_or_none(data.codigomunic), _int_or_none(data.codigoestab), _int_or_none(data.codigofilial), _int_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
-            data.ajustefinalpoc, data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
+            _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
             data.cnpj.encode("cp1252", "ignore") if data.cnpj else None,
             emp_id
         )
