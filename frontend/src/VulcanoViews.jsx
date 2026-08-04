@@ -428,7 +428,15 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
   const labelStyle = { color: '#8a7a68' };
 
   const [vendaForm, setVendaForm] = useState({ id_empreendimento: '', data: '', total: '', permuta: 'N', conta_permuta: '' });
-  const [compradores, setCompradores] = useState([{ nome: '', cpf_cnpj: '' }]);
+  const [compradores, setCompradores] = useState([{ nome: '', cpf_cnpj: '', percentual: 100 }]);
+
+  // divisao igualitaria do contrato entre N compradores (ultimo absorve o arredondamento)
+  const redistribuirPercentuais = (lista) => {
+    const n = lista.length || 1;
+    const base = Math.floor(10000 / n) / 100;
+    return lista.map((c, i) => ({ ...c, percentual: i === n - 1 ? Math.round((100 - base * (n - 1)) * 100) / 100 : base }));
+  };
+  const somaPercentuais = compradores.reduce((acc, c) => acc + (parseFloat(c.percentual) || 0), 0);
   const [condicoes, setCondicoes] = useState([]);
   const [unidadesDisp, setUnidadesDisp] = useState([]);
   const [blocosById, setBlocosById] = useState({});
@@ -503,6 +511,10 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
       alert('Há comprador com nome ou CPF/CNPJ faltando — complete ou remova a linha.');
       return;
     }
+    if (compradores.length > 1 && Math.abs(somaPercentuais - 100) > 0.05) {
+      alert(`Os percentuais dos compradores somam ${somaPercentuais.toFixed(2)}% — ajuste para fechar 100% (a divisão define o valor de cada CPF na DIMOB/EFD).`);
+      return;
+    }
     const condSemVenc = condicoes.filter(c => parseFloat(c.valor || 0) > 0 && !c.vencimento);
     if (condSemVenc.length) {
       alert('Há condição de pagamento com valor mas sem 1º vencimento — preencha a data ou remova a linha.');
@@ -518,7 +530,7 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
       total: totalNum,
       permuta: vendaForm.permuta,
       conta_permuta: vendaForm.permuta === 'S' && vendaForm.conta_permuta ? parseInt(vendaForm.conta_permuta) : null,
-      compradores: compradores.filter(c => c.nome && c.cpf_cnpj).map((c, i) => ({ ...c, principal: i === 0 })),
+      compradores: compradores.filter(c => c.nome && c.cpf_cnpj).map((c, i) => ({ nome: c.nome, cpf_cnpj: c.cpf_cnpj, percentual: parseFloat(c.percentual) || 0, principal: i === 0 })),
       condicoes: condicoes
         .filter(c => parseFloat(c.valor || 0) > 0 && c.vencimento)
         .map(c => ({ tipo: c.tipo, quantidade: parseInt(c.quantidade || 1), valor: parseFloat(c.valor), vencimento: c.vencimento })),
@@ -594,22 +606,29 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className={labelCls + ' mb-0'} style={labelStyle}>Compradores {compradores.length > 1 && `(${compradores.length})`}</label>
-                <button type="button" onClick={() => setCompradores(cs => [...cs, { nome: '', cpf_cnpj: '' }])} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold" style={{ background: 'rgba(255, 160, 80, 0.1)', color: '#ff7a1a' }}>
+                <button type="button" onClick={() => setCompradores(cs => redistribuirPercentuais([...cs, { nome: '', cpf_cnpj: '' }]))} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold" style={{ background: 'rgba(255, 160, 80, 0.1)', color: '#ff7a1a' }}>
                   <Plus size={11}/> Adicionar comprador
                 </button>
               </div>
               <div className="flex flex-col gap-2">
-                {compradores.map((c, idx) => (
-                  <div key={idx} className="grid grid-cols-[24px_1fr_220px_28px] items-center gap-2">
+                {compradores.map((c, idx) => {
+                  const cota = totalNum > 0 ? totalNum * (parseFloat(c.percentual) || 0) / 100 : 0;
+                  return (
+                  <div key={idx} className="grid grid-cols-[24px_1fr_190px_75px_110px_28px] items-center gap-2">
                     <span className="text-[9px] font-mono text-center" style={{ color: idx === 0 ? '#ff7a1a' : '#5a4e42' }} title={idx === 0 ? 'Comprador principal' : 'Comprador vinculado'}>{idx === 0 ? '1º' : `${idx + 1}º`}</span>
                     <input value={c.nome} onChange={(e) => setComprador(idx, { nome: e.target.value })} placeholder="Nome completo" className="p-3 rounded text-[11px] outline-none" style={inputStyle} />
                     <input value={c.cpf_cnpj} onChange={(e) => setComprador(idx, { cpf_cnpj: e.target.value })} onBlur={() => buscarClientePorDoc(idx)} placeholder="CPF/CNPJ" className="p-3 rounded text-[11px] outline-none font-mono" style={inputStyle} />
-                    <button type="button" disabled={compradores.length === 1} onClick={() => setCompradores(cs => cs.filter((_, i) => i !== idx))} className="p-1.5 rounded hover:bg-red-900/30 disabled:opacity-20" style={{ color: '#8a7a68' }}><Trash2 size={13}/></button>
+                    <input type="number" step="0.01" min="0" max="100" value={c.percentual} disabled={compradores.length === 1} onChange={(e) => setComprador(idx, { percentual: e.target.value })} title="% do contrato deste comprador (DIMOB/EFD)" className="p-3 rounded text-[11px] outline-none font-mono text-right disabled:opacity-40" style={inputStyle} />
+                    <span className="font-mono text-[10px] text-right" style={{ color: '#8a7a68' }} title="Cota deste CPF no contrato">{compradores.length > 1 ? formatCurrency(cota) : '—'}</span>
+                    <button type="button" disabled={compradores.length === 1} onClick={() => setCompradores(cs => redistribuirPercentuais(cs.filter((_, i) => i !== idx)))} className="p-1.5 rounded hover:bg-red-900/30 disabled:opacity-20" style={{ color: '#8a7a68' }}><Trash2 size={13}/></button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {compradores.length > 1 && (
-                <p className="mt-1 text-[9.5px]" style={{ color: '#5a4e42' }}>O 1º comprador é o titular da venda; os demais entram como vendas vinculadas (modelo do Vulcano).</p>
+                <p className="mt-1 text-[9.5px]" style={{ color: Math.abs(somaPercentuais - 100) > 0.05 ? '#ff7a1a' : '#5a4e42' }}>
+                  O contrato é RATEADO entre os CPFs conforme os percentuais (vale para DIMOB e EFD-Contribuições). Soma atual: {somaPercentuais.toFixed(2)}%{Math.abs(somaPercentuais - 100) > 0.05 ? ' ⚠ precisa fechar 100%' : ' ✓'}. O 1º comprador é o titular; os demais entram como vendas vinculadas com a sua cota.
+                </p>
               )}
             </div>
 
@@ -767,7 +786,7 @@ export const VendasView = ({ selectedEmpresa }) => {
       'Unidade': v.descricao,
       'Comprador Principal': v.cliente_nome,
       'CPF/CNPJ': v.cliente_cnpj,
-      'Compradores': (v.compradores || []).map(c => c.nome).join(' / ') || v.cliente_nome,
+      'Compradores': (v.compradores || []).map(c => c.valor != null ? `${c.nome} (${formatCurrency(c.valor)})` : c.nome).join(' / ') || v.cliente_nome,
       'Total Venda': v.total,
       'Permuta': v.permuta === 'S' ? 'SIM' : 'NÃO',
       'Status': v.distrato === 'S' ? 'DISTRATADA' : 'ATIVA',
@@ -875,7 +894,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                                                 <div className="font-medium text-[13.5px] truncate flex items-center gap-2" style={{ color: 'var(--v-text-bold)' }}>
                                                     {v.cliente_nome}
                                                     {(v.qtd_compradores || 1) > 1 && (
-                                                        <span title={(v.compradores || []).map(c => c.nome).join('\n')} className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0" style={{ background: 'rgba(255, 122, 26, 0.15)', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
+                                                        <span title={(v.compradores || []).map(c => c.valor != null ? `${c.nome} — ${formatCurrency(c.valor)}` : c.nome).join('\n')} className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0" style={{ background: 'rgba(255, 122, 26, 0.15)', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
                                                             +{v.qtd_compradores - 1}
                                                         </span>
                                                     )}

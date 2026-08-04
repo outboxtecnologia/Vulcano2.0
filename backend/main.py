@@ -330,7 +330,8 @@ async def _gemini_generate_json_async(
     prompt: str,
     file_data: bytes = None,
     mime_type: str = None,
-    response_schema: dict = None   # [OPT-2] Structured Outputs — Vertex apenas
+    response_schema: dict = None,   # [OPT-2] Structured Outputs — Vertex apenas
+    max_output_tokens: int = 8192
 ) -> dict:
     """Chama Gemini e retorna um objeto JSON (assíncrono nativo).
 
@@ -354,7 +355,7 @@ async def _gemini_generate_json_async(
             model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
             gen_cfg = {
                 "response_mime_type": "application/json",
-                "max_output_tokens": 8192,
+                "max_output_tokens": max_output_tokens,
             }
             if USE_VERTEX_FOR_GEMINI:
                 gen_cfg["thinking_config"] = {"thinking_budget": 0}
@@ -375,7 +376,7 @@ async def _gemini_generate_json_async(
                 model_cls = VertexModel if USE_VERTEX_FOR_GEMINI else genai.GenerativeModel
                 gen_cfg_fb = {
                     "response_mime_type": "application/json",
-                    "max_output_tokens": 8192,
+                    "max_output_tokens": max_output_tokens,
                 }
                 if USE_VERTEX_FOR_GEMINI:
                     gen_cfg_fb["thinking_config"] = {"thinking_budget": 0}
@@ -4030,6 +4031,457 @@ def put_empreendimento_endereco(emp_id: int, data: EnderecoInput):
 
     return {"success": True}
 
+# ── Importação de estrutura via matrícula de incorporação (PDF → Vertex) ──────
+# Fluxo do item 3 do doc da analista: a certidão de inteiro teor da matrícula
+# (imagem escaneada) vai inteira ao Gemini/Vertex, que devolve o cadastro do
+# empreendimento + blocos + GRUPOS de unidades identicas (como a propria
+# matrícula descreve) — a expansão em unidades individuais é feita em código.
+
+_MATRICULA_PROMPT_EMP = """Você é um analista de registro de imóveis. O PDF anexo é a CERTIDÃO DE INTEIRO TEOR de uma matrícula com registro de INCORPORAÇÃO IMOBILIÁRIA (páginas escaneadas — leia todas).
+
+Extraia SOMENTE os dados cadastrais e retorne EXATAMENTE este JSON (chaves fixas; string vazia quando não constar):
+{
+  "nome": "nome do empreendimento/residencial",
+  "matricula_numero": "número da matrícula",
+  "cartorio": "cartório/comarca do registro",
+  "incorporadora_nome": "razão social da incorporadora",
+  "incorporadora_cnpj": "CNPJ da incorporadora",
+  "cno": "CNO/CEI da obra se citado",
+  "area_terreno_m2": 0.0,
+  "endereco": {"logradouro": "", "numero": "", "complemento": "", "bairro": "", "cep": "", "uf": "", "municipio": ""},
+  "observacoes": "averbações/ressalvas relevantes (permutas, ônus, patrimônio de afetação, retificações)"
+}
+
+ONDE ACHAR CADA DADO:
+- nome: no R. de INCORPORAÇÃO ("incorporará a edificação denominada ..."). Copie o nome EXATO em negrito nesse registro.
+- incorporadora: a proprietária/incorporadora citada no R. de incorporação (CNPJ como escrito, geralmente no R. de compra e venda).
+- endereço: o do IMÓVEL DESTA matrícula — se houver averbação de ATUALIZAÇÃO DE ENDEREÇO, use a mais recente. NUNCA use o endereço do CARTÓRIO que aparece no cabeçalho de todas as páginas (ex.: rua do "Registro de Imóveis").
+- cno: APENAS se o documento citar literalmente CNO/CEI da obra; senão "".
+
+TRANSCREVA fielmente o que está escrito; NÃO complete com conhecimento externo nem invente nomes. Se um dado não constar, devolva string vazia."""
+
+_MATRICULA_PROMPT_ESTRUTURA = """Você é um analista de registro de imóveis. O PDF anexo é a CERTIDÃO DE INTEIRO TEOR de uma matrícula com registro de INCORPORAÇÃO IMOBILIÁRIA (páginas escaneadas — leia todas).
+
+Extraia a ESTRUTURA de blocos e unidades autônomas e retorne EXATAMENTE este JSON:
+{
+  "blocos": ["BLOCO A", "BLOCO B"],
+  "grupos_unidades": [
+    {"bloco": "BLOCO A", "tipo": "apartamento",
+     "unidades": [{"numero": "101", "vaga": "estacionamento descoberta 001"}],
+     "area_privativa_m2": 0.0, "area_acessoria_m2": 0.0, "area_privativa_total_m2": 0.0,
+     "area_comum_m2": 0.0, "area_total_m2": 0.0, "fracao_ideal_pct": 0.0}
+  ],
+  "unidades_autonomas_extras": [{"descricao": "", "quantidade": 0, "numeracao": ""}]
+}
+
+Na seção "DISCRIMINAÇÃO NUMÉRICA, LOCALIZAÇÃO, ÁREA E FRAÇÃO IDEAL DAS UNIDADES" (ou equivalente), as unidades vêm em GRUPOS com áreas idênticas (ex.: "Apartamento nº 101 do bloco A com vaga nº 001, Apartamento nº 201 do bloco A com vaga nº 009...: área privativa de X m²..."). Para cada grupo: o bloco (use o nome como escrito, ex. "BLOCO A"); o tipo; os pares {numero, vaga} respeitando o pareamento apartamento↔vaga do texto (vaga com descrição curta; "" se não houver); e as áreas do grupo. ATENÇÃO fracao_ideal_pct: a matrícula escreve "coeficiente de proporcionalidade equivalente a 0,3801% ou 39,8546m² de fração ideal" — fracao_ideal_pct é o PERCENTUAL (0.3801), NUNCA o valor em m². Decimais com ponto.
+
+REGRAS CRÍTICAS:
+- NÃO invente unidades: transcreva exatamente as numerações listadas em cada grupo.
+- Cada apartamento aparece em exatamente UM grupo — cuidado com grupos que continuam na página/verso seguinte (o cabeçalho repete; a lista de apartamentos do grupo pode atravessar a quebra de página).
+- Confira: a soma das unidades de todos os grupos deve bater com o total declarado na matrícula (ex.: "288 apartamentos"). Se não bater, revise antes de responder.
+- unidades_autonomas_extras: só unidades AUTÔNOMAS fora dos blocos (lojas, vagas autônomas). Vagas VINCULADAS a apartamentos não entram."""
+
+def _num_matricula(v):
+    """Coage área/fração p/ float (Gemini às vezes devolve string); None se inválido."""
+    try:
+        s = str(v).strip().replace(",", ".")
+        return float(s) if s else None
+    except (TypeError, ValueError):
+        return None
+
+_RE_BLOCO_CURTO = None
+def _canon_bloco(nome: str) -> str:
+    """'A' → 'BLOCO A'; normaliza caixa/espacos p/ casar blocos entre execucoes."""
+    global _RE_BLOCO_CURTO
+    if _RE_BLOCO_CURTO is None:
+        _RE_BLOCO_CURTO = re.compile(r"^[A-Z0-9]{1,3}$")
+    n = re.sub(r"\s+", " ", str(nome or "").strip().upper())
+    if _RE_BLOCO_CURTO.match(n):
+        n = f"BLOCO {n}"
+    return n
+
+def _normalizar_emp_matricula(raw: dict) -> dict:
+    """Gemini às vezes foge do schema (fallback sem structured output) — mapeia
+    variações de chave para um shape estável que a UI conhece."""
+    raw = raw or {}
+    inc = raw.get("incorporadora") or {}
+    end = raw.get("endereco") or raw.get("endereco_terreno") or {}
+    def pick(*keys):
+        for k in keys:
+            v = raw.get(k)
+            if v not in (None, ""):
+                return v
+        return ""
+    return {
+        "nome": pick("nome", "nome_empreendimento"),
+        "matricula_numero": str(pick("matricula_numero", "matricula") or ""),
+        "cartorio": pick("cartorio", "cartorio_comarca", "comarca"),
+        "incorporadora_nome": raw.get("incorporadora_nome") or inc.get("nome") or "",
+        "incorporadora_cnpj": raw.get("incorporadora_cnpj") or inc.get("cnpj") or "",
+        "cno": pick("cno", "cno_obra"),
+        "area_terreno_m2": raw.get("area_terreno_m2"),
+        "endereco": {
+            "logradouro": end.get("logradouro") or "",
+            "numero": str(end.get("numero") or ""),
+            "complemento": end.get("complemento") or "",
+            "bairro": end.get("bairro") or "",
+            "cep": end.get("cep") or "",
+            "uf": end.get("uf") or "",
+            "municipio": end.get("municipio") or "",
+        },
+    }
+
+def _expandir_grupos_matricula(extracao: dict) -> tuple[list[dict], list[str]]:
+    """Grupos → unidades individuais p/ prévia e importação.
+
+    Dedup por (bloco, numero) — mantém a 1ª ocorrência e reporta as repetidas
+    (sinal de erro de leitura do modelo que o usuário deve conferir na prévia).
+    """
+    unidades, vistos, duplicatas = [], set(), []
+    for g in extracao.get("grupos_unidades", []) or []:
+        for u in g.get("unidades", []) or []:
+            bloco = _canon_bloco(g.get("bloco"))
+            numero = str(u.get("numero") or "").strip()
+            chave = (bloco, numero)
+            if chave in vistos:
+                duplicatas.append(f"{bloco} nº {numero}")
+                continue
+            vistos.add(chave)
+            unidades.append({
+                "bloco": bloco,
+                "tipo": (g.get("tipo") or "apartamento").strip(),
+                "numero": numero,
+                "vaga": (u.get("vaga") or "").strip(),
+                "area_privativa_m2": _num_matricula(g.get("area_privativa_m2")),
+                "area_privativa_total_m2": _num_matricula(g.get("area_privativa_total_m2")),
+                "area_total_m2": _num_matricula(g.get("area_total_m2")),
+                "fracao_ideal_pct": _num_matricula(g.get("fracao_ideal_pct")),
+            })
+    return unidades, duplicatas
+
+@app.post("/api/vulcano/matricula/extrair")
+async def extrair_matricula(file: UploadFile = File(...)):
+    """Envia a matrícula (PDF) ao Vertex e devolve empreendimento+blocos+unidades."""
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie um PDF (certidão da matrícula).")
+    pdf_bytes = await file.read()
+    if len(pdf_bytes) > 30 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF acima de 30MB.")
+
+    # ── CONSENSO ANTI-ALUCINAÇÃO ─────────────────────────────────────────────
+    # Extrações independentes divergem em detalhes (caso real: uma leitura
+    # devolveu nome/CNPJ/endereço de empreendimento INEXISTENTE, outra trocou a
+    # vaga de um apto). Defesa: 3 leituras do cadastro (voto por campo) + 2 da
+    # estrutura (diff por unidade) + desempate focado só no que divergir.
+    from collections import Counter
+    N_EMP, N_EST = 3, 3
+    tasks = [
+        _gemini_generate_json_async(_MATRICULA_PROMPT_EMP, file_data=pdf_bytes,
+                                    mime_type="application/pdf", max_output_tokens=4096)
+        for _ in range(N_EMP)
+    ] + [
+        _gemini_generate_json_async(_MATRICULA_PROMPT_ESTRUTURA, file_data=pdf_bytes,
+                                    mime_type="application/pdf", max_output_tokens=32768)
+        for _ in range(N_EST)
+    ]
+    resultados = await asyncio.gather(*tasks, return_exceptions=True)
+    emp_runs = [_normalizar_emp_matricula(r) for r in resultados[:N_EMP] if isinstance(r, dict)]
+    est_runs = [r for r in resultados[N_EMP:] if isinstance(r, dict)]
+    if not emp_runs or not est_runs:
+        erros = [str(r)[:120] for r in resultados if isinstance(r, Exception)]
+        raise HTTPException(status_code=502, detail=f"Extração falhou nas leituras: {erros}")
+
+    # cadastro: voto campo a campo com clustering tolerante — valores-lixo
+    # ("NÃO CONSTA") viram vazio; "PALHOÇA/SC" ⊂ "REGISTRO DE IMÓVEIS DE
+    # PALHOÇA/SC" e "LTDA" ⊂ "LTDA ME" contam como o mesmo valor (vence o mais
+    # completo); CNPJ/CEP comparam só dígitos.
+    _LIXO = {"NAO CONSTA", "NÃO CONSTA", "N/A", "NA", "-", "NULL", "NONE",
+             "SEM INFORMACAO", "SEM INFORMAÇÃO", "NAO INFORMADO", "NÃO INFORMADO"}
+
+    def _norm_cmp(v):
+        s = str(v or "").strip().upper()
+        s = re.sub(r"\s+", " ", s)
+        return "" if s in _LIXO else s
+
+    def _voto_campo(valores, digits_only=False):
+        """→ (valor_vencedor, variantes_divergentes_ou_None)."""
+        def key(v):
+            n = _norm_cmp(v)
+            return re.sub(r"\D", "", n) if digits_only else n
+        candidatos = [str(v).strip() for v in valores if key(v)]
+        if not candidatos:
+            return "", None
+        # clusters por igualdade/containment da forma normalizada
+        clusters = []  # [ [reprs...] ]
+        for v in candidatos:
+            kv = key(v)
+            alocado = False
+            for cl in clusters:
+                k0 = key(cl[0])
+                if kv == k0 or kv in k0 or k0 in kv:
+                    cl.append(v)
+                    alocado = True
+                    break
+            if not alocado:
+                clusters.append([v])
+        clusters.sort(key=len, reverse=True)
+        top = clusters[0]
+        representante = max(top, key=len)  # a variante mais completa
+        if len(clusters) == 1 or len(top) >= 2:
+            variantes = sorted({c[0] for c in clusters[1:]}) if len(clusters) > 1 else None
+            return representante, variantes
+        # vários clusters, todos com 1 voto: sem consenso
+        return "", sorted({c[0] for c in clusters})
+
+    emp_raw, divergencias_cadastro = {}, {}
+    campos_planos = ["nome", "matricula_numero", "cartorio", "incorporadora_nome",
+                     "incorporadora_cnpj", "cno", "area_terreno_m2", "observacoes"]
+    for campo in campos_planos:
+        digits = campo in ("incorporadora_cnpj",)
+        valor, variantes = _voto_campo([r.get(campo) for r in emp_runs], digits_only=digits)
+        emp_raw[campo] = valor
+        if variantes:
+            divergencias_cadastro[campo] = variantes
+    emp_raw["endereco"] = {}
+    for campo in ("logradouro", "numero", "complemento", "bairro", "cep", "uf", "municipio"):
+        valor, variantes = _voto_campo(
+            [(r.get("endereco") or {}).get(campo) for r in emp_runs],
+            digits_only=(campo == "cep"),
+        )
+        emp_raw["endereco"][campo] = valor
+        if variantes:
+            divergencias_cadastro[f"endereco.{campo}"] = variantes
+
+    # desempate focado do cadastro: p/ campos sem consenso, escolher entre os
+    # candidatos e transcrever do documento é bem mais confiavel que extraçao aberta
+    campos_pendentes = {c: v for c, v in divergencias_cadastro.items()
+                        if not (emp_raw.get(c) if "." not in c else emp_raw["endereco"].get(c.split(".")[1]))}
+    if campos_pendentes:
+        perguntas = "; ".join(f"{c}: candidatos {v}" for c, v in campos_pendentes.items())
+        try:
+            resolucao = await _gemini_generate_json_async(
+                "No PDF anexo (certidão de matrícula com incorporação), leituras anteriores "
+                f"divergiram nos campos cadastrais a seguir — {perguntas}. Localize cada um no "
+                "documento (nome do empreendimento fica no R. de INCORPORAÇÃO 'edificação "
+                "denominada ...'; endereço é o do IMÓVEL, nunca o do cartório do cabeçalho; "
+                "prefira averbação de atualização de endereço mais recente) e responda no JSON "
+                "{\"resolucoes\": {\"<campo>\": \"<valor exato do documento, ou vazio se não constar>\"}}. "
+                "Escolha entre os candidatos apenas se um deles for exatamente o que está escrito.",
+                file_data=pdf_bytes,
+                mime_type="application/pdf",
+                max_output_tokens=4096,
+            )
+            for campo, valor in (resolucao.get("resolucoes") or {}).items():
+                valor = str(valor or "").strip()
+                if not valor or campo not in campos_pendentes:
+                    continue
+                if "." in campo:
+                    emp_raw["endereco"][campo.split(".")[1]] = valor
+                else:
+                    emp_raw[campo] = valor
+                divergencias_cadastro[campo] = campos_pendentes[campo] + ["→ resolvido no desempate: " + valor]
+        except Exception:
+            pass  # divergencias ficam listadas p/ o humano
+
+    # estrutura: expande cada leitura e faz diff por (bloco, numero)
+    expandidos = [_expandir_grupos_matricula(r) for r in est_runs]
+    dup_todas = sorted({d for _, dups in expandidos for d in dups})
+    mapas = [{(u["bloco"], u["numero"]): u for u in unids} for unids, _ in expandidos]
+
+    def _vaga_cmp(v):
+        return re.sub(r"\D", "", str(v or "")) or _norm_cmp(v)
+
+    def _tupla_voto(u):
+        return (
+            round(float(u.get("area_privativa_m2") or 0), 2),
+            round(float(u.get("fracao_ideal_pct") or 0), 4),
+            _vaga_cmp(u.get("vaga")),
+        )
+
+    # voto por unidade: a tupla (área, fração, vaga) com maioria entre as
+    # leituras vence; sem maioria → desempate focado
+    unidades, para_desempate = [], set()
+    todas_chaves = sorted(set().union(*[set(m) for m in mapas]))
+    for chave in todas_chaves:
+        ocorrencias = [m[chave] for m in mapas if chave in m]
+        tuplas = [_tupla_voto(o) for o in ocorrencias]
+        vencedora = Counter(tuplas).most_common(1)[0]
+        if vencedora[1] >= 2:
+            u = dict(ocorrencias[tuplas.index(vencedora[0])])
+            if len(ocorrencias) < len(mapas):
+                u["divergente_conferir"] = True  # faltou em alguma leitura
+        else:
+            u = dict(ocorrencias[0])
+            u["divergente_conferir"] = True
+            para_desempate.add(chave)
+        unidades.append(u)
+    para_desempate.update(
+        (d.split(" nº ")[0], d.split(" nº ")[1]) for d in dup_todas if " nº " in d
+    )
+
+    # desempate focado em LOTES (pergunta só pelas unidades sem maioria)
+    corrigidas = []
+    if para_desempate:
+        pendentes = sorted(para_desempate)
+        por_chave = {(u["bloco"], u["numero"]): u for u in unidades}
+        LOTE, MAX_LOTES = 25, 4
+        for i in range(0, min(len(pendentes), LOTE * MAX_LOTES), LOTE):
+            lote = pendentes[i:i + LOTE]
+            lista = ", ".join(f"{b} nº {n}" for b, n in lote)
+            try:
+                correcao = await _gemini_generate_json_async(
+                    "No PDF anexo (certidão de matrícula com incorporação), leituras anteriores "
+                    f"divergiram sobre estas unidades: {lista}. Localize CADA uma na seção de "
+                    "discriminação das unidades (atenção a grupos que continuam na página seguinte) "
+                    "e retorne os dados corretos no JSON: {\"correcoes\": [{\"bloco\", \"numero\", \"vaga\", "
+                    "\"area_privativa_m2\", \"area_privativa_total_m2\", \"area_total_m2\", \"fracao_ideal_pct\"}]}. "
+                    "ATENÇÃO: fracao_ideal_pct é o coeficiente PERCENTUAL (ex.: 0.3801, o valor com %), "
+                    "NUNCA a fração ideal em m². Decimais com ponto. Transcreva exatamente o que a matrícula diz.",
+                    file_data=pdf_bytes,
+                    mime_type="application/pdf",
+                    max_output_tokens=8192,
+                )
+                for c in correcao.get("correcoes", []) or []:
+                    chave = (_canon_bloco(c.get("bloco")), str(c.get("numero") or "").strip())
+                    alvo = por_chave.get(chave)
+                    if alvo:
+                        if str(c.get("vaga") or "").strip():
+                            alvo["vaga"] = str(c["vaga"]).strip()
+                        suspeito = False
+                        for k in ("area_privativa_m2", "area_privativa_total_m2", "area_total_m2", "fracao_ideal_pct"):
+                            val = _num_matricula(c.get(k))
+                            if val is None:
+                                continue
+                            if k == "fracao_ideal_pct" and val > 10:
+                                suspeito = True  # veio a fração em m², não o percentual
+                                continue
+                            alvo[k] = val
+                        alvo["corrigida_desempate"] = True
+                        if not suspeito:
+                            alvo.pop("divergente_conferir", None)
+                        corrigidas.append(f"{chave[0]} nº {chave[1]}")
+            except Exception:
+                continue  # lote fica marcado divergente_conferir p/ o humano
+
+    extracao = est_runs[0]  # p/ grupos_unidades/extras na resposta
+    # blocos: uniao canonizada das leituras + citados nas unidades
+    blocos = []
+    for r in est_runs:
+        for b in (r.get("blocos") or []):
+            cb = _canon_bloco(b)
+            if cb and cb not in blocos:
+                blocos.append(cb)
+    for u in unidades:
+        if u["bloco"] and u["bloco"] not in blocos:
+            blocos.append(u["bloco"])
+
+    # conferências p/ a prévia (o humano decide)
+    soma_fracao = sum(u.get("fracao_ideal_pct") or 0 for u in unidades)
+    conferencias = {
+        "leituras_estrutura": len(est_runs),
+        "duplicatas_descartadas": dup_todas,
+        "unidades_divergentes": sorted(f"{b} nº {n}" for b, n in para_desempate),
+        "corrigidas_no_desempate": corrigidas,
+        "divergencias_cadastro": divergencias_cadastro,
+        "soma_fracao_ideal_pct": round(soma_fracao, 4),
+        "fracao_fecha_100": abs(soma_fracao - 100.0) < 1.0 if soma_fracao else None,
+    }
+
+    obs = emp_raw.get("observacoes") or extracao.get("observacoes") or ""
+    if isinstance(obs, list):
+        obs = " ".join(str(o) for o in obs)
+    return {
+        "empreendimento": _normalizar_emp_matricula(emp_raw),
+        "blocos": blocos,
+        "grupos_unidades": extracao.get("grupos_unidades") or [],
+        "unidades": unidades,
+        "total_unidades": len(unidades),
+        "unidades_autonomas_extras": extracao.get("unidades_autonomas_extras") or [],
+        "observacoes": obs,
+        "conferencias": conferencias,
+    }
+
+class ImportarEstruturaInput(BaseModel):
+    empreendimento_id: int
+    blocos: list[dict]  # [{nome: str, unidades: [{descricao: str, metragem: float|None, inscricao: int|None}]}]
+
+@app.post("/api/vulcano/estrutura/importar")
+def importar_estrutura(data: ImportarEstruturaInput):
+    """Grava em lote blocos+unidades no Firebird (transação única).
+
+    Blocos com mesmo nome no empreendimento são reaproveitados; unidades cuja
+    DESCRICAO já existe no bloco são puladas (re-importação segura).
+    """
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        cur.execute("SELECT ID, NOME FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (data.empreendimento_id,))
+        blocos_existentes = {dec(r[1]).upper(): r[0] for r in cur.fetchall()}
+
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM BLOCO")
+        next_bloco_id = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM UNIDADE")
+        next_unid_id = cur.fetchone()[0]
+
+        stats = {"blocos_criados": 0, "blocos_reaproveitados": 0, "unidades_criadas": 0, "unidades_puladas": 0}
+        for b in data.blocos:
+            nome = str(b.get("nome") or "").strip().upper()
+            if not nome:
+                continue
+            if nome in blocos_existentes:
+                bloco_id = blocos_existentes[nome]
+                stats["blocos_reaproveitados"] += 1
+            else:
+                bloco_id = next_bloco_id
+                next_bloco_id += 1
+                cur.execute(
+                    "INSERT INTO BLOCO (ID, IDEMPREENDIMENTO, NOME) VALUES (?, ?, ?)",
+                    (bloco_id, data.empreendimento_id, nome.encode('cp1252', 'ignore')[:100]),
+                )
+                blocos_existentes[nome] = bloco_id
+                stats["blocos_criados"] += 1
+
+            cur.execute("SELECT DESCRICAO FROM UNIDADE WHERE IDBLOCO = ?", (bloco_id,))
+            ja_existem = {dec(r[0]).upper() for r in cur.fetchall()}
+            for u in b.get("unidades", []) or []:
+                descricao = str(u.get("descricao") or "").strip()
+                if not descricao or descricao.upper() in ja_existem:
+                    stats["unidades_puladas"] += 1
+                    continue
+                metragem = u.get("metragem")
+                try:
+                    metragem = float(metragem) if metragem not in (None, "") else None
+                except (TypeError, ValueError):
+                    metragem = None
+                inscricao = _int_or_none(u.get("inscricao"))
+                cur.execute(
+                    "INSERT INTO UNIDADE (ID, IDBLOCO, DESCRICAO, METRAGEM, NUMCADIMOB) VALUES (?, ?, ?, ?, ?)",
+                    (next_unid_id, bloco_id, descricao.encode('cp1252', 'ignore')[:100], metragem, inscricao),
+                )
+                next_unid_id += 1
+                ja_existem.add(descricao.upper())
+                stats["unidades_criadas"] += 1
+
+        conn.commit()
+        return {"success": True, **stats}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
 @app.get("/api/vulcano/clientes")
 def get_vulcano_clientes(empresa_id: int):
     try:
@@ -4187,8 +4639,11 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
         df_vendas = pd.read_sql_query(query_vendas, conn, params=tuple(params))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
 
-        # Compradores extras: vendas satelites vinculadas via IDVENDAVINCULADA
-        # (multi-comprador estilo legado; satelites tem TOTALVENDA=0 e ficam fora da lista)
+        # Compradores extras: vendas satelites vinculadas via IDVENDAVINCULADA.
+        # Satelites NOVAS (marcadas 'VINCULADA VENDA' no INFCOMP) carregam a COTA
+        # do comprador no contrato — o total do grupo soma principal + cotas.
+        # Vinculos legados sem marcador (linhas duplicadas com valor cheio) NAO
+        # entram na soma, senao o contrato dobraria.
         co_compradores = {}
         ids = [int(i) for i in df_vendas['ID'].tolist()] if len(df_vendas) else []
         if ids:
@@ -4197,7 +4652,7 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
                 chunk = ids[chunk_start:chunk_start + 500]
                 placeholders = ",".join("?" * len(chunk))
                 cur2.execute(
-                    f"""SELECT v2.IDVENDAVINCULADA, c2.NOME, c2.CNPJ
+                    f"""SELECT v2.IDVENDAVINCULADA, c2.NOME, c2.CNPJ, v2.TOTALVENDA, v2.INFCOMP
                         FROM VENDA v2
                         JOIN CLIENTE c2 ON c2.ID = v2.ID_CLIENTE
                         WHERE v2.IDVENDAVINCULADA IN ({placeholders})""",
@@ -4205,7 +4660,13 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
                 )
                 for rr in cur2.fetchall():
                     dec_ = lambda v: v.decode('cp1252', 'ignore').strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
-                    co_compradores.setdefault(int(rr[0]), []).append({"nome": dec_(rr[1]), "cpf_cnpj": dec_(rr[2])})
+                    marcada = dec_(rr[4]).upper().startswith("VINCULADA VENDA")
+                    co_compradores.setdefault(int(rr[0]), []).append({
+                        "nome": dec_(rr[1]),
+                        "cpf_cnpj": dec_(rr[2]),
+                        "valor": float(rr[3] or 0) if marcada else None,
+                        "rateada": marcada,
+                    })
 
         df = df_vendas
         df = df.replace({np.nan: None})
@@ -4243,9 +4704,14 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
         records = df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
         for rec in records:
             extras = co_compradores.get(int(rec['id']), [])
-            rec['compradores'] = [{"nome": rec['cliente_nome'], "cpf_cnpj": rec['cliente_cnpj'], "principal": True}] + \
-                                 [{**c, "principal": False} for c in extras]
+            cota_principal = rec['total']
+            soma_cotas_extras = sum(c['valor'] for c in extras if c.get('rateada') and c.get('valor'))
+            total_contrato = round(cota_principal + soma_cotas_extras, 2)
+            rec['compradores'] = [{"nome": rec['cliente_nome'], "cpf_cnpj": rec['cliente_cnpj'],
+                                   "principal": True, "valor": cota_principal if extras else None}] + \
+                                 [{k: c[k] for k in ("nome", "cpf_cnpj", "valor")} | {"principal": False} for c in extras]
             rec['qtd_compradores'] = 1 + len(extras)
+            rec['total'] = total_contrato  # valor do CONTRATO (cotas somadas)
         return records
 
     except Exception as e:
@@ -4307,16 +4773,22 @@ def get_vulcano_venda_condicoes(venda_id: int):
             },
         }
 
-        # Compradores extras (vendas satelites vinculadas a esta principal)
+        # Compradores extras (vendas satelites vinculadas a esta principal).
+        # Satelites marcadas carregam a cota do comprador; total_contrato = soma.
         cur.execute(
-            """SELECT c2.NOME, c2.CNPJ FROM VENDA v2
+            """SELECT c2.NOME, c2.CNPJ, v2.TOTALVENDA, v2.INFCOMP FROM VENDA v2
                JOIN CLIENTE c2 ON c2.ID = v2.ID_CLIENTE
                WHERE v2.IDVENDAVINCULADA = ?""",
             (int(venda_id),),
         )
-        venda["compradores"] = [{"nome": venda["cliente"]["nome"], "cpf_cnpj": venda["cliente"]["cnpj"], "principal": True}] + [
-            {"nome": dec(rr[0]), "cpf_cnpj": dec(rr[1]), "principal": False} for rr in cur.fetchall()
-        ]
+        extras = []
+        for rr in cur.fetchall():
+            marcada = dec(rr[3]).upper().startswith("VINCULADA VENDA")
+            extras.append({"nome": dec(rr[0]), "cpf_cnpj": dec(rr[1]), "principal": False,
+                           "valor": float(rr[2] or 0) if marcada else None, "rateada": marcada})
+        venda["compradores"] = [{"nome": venda["cliente"]["nome"], "cpf_cnpj": venda["cliente"]["cnpj"],
+                                 "principal": True, "valor": venda["total"] if extras else None}] + extras
+        venda["total_contrato"] = round(venda["total"] + sum(e["valor"] for e in extras if e.get("rateada") and e["valor"]), 2)
 
         # Formas de pagamento (condições)
         cur.execute(
@@ -5992,7 +6464,7 @@ def delete_empreendimento(emp_id: int):
         if count_vendas > 0:
             raise HTTPException(status_code=400, detail=f"Ação bloqueada: Existem {count_vendas} vendas vinculadas a esta infraestrutura.")
             
-        cur.execute("DELETE FROM UNIDADE WHERE ID_BLOCO IN (SELECT ID FROM BLOCO WHERE IDEMPREENDIMENTO = ?)", (emp_id,))
+        cur.execute("DELETE FROM UNIDADE WHERE IDBLOCO IN (SELECT ID FROM BLOCO WHERE IDEMPREENDIMENTO = ?)", (emp_id,))
         cur.execute("DELETE FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (emp_id,))
         cur.execute("DELETE FROM EMPREENDIMENTO WHERE ID = ?", (emp_id,))
         conn.commit()
@@ -6283,6 +6755,22 @@ async def post_vendas(request: Request):
         ids_clientes = [_get_or_create_cliente(c) for c in compradores]
         id_cliente = ids_clientes[0] if ids_clientes else None
 
+        # Rateio do contrato entre os CPFs (DIMOB/EFD-Contribuicoes precisam do
+        # valor por adquirente): percentual informado por comprador, normalizado
+        # p/ fechar 100; sem percentuais, divide igual. As cotas somam EXATAMENTE
+        # o total (ultima absorve arredondamento).
+        total_contrato = float(data.get("total", 0) or 0)
+        n_comp = max(1, len(compradores))
+        percs = [float(c.get("percentual") or 0) for c in compradores] or [100.0]
+        soma_percs = sum(p for p in percs if p > 0)
+        if soma_percs <= 0:
+            percs = [100.0 / n_comp] * n_comp
+        else:
+            percs = [max(0.0, p) * 100.0 / soma_percs for p in percs]
+        cotas = [round(total_contrato * p / 100.0, 2) for p in percs]
+        if cotas:
+            cotas[-1] = round(total_contrato - sum(cotas[:-1]), 2)
+
         # --- VENDA ---
         cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDA")
         new_id = cur.fetchone()[0]
@@ -6315,7 +6803,7 @@ async def post_vendas(request: Request):
             num_cad,
             date_str,
             str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100],
-            float(data.get("total", 0) or 0),
+            cotas[0] if cotas else total_contrato,
             int(empresa_id),
             permuta,
             conta_permuta,
@@ -6323,23 +6811,26 @@ async def post_vendas(request: Request):
         )
         cur.execute(query, params)
 
-        # --- VENDAS SATELITES (multi-comprador estilo legado) ---
-        # 1 linha VENDA por comprador extra, TOTALVENDA=0 (valor cheio fica na
-        # principal — evita somar em dobro em listas/POC/DIMOB), vinculada pela
-        # IDVENDAVINCULADA. Unidades, condicoes e RECEBER existem so na principal.
+        # --- VENDAS SATELITES (multi-comprador, valores rateados por CPF) ---
+        # 1 linha VENDA por comprador extra com a SUA cota do contrato (DIMOB e
+        # EFD-Contribuicoes declaram por adquirente), vinculada pela
+        # IDVENDAVINCULADA e marcada no INFCOMP. As cotas do grupo somam o
+        # contrato — listas/POC nao dobram. Unidades, condicoes e RECEBER
+        # existem so na principal (fluxo financeiro e um so).
         desc_unid = str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100]
         for offset, cid_extra in enumerate(ids_clientes[1:], start=1):
             if cid_extra is None:
                 continue
             sat_id = new_id + offset
             cur.execute(
-                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, 0, ?, 'N', ?, ?, ?, ?)",
+                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?, ?)",
                 (
                     sat_id,
                     id_empreendimento,
                     num_cad,
                     date_str,
                     desc_unid,
+                    cotas[offset] if offset < len(cotas) else 0,
                     int(empresa_id),
                     permuta,
                     cid_extra,

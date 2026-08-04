@@ -37,20 +37,30 @@ cadastro (ID), CNPJ ou CNO**. O card também passou a exibir o CNPJ junto do CNO
   as empresas do Questor (por isso apareciam coisas como "Trade Marketing"); agora só
   vêm os centros de custo cadastrados para a empresa selecionada.
 
-### 3 – Estrutura Blocos (importação) — **A TRABALHAR JUNTOS**
+### 3 – Estrutura Blocos (importação) — **IMPLEMENTADO: matrícula de incorporação via IA**
 > *"Como fazer a importação dos dados?"*
 
-Hoje só existe cadastro manual (um bloco/unidade por vez). A proposta para discutirmos:
+Resposta: **enviando o PDF da matrícula de incorporação** (certidão de inteiro teor).
+Na aba **Estrutura (Blocos)** do empreendimento há o botão **"Enviar matrícula"**:
 
-1. **Planilha modelo** com colunas `Bloco | Unidade | Metragem | Inscrição Imobiliária`
-   (mesmo formato do arquivo `GARDEN I.xls` que já está em modelos_entrada).
-2. Botão **"Importar planilha"** na aba Estrutura (Blocos): lê o Excel direto no
-   navegador, mostra prévia com validação (blocos novos × existentes, unidades
-   duplicadas) e grava em lote nos cadastros de blocos/unidades já existentes.
-3. Alternativa mais robusta: usar o **Smart Importer** (tela 5), que já tem fila e
-   mapeamento de colunas assistido, para PDFs/planilhas fora do padrão.
+1. A IA (Vertex/Gemini) lê a certidão escaneada inteira — o cadastro em **3 leituras
+   independentes com voto** e a estrutura em **3 leituras com voto por unidade**;
+   o que divergir entre leituras vai para **rodadas de desempate focadas**. Isso
+   elimina alucinações de leitura única (testado com a matrícula real 105.083 do
+   GRAND LIFE RESIDENCE / ALZ: 288 apartamentos em 3 blocos extraídos exatos,
+   frações ideais fechando 100%).
+2. A **prévia** mostra o cadastro (nome, matrícula, incorporadora, endereço), os
+   blocos, as 288 unidades com todas as áreas + vaga vinculada, e os **avisos**:
+   campos onde as leituras divergiram (ex.: bairro antigo × atualizado) e unidades
+   marcadas p/ conferência. Nada é gravado sem sua confirmação.
+3. Você escolhe **qual área vira a metragem** da unidade (privativa, privativa total
+   ou real total), se a vaga entra na descrição, e pode aplicar o endereço da
+   matrícula direto na aba Dados Gerais.
+4. **Gravar** cria blocos+unidades em lote (transação única). Re-importar é seguro:
+   unidades que já existem são puladas.
 
-Nada disso foi implementado ainda — está reservado para definirmos o formato juntos.
+A leitura leva ~3-5 minutos (várias passadas de conferência). Para planilhas simples
+(tipo GARDEN I.xls) o cadastro manual da aba continua disponível.
 
 ---
 
@@ -82,13 +92,15 @@ O formulário antigo (ID na mão + texto livre) foi substituído. O fluxo agora 
 
 **Venda com mais de um comprador** (campo "vincular venda"): seguimos o modelo do
 Vulcano antigo — cada comprador extra vira uma venda **vinculada** à principal (campo
-`IDVENDAVINCULADA`, que existia no banco mas nunca era preenchido). Diferença importante:
-a venda principal carrega o **valor cheio** e as vinculadas ficam com **valor zero**,
-para o total da carteira **não somar em dobro** (no modelo antigo as duas linhas
-carregavam o valor cheio — ex.: as vendas #19608/#19609 de R$ 901.636,49 que hoje
-aparecem somando R$ 1,8 mi). Na lista, a venda aparece **uma vez** com um selo `+1`
-mostrando os demais compradores. Parcelas e recebimentos ficam só na principal; o
-distrato da principal cancela também as vinculadas.
+`IDVENDAVINCULADA`, que existia no banco mas nunca era preenchido) — e o **contrato é
+RATEADO entre os CPFs**: no formulário você define o **% de cada comprador** (padrão:
+divisão igual) e cada linha grava a **cota daquele CPF**, somando exatamente o valor
+do contrato. É essa cota por adquirente que alimenta a **DIMOB** (o R03 sai por CPF
+com o valor da participação, e o valor pago no ano também é rateado na mesma
+proporção) e serve de base para a **EFD-Contribuições**. Na lista, a venda aparece
+**uma vez** com o valor do contrato e um selo `+N` mostrando os compradores e suas
+cotas. Parcelas e recebimentos ficam só na principal (o fluxo financeiro do contrato
+é um só); o distrato da principal cancela também as vinculadas.
 
 *Caso LIGIA/LARISSA*: verificamos que a venda #19609 **já estava vinculada** à #19608
 na base (campo preenchido); com a listagem nova o par passa a aparecer **uma única
