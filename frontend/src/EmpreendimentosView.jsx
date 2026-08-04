@@ -268,6 +268,90 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     setPickerOpen(null);
   };
 
+  // ── Importação da estrutura via matrícula de incorporação (PDF → Vertex) ──
+  const [matriculaPreview, setMatriculaPreview] = useState(null);
+  const [matriculaLoading, setMatriculaLoading] = useState(false);
+  const [metragemCampo, setMetragemCampo] = useState('area_privativa_m2');
+  const [incluirVaga, setIncluirVaga] = useState(false);
+  const [importandoEstrutura, setImportandoEstrutura] = useState(false);
+  const matriculaInputRef = React.useRef(null);
+
+  const handleUploadMatricula = async (file) => {
+    if (!file) return;
+    setMatriculaLoading(true);
+    setMatriculaPreview(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API_BASE}/api/vulcano/matricula/extrair`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
+      setMatriculaPreview(data);
+    } catch (e) {
+      alert('Falha na leitura da matrícula: ' + e.message);
+    } finally {
+      setMatriculaLoading(false);
+      if (matriculaInputRef.current) matriculaInputRef.current.value = '';
+    }
+  };
+
+  const descricaoUnidadeMatricula = (u) => {
+    const tipo = (u.tipo || '').toUpperCase().startsWith('APART') ? 'APTO' : (u.tipo || 'UNID').toUpperCase().slice(0, 12);
+    let d = `${tipo} ${u.numero}`;
+    if (incluirVaga && u.vaga) d += ` - VAGA ${u.vaga.toUpperCase()}`;
+    return d;
+  };
+
+  const handleGravarEstrutura = async () => {
+    if (!matriculaPreview || !editingEmp) return;
+    const porBloco = {};
+    matriculaPreview.unidades.forEach(u => {
+      (porBloco[u.bloco] = porBloco[u.bloco] || []).push({
+        descricao: descricaoUnidadeMatricula(u),
+        metragem: u[metragemCampo] ?? null,
+      });
+    });
+    const payload = {
+      empreendimento_id: editingEmp.id,
+      blocos: Object.entries(porBloco).map(([nome, unidades]) => ({ nome, unidades })),
+    };
+    setImportandoEstrutura(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/estrutura/importar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
+      alert(`Importado: ${data.blocos_criados} bloco(s) criado(s), ${data.blocos_reaproveitados} reaproveitado(s), ${data.unidades_criadas} unidade(s) criada(s), ${data.unidades_puladas} já existiam.`);
+      setMatriculaPreview(null);
+      fetchEstrutura(editingEmp.id);
+    } catch (e) {
+      alert('Falha ao gravar estrutura: ' + e.message);
+    } finally {
+      setImportandoEstrutura(false);
+    }
+  };
+
+  const aplicarCadastroMatricula = () => {
+    const e = matriculaPreview?.empreendimento;
+    if (!e) return;
+    if (e.endereco?.logradouro || e.endereco?.cep) {
+      setEnderecoForm(prev => ({
+        ...prev,
+        logradouro: e.endereco.logradouro || prev.logradouro,
+        numero: e.endereco.numero || prev.numero,
+        complemento: e.endereco.complemento || prev.complemento,
+        bairro: e.endereco.bairro || prev.bairro,
+        cep: e.endereco.cep || prev.cep,
+        uf: e.endereco.uf || prev.uf,
+        fonte: 'MANUAL',
+      }));
+    }
+    if (e.nome && !formData.nome) setFormData(f => ({ ...f, nome: e.nome }));
+    setActiveTab('dados');
+    alert('Endereço da matrícula aplicado à aba Dados Gerais — confira e salve.');
+  };
+
   const handleSave = async () => {
     if (saving) return; // duplo clique criava dois registros: o id vem de MAX(ID)+1
 
@@ -857,6 +941,111 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
 
               {activeTab === 'estrutura' && (
                 <div className="space-y-8 animate-in zoom-in-95 duration-500">
+                    {/* Importação via matrícula de incorporação */}
+                    <div className="bg-[var(--v-accent)]/5 border border-[#ff4d00]/20 p-4 rounded-[var(--v-radius)] space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="text-[10px] font-black text-[var(--v-text-bold)] uppercase tracking-widest">Importar da Matrícula de Incorporação (PDF)</h4>
+                                <p className="text-[10px] text-[var(--v-text-muted)] mt-1">A certidão de inteiro teor é lida pela IA em 3 leituras independentes com conferência e desempate; você revisa a prévia antes de gravar.</p>
+                            </div>
+                            <input ref={matriculaInputRef} type="file" accept=".pdf" className="hidden" onChange={(e) => handleUploadMatricula(e.target.files?.[0])} />
+                            <button
+                                onClick={() => matriculaInputRef.current?.click()}
+                                disabled={matriculaLoading}
+                                className="bg-[var(--v-accent)] text-black px-4 py-2 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-white transition-all disabled:opacity-50 shrink-0"
+                            >
+                                {matriculaLoading ? <Loader2 size={14} className="animate-spin"/> : <Database size={14}/>}
+                                {matriculaLoading ? 'Lendo (até ~5 min)...' : 'Enviar matrícula'}
+                            </button>
+                        </div>
+
+                        {matriculaLoading && (
+                            <p className="text-[10px] text-[var(--v-accent)] animate-pulse font-bold uppercase tracking-widest">Extraindo com IA: 3 leituras do cadastro + 3 da estrutura + desempates. Aguarde nesta tela.</p>
+                        )}
+
+                        {matriculaPreview && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4 text-[11px] text-[var(--v-text-bold)]">
+                                    <div className="space-y-1">
+                                        <p><span className="text-[var(--v-text-faint)]">Empreendimento:</span> <b>{matriculaPreview.empreendimento.nome || '—'}</b></p>
+                                        <p><span className="text-[var(--v-text-faint)]">Matrícula:</span> {matriculaPreview.empreendimento.matricula_numero || '—'} · {matriculaPreview.empreendimento.cartorio || ''}</p>
+                                        <p><span className="text-[var(--v-text-faint)]">Incorporadora:</span> {matriculaPreview.empreendimento.incorporadora_nome || '—'} {matriculaPreview.empreendimento.incorporadora_cnpj && `(${matriculaPreview.empreendimento.incorporadora_cnpj})`}</p>
+                                        <p><span className="text-[var(--v-text-faint)]">Endereço:</span> {[matriculaPreview.empreendimento.endereco?.logradouro, matriculaPreview.empreendimento.endereco?.numero, matriculaPreview.empreendimento.endereco?.bairro, matriculaPreview.empreendimento.endereco?.cep, matriculaPreview.empreendimento.endereco?.uf].filter(Boolean).join(', ') || '—'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p><span className="text-[var(--v-text-faint)]">Blocos:</span> {matriculaPreview.blocos.join(', ')}</p>
+                                        <p><span className="text-[var(--v-text-faint)]">Unidades:</span> <b>{matriculaPreview.total_unidades}</b></p>
+                                        <p><span className="text-[var(--v-text-faint)]">Σ fração ideal:</span> {matriculaPreview.conferencias.soma_fracao_ideal_pct}% {matriculaPreview.conferencias.fracao_fecha_100 ? '✓' : '⚠ não fecha 100%'}</p>
+                                        {matriculaPreview.conferencias.corrigidas_no_desempate.length > 0 && (
+                                            <p className="text-[var(--v-accent)]">⚙ {matriculaPreview.conferencias.corrigidas_no_desempate.length} unidade(s) resolvidas em leitura de desempate</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {(Object.keys(matriculaPreview.conferencias.divergencias_cadastro || {}).length > 0 || matriculaPreview.unidades.some(u => u.divergente_conferir)) && (
+                                    <div className="bg-[#ff3b30]/10 border border-[#ff3b30]/30 p-3 rounded text-[10px] text-[var(--v-text-bold)] space-y-1">
+                                        <p className="font-black uppercase text-[#ff3b30]">Conferir antes de gravar:</p>
+                                        {Object.entries(matriculaPreview.conferencias.divergencias_cadastro || {}).map(([campo, vars]) => (
+                                            <p key={campo}>• {campo}: leituras divergiram — {Array.isArray(vars) ? vars.join(' | ') : String(vars)}</p>
+                                        ))}
+                                        {matriculaPreview.unidades.filter(u => u.divergente_conferir).slice(0, 10).map(u => (
+                                            <p key={`${u.bloco}-${u.numero}`}>• {u.bloco} nº {u.numero}: leituras divergiram sem desempate — confira na matrícula</p>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-4 flex-wrap text-[10px] text-[var(--v-text-bold)]">
+                                    <label className="flex items-center gap-2 uppercase font-bold text-[var(--v-text-faint)]">Metragem a gravar:
+                                        <select value={metragemCampo} onChange={(e) => setMetragemCampo(e.target.value)} className="bg-black/40 border border-white/5 p-1.5 text-[10px] text-[var(--v-text-bold)] outline-none">
+                                            <option value="area_privativa_m2">Área privativa</option>
+                                            <option value="area_privativa_total_m2">Área privativa total (c/ acessória)</option>
+                                            <option value="area_total_m2">Área real total (c/ comum)</option>
+                                        </select>
+                                    </label>
+                                    <label className="flex items-center gap-2 uppercase font-bold text-[var(--v-text-faint)]">
+                                        <input type="checkbox" checked={incluirVaga} onChange={(e) => setIncluirVaga(e.target.checked)} /> Incluir vaga na descrição
+                                    </label>
+                                    <button onClick={aplicarCadastroMatricula} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded text-[10px] font-bold uppercase hover:bg-[var(--v-accent)]/15 text-[var(--v-accent)]">Usar endereço/nome no cadastro</button>
+                                </div>
+
+                                <div className="max-h-64 overflow-y-auto custom-scrollbar border border-white/5 rounded">
+                                    <table className="w-full text-[10px] text-[var(--v-text-bold)]">
+                                        <thead className="sticky top-0 bg-black/90">
+                                            <tr className="text-[var(--v-text-faint)] uppercase text-left">
+                                                <th className="p-2">Bloco</th><th className="p-2">Unidade</th><th className="p-2">Vaga</th>
+                                                <th className="p-2 text-right">Priv. m²</th><th className="p-2 text-right">Priv. total m²</th>
+                                                <th className="p-2 text-right">Total m²</th><th className="p-2 text-right">Fração %</th><th className="p-2"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {matriculaPreview.unidades.map(u => (
+                                                <tr key={`${u.bloco}-${u.numero}`} className="border-t border-white/5">
+                                                    <td className="p-1.5">{u.bloco}</td>
+                                                    <td className="p-1.5 font-bold">{descricaoUnidadeMatricula(u)}</td>
+                                                    <td className="p-1.5 text-[var(--v-text-faint)]">{u.vaga || '—'}</td>
+                                                    <td className="p-1.5 text-right font-mono">{u.area_privativa_m2 ?? '—'}</td>
+                                                    <td className="p-1.5 text-right font-mono">{u.area_privativa_total_m2 ?? '—'}</td>
+                                                    <td className="p-1.5 text-right font-mono">{u.area_total_m2 ?? '—'}</td>
+                                                    <td className="p-1.5 text-right font-mono">{u.fracao_ideal_pct ?? '—'}</td>
+                                                    <td className="p-1.5">{u.divergente_conferir ? <span title="Leituras divergiram — conferir" className="text-[#ff3b30] font-black">⚠</span> : u.corrigida_desempate ? <span title="Resolvida em leitura de desempate" className="text-[var(--v-accent)]">⚙</span> : ''}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="flex justify-end gap-3">
+                                    <button onClick={() => setMatriculaPreview(null)} className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)] hover:bg-white/5 rounded">Descartar</button>
+                                    <button onClick={handleGravarEstrutura} disabled={importandoEstrutura}
+                                        className="bg-[var(--v-accent)] text-black px-5 py-2 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50 flex items-center gap-2">
+                                        {importandoEstrutura && <Loader2 size={12} className="animate-spin"/>}
+                                        Gravar {matriculaPreview.total_unidades} unidades em {matriculaPreview.blocos.length} blocos
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-12 gap-8">
                         {/* Blocos List */}
                         <div className="col-span-4 border-r border-[var(--v-border)] pr-8 space-y-4">
