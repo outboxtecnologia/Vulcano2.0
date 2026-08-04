@@ -406,6 +406,12 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
 const TIPOS_CONDICAO = ['SINAL', 'MENSAL', 'SEMESTRAL', 'ANUAL', 'REFORCO', 'INTERMEDIARIA', 'CHAVES', 'FINANCIAMENTO'];
 const TIPOS_PARCELA_UNICA = ['SINAL', 'INTERMEDIARIA', 'CHAVES', 'FINANCIAMENTO'];
 
+// Data local (nao UTC): toISOString() vira "amanha" entre 21h e 0h no Brasil
+const hojeLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved }) => {
   const inputStyle = { background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' };
   const labelCls = "text-[10px] uppercase font-bold mb-2 block";
@@ -420,7 +426,9 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
   const [loadingUnidades, setLoadingUnidades] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const detalhesReqRef = useRef(0);
   const handleSelectEmpreendimento = async (empId) => {
+    const reqId = ++detalhesReqRef.current;
     setVendaForm(f => ({ ...f, id_empreendimento: empId }));
     setUnidadesSel([]);
     setUnidadesDisp([]);
@@ -429,6 +437,7 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
     try {
       const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/detalhes`);
       const d = await res.json();
+      if (reqId !== detalhesReqRef.current) return; // resposta stale: usuario ja trocou de empreendimento
       const blocos = {};
       (Array.isArray(d?.blocos) ? d.blocos : []).forEach(b => { blocos[b.id] = b.nome; });
       setBlocosById(blocos);
@@ -436,7 +445,7 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
     } catch (e) {
       console.error(e);
     } finally {
-      setLoadingUnidades(false);
+      if (reqId === detalhesReqRef.current) setLoadingUnidades(false);
     }
   };
 
@@ -475,7 +484,20 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!vendaForm.id_empreendimento) { alert('Selecione o empreendimento.'); return; }
-    if (!compradores.some(c => c.nome && c.cpf_cnpj)) { alert('Informe ao menos um comprador com nome e CPF/CNPJ.'); return; }
+    if (!(compradores[0]?.nome && compradores[0]?.cpf_cnpj)) {
+      alert('O 1º comprador (titular da venda) precisa de nome e CPF/CNPJ.');
+      return;
+    }
+    const incompletos = compradores.filter(c => (c.nome || c.cpf_cnpj) && !(c.nome && c.cpf_cnpj));
+    if (incompletos.length) {
+      alert('Há comprador com nome ou CPF/CNPJ faltando — complete ou remova a linha.');
+      return;
+    }
+    const condSemVenc = condicoes.filter(c => parseFloat(c.valor || 0) > 0 && !c.vencimento);
+    if (condSemVenc.length) {
+      alert('Há condição de pagamento com valor mas sem 1º vencimento — preencha a data ou remova a linha.');
+      return;
+    }
     setSaving(true);
     const payload = {
       empresa_id: parseInt(selectedEmpresa),
@@ -1023,7 +1045,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <div className="grid grid-cols-2 gap-3 mb-6">
                     <div>
                         <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Data do distrato</label>
-                        <input type="date" value={distratoModal.data_distrato_form || new Date().toISOString().slice(0,10)}
+                        <input type="date" value={distratoModal.data_distrato_form || hojeLocal()}
                             onChange={(e) => setDistratoModal({ ...distratoModal, data_distrato_form: e.target.value })}
                             className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
                     </div>
@@ -1045,7 +1067,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({
                                     id_venda: distratoModal.id,
-                                    data_distrato: distratoModal.data_distrato_form || new Date().toISOString().slice(0,10),
+                                    data_distrato: distratoModal.data_distrato_form || hojeLocal(),
                                     valor_devolvido: parseFloat(distratoModal.valor_devolvido_form || 0),
                                     data_pagamento: null
                                 })

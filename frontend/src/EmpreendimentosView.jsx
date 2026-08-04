@@ -79,10 +79,17 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
 
   useEffect(() => {
     fetchEmpreendimentos();
+    // caches dos pickers sao por empresa — trocar de empresa invalida
+    setQuestorEstabs(null);
+    setQuestorObras(null);
+    setPickerOpen(null);
     if (selectedEmpresa) {
         fetchQuestorData();
     }
   }, [selectedEmpresa]);
+
+  // guarda contra resposta stale do fetch de endereco (modal reaberto p/ outro emp)
+  const enderecoReqRef = React.useRef(0);
 
   const fetchEmpreendimentos = async () => {
     setLoading(true);
@@ -138,14 +145,17 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   };
 
   const fetchEndereco = async (empId, emp) => {
+    const reqId = ++enderecoReqRef.current;
     try {
       const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/endereco`);
       const data = await res.json();
+      if (reqId !== enderecoReqRef.current) return; // resposta stale: outro modal foi aberto
       if (res.ok && data?.endereco) {
         setEnderecoForm({ ...data.endereco, fonte: data.fonte === 'legado' ? 'MANUAL' : (data.fonte || 'MANUAL'), codigo_outemp: data.codigo_outemp, codigo_estab: data.codigo_estab });
         return;
       }
     } catch (e) { console.error('Erro endereco:', e); }
+    if (reqId !== enderecoReqRef.current) return;
     // fallback: campos legados achatados do proprio emp
     setEnderecoForm({ ...EMPTY_ENDERECO, logradouro: emp?.endereco || '', cep: emp?.cep || '', uf: emp?.siglaestado || '', codigo_munic: emp?.codigomunic || '' });
   };
@@ -202,7 +212,10 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
       }
     } catch (e) {
       console.error('Erro picker Questor:', e);
-      if (kind === 'cnpj') setQuestorEstabs([]); else setQuestorObras([]);
+      // null (nao []) para permitir retry na proxima abertura apos falha transitoria
+      if (kind === 'cnpj') setQuestorEstabs(null); else setQuestorObras(null);
+      setPickerOpen(null);
+      alert('Falha ao consultar o Questor — tente abrir o picker novamente.');
     } finally {
       setLoadingPicker(false);
     }
@@ -238,7 +251,10 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
       ? `${API_BASE}/api/vulcano/empreendimentos/${editingEmp.id}`
       : `${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`;
     
-    // Endereco legado = concatenacao do estruturado (compatibilidade)
+    // Endereco legado = concatenacao do estruturado (compatibilidade).
+    // Sem fallback pro formData.endereco antigo: o enderecoForm e a fonte de
+    // verdade (carregado do banco do app ou do proprio legado ao abrir o modal),
+    // entao limpar os campos limpa o endereco de fato.
     const endLegado = [
         [enderecoForm.logradouro, enderecoForm.numero].filter(Boolean).join(', '),
         enderecoForm.complemento,
@@ -248,7 +264,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     // Ensure numeric fields are correctly typed
     const payload = {
         ...formData,
-        endereco: endLegado || formData.endereco || '',
+        endereco: endLegado,
         cep: enderecoForm.cep || '',
         siglaestado: enderecoForm.uf || '',
         codigomunic: String(enderecoForm.codigo_munic || ''),
@@ -289,7 +305,9 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
         // Persiste o endereco estruturado (banco do app) apos salvar o cadastro
         const body = await res.json().catch(() => ({}));
         const empId = editingEmp ? editingEmp.id : body?.id;
-        if (empId && (enderecoForm.logradouro || enderecoForm.cep || enderecoForm.bairro)) {
+        // Em edicao o PUT roda sempre (permite LIMPAR o endereco); em criacao, so
+        // se algo foi preenchido.
+        if (empId && (editingEmp || enderecoForm.logradouro || enderecoForm.cep || enderecoForm.bairro)) {
           try {
             const resEnd = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/endereco`, {
               method: 'PUT',
