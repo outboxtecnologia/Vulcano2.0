@@ -121,6 +121,13 @@ mostra as condições e parcelas no painel direito da tela de Vendas (clicar na 
   primeiro uso. Sem `APP_DB_KIND`, cai no SQLite local (poc_database.sqlite).
 - Zero DDL no Firebird do Vulcano legado — só DML em colunas que já existiam
   (CNPJ, CONTA_PERMUTA, IDVENDAVINCULADA, INFCOMP).
+- **Bugs herdados da troca de base (03/08) corrigidos de brinde**: na base atual
+  (`/Klaus/ArquivoQuestor.fdb`) `VENDA.NUMCADIMOB` é INTEGER (o insert antigo gravava
+  a string "MVP-id" e estourava SQL -303 — nenhuma venda nova funcionava) e
+  `EMPREENDIMENTO.AJUSTEFINALPOC` é DOUBLE (o form mandava 'N' e **salvar qualquer
+  empreendimento falhava**); campos CODIGOESTAB/FILIAL/MATRIZ/MUNIC agora aceitam
+  vazio (viram NULL). Testado na base real com transação + rollback e round-trip
+  de PATCH restaurando o estado original.
 - O gerador DIMOB (`gerar_dimob.py`) ainda não consome o endereço estruturado — quando
   formos evoluir o R01/R02, ler primeiro do Postgres com fallback para o legado (e
   migrar a conexão hardcoded dele para o `get_conn`).
