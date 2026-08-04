@@ -42,7 +42,7 @@ export const NAV_SECTIONS = [
       { slug: 'vendas', label: 'Vendas', icon: ShoppingCart, Component: VendasView },
       { slug: 'recebimentos', label: 'Recebimentos', icon: DollarSign, Component: RecebimentosView },
       { slug: 'recebimentos-mensal', label: 'Receb. Mensal', icon: DollarSign, Component: RecebimentosMensalView },
-      { slug: 'gerar-parcelas', label: 'Geração de Parcelas', icon: ListPlus, Component: GeracaoParcelasView },
+      { slug: 'gerar-parcelas', label: 'Geração de Parcelas', icon: ListPlus, Component: GeracaoParcelasView, dropQuery: ['emp'] },
       { slug: 'importer', label: 'Smart Importer', icon: FileSpreadsheet, Component: SmartImporter },
       { slug: 'conciliador', label: 'Conversor Universal', icon: UploadCloud, Component: ConciliadorView },
     ],

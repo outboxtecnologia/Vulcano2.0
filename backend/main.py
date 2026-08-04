@@ -4380,13 +4380,15 @@ def sync_recebimentos_projetadas():
 class GerarParcelasInput(BaseModel):
     modo: str = "A"                  # "A" = venda sem parcela | "B" = parcelas orfas
     empresa_id: int | None = None    # None = todas as empresas
+    empreendimento_id: int | None = None  # None = todos os empreendimentos
     data_inicio: str | None = None   # "YYYY-MM-DD" — so vale no modo B
     data_fim: str | None = None      # "YYYY-MM-DD" — so vale no modo B
     dry_run: bool = True             # True = so simula
     limite: int | None = None        # FIRST N, para piloto
 
 
-def _rodar_geracao(modo, empresa_id, data_inicio, data_fim, dry_run, limite):
+def _rodar_geracao(modo, empresa_id, data_inicio, data_fim, dry_run, limite,
+                   empreendimento_id=None):
     """Executa o motor e devolve o resultado pronto para virar JSON."""
     from core.services.receber_generator import executar
 
@@ -4397,6 +4399,7 @@ def _rodar_geracao(modo, empresa_id, data_inicio, data_fim, dry_run, limite):
             conn_v,
             modo=modo,
             empresa_id=empresa_id,
+            empreendimento_id=empreendimento_id,
             data_inicio=data_inicio,
             data_fim=data_fim,
             limite=limite,
@@ -4438,6 +4441,7 @@ def gerar_parcelas(data: GerarParcelasInput):
     return _rodar_geracao(
         modo=data.modo,
         empresa_id=data.empresa_id,
+        empreendimento_id=data.empreendimento_id,
         data_inicio=data.data_inicio,
         data_fim=data.data_fim,
         dry_run=data.dry_run,
@@ -4461,6 +4465,7 @@ def popular_receber_abertas(data: PopularReceberInput):
     resultado = _rodar_geracao(
         modo="B",
         empresa_id=data.empresa_id,
+        empreendimento_id=None,   # contrato antigo: sem recorte por obra
         data_inicio=data.data_inicio,
         data_fim=None,
         dry_run=data.dry_run,

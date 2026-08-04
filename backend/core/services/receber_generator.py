@@ -93,7 +93,22 @@ def _iso(valor):
     return str(valor)[:10]
 
 
-def montar_query(modo, empresa_id=None, data_inicio=None, data_fim=None, limite=None):
+def _texto(valor):
+    """CHAR do Firebird -> str limpa, ou None. NOME e CHAR: vem com padding e,
+    conforme o charset da conexao, pode chegar como bytes.
+
+    Codec e "cp1252", nao "win1252": o dec() de /api/vulcano/empreendimentos
+    (main.py) escreve "win1252", que o Python nao conhece — la nunca estourou
+    porque o driver ja devolve str e o ramo de bytes nunca roda."""
+    if valor is None:
+        return None
+    if isinstance(valor, bytes):
+        valor = valor.decode("cp1252", "ignore")
+    return str(valor).strip() or None
+
+
+def montar_query(modo, empresa_id=None, data_inicio=None, data_fim=None,
+                 limite=None, empreendimento_id=None):
     """Devolve (sql, params). Só o FIRST N e interpolado — o Firebird nao aceita
     parametro ali — e passa por int() antes."""
     modo = normalizar_modo(modo)
@@ -104,6 +119,13 @@ def montar_query(modo, empresa_id=None, data_inicio=None, data_fim=None, limite=
     if empresa_id is not None:
         filtros.append("v.CODIGOEMPRESA = ?")
         params.append(int(empresa_id))
+
+    # Recorte por obra: alternativa ao recorte por vencimento quando o lote da
+    # empresa estoura o teto. Empreendimento pertence a uma empresa, entao so
+    # faz sentido combinado com empresa_id — a tela impede a outra combinacao.
+    if empreendimento_id is not None:
+        filtros.append("v.IDEMPREENDIMENTO = ?")
+        params.append(int(empreendimento_id))
 
     # Recorte por vencimento so faz sentido no reparo pontual (modo B).
     if modo == "B":
@@ -126,10 +148,15 @@ def montar_query(modo, empresa_id=None, data_inicio=None, data_fim=None, limite=
             vfp.IDVENDA     AS IDVENDA,
             v.ID_CLIENTE    AS ID_CLIENTE,
             v.CODIGOEMPRESA AS CODIGOEMPRESA,
-            v.CODIGOESTAB   AS CODIGOESTAB
+            v.CODIGOESTAB   AS CODIGOESTAB,
+            v.IDEMPREENDIMENTO AS IDEMPREENDIMENTO,
+            e.NOME             AS EMPREENDIMENTO
         FROM VENDAFORMAPAGTOPRAZO vpp
         JOIN VENDAFORMAPAGTO vfp ON vfp.ID = vpp.IDVENDAFORMAPAGTO
         JOIN VENDA v            ON v.ID   = vfp.IDVENDA
+        -- LEFT: venda sem empreendimento nao pode sumir do lote por causa de
+        -- uma coluna que so existe para exibicao.
+        LEFT JOIN EMPREENDIMENTO e ON e.ID = v.IDEMPREENDIMENTO
         WHERE {' AND '.join(filtros)}
         ORDER BY v.CODIGOEMPRESA, vfp.IDVENDA, vpp.DATA
     """
@@ -137,9 +164,10 @@ def montar_query(modo, empresa_id=None, data_inicio=None, data_fim=None, limite=
 
 
 def buscar_alvos(conn, modo="A", empresa_id=None, data_inicio=None,
-                 data_fim=None, limite=None):
+                 data_fim=None, limite=None, empreendimento_id=None):
     """Linhas candidatas, normalizadas em dicts."""
-    sql, params = montar_query(modo, empresa_id, data_inicio, data_fim, limite)
+    sql, params = montar_query(modo, empresa_id, data_inicio, data_fim, limite,
+                               empreendimento_id=empreendimento_id)
     cur = conn.cursor()
     cur.execute(sql, params)
     cols = [d[0] for d in cur.description]
@@ -209,6 +237,8 @@ def resumir(alvos, bloqueios=None):
         "prazo_id": a["PRAZO_ID"],
         "idvenda": a["IDVENDA"],
         "empresa": a["CODIGOEMPRESA"],
+        "empreendimento_id": a.get("IDEMPREENDIMENTO"),
+        "empreendimento": _texto(a.get("EMPREENDIMENTO")),
         "data": _iso(a["VENCIMENTO"]),
         "parcela": competencia(a["VENCIMENTO"]),
         "valor": float(a["VALOR_PARCELA"] or 0),
@@ -325,6 +355,7 @@ def escrever_log_rollback(resultado, log_dir="."):
         "executado_em": datetime.now().isoformat(timespec="seconds"),
         "modo": resultado.get("modo"),
         "empresa_id": resultado.get("empresa_id"),
+        "empreendimento_id": resultado.get("empreendimento_id"),
         "inseridos": resultado.get("inseridos"),
         "erros": resultado.get("erros"),
         "erros_detalhe": (resultado.get("erros_detalhe") or [])[:50],
@@ -347,7 +378,8 @@ def escrever_log_rollback(resultado, log_dir="."):
 
 
 def executar(conn, modo="A", empresa_id=None, data_inicio=None, data_fim=None,
-             limite=None, dry_run=True, teto=TETO_PARCELAS, log_dir=None):
+             limite=None, dry_run=True, teto=TETO_PARCELAS, log_dir=None,
+             empreendimento_id=None):
     """Fluxo completo: busca -> resume -> (grava). Usado pelo CLI e pela API.
 
     Simulacao nunca e recusada pelo teto: e assim que o operador descobre como
@@ -355,12 +387,14 @@ def executar(conn, modo="A", empresa_id=None, data_inicio=None, data_fim=None,
     """
     modo = normalizar_modo(modo)
     bloqueios = carregar_bloqueios(conn)
-    alvos = buscar_alvos(conn, modo, empresa_id, data_inicio, data_fim, limite)
+    alvos = buscar_alvos(conn, modo, empresa_id, data_inicio, data_fim, limite,
+                         empreendimento_id=empreendimento_id)
 
     resultado = {
         "modo": modo,
         "execucao": False,
         "empresa_id": empresa_id,
+        "empreendimento_id": empreendimento_id,
         "data_inicio": data_inicio if modo == "B" else None,
         "data_fim": data_fim if modo == "B" else None,
         "limite": limite,

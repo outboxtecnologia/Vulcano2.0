@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     AlertTriangle, CheckCircle2, ListPlus, Loader2, Play, RefreshCw, ShieldAlert,
 } from 'lucide-react';
@@ -34,6 +34,7 @@ const Th = ({ children, right, sortKey, sort, onSort }) => {
 
 const COLUNAS = [
     { key: 'empresa',  label: 'Empresa',     type: 'number' },
+    { key: 'empreendimento', label: 'Empreendimento', type: 'text' },
     { key: 'idvenda',  label: 'Venda',       type: 'number' },
     { key: 'prazo_id', label: 'Prazo',       type: 'number' },
     { key: 'data',     label: 'Vencimento',  type: 'date' },
@@ -63,9 +64,11 @@ const Card = ({ label, valor, cor }) => (
 export const GeracaoParcelasView = ({ selectedEmpresa }) => {
     const [modo, setModo] = useSearchParamState('modo', 'A');
     const [todas, setTodas] = useSearchParamState('todas', '0');
+    const [emp, setEmp] = useSearchParamState('emp', '');
     const [de, setDe] = useSearchParamState('de', '');
     const [ate, setAte] = useSearchParamState('ate', '');
     const [limite, setLimite] = useState('');
+    const [empreendimentos, setEmpreendimentos] = useState([]);
 
     const [previa, setPrevia] = useState(null);
     const [simulando, setSimulando] = useState(false);
@@ -77,9 +80,26 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
     const sort = useTableSort(COLUNAS, { persistKey: 'ord' });
     const todasEmpresas = todas === '1';
 
+    // Lista pela rota "gorda" de proposito: /api/empreendimentos/basico filtra
+    // ATIVO = 'S', e obra concluida e justamente a que costuma ter prazos antigos
+    // por materializar — o caso que esta tela existe para reparar.
+    useEffect(() => {
+        if (!selectedEmpresa) return undefined;
+        const ac = new AbortController();
+        fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`, { signal: ac.signal })
+            .then((res) => res.json())
+            .then((d) => setEmpreendimentos(Array.isArray(d) ? d : []))
+            .catch((e) => { if (e.name !== 'AbortError') setEmpreendimentos([]); });
+        return () => ac.abort();
+    }, [selectedEmpresa]);
+
+    const empId = todasEmpresas || !emp ? null : Number(emp);
+    const empSelecionado = empId ? empreendimentos.find((e) => e.id === empId) : null;
+
     const payload = (dryRun) => ({
         modo,
         empresa_id: todasEmpresas ? null : Number(selectedEmpresa),
+        empreendimento_id: empId,
         // O backend ignora datas no modo A, mas nao mandar deixa a intencao clara.
         data_inicio: modo === 'B' && de ? de : null,
         data_fim: modo === 'B' && ate ? ate : null,
@@ -94,6 +114,14 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
         setPrevia(null);
         setResultado(null);
         setErro(null);
+    };
+
+    // Marcar "todas as empresas" desabilita o seletor de obra; deixar o id
+    // pendurado na URL sob um campo desabilitado e o tipo de estado invisivel
+    // que faz gravar o lote errado na proxima visita.
+    const mudarAbrangencia = (marcado) => {
+        if (marcado) setEmp('');
+        invalidar(setTodas)(marcado ? '1' : '0');
     };
 
     const simular = async (signal) => {
@@ -173,11 +201,26 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
                     <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">Abrangência</label>
                     <label className="flex items-center gap-2 px-3 py-2 bg-[var(--v-bg)] border border-[var(--v-line)] rounded-lg cursor-pointer">
                         <input type="checkbox" checked={todasEmpresas}
-                            onChange={(e) => invalidar(setTodas)(e.target.checked ? '1' : '0')} />
+                            onChange={(e) => mudarAbrangencia(e.target.checked)} />
                         <span className="text-[11px] font-bold text-[var(--v-text-bold)]">
                             {todasEmpresas ? 'Todas as empresas' : `Empresa ${selectedEmpresa}`}
                         </span>
                     </label>
+                </div>
+
+                <div className="min-w-72"
+                    title={todasEmpresas ? 'O empreendimento pertence a uma empresa só — desmarque “todas as empresas” para recortar por obra.' : undefined}>
+                    <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">
+                        Empreendimento {todasEmpresas && <span className="text-[var(--v-text-faint)]">(só por empresa)</span>}
+                    </label>
+                    <select value={todasEmpresas ? '' : emp} disabled={todasEmpresas}
+                        onChange={(e) => invalidar(setEmp)(e.target.value)}
+                        className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] hover:border-[#333] text-[var(--v-text-bold)] text-[11px] px-2 py-2 rounded-lg outline-none disabled:opacity-40">
+                        <option value="">Todos os empreendimentos</option>
+                        {empreendimentos.map((e) => (
+                            <option key={e.id} value={String(e.id)}>{e.id} — {e.nome}</option>
+                        ))}
+                    </select>
                 </div>
 
                 <div title={modo === 'A' ? 'No modo A a venda recebe a matriz inteira de prazos — recortar por data deixaria a venda pela metade.' : undefined}>
@@ -286,6 +329,9 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
                             {linhas.map((r) => (
                                 <tr key={r.prazo_id} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)]">
                                     <td className="px-3 py-2 font-mono">{r.empresa}</td>
+                                    <td className="px-3 py-2 max-w-48 truncate text-[var(--v-text-muted)]" title={r.empreendimento || undefined}>
+                                        {r.empreendimento || '—'}
+                                    </td>
                                     <td className="px-3 py-2 font-mono">{r.idvenda}</td>
                                     <td className="px-3 py-2 font-mono text-[var(--v-text-muted)]">{r.prazo_id}</td>
                                     <td className="px-3 py-2 font-mono">
@@ -374,7 +420,14 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
                             Serão gravadas <strong style={{ color: 'var(--v-text-bold)' }}>{fmtInt(previa.total_parcelas)} parcelas</strong> de{' '}
                             <strong style={{ color: 'var(--v-text-bold)' }}>{fmtInt(previa.total_vendas)} vendas</strong>, totalizando{' '}
                             <strong style={{ color: 'var(--v-text-bold)' }}>{fmt(previa.valor_total)}</strong>, em{' '}
-                            {todasEmpresas ? 'todas as empresas' : `na empresa ${selectedEmpresa}`}.
+                            {todasEmpresas ? 'todas as empresas' : `na empresa ${selectedEmpresa}`}
+                            {empId && (
+                                <>, apenas no empreendimento{' '}
+                                    <strong style={{ color: 'var(--v-text-bold)' }}>
+                                        {empSelecionado ? `${empSelecionado.id} — ${empSelecionado.nome}` : empId}
+                                    </strong>
+                                </>
+                            )}.
                         </p>
                         <p className="text-[11px] mb-6" style={{ color: 'var(--v-text-muted)' }}>
                             Modo {modo} — {MODOS[modo].titulo}. Todas entram <strong>em aberto</strong> (total pago zero)
