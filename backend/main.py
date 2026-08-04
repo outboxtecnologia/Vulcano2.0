@@ -489,6 +489,26 @@ def _validar_nova_senha(password: str, password_confirm: str) -> None:
 
 @app.post("/api/auth/login")
 def api_auth_login(payload: LoginRequest):
+    # 1) usuarios_local (SQLite): permite logar sem o Firebird do vulcano no ar.
+    import sqlite3
+    try:
+        s_conn = sqlite3.connect(POC_DATABASE_FILE)
+        s_cur = s_conn.cursor()
+        s_cur.execute("""
+            SELECT id, usuario_id, nome, tipo_permissao, email
+            FROM usuarios_local
+            WHERE (UPPER(email) = UPPER(?) OR UPPER(usuario_id) = UPPER(?))
+              AND senha = ?
+              AND ativo = 'T'
+        """, (payload.email, payload.email, payload.password))
+        s_row = s_cur.fetchone()
+        s_conn.close()
+        if s_row:
+            return {"success": True, "user": {"id": s_row[0], "usuarioId": s_row[1], "nome": s_row[2], "tipoPermissao": s_row[3], "email": s_row[4]}}
+    except Exception:
+        pass
+
+    # 2) USUARIO do vulcano (Firebird) — senha hasheada SENHAV2 + primeiro acesso
     from core.auth.password import senhav2_preenchida, verify_password
     from core.auth.usuario import buscar_usuario_por_login, usuario_para_json
 
@@ -2892,6 +2912,36 @@ def get_conn(db_name="vulcano", empresa_id=None):
         charset="WIN1252"
     )
 
+_APP_ENDERECO_DDL_OK = False
+_APP_ENDERECO_DDL_LOCK = __import__("threading").Lock()
+
+def get_app_conn():
+    """Banco OPERACIONAL do app via db_app (APP_DB_KIND: sqlite ou postgres `vulcano2`).
+
+    Garante lazy o DDL da tabela de endereco estruturado (layout DIMOB) do
+    empreendimento. DDL em dialeto SQLite de proposito: o translate_app do
+    db_app converte para Postgres, e o fallback sqlite funciona sem mudanca.
+    Lock: endpoints sync rodam no threadpool — sem ele, dois cold starts
+    concorrentes disparam o CREATE em paralelo (UniqueViolation no PG).
+    """
+    from db_app import connect_app
+    conn = connect_app()
+    global _APP_ENDERECO_DDL_OK
+    if not _APP_ENDERECO_DDL_OK:
+        with _APP_ENDERECO_DDL_LOCK:
+            if not _APP_ENDERECO_DDL_OK:
+                conn.execute("""CREATE TABLE IF NOT EXISTS empreendimento_endereco (
+                    empreendimento_id INTEGER PRIMARY KEY,
+                    tipo_logradouro TEXT, logradouro TEXT, numero TEXT,
+                    complemento TEXT, bairro TEXT, cep TEXT, uf TEXT,
+                    codigo_munic TEXT,
+                    fonte TEXT, codigo_outemp INTEGER, codigo_estab INTEGER,
+                    atualizado_em TEXT DEFAULT (datetime('now'))
+                )""")
+                conn.commit()
+                _APP_ENDERECO_DDL_OK = True
+    return conn
+
 def _table_has_column(cur, table_name: str, column_name: str) -> bool:
     """
     Checks if a table has a given column. Usa metadados de sistema:
@@ -3010,11 +3060,17 @@ def get_questor_plano_contas_espec(empresa_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/questor/centrocusto")
-def get_questor_centrocusto():
+def get_questor_centrocusto(empresa_id: int | None = None):
     try:
         conn = get_conn("questor")
         cur = conn.cursor()
-        cur.execute("SELECT CODIGOCENTROCUSTO, DESCRCENTROCUSTO FROM CENTROCUSTO ORDER BY DESCRCENTROCUSTO")
+        if empresa_id is not None:
+            cur.execute(
+                "SELECT CODIGOCENTROCUSTO, DESCRCENTROCUSTO FROM CENTROCUSTO WHERE CODIGOEMPRESA = ? ORDER BY DESCRCENTROCUSTO",
+                (int(empresa_id),),
+            )
+        else:
+            cur.execute("SELECT CODIGOCENTROCUSTO, DESCRCENTROCUSTO FROM CENTROCUSTO ORDER BY DESCRCENTROCUSTO")
         
         def dec(v):
             if v is None: return ""
@@ -3043,6 +3099,108 @@ def get_questor_historicos():
         historicos = [{"id": r[0], "descricao": dec(r[1])} for r in cur.fetchall()]
         conn.close()
         return historicos
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/estabs")
+def get_questor_estabs(empresa_id: int):
+    """Estabelecimentos da empresa no Questor (CNPJ da filial/SPE do RET + endereco).
+
+    Usado pelo picker "Puxar do Questor" do campo CNPJ do empreendimento.
+    """
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT CODIGOESTAB, INSCRFEDERAL, ENDERECOESTAB, NUMENDERESTAB,
+                   COMPLENDERESTAB, BAIRROENDERESTAB, CEPENDERESTAB,
+                   SIGLAESTADO, CODIGOMUNIC
+            FROM ESTAB
+            WHERE CODIGOEMPRESA = ?
+            ORDER BY CODIGOESTAB
+            """,
+            (int(empresa_id),),
+        )
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        estabs = [
+            {
+                "codigoestab": r[0],
+                "cnpj": dec(r[1]),
+                "endereco": {
+                    "logradouro": dec(r[2]),
+                    "numero": dec(r[3]),
+                    "complemento": dec(r[4]),
+                    "bairro": dec(r[5]),
+                    "cep": dec(r[6]),
+                    "uf": dec(r[7]),
+                    "codigo_munic": dec(r[8]),
+                },
+            }
+            for r in cur.fetchall()
+        ]
+        conn.close()
+        return {"estabs": estabs}
+    except Exception as e:
+        if 'conn' in locals() and conn: conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/questor/obras-cno")
+def get_questor_obras_cno(empresa_id: int):
+    """Obras (CNO) da empresa no Questor: OUTRAEMPEMP x OUTRAEMPRESA, TIPOOUTEMP=1.
+
+    Usado pelo picker "Puxar do Questor" do campo CNO do empreendimento.
+    TIPOOUTEMP filtrado em Python (tipo char/int ambiguo entre FB e PG).
+    """
+    try:
+        conn = get_conn("questor")
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT OE.CODIGOOUTEMP, OE.NOMEOUTEMP, OE.INSCRFEDERAL,
+                   OE.CODIGOTIPOLOGRAD, OE.ENDEROUTEMP, OE.NUMEROENDER,
+                   OE.COMPLENDER, OE.BAIRROOUTEMP, OE.SIGLAESTADO,
+                   OE.CODIGOMUNIC, OE.CEP, OEE.TIPOOUTEMP
+            FROM OUTRAEMPEMP OEE
+            JOIN OUTRAEMPRESA OE ON OE.CODIGOOUTEMP = OEE.CODIGOOUTEMP
+            WHERE OEE.CODIGOEMPRESA = ?
+            ORDER BY OE.NOMEOUTEMP
+            """,
+            (int(empresa_id),),
+        )
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        obras = []
+        for r in cur.fetchall():
+            if dec(r[11]) != "1":  # 1 = obra/CNO (2 = empresa, 3 = terceiro)
+                continue
+            obras.append({
+                "codigooutemp": r[0],
+                "nome": dec(r[1]),
+                "cno": dec(r[2]),
+                "endereco": {
+                    "tipo_logradouro": dec(r[3]),
+                    "logradouro": dec(r[4]),
+                    "numero": dec(r[5]),
+                    "complemento": dec(r[6]),
+                    "bairro": dec(r[7]),
+                    "uf": dec(r[8]),
+                    "codigo_munic": dec(r[9]),
+                    "cep": dec(r[10]),
+                },
+            })
+        conn.close()
+        return {"obras": obras}
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
@@ -3622,6 +3780,16 @@ def _num_or_none(v):
         return None
 
 
+def _float_or_none(v):
+    """AJUSTEFINALPOC e DOUBLE na base atual (era CHAR S/N na antiga) — o model
+    manda 'N' por default e o Firebird da SQL -303. Aceita numero; resto vira NULL."""
+    try:
+        return float(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+
 @app.post("/api/vulcano/empreendimentos")
 def post_vulcano_empreendimento(data: EmpreendimentoInput):
     conn = None
@@ -3663,7 +3831,7 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             data.cep, data.siglaestado, _num_or_none(data.codigomunic), _num_or_none(data.codigoestab),
             _num_or_none(data.codigofilial), _num_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
-            data.ajustefinalpoc, data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita
+            _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita
         )
         cur.execute(query, params)
         conn.commit()
@@ -3709,7 +3877,7 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
             data.cep, data.siglaestado, _num_or_none(data.codigomunic), _num_or_none(data.codigoestab),
             _num_or_none(data.codigofilial), _num_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
-            data.ajustefinalpoc, data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
+            _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
             emp_id
         )
         cur.execute(query, params)
@@ -3719,6 +3887,148 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
+
+class EnderecoInput(BaseModel):
+    tipo_logradouro: str = ''
+    logradouro: str = ''
+    numero: str = ''
+    complemento: str = ''
+    bairro: str = ''
+    cep: str = ''
+    uf: str = ''
+    codigo_munic: str = ''
+    fonte: str = 'MANUAL'  # MANUAL | QUESTOR_OBRA | QUESTOR_ESTAB
+    codigo_outemp: int | None = None
+    codigo_estab: int | None = None
+
+def _endereco_legado_str(e: "EnderecoInput") -> str:
+    """Concatena o endereco estruturado no formato do campo unico do legado."""
+    partes = f"{e.logradouro}, {e.numero}".strip(", ")
+    if e.complemento:
+        partes += f" {e.complemento}"
+    if e.bairro:
+        partes += f" - {e.bairro}"
+    return partes.strip()
+
+@app.get("/api/vulcano/empreendimentos/{emp_id}/endereco")
+def get_empreendimento_endereco(emp_id: int):
+    """Endereco estruturado (layout DIMOB) do banco do app; fallback campos legados."""
+    conn = vconn = None
+    try:
+        conn = get_app_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT tipo_logradouro, logradouro, numero, complemento, bairro,
+                      cep, uf, codigo_munic, fonte, codigo_outemp, codigo_estab
+               FROM empreendimento_endereco WHERE empreendimento_id = ?""",
+            (int(emp_id),),
+        )
+        row = cur.fetchone()
+        if row:
+            return {
+                "found": True,
+                "fonte": row[8] or "MANUAL",
+                "codigo_outemp": row[9],
+                "codigo_estab": row[10],
+                "endereco": {
+                    "tipo_logradouro": row[0] or "", "logradouro": row[1] or "",
+                    "numero": row[2] or "", "complemento": row[3] or "",
+                    "bairro": row[4] or "", "cep": row[5] or "",
+                    "uf": row[6] or "", "codigo_munic": row[7] or "",
+                },
+            }
+        # fallback: colunas legadas do EMPREENDIMENTO (endereco texto unico)
+        vconn = get_conn("vulcano")
+        vcur = vconn.cursor()
+        vcur.execute("SELECT ENDERECO, CEP, SIGLAESTADO, CODIGOMUNIC FROM EMPREENDIMENTO WHERE ID = ?", (int(emp_id),))
+        vrow = vcur.fetchone()
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        if not vrow:
+            raise HTTPException(status_code=404, detail="Empreendimento nao encontrado")
+        return {
+            "found": False,
+            "fonte": "legado",
+            "codigo_outemp": None,
+            "codigo_estab": None,
+            "endereco": {
+                "tipo_logradouro": "", "logradouro": dec(vrow[0]), "numero": "",
+                "complemento": "", "bairro": "", "cep": dec(vrow[1]),
+                "uf": dec(vrow[2]), "codigo_munic": dec(vrow[3]),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        for c in (conn, vconn):
+            try:
+                if c: c.close()
+            except Exception:
+                pass
+
+@app.put("/api/vulcano/empreendimentos/{emp_id}/endereco")
+def put_empreendimento_endereco(emp_id: int, data: EnderecoInput):
+    """Upsert do endereco estruturado no banco do app + sync das colunas legadas."""
+    conn = None
+    try:
+        conn = get_app_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO empreendimento_endereco (
+                 empreendimento_id, tipo_logradouro, logradouro, numero, complemento,
+                 bairro, cep, uf, codigo_munic, fonte, codigo_outemp, codigo_estab
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(empreendimento_id) DO UPDATE SET
+                 tipo_logradouro=excluded.tipo_logradouro, logradouro=excluded.logradouro,
+                 numero=excluded.numero, complemento=excluded.complemento,
+                 bairro=excluded.bairro, cep=excluded.cep, uf=excluded.uf,
+                 codigo_munic=excluded.codigo_munic, fonte=excluded.fonte,
+                 codigo_outemp=excluded.codigo_outemp, codigo_estab=excluded.codigo_estab,
+                 atualizado_em=(datetime('now'))""",
+            (int(emp_id), data.tipo_logradouro, data.logradouro, data.numero,
+             data.complemento, data.bairro, data.cep, data.uf, data.codigo_munic,
+             data.fonte, data.codigo_outemp, data.codigo_estab),
+        )
+        conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Banco do app (endereco): {e}")
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+    # Sync best-effort das colunas legadas existentes (sem DDL; conexao distinta).
+    # CODIGOMUNIC e SMALLINT na base viva: '' vira NULL e valores fora do range
+    # (ex. codigo IBGE de 7 digitos) tambem — o valor completo fica no banco do app.
+    munic = _num_or_none(data.codigo_munic)
+    if munic is not None and not (-32768 <= munic <= 32767):
+        munic = None
+    vconn = None
+    try:
+        vconn = get_conn("vulcano")
+        vcur = vconn.cursor()
+        vcur.execute(
+            "UPDATE EMPREENDIMENTO SET ENDERECO = ?, CEP = ?, SIGLAESTADO = ?, CODIGOMUNIC = ? WHERE ID = ?",
+            (_endereco_legado_str(data).encode("cp1252", "ignore"),
+             data.cep, data.uf, munic, int(emp_id)),
+        )
+        vconn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Endereco salvo no banco do app, mas falhou sync no legado: {e}")
+    finally:
+        try:
+            if vconn: vconn.close()
+        except Exception:
+            pass
+
+    return {"success": True}
 
 @app.get("/api/vulcano/clientes")
 def get_vulcano_clientes(empresa_id: int):
@@ -3861,6 +4171,7 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
               AND COALESCE(c.NOME, '') NOT LIKE '%XXX%'
               AND COALESCE(c.CNPJ, '') <> '000.000.000-00'
               AND COALESCE(v.TOTALVENDA, 0) > 0.01
+              AND v.IDVENDAVINCULADA IS NULL
         """
         params = [empresa_id]
         if empreendimento_id:
@@ -3875,7 +4186,27 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
             
         df_vendas = pd.read_sql_query(query_vendas, conn, params=tuple(params))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
-        
+
+        # Compradores extras: vendas satelites vinculadas via IDVENDAVINCULADA
+        # (multi-comprador estilo legado; satelites tem TOTALVENDA=0 e ficam fora da lista)
+        co_compradores = {}
+        ids = [int(i) for i in df_vendas['ID'].tolist()] if len(df_vendas) else []
+        if ids:
+            cur2 = conn.cursor()
+            for chunk_start in range(0, len(ids), 500):
+                chunk = ids[chunk_start:chunk_start + 500]
+                placeholders = ",".join("?" * len(chunk))
+                cur2.execute(
+                    f"""SELECT v2.IDVENDAVINCULADA, c2.NOME, c2.CNPJ
+                        FROM VENDA v2
+                        JOIN CLIENTE c2 ON c2.ID = v2.ID_CLIENTE
+                        WHERE v2.IDVENDAVINCULADA IN ({placeholders})""",
+                    tuple(chunk),
+                )
+                for rr in cur2.fetchall():
+                    dec_ = lambda v: v.decode('cp1252', 'ignore').strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
+                    co_compradores.setdefault(int(rr[0]), []).append({"nome": dec_(rr[1]), "cpf_cnpj": dec_(rr[2])})
+
         df = df_vendas
         df = df.replace({np.nan: None})
         conn.close()
@@ -3909,7 +4240,13 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
             'UNIDADE_ID': 'unidade_id'
         })
 
-        return df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
+        records = df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
+        for rec in records:
+            extras = co_compradores.get(int(rec['id']), [])
+            rec['compradores'] = [{"nome": rec['cliente_nome'], "cpf_cnpj": rec['cliente_cnpj'], "principal": True}] + \
+                                 [{**c, "principal": False} for c in extras]
+            rec['qtd_compradores'] = 1 + len(extras)
+        return records
 
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
@@ -3934,18 +4271,22 @@ def get_vulcano_venda_condicoes(venda_id: int):
                 return v.decode("win1252", "ignore").strip()
             return str(v).strip()
 
-        # Venda (resumo)
-        cur.execute(
-            """
-            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, v.TOTALVENDA, v.DISTRATO, v.DATADISTRATO, v.PERMUTA, e.NOME, c.ID, c.CNPJ, c.NOME
+        # Venda (resumo). Se for satelite de multi-comprador (IDVENDAVINCULADA
+        # preenchida), redireciona para a venda principal — condicoes/parcelas
+        # existem apenas nela.
+        query_resumo = """
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, v.TOTALVENDA, v.DISTRATO, v.DATADISTRATO, v.PERMUTA, e.NOME, c.ID, c.CNPJ, c.NOME, v.IDVENDAVINCULADA
             FROM VENDA v
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             WHERE v.ID = ?
-            """,
-            (int(venda_id),),
-        )
+            """
+        cur.execute(query_resumo, (int(venda_id),))
         r = cur.fetchone()
+        if r and r[12]:
+            venda_id = int(r[12])
+            cur.execute(query_resumo, (venda_id,))
+            r = cur.fetchone()
         if not r:
             conn.close()
             raise HTTPException(status_code=404, detail="Venda não encontrada")
@@ -3965,6 +4306,17 @@ def get_vulcano_venda_condicoes(venda_id: int):
                 "nome": dec(r[11]),
             },
         }
+
+        # Compradores extras (vendas satelites vinculadas a esta principal)
+        cur.execute(
+            """SELECT c2.NOME, c2.CNPJ FROM VENDA v2
+               JOIN CLIENTE c2 ON c2.ID = v2.ID_CLIENTE
+               WHERE v2.IDVENDAVINCULADA = ?""",
+            (int(venda_id),),
+        )
+        venda["compradores"] = [{"nome": venda["cliente"]["nome"], "cpf_cnpj": venda["cliente"]["cnpj"], "principal": True}] + [
+            {"nome": dec(rr[0]), "cpf_cnpj": dec(rr[1]), "principal": False} for rr in cur.fetchall()
+        ]
 
         # Formas de pagamento (condições)
         cur.execute(
@@ -5907,22 +6259,29 @@ async def post_vendas(request: Request):
         conn = get_conn("vulcano")
         cur = conn.cursor()
 
-        # --- CLIENTES ---
+        # --- CLIENTES (todos os compradores; o principal vai na VENDA principal,
+        # os demais viram vendas satelites vinculadas via IDVENDAVINCULADA) ---
+        def _get_or_create_cliente(comp) -> int | None:
+            raw_doc = "".join(filter(str.isdigit, comp.get("cpf_cnpj", "")))
+            if not raw_doc:
+                return None
+            cur.execute("SELECT FIRST 1 ID FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw_doc,))
+            cli_row = cur.fetchone()
+            if cli_row:
+                return cli_row[0]
+            cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
+            cid = cur.fetchone()[0]
+            cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
+                (cid, str(comp.get("nome", "")).encode('cp1252', 'ignore')[:100], comp.get("cpf_cnpj", ""), int(empresa_id)))
+            return cid
+
         compradores = data.get("compradores", [])
-        id_cliente = None
+        # comprador principal: flag `principal`, senao o primeiro da lista
+        idx_principal = next((i for i, c in enumerate(compradores) if c.get("principal")), 0)
         if compradores:
-            comp_princ = compradores[0]
-            raw_doc = "".join(filter(str.isdigit, comp_princ.get("cpf_cnpj", "")))
-            if raw_doc:
-                cur.execute("SELECT FIRST 1 ID FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw_doc,))
-                cli_row = cur.fetchone()
-                if cli_row:
-                    id_cliente = cli_row[0]
-                else:
-                    cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
-                    id_cliente = cur.fetchone()[0]
-                    cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
-                        (id_cliente, str(comp_princ.get("nome", "")).encode('cp1252', 'ignore')[:100], comp_princ.get("cpf_cnpj", ""), int(empresa_id)))
+            compradores = [compradores[idx_principal]] + [c for i, c in enumerate(compradores) if i != idx_principal]
+        ids_clientes = [_get_or_create_cliente(c) for c in compradores]
+        id_cliente = ids_clientes[0] if ids_clientes else None
 
         # --- VENDA ---
         cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDA")
@@ -5934,19 +6293,60 @@ async def post_vendas(request: Request):
         date_str = data.get("data", "")
         id_empreendimento = int(data.get("id_empreendimento", 0) or 0)
 
-        query = "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?)"
+        conta_permuta = int(data.get("conta_permuta") or 0) or None
+
+        # NUMCADIMOB e INTEGER na base viva (nao aceita o antigo "MVP-<id>"):
+        # usa o numero de cadastro imobiliario da 1a unidade vendida, se houver.
+        num_cad = None
+        _unids = data.get("unidades_selecionadas") or []
+        if _unids:
+            try:
+                cur.execute("SELECT NUMCADIMOB FROM UNIDADE WHERE ID = ?", (int(_unids[0]),))
+                _row = cur.fetchone()
+                if _row and _row[0] is not None:
+                    num_cad = int(str(_row[0]).strip() or 0) or None
+            except Exception:
+                num_cad = None
+
+        query = "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, CONTA_PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?)"
         params = (
             new_id,
             id_empreendimento,
-            "MVP-" + str(new_id),
+            num_cad,
             date_str,
             str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100],
             float(data.get("total", 0) or 0),
             int(empresa_id),
             permuta,
+            conta_permuta,
             id_cliente
         )
         cur.execute(query, params)
+
+        # --- VENDAS SATELITES (multi-comprador estilo legado) ---
+        # 1 linha VENDA por comprador extra, TOTALVENDA=0 (valor cheio fica na
+        # principal — evita somar em dobro em listas/POC/DIMOB), vinculada pela
+        # IDVENDAVINCULADA. Unidades, condicoes e RECEBER existem so na principal.
+        desc_unid = str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100]
+        for offset, cid_extra in enumerate(ids_clientes[1:], start=1):
+            if cid_extra is None:
+                continue
+            sat_id = new_id + offset
+            cur.execute(
+                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, 0, ?, 'N', ?, ?, ?, ?)",
+                (
+                    sat_id,
+                    id_empreendimento,
+                    num_cad,
+                    date_str,
+                    desc_unid,
+                    int(empresa_id),
+                    permuta,
+                    cid_extra,
+                    new_id,
+                    f"VINCULADA VENDA #{new_id}".encode('cp1252', 'ignore'),
+                ),
+            )
 
         # --- VENDAUNIDADE ---
         unidades_selecionadas = data.get("unidades_selecionadas", [])
@@ -6099,8 +6499,8 @@ async def post_distratos(request: Request):
         )
         cur.execute(q_dist, pr_dist)
         
-        # update venda flag
-        cur.execute("UPDATE VENDA SET DISTRATO = 'S', DATADISTRATO = ? WHERE ID = ?", (data.get("data_distrato"), int(id_venda)))
+        # update venda flag (cascateia para as vendas satelites de multi-comprador)
+        cur.execute("UPDATE VENDA SET DISTRATO = 'S', DATADISTRATO = ? WHERE ID = ? OR IDVENDAVINCULADA = ?", (data.get("data_distrato"), int(id_venda), int(id_venda)))
         
         conn.commit()
         conn.close()
@@ -8313,6 +8713,10 @@ if os.path.exists(frontend_dist):
 
     @app.exception_handler(404)
     async def custom_404_handler(request, exc):
+        # 404 de API continua JSON; o fallback pro index.html e so pro roteamento da SPA.
+        if request.url.path.startswith("/api"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=404, content={"detail": getattr(exc, "detail", "Not Found")})
         index_file = os.path.join(frontend_dist, "index.html")
         if os.path.exists(index_file):
             return FileResponse(index_file)

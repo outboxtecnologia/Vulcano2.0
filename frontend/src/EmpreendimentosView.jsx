@@ -17,7 +17,8 @@ const CAMPO = "w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 t
 // virar undefined, o que transformava o input em uncontrolled no meio da edicao.
 const FORM_VAZIO = {
   nome: '', cnpj: '', cno: '', metragem: 0, custo: 0, endereco: '',
-  ret: 'N', ativo: 'S', obra_concluida: 'N', data_conclusao: '',
+  ret: 'N', datainicioret: '', aliqret: 0,
+  ativo: 'S', obra_concluida: 'N', data_conclusao: '',
   conta_caixa: 0, conta_clientes: 0, conta_adi_cli: 0, conta_estand: 0, conta_estcon: 0,
   conta_despesa: 0, conta_rec: 0, conta_variacao: 0, conta_devolucao: 0, centro_custo: 0,
   hist_venda: 0, hist_recebimento: 0, hist_variacao: 0, hist_baixaadi: 0,
@@ -55,6 +56,13 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   // antes de clicar em salvar reatribuia o empreendimento para B em silencio.
   const [modalEmpresaId, setModalEmpresaId] = useState(null);
   const [activeTab, setActiveTab] = useState('dados'); // 'dados', 'questor', 'estrutura'
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Pickers "Puxar do Questor" (CNPJ do estab / CNO da obra)
+  const [questorEstabs, setQuestorEstabs] = useState(null);   // null = ainda nao buscado
+  const [questorObras, setQuestorObras] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(null);         // null | 'cnpj' | 'cno'
+  const [loadingPicker, setLoadingPicker] = useState(false);
 
   // Questor data for selectors
   const [planoContas, setPlanoContas] = useState([]);
@@ -73,14 +81,25 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
+  // Endereco estruturado (layout DIMOB) — persiste no banco proprio do app
+  const EMPTY_ENDERECO = { tipo_logradouro: '', logradouro: '', numero: '', complemento: '', bairro: '', cep: '', uf: '', codigo_munic: '', fonte: 'MANUAL', codigo_outemp: null, codigo_estab: null };
+  const [enderecoForm, setEnderecoForm] = useState(EMPTY_ENDERECO);
+
   useEffect(() => {
     const ac = new AbortController();
     fetchEmpreendimentos(ac.signal);
+    // caches dos pickers sao por empresa — trocar de empresa invalida
+    setQuestorEstabs(null);
+    setQuestorObras(null);
+    setPickerOpen(null);
     if (selectedEmpresa) {
         fetchQuestorData(ac.signal);
     }
     return () => ac.abort();
   }, [selectedEmpresa]);
+
+  // guarda contra resposta stale do fetch de endereco (modal reaberto p/ outro emp)
+  const enderecoReqRef = React.useRef(0);
 
   const fetchEmpreendimentos = async (signal) => {
     setLoading(true);
@@ -104,7 +123,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     try {
         const [pc, cc, hi] = await Promise.all([
             fetch(`${API_BASE}/api/questor/plano-contas-espec?empresa_id=${selectedEmpresa}`, { signal }).then(r => r.json()),
-            fetch(`${API_BASE}/api/questor/centrocusto`, { signal }).then(r => r.json()),
+            fetch(`${API_BASE}/api/questor/centrocusto?empresa_id=${selectedEmpresa}`, { signal }).then(r => r.json()),
             fetch(`${API_BASE}/api/questor/historicos`, { signal }).then(r => r.json())
         ]);
         setPlanoContas(asArray(pc?.contas));
@@ -137,7 +156,24 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     }
   };
 
+  const fetchEndereco = async (empId, emp) => {
+    const reqId = ++enderecoReqRef.current;
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/endereco`);
+      const data = await res.json();
+      if (reqId !== enderecoReqRef.current) return; // resposta stale: outro modal foi aberto
+      if (res.ok && data?.endereco) {
+        setEnderecoForm({ ...data.endereco, fonte: data.fonte === 'legado' ? 'MANUAL' : (data.fonte || 'MANUAL'), codigo_outemp: data.codigo_outemp, codigo_estab: data.codigo_estab });
+        return;
+      }
+    } catch (e) { console.error('Erro endereco:', e); }
+    if (reqId !== enderecoReqRef.current) return;
+    // fallback: campos legados achatados do proprio emp
+    setEnderecoForm({ ...EMPTY_ENDERECO, logradouro: emp?.endereco || '', cep: emp?.cep || '', uf: emp?.siglaestado || '', codigo_munic: emp?.codigomunic || '' });
+  };
+
   const handleOpenModal = (emp = null) => {
+    setPickerOpen(null);
     if (emp) {
       setEditingEmp(emp);
       // Merge sobre o formulario vazio: campo ausente na resposta da API mantem o
@@ -146,13 +182,17 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
         ...FORM_VAZIO,
         ...emp,
         ret: emp.ret || 'N',
+        datainicioret: emp.datainicioret || '',
+        aliqret: emp.aliqret || 0,
         ativo: emp.ativo || 'S',
         obra_concluida: emp.obra_concluida || 'N'
       });
       fetchEstrutura(emp.id);
+      fetchEndereco(emp.id, emp);
     } else {
       setEditingEmp(null);
       setFormData(FORM_VAZIO);
+      setEnderecoForm(EMPTY_ENDERECO);
       setBlocos([]);
       setUnidades([]);
     }
@@ -168,12 +208,64 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     setEditingEmp(null);
     setModalEmpresaId(null);
     setFormData(FORM_VAZIO);
+    setEnderecoForm(EMPTY_ENDERECO);
     setBlocos([]);
     setUnidades([]);
     setNewBlocoName('');
     setNewUnidade({ id_bloco: '', descricao: '', metragem: '', inscricao: '' });
     setSaveError(null);
     setSaving(false);
+    setPickerOpen(null);
+  };
+
+  // Pickers "Puxar do Questor"
+  const handleOpenPicker = async (kind) => {
+    if (pickerOpen === kind) { setPickerOpen(null); return; }
+    setPickerOpen(kind);
+    const cached = kind === 'cnpj' ? questorEstabs : questorObras;
+    if (cached !== null) return;
+    setLoadingPicker(true);
+    try {
+      if (kind === 'cnpj') {
+        const r = await fetch(`${API_BASE}/api/questor/estabs?empresa_id=${selectedEmpresa}`).then(r => r.json());
+        setQuestorEstabs(asArray(r?.estabs));
+      } else {
+        const r = await fetch(`${API_BASE}/api/questor/obras-cno?empresa_id=${selectedEmpresa}`).then(r => r.json());
+        setQuestorObras(asArray(r?.obras));
+      }
+    } catch (e) {
+      console.error('Erro picker Questor:', e);
+      // null (nao []) para permitir retry na proxima abertura apos falha transitoria
+      if (kind === 'cnpj') setQuestorEstabs(null); else setQuestorObras(null);
+      setPickerOpen(null);
+      alert('Falha ao consultar o Questor — tente abrir o picker novamente.');
+    } finally {
+      setLoadingPicker(false);
+    }
+  };
+
+  const aplicarEnderecoQuestor = (endereco, fonte, extra) => {
+    // Preenche o endereco estruturado a partir do Questor apenas se vier algo util
+    if (!endereco || !(endereco.logradouro || endereco.cep)) return;
+    setEnderecoForm(prev => ({
+      ...prev,
+      ...endereco,
+      fonte,
+      codigo_outemp: extra?.codigo_outemp ?? prev.codigo_outemp,
+      codigo_estab: extra?.codigo_estab ?? prev.codigo_estab,
+    }));
+  };
+
+  const handlePickEstab = (estab) => {
+    setFormData(f => ({ ...f, cnpj: estab.cnpj, codigoestab: String(estab.codigoestab) }));
+    aplicarEnderecoQuestor(estab.endereco, 'QUESTOR_ESTAB', { codigo_estab: estab.codigoestab });
+    setPickerOpen(null);
+  };
+
+  const handlePickObra = (obra) => {
+    setFormData(f => ({ ...f, cno: obra.cno }));
+    aplicarEnderecoQuestor(obra.endereco, 'QUESTOR_OBRA', { codigo_outemp: obra.codigooutemp });
+    setPickerOpen(null);
   };
 
   const handleSave = async () => {
@@ -191,13 +283,28 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
       ? `${API_BASE}/api/vulcano/empreendimentos/${editingEmp.id}`
       : `${API_BASE}/api/vulcano/empreendimentos?empresa_id=${empresaDoModal}`;
 
+    // Endereco legado = concatenacao do estruturado (compatibilidade).
+    // Sem fallback pro formData.endereco antigo: o enderecoForm e a fonte de
+    // verdade (carregado do banco do app ou do proprio legado ao abrir o modal),
+    // entao limpar os campos limpa o endereco de fato.
+    const endLegado = [
+        [enderecoForm.logradouro, enderecoForm.numero].filter(Boolean).join(', '),
+        enderecoForm.complemento,
+        enderecoForm.bairro ? `- ${enderecoForm.bairro}` : ''
+    ].filter(Boolean).join(' ').trim();
+
     // Ensure numeric fields are correctly typed
     const payload = {
         ...formData,
+        endereco: endLegado,
+        cep: enderecoForm.cep || '',
+        siglaestado: enderecoForm.uf || '',
+        codigomunic: String(enderecoForm.codigo_munic || ''),
         obra_concluida: formData.obra_concluida || 'N',
         empresa_id: parseInt(empresaDoModal),
         metragem: parseFloat(formData.metragem || 0),
         custo: parseFloat(formData.custo || 0),
+        aliqret: parseFloat(formData.aliqret || 0),
         conta_caixa: parseInt(formData.conta_caixa || 0),
         conta_clientes: parseInt(formData.conta_clientes || 0),
         conta_adi_cli: parseInt(formData.conta_adi_cli || 0),
@@ -228,6 +335,26 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
         body: JSON.stringify(payload)
       });
       if (res.ok) {
+        // Persiste o endereco estruturado (banco do app) apos salvar o cadastro
+        const body = await res.json().catch(() => ({}));
+        const empId = editingEmp ? editingEmp.id : body?.id;
+        // Em edicao o PUT roda sempre (permite LIMPAR o endereco); em criacao, so
+        // se algo foi preenchido.
+        if (empId && (editingEmp || enderecoForm.logradouro || enderecoForm.cep || enderecoForm.bairro)) {
+          try {
+            const resEnd = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/endereco`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...enderecoForm, codigo_munic: String(enderecoForm.codigo_munic || '') })
+            });
+            if (!resEnd.ok) {
+              const errEnd = await resEnd.json().catch(() => ({}));
+              alert("Cadastro salvo, mas o endereço estruturado falhou: " + (errEnd?.detail || resEnd.status));
+            }
+          } catch (e) {
+            alert("Cadastro salvo, mas o endereço estruturado falhou (rede).");
+          }
+        }
         fecharModal();
         fetchEmpreendimentos();
         return;
@@ -350,16 +477,31 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
           <h2 className="font-headline text-3xl font-black tracking-tight text-[var(--v-text-bold)] uppercase italic">Central de Empreendimentos</h2>
           <p className="text-[10px] text-[var(--v-accent)] font-black uppercase tracking-[0.4em] mt-1">Gestão de Nodes & Infraestrutura Vulcano</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="bg-[var(--v-accent)] text-[var(--v-text-inv)] px-6 py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-[var(--v-hover)] transition-all shadow-[0_0_20px_rgba(255,77,0,0.3)] group"
-        >
-          <Plus size={16} className="group-hover:rotate-90 transition-transform" /> Novo Empreendimento
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--v-text-faint)]" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nome, nº cadastro, CNPJ ou CNO..."
+              className="w-80 bg-[var(--v-card)] border border-[var(--v-border)] rounded-[var(--v-radius)] pl-9 pr-3 py-3 text-xs text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent)]/50 transition-all placeholder:text-[var(--v-text-faint)]"
+            />
+          </div>
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-[var(--v-accent)] text-[var(--v-text-inv)] px-6 py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-[var(--v-hover)] transition-all shadow-[0_0_20px_rgba(255,77,0,0.3)] group"
+          >
+            <Plus size={16} className="group-hover:rotate-90 transition-transform" /> Novo Empreendimento
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {empreendimentos.map(emp => (
+        {empreendimentos.filter(emp => {
+          const q = searchQuery.trim().toLowerCase();
+          if (!q) return true;
+          return [emp.nome, String(emp.id), emp.cnpj, emp.cno].some(v => (v || '').toLowerCase().includes(q));
+        }).map(emp => (
           <div key={emp.id} className="group relative">
             <div className="p-6 bg-[var(--v-card)] backdrop-blur-md border border-[var(--v-border)] rounded-[var(--v-radius)] hover:border-[var(--v-accent)]/30 transition-all duration-300 flex flex-col h-full gap-4">
               <div className="flex justify-between items-start">
@@ -375,6 +517,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
               <div className="space-y-1">
                 <h3 className="font-headline font-black text-[var(--v-text-bold)] uppercase tracking-wider text-sm">{emp.nome}</h3>
                 <p className="text-[10px] text-[var(--v-text-faint)] font-bold uppercase py-1 border-b border-[var(--v-border)]">CNO: {emp.cno || 'Não Informado'}</p>
+                <p className="text-[10px] text-[var(--v-text-faint)] font-bold uppercase py-1 border-b border-[var(--v-border)]">CNPJ: {emp.cnpj || '—'}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-2">
@@ -486,18 +629,63 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                               className={CAMPO} />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">CNPJ</label>
-                                <input value={formData.cnpj} onChange={(e) => setFormData({...formData, cnpj: e.target.value})} className="w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                            <div className="space-y-1 relative">
+                                <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">CNPJ RET</label>
+                                <div className="flex gap-1">
+                                    <input value={formData.cnpj} onChange={(e) => setFormData({...formData, cnpj: e.target.value})} className="w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                    <button type="button" onClick={() => handleOpenPicker('cnpj')} title="Puxar do Questor (estabelecimentos da empresa)"
+                                        className="px-2.5 bg-[var(--v-tint)] hover:bg-[var(--v-accent)]/15 border border-[var(--v-border)] rounded-[var(--v-radius)] text-[var(--v-accent)] transition-colors shrink-0">
+                                        <Database size={14}/>
+                                    </button>
+                                </div>
+                                {pickerOpen === 'cnpj' && (
+                                    <div className="absolute z-30 top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-[var(--v-shell)] border border-[var(--v-border)] rounded-[var(--v-radius)] shadow-2xl custom-scrollbar">
+                                        {loadingPicker ? <div className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase animate-pulse">Buscando no Questor...</div> :
+                                         !(questorEstabs || []).length ? <div className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase">Nenhum estabelecimento</div> :
+                                         (questorEstabs || []).map(es => (
+                                            <button key={es.codigoestab} type="button" onClick={() => handlePickEstab(es)}
+                                                className="w-full text-left px-3 py-2 text-[11px] text-[var(--v-text-bold)] hover:bg-[var(--v-accent)]/10 border-b border-[var(--v-border)] font-mono">
+                                                Estab {es.codigoestab} — {es.cnpj || 'sem CNPJ'}
+                                                <span className="block text-[9px] text-[var(--v-text-faint)] font-sans">{es.endereco?.logradouro}{es.endereco?.numero ? `, ${es.endereco.numero}` : ''} {es.endereco?.bairro}</span>
+                                            </button>
+                                         ))}
+                                    </div>
+                                )}
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-1 relative">
                                 <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">CNO</label>
-                                <input value={formData.cno} onChange={(e) => setFormData({...formData, cno: e.target.value})} className="w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                <div className="flex gap-1">
+                                    <input value={formData.cno} onChange={(e) => setFormData({...formData, cno: e.target.value})} className="w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                    <button type="button" onClick={() => handleOpenPicker('cno')} title="Puxar do Questor (obras/CNO da empresa)"
+                                        className="px-2.5 bg-[var(--v-tint)] hover:bg-[var(--v-accent)]/15 border border-[var(--v-border)] rounded-[var(--v-radius)] text-[var(--v-accent)] transition-colors shrink-0">
+                                        <Database size={14}/>
+                                    </button>
+                                </div>
+                                {pickerOpen === 'cno' && (
+                                    <div className="absolute z-30 top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-[var(--v-shell)] border border-[var(--v-border)] rounded-[var(--v-radius)] shadow-2xl custom-scrollbar">
+                                        {loadingPicker ? <div className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase animate-pulse">Buscando no Questor...</div> :
+                                         !(questorObras || []).length ? <div className="p-3 text-[10px] text-[var(--v-text-faint)] uppercase">Nenhuma obra/CNO</div> :
+                                         (questorObras || []).map(ob => (
+                                            <button key={ob.codigooutemp} type="button" onClick={() => handlePickObra(ob)}
+                                                className="w-full text-left px-3 py-2 text-[11px] text-[var(--v-text-bold)] hover:bg-[var(--v-accent)]/10 border-b border-[var(--v-border)]">
+                                                {ob.nome} <span className="font-mono text-[var(--v-accent)]">— CNO {ob.cno || '—'}</span>
+                                            </button>
+                                         ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Endereço Completo</label>
-                            <input value={formData.endereco} onChange={(e) => setFormData({...formData, endereco: e.target.value})} className="w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                            <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Endereço <span className="text-[var(--v-accent)]">(layout DIMOB)</span>{enderecoForm.fonte !== 'MANUAL' && <span className="ml-2 text-[8px] bg-[var(--v-accent)]/10 border border-[#ff4d00]/20 px-1.5 py-0.5 rounded text-[var(--v-accent)]">preenchido do Questor</span>}</label>
+                            <div className="grid grid-cols-6 gap-2">
+                                <input value={enderecoForm.logradouro} onChange={(e) => setEnderecoForm({...enderecoForm, logradouro: e.target.value, fonte: 'MANUAL'})} placeholder="Logradouro" className="col-span-4 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                <input value={enderecoForm.numero} onChange={(e) => setEnderecoForm({...enderecoForm, numero: e.target.value, fonte: 'MANUAL'})} placeholder="Número" className="col-span-2 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                <input value={enderecoForm.complemento} onChange={(e) => setEnderecoForm({...enderecoForm, complemento: e.target.value, fonte: 'MANUAL'})} placeholder="Complemento" className="col-span-3 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                <input value={enderecoForm.bairro} onChange={(e) => setEnderecoForm({...enderecoForm, bairro: e.target.value, fonte: 'MANUAL'})} placeholder="Bairro" className="col-span-3 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                <input value={enderecoForm.cep} onChange={(e) => setEnderecoForm({...enderecoForm, cep: e.target.value, fonte: 'MANUAL'})} placeholder="CEP" className="col-span-2 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                                <input value={enderecoForm.uf} onChange={(e) => setEnderecoForm({...enderecoForm, uf: e.target.value.toUpperCase().slice(0,2), fonte: 'MANUAL'})} placeholder="UF" className="col-span-1 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50 uppercase" />
+                                <input value={enderecoForm.codigo_munic} onChange={(e) => setEnderecoForm({...enderecoForm, codigo_munic: e.target.value, fonte: 'MANUAL'})} placeholder="Cód. Município" className="col-span-3 bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />
+                            </div>
                         </div>
                     </div>
                     <div className="space-y-4">
@@ -537,6 +725,20 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                 </select>
                             </div>
                         </div>
+                        {/* Campos do RET em linha propria: so aparecem quando adere,
+                            e sem aninhar grid dentro de grid. */}
+                        {formData.ret === 'S' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Data Inicial RET</label>
+                                    <input type="date" value={formData.datainicioret || ''} onChange={(e) => setFormData({...formData, datainicioret: e.target.value})} className={CAMPO} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Alíquota RET (%)</label>
+                                    <input type="number" step="0.01" value={formData.aliqret || ''} onChange={(e) => setFormData({...formData, aliqret: e.target.value})} placeholder="4.00" className={CAMPO} />
+                                </div>
+                            </div>
+                        )}
                         <div className="space-y-1">
                             <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Data de Conclusão</label>
                             <input type="date" value={formData.data_conclusao} onChange={(e) => setFormData({...formData, data_conclusao: e.target.value})} className="w-full bg-[var(--v-card)] border border-[var(--v-border)] p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50" />

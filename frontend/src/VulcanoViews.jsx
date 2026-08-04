@@ -14,6 +14,7 @@ import {
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { API_BASE } from './apiBase';
+import * as XLSX from 'xlsx';
 
 
 
@@ -411,6 +412,254 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
     );
 };
 
+// Tipos de condicao aceitos pelo backend (POST /api/vulcano/vendas -> VENDAFORMAPAGTO)
+const TIPOS_CONDICAO = ['SINAL', 'MENSAL', 'SEMESTRAL', 'ANUAL', 'REFORCO', 'INTERMEDIARIA', 'CHAVES', 'FINANCIAMENTO'];
+const TIPOS_PARCELA_UNICA = ['SINAL', 'INTERMEDIARIA', 'CHAVES', 'FINANCIAMENTO'];
+
+// Data local (nao UTC): toISOString() vira "amanha" entre 21h e 0h no Brasil
+const hojeLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved }) => {
+  const inputStyle = { background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' };
+  const labelCls = "text-[10px] uppercase font-bold mb-2 block";
+  const labelStyle = { color: '#8a7a68' };
+
+  const [vendaForm, setVendaForm] = useState({ id_empreendimento: '', data: '', total: '', permuta: 'N', conta_permuta: '' });
+  const [compradores, setCompradores] = useState([{ nome: '', cpf_cnpj: '' }]);
+  const [condicoes, setCondicoes] = useState([]);
+  const [unidadesDisp, setUnidadesDisp] = useState([]);
+  const [blocosById, setBlocosById] = useState({});
+  const [unidadesSel, setUnidadesSel] = useState([]);
+  const [loadingUnidades, setLoadingUnidades] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const detalhesReqRef = useRef(0);
+  const handleSelectEmpreendimento = async (empId) => {
+    const reqId = ++detalhesReqRef.current;
+    setVendaForm(f => ({ ...f, id_empreendimento: empId }));
+    setUnidadesSel([]);
+    setUnidadesDisp([]);
+    if (!empId) return;
+    setLoadingUnidades(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/detalhes`);
+      const d = await res.json();
+      if (reqId !== detalhesReqRef.current) return; // resposta stale: usuario ja trocou de empreendimento
+      const blocos = {};
+      (Array.isArray(d?.blocos) ? d.blocos : []).forEach(b => { blocos[b.id] = b.nome; });
+      setBlocosById(blocos);
+      setUnidadesDisp(Array.isArray(d?.unidades) ? d.unidades : []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      if (reqId === detalhesReqRef.current) setLoadingUnidades(false);
+    }
+  };
+
+  const toggleUnidade = (uid) => {
+    setUnidadesSel(sel => sel.includes(uid) ? sel.filter(i => i !== uid) : [...sel, uid]);
+  };
+
+  const buscarClientePorDoc = async (idx) => {
+    const doc = (compradores[idx]?.cpf_cnpj || '').replace(/\D/g, '');
+    if (!doc || compradores[idx]?.nome) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/clientes/search?cpf_cnpj=${doc}`);
+      const d = await res.json();
+      const nome = d?.cliente?.nome || d?.nome;
+      if (nome) setCompradores(cs => cs.map((c, i) => i === idx ? { ...c, nome } : c));
+    } catch (e) { /* lookup opcional */ }
+  };
+
+  const setComprador = (idx, patch) => setCompradores(cs => cs.map((c, i) => i === idx ? { ...c, ...patch } : c));
+  const setCondicao = (idx, patch) => setCondicoes(cs => cs.map((c, i) => {
+    if (i !== idx) return c;
+    const novo = { ...c, ...patch };
+    if (patch.tipo && TIPOS_PARCELA_UNICA.includes(patch.tipo)) novo.quantidade = 1;
+    return novo;
+  }));
+
+  const somaCondicoes = condicoes.reduce((acc, c) => acc + (parseFloat(c.valor || 0) * parseInt(c.quantidade || 1)), 0);
+  const totalNum = parseFloat(vendaForm.total || 0);
+  const divergente = condicoes.length > 0 && Math.abs(somaCondicoes - totalNum) > 0.01;
+
+  const descricaoUnidades = unidadesDisp
+    .filter(u => unidadesSel.includes(u.id))
+    .map(u => `${blocosById[u.id_bloco] || ''} - ${u.descricao}`.replace(/^ - /, ''))
+    .join(' / ');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!vendaForm.id_empreendimento) { alert('Selecione o empreendimento.'); return; }
+    if (!(compradores[0]?.nome && compradores[0]?.cpf_cnpj)) {
+      alert('O 1º comprador (titular da venda) precisa de nome e CPF/CNPJ.');
+      return;
+    }
+    const incompletos = compradores.filter(c => (c.nome || c.cpf_cnpj) && !(c.nome && c.cpf_cnpj));
+    if (incompletos.length) {
+      alert('Há comprador com nome ou CPF/CNPJ faltando — complete ou remova a linha.');
+      return;
+    }
+    const condSemVenc = condicoes.filter(c => parseFloat(c.valor || 0) > 0 && !c.vencimento);
+    if (condSemVenc.length) {
+      alert('Há condição de pagamento com valor mas sem 1º vencimento — preencha a data ou remova a linha.');
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      empresa_id: parseInt(selectedEmpresa),
+      id_empreendimento: parseInt(vendaForm.id_empreendimento),
+      unidade: descricaoUnidades,
+      unidades_selecionadas: unidadesSel,
+      data: vendaForm.data,
+      total: totalNum,
+      permuta: vendaForm.permuta,
+      conta_permuta: vendaForm.permuta === 'S' && vendaForm.conta_permuta ? parseInt(vendaForm.conta_permuta) : null,
+      compradores: compradores.filter(c => c.nome && c.cpf_cnpj).map((c, i) => ({ ...c, principal: i === 0 })),
+      condicoes: condicoes
+        .filter(c => parseFloat(c.valor || 0) > 0 && c.vencimento)
+        .map(c => ({ tipo: c.tipo, quantidade: parseInt(c.quantidade || 1), valor: parseFloat(c.valor), vencimento: c.vencimento })),
+    };
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
+      onSaved();
+    } catch (err) {
+      alert('Erro ao cadastrar venda: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in p-6">
+      <div className="w-full max-w-5xl rounded-xl shadow-2xl flex flex-col max-h-[92vh]" style={{ background: '#0c0908', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
+        <div className="p-6 border-b flex justify-between items-center shrink-0" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+          <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3" style={{ color: '#f0e6d8' }}><Plus size={20} color="#ff7a1a"/> Cadastrar Nova Venda</h3>
+          <button onClick={onClose} style={{ color: '#8a7a68' }}><X size={20}/></button>
+        </div>
+        <div className="p-6 overflow-y-auto custom-scrollbar">
+          <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+
+            {/* EMPREENDIMENTO + UNIDADES */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls} style={labelStyle}>Empreendimento</label>
+                <select value={vendaForm.id_empreendimento} onChange={(e) => handleSelectEmpreendimento(e.target.value)} required className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle}>
+                  <option value="">Selecione...</option>
+                  {empreendimentosList.map(emp => <option key={emp.id} value={emp.id}>{emp.id} — {emp.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls} style={labelStyle}>Unidades disponíveis {loadingUnidades && '(carregando...)'}</label>
+                <div className="max-h-36 overflow-y-auto rounded custom-scrollbar p-1" style={inputStyle}>
+                  {!vendaForm.id_empreendimento ? (
+                    <div className="p-2 text-[10px] uppercase" style={{ color: '#5a4e42' }}>Selecione o empreendimento</div>
+                  ) : !unidadesDisp.length && !loadingUnidades ? (
+                    <div className="p-2 text-[10px] uppercase" style={{ color: '#5a4e42' }}>Sem unidades livres (vendidas ou sem estrutura)</div>
+                  ) : (
+                    unidadesDisp.map(u => (
+                      <label key={u.id} className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer hover:bg-white/5 rounded" style={{ color: '#f0e6d8' }}>
+                        <input type="checkbox" checked={unidadesSel.includes(u.id)} onChange={() => toggleUnidade(u.id)} />
+                        <span>{blocosById[u.id_bloco] ? `${blocosById[u.id_bloco]} — ` : ''}{u.descricao}</span>
+                        <span className="ml-auto font-mono text-[10px]" style={{ color: '#8a7a68' }}>{u.metragem ? `${u.metragem} m²` : ''}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* DATA / TOTAL / PERMUTA */}
+            <div className="grid grid-cols-4 gap-4">
+              <div><label className={labelCls} style={labelStyle}>Data Venda</label><input type="date" value={vendaForm.data} onChange={(e) => setVendaForm({ ...vendaForm, data: e.target.value })} required className="w-full p-3 rounded text-[11px] outline-none dark-calendar" style={inputStyle} /></div>
+              <div><label className={labelCls} style={labelStyle}>Total Venda</label><input type="number" step="0.01" value={vendaForm.total} onChange={(e) => setVendaForm({ ...vendaForm, total: e.target.value })} required className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle} /></div>
+              <div>
+                <label className={labelCls} style={labelStyle}>Imóvel Permutado?</label>
+                <select value={vendaForm.permuta} onChange={(e) => setVendaForm({ ...vendaForm, permuta: e.target.value })} className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle}>
+                  <option value="N">Não</option>
+                  <option value="S">Sim</option>
+                </select>
+              </div>
+              {vendaForm.permuta === 'S' && (
+                <div><label className={labelCls} style={labelStyle}>Conta Permuta (Questor)</label><input type="number" value={vendaForm.conta_permuta} onChange={(e) => setVendaForm({ ...vendaForm, conta_permuta: e.target.value })} placeholder="opcional" className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle} /></div>
+              )}
+            </div>
+
+            {/* COMPRADORES */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className={labelCls + ' mb-0'} style={labelStyle}>Compradores {compradores.length > 1 && `(${compradores.length})`}</label>
+                <button type="button" onClick={() => setCompradores(cs => [...cs, { nome: '', cpf_cnpj: '' }])} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold" style={{ background: 'rgba(255, 160, 80, 0.1)', color: '#ff7a1a' }}>
+                  <Plus size={11}/> Adicionar comprador
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {compradores.map((c, idx) => (
+                  <div key={idx} className="grid grid-cols-[24px_1fr_220px_28px] items-center gap-2">
+                    <span className="text-[9px] font-mono text-center" style={{ color: idx === 0 ? '#ff7a1a' : '#5a4e42' }} title={idx === 0 ? 'Comprador principal' : 'Comprador vinculado'}>{idx === 0 ? '1º' : `${idx + 1}º`}</span>
+                    <input value={c.nome} onChange={(e) => setComprador(idx, { nome: e.target.value })} placeholder="Nome completo" className="p-3 rounded text-[11px] outline-none" style={inputStyle} />
+                    <input value={c.cpf_cnpj} onChange={(e) => setComprador(idx, { cpf_cnpj: e.target.value })} onBlur={() => buscarClientePorDoc(idx)} placeholder="CPF/CNPJ" className="p-3 rounded text-[11px] outline-none font-mono" style={inputStyle} />
+                    <button type="button" disabled={compradores.length === 1} onClick={() => setCompradores(cs => cs.filter((_, i) => i !== idx))} className="p-1.5 rounded hover:bg-red-900/30 disabled:opacity-20" style={{ color: '#8a7a68' }}><Trash2 size={13}/></button>
+                  </div>
+                ))}
+              </div>
+              {compradores.length > 1 && (
+                <p className="mt-1 text-[9.5px]" style={{ color: '#5a4e42' }}>O 1º comprador é o titular da venda; os demais entram como vendas vinculadas (modelo do Vulcano).</p>
+              )}
+            </div>
+
+            {/* CONDICOES DE PAGAMENTO */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className={labelCls + ' mb-0'} style={labelStyle}>Condições de Pagamento</label>
+                <button type="button" onClick={() => setCondicoes(cs => [...cs, { tipo: 'MENSAL', quantidade: 1, valor: '', vencimento: '' }])} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold" style={{ background: 'rgba(255, 160, 80, 0.1)', color: '#ff7a1a' }}>
+                  <Plus size={11}/> Adicionar condição
+                </button>
+              </div>
+              {!condicoes.length ? (
+                <div className="p-3 rounded text-[10px] uppercase" style={{ ...inputStyle, color: '#5a4e42' }}>Sem condições — a venda será gravada sem parcelas geradas.</div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-[150px_90px_1fr_150px_28px] gap-2 text-[9px] uppercase font-bold px-1" style={{ color: '#5a4e42' }}>
+                    <span>Tipo</span><span>Qtd parcelas</span><span>Valor da parcela</span><span>1º vencimento</span><span></span>
+                  </div>
+                  {condicoes.map((c, idx) => (
+                    <div key={idx} className="grid grid-cols-[150px_90px_1fr_150px_28px] items-center gap-2">
+                      <select value={c.tipo} onChange={(e) => setCondicao(idx, { tipo: e.target.value })} className="p-2.5 rounded text-[11px] outline-none" style={inputStyle}>
+                        {TIPOS_CONDICAO.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <input type="number" min="1" value={c.quantidade} disabled={TIPOS_PARCELA_UNICA.includes(c.tipo)} onChange={(e) => setCondicao(idx, { quantidade: e.target.value })} className="p-2.5 rounded text-[11px] outline-none disabled:opacity-40" style={inputStyle} />
+                      <input type="number" step="0.01" value={c.valor} onChange={(e) => setCondicao(idx, { valor: e.target.value })} placeholder="0,00" className="p-2.5 rounded text-[11px] outline-none" style={inputStyle} />
+                      <input type="date" value={c.vencimento} onChange={(e) => setCondicao(idx, { vencimento: e.target.value })} className="p-2.5 rounded text-[11px] outline-none dark-calendar" style={inputStyle} />
+                      <button type="button" onClick={() => setCondicoes(cs => cs.filter((_, i) => i !== idx))} className="p-1.5 rounded hover:bg-red-900/30" style={{ color: '#8a7a68' }}><Trash2 size={13}/></button>
+                    </div>
+                  ))}
+                  <div className="flex justify-end gap-4 text-[11px] font-mono px-1" style={{ color: divergente ? '#ff7a1a' : '#8a7a68' }}>
+                    <span>Σ condições: {formatCurrency(somaCondicoes)}</span>
+                    <span>Total: {formatCurrency(totalNum)}</span>
+                    {divergente && <span className="font-bold">⚠ divergência {formatCurrency(somaCondicoes - totalNum)}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4 border-t mt-2" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
+              <button type="submit" disabled={saving} className="px-8 py-3 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                {saving ? 'Gravando...' : 'Registrar Venda'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const VendasView = ({ selectedEmpresa }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -504,15 +753,30 @@ export const VendasView = ({ selectedEmpresa }) => {
     else groupedVendas['ANTERIORES'].push(v);
   });
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const payload = Object.fromEntries(fd);
-    try {
-      await fetch(`${API_BASE}/api/vulcano/vendas`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      alert("Venda cadastrada!"); setShowForm(false); setLoading(true);
-      fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`).then(res => res.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); });
-    } catch (err) { alert("Erro ao cadastrar."); }
+  const handleVendaSalva = () => {
+    setShowForm(false);
+    if (hasSearched) handleSearch();
+  };
+
+  const handleExportXLSX = () => {
+    if (!filtered.length) return;
+    const rows = filtered.map(v => ({
+      'ID': v.id,
+      'Data': v.data,
+      'Empreendimento': v.empreendimento,
+      'Unidade': v.descricao,
+      'Comprador Principal': v.cliente_nome,
+      'CPF/CNPJ': v.cliente_cnpj,
+      'Compradores': (v.compradores || []).map(c => c.nome).join(' / ') || v.cliente_nome,
+      'Total Venda': v.total,
+      'Permuta': v.permuta === 'S' ? 'SIM' : 'NÃO',
+      'Status': v.distrato === 'S' ? 'DISTRATADA' : 'ATIVA',
+      'Data Distrato': v.data_distrato || ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Vendas');
+    XLSX.writeFile(wb, `vendas_emp${empreendimentoFilter || selectedEmpresa}_${dataIniFilter}_a_${dataFimFilter}.xlsx`);
   };
 
   const totalGeral = filtered.reduce((acc, curr) => acc + (curr.total || 0), 0);
@@ -536,6 +800,9 @@ export const VendasView = ({ selectedEmpresa }) => {
                 
                 <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'var(--v-text-bold)' }}>
                     <Filter size={12}/> Comandos <kbd className="ml-1 text-[10px]" style={{ color: 'var(--v-text-muted)' }}>⌘K</kbd>
+                </button>
+                <button onClick={handleExportXLSX} disabled={!filtered.length} title={filtered.length ? 'Exportar a lista filtrada para Excel' : 'Busque vendas primeiro'} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'var(--v-text-bold)' }}>
+                    <FileSpreadsheet size={12}/> Excel
                 </button>
                 <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg" style={{ background: 'linear-gradient(135deg, var(--v-accent), var(--v-accent-2))', color: 'var(--v-accent-soft)' }}>
                     <Plus size={12}/> Nova venda <kbd className="ml-1 text-[10px] bg-[var(--v-zebra)] border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘N</kbd>
@@ -605,7 +872,14 @@ export const VendasView = ({ selectedEmpresa }) => {
                                             </div>
                                             
                                             <div className="min-w-0">
-                                                <div className="font-medium text-[13.5px] truncate" style={{ color: 'var(--v-text-bold)' }}>{v.cliente_nome}</div>
+                                                <div className="font-medium text-[13.5px] truncate flex items-center gap-2" style={{ color: 'var(--v-text-bold)' }}>
+                                                    {v.cliente_nome}
+                                                    {(v.qtd_compradores || 1) > 1 && (
+                                                        <span title={(v.compradores || []).map(c => c.nome).join('\n')} className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0" style={{ background: 'rgba(255, 122, 26, 0.15)', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
+                                                            +{v.qtd_compradores - 1}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="font-mono text-[10.5px] mt-1" style={{ color: 'var(--v-text-muted)' }}>
                                                     {v.descricao} · <span style={{ color: 'var(--v-text-faint)' }}>{v.cliente_cnpj}</span>
                                                 </div>
@@ -759,30 +1033,14 @@ export const VendasView = ({ selectedEmpresa }) => {
         </div>
       </div>
       
-      {/* MODAL NOVA VENDA (Apenas Form Antigo Simplificado) */}
+      {/* MODAL NOVA VENDA */}
       {showForm && (
-        <div className="fixed inset-0 bg-[var(--v-overlay)] backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in p-6">
-            <div className="w-full max-w-4xl rounded-xl shadow-2xl flex flex-col max-h-[90vh]" style={{ background: 'var(--v-shell)', border: '1px solid var(--v-line-warm)' }}>
-                <div className="p-6 border-b flex justify-between items-center" style={{ borderColor: 'var(--v-line-warm)' }}>
-                    <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3" style={{ color: 'var(--v-text-bold)' }}><Plus size={20} color="var(--v-accent)"/> Cadastrar Nova Venda</h3>
-                    <button onClick={() => setShowForm(false)} style={{ color: 'var(--v-text-muted)' }}><X size={20}/></button>
-                </div>
-                <div className="p-6 overflow-y-auto custom-scrollbar">
-                    <form className="flex flex-col gap-6" onSubmit={handleFormSubmit}>
-                        <input type="hidden" name="empresa_id" value={selectedEmpresa} />
-                        <div className="grid grid-cols-4 gap-4">
-                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: 'var(--v-text-muted)' }}>ID Emp.</label><input name="id_empreendimento" type="number" required className="w-full p-3 rounded text-[11px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-bold)' }} /></div>
-                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: 'var(--v-text-muted)' }}>Unidade</label><input name="unidade" required className="w-full p-3 rounded text-[11px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-bold)' }} /></div>
-                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: 'var(--v-text-muted)' }}>Total Venda</label><input name="total" type="number" step="0.01" required className="w-full p-3 rounded text-[11px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-bold)' }} /></div>
-                            <div><label className="text-[10px] uppercase font-bold mb-2 block" style={{ color: 'var(--v-text-muted)' }}>Data Venda</label><input name="data" type="date" required className="w-full p-3 rounded text-[11px] outline-none dark-calendar" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-bold)' }} /></div>
-                        </div>
-                        <div className="flex justify-end pt-4 border-t mt-4" style={{ borderColor: 'var(--v-line-warm)' }}>
-                            <button type="submit" className="px-8 py-3 rounded text-[11px] font-bold uppercase tracking-widest" style={{ background: 'linear-gradient(135deg, var(--v-accent), var(--v-accent-2))', color: 'var(--v-accent-soft)' }}>Registrar Venda</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        <NovaVendaModal
+          selectedEmpresa={selectedEmpresa}
+          empreendimentosList={empreendimentosList}
+          onClose={() => setShowForm(false)}
+          onSaved={handleVendaSalva}
+        />
       )}
 
       {/* MODAL DISTRATO */}
@@ -792,27 +1050,49 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <h3 className="text-red-500 text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-4">
                     <AlertCircle size={24}/> Confirmar Distrato
                 </h3>
-                <p className="text-[12px] mb-6" style={{ color: 'var(--v-text-muted)' }}>
-                    Você está prestes a distratar o contrato <strong style={{ color: 'var(--v-text-bold)' }}>#{distratoModal.id}</strong> ({distratoModal.cliente_nome}). 
+                <p className="text-[12px] mb-4" style={{ color: 'var(--v-text-muted)' }}>
+                    Você está prestes a distratar o contrato <strong style={{ color: 'var(--v-text-bold)' }}>#{distratoModal.id}</strong> ({distratoModal.cliente_nome}).
                     Esta ação <span className="text-red-500 font-bold">cancelará as parcelas futuras</span> vinculadas a esta venda.
                 </p>
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: 'var(--v-text-muted)' }}>Data do distrato</label>
+                        <input type="date" value={distratoModal.data_distrato_form || hojeLocal()}
+                            onChange={(e) => setDistratoModal({ ...distratoModal, data_distrato_form: e.target.value })}
+                            className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.08)', color: 'var(--v-text-bold)' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: 'var(--v-text-muted)' }}>Valor devolvido</label>
+                        <input type="number" step="0.01" value={distratoModal.valor_devolvido_form ?? ''} placeholder="0,00"
+                            onChange={(e) => setDistratoModal({ ...distratoModal, valor_devolvido_form: e.target.value })}
+                            className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.08)', color: 'var(--v-text-bold)' }} />
+                    </div>
+                </div>
                 <div className="flex justify-end gap-3">
                     <button onClick={() => setDistratoModal(null)} className="px-4 py-2 hover:bg-[var(--v-tint)] transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: 'var(--v-text-muted)' }}>
                         Cancelar
                     </button>
-                    <button 
+                    <button
                         onClick={() => {
-                            fetch(`${API_BASE}/api/vulcano/vendas/${distratoModal.id}/distratar`, { method: "POST" })
-                                .then(res => res.json())
-                                .then(() => {
+                            fetch(`${API_BASE}/api/distratos`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    id_venda: distratoModal.id,
+                                    data_distrato: distratoModal.data_distrato_form || hojeLocal(),
+                                    valor_devolvido: parseFloat(distratoModal.valor_devolvido_form || 0),
+                                    data_pagamento: null
+                                })
+                            })
+                                .then(async res => {
+                                    const body = await res.json().catch(() => ({}));
+                                    if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
                                     setDistratoModal(null);
                                     setSelectedVenda(null);
-                                    setLoading(true);
-                                    fetch(`${API_BASE}/api/vulcano/vendas?empresa_id=${selectedEmpresa}`)
-                                        .then(r => r.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); });
+                                    if (hasSearched) handleSearch();
                                 })
-                                .catch(err => alert("Erro ao distratar"));
-                        }} 
+                                .catch(err => alert("Erro ao distratar: " + err.message));
+                        }}
                         className="px-6 py-2 bg-red-900/20 hover:bg-red-900/40 border border-red-900/50 text-red-500 rounded text-[11px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(239,68,68,0.15)]"
                     >
                         Confirmar Distrato
