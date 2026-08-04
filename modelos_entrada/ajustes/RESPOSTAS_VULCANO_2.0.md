@@ -90,8 +90,11 @@ aparecem somando R$ 1,8 mi). Na lista, a venda aparece **uma vez** com um selo `
 mostrando os demais compradores. Parcelas e recebimentos ficam só na principal; o
 distrato da principal cancela também as vinculadas.
 
-*Vendas antigas duplicadas* (como a LIGIA/LARISSA) permanecem como estão — dá para
-saneá-las depois preenchendo o vínculo, se quiserem (posso preparar esse ajuste).
+*Caso LIGIA/LARISSA*: verificamos que a venda #19609 **já estava vinculada** à #19608
+na base (campo preenchido); com a listagem nova o par passa a aparecer **uma única
+vez**, com o valor do contrato (R$ 901.636,49) e o selo `+1` dos dois compradores —
+o total da carteira deixa de somar R$ 1,8 mi. Outras duplicatas antigas que não
+tenham o vínculo preenchido podem ser saneadas depois (posso preparar esse ajuste).
 
 ### Campo forma de pagamento — onde fica?
 > *"Campo forma de pagamento – onde fica?"*
