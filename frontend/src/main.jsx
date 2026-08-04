@@ -1,7 +1,8 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import { RouterProvider } from 'react-router'
 import './index.css'
-import App from './App.jsx'
+import { router } from './router.jsx'
 
 class GlobalErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null, info: null }; }
@@ -36,7 +37,7 @@ class GlobalErrorBoundary extends React.Component {
 
 createRoot(document.getElementById('root')).render(
   <GlobalErrorBoundary>
-    <App />
+    <RouterProvider router={router} />
   </GlobalErrorBoundary>,
 )
 

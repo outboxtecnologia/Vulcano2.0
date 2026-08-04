@@ -15,22 +15,22 @@ function StatusBadge({ status }) {
     ok: {
       icon: <CheckCircle2 size={11} />,
       label: 'Atualizado',
-      cls: 'text-[var(--v-accent-3)] border-[#34c759]/30 bg-[#34c759]/10',
+      cls: 'text-[var(--v-accent-3)] border-[var(--v-ok)]/30 bg-[var(--v-ok)]/10',
     },
     pendente: {
       icon: <Clock size={11} className="animate-pulse" />,
       label: 'Buscando CCT...',
-      cls: 'text-[var(--v-accent-6)] border-[#ffcc00]/30 bg-[#ffcc00]/10',
+      cls: 'text-[var(--v-accent-6)] border-[var(--v-warn-hi)]/30 bg-[var(--v-warn-hi)]/10',
     },
     erro: {
       icon: <AlertTriangle size={11} />,
       label: 'Erro',
-      cls: 'text-[var(--v-accent)] border-[#ff4d00]/30 bg-[var(--v-accent)]/10',
+      cls: 'text-[var(--v-accent)] border-[var(--v-accent)]/30 bg-[rgb(var(--v-accent-rgb)_/_0.1)]',
     },
     pdf_nao_encontrado: {
       icon: <FileX size={11} />,
       label: 'CCT não encontrada',
-      cls: 'text-[var(--v-text-faint)] border-[#666]/30 bg-[#666]/10',
+      cls: 'text-[var(--v-text-faint)] border-[var(--v-text-muted)]/30 bg-[var(--v-text-muted)]/10',
     },
   };
   const cfg = map[status] || map.pendente;
@@ -57,7 +57,7 @@ function ClausulaExpand({ texto }) {
       {texto.length > 120 && (
         <button
           onClick={() => setAberto((v) => !v)}
-          className="flex items-center gap-1 text-[9px] text-[var(--v-accent)]/50 hover:text-[var(--v-accent)] mt-1 transition-colors"
+          className="flex items-center gap-1 text-[9px] text-[rgb(var(--v-accent-rgb)_/_0.5)] hover:text-[var(--v-accent)] mt-1 transition-colors"
         >
           {aberto ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
           {aberto ? 'Menos' : 'Ver trecho completo'}
@@ -69,13 +69,13 @@ function ClausulaExpand({ texto }) {
 
 function InfoRow({ label, valor, clausula }) {
   return (
-    <div className="py-2 border-b border-white/5 last:border-0">
+    <div className="py-2 border-b border-[var(--v-line)] last:border-0">
       <div className="flex justify-between items-start gap-2">
         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-text-faint)] shrink-0">
           {label}
         </span>
         <span className="text-[11px] font-bold text-[var(--v-text-bold)] text-right">
-          {valor || <span className="text-[#333] italic font-normal">—</span>}
+          {valor || <span className="text-[var(--v-text-ghost)] italic font-normal">—</span>}
         </span>
       </div>
       <ClausulaExpand texto={clausula} />
@@ -101,7 +101,7 @@ function SindicatoCard({ s, onAtualizar }) {
     : null;
 
   return (
-    <div className="bg-black/40 border border-white/5 rounded-[var(--v-radius)] hover:border-[#ff4d00]/20 transition-all duration-300 p-5 flex flex-col gap-3">
+    <div className="bg-[var(--v-scrim)] border border-[var(--v-line)] rounded-[var(--v-radius)] hover:border-[var(--v-accent)]/20 transition-all duration-300 p-5 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -120,7 +120,7 @@ function SindicatoCard({ s, onAtualizar }) {
             href={s.url_pdf}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 p-1.5 bg-white/5 border border-white/10 rounded-[var(--v-radius)] hover:border-[#ff4d00]/40 hover:bg-[var(--v-accent)]/10 transition-all"
+            className="shrink-0 p-1.5 bg-[var(--v-tint)] border border-[var(--v-line)] rounded-[var(--v-radius)] hover:border-[var(--v-accent)]/40 hover:bg-[rgb(var(--v-accent-rgb)_/_0.1)] transition-all"
             title="Abrir CCT (PDF)"
           >
             <ExternalLink size={12} className="text-[var(--v-text-muted)]" />
@@ -129,7 +129,7 @@ function SindicatoCard({ s, onAtualizar }) {
       </div>
 
       {/* Dados */}
-      <div className="bg-black/20 rounded-[var(--v-radius)] px-3 py-1">
+      <div className="bg-[var(--v-zebra)] rounded-[var(--v-radius)] px-3 py-1">
         <InfoRow label="Piso Salarial" valor={piso} />
         <InfoRow label="Data Base" valor={dataBase} />
         <InfoRow
@@ -151,7 +151,7 @@ function SindicatoCard({ s, onAtualizar }) {
           {dt && <span className="text-[9px] text-[var(--v-text-faint)]">{dt}</span>}
           <button
             onClick={() => onAtualizar()}
-            className="p-1.5 bg-white/5 border border-white/5 rounded-[var(--v-radius)] hover:border-[#ff4d00]/40 hover:text-[var(--v-accent)] text-[var(--v-text-faint)] transition-all"
+            className="p-1.5 bg-[var(--v-tint)] border border-[var(--v-line)] rounded-[var(--v-radius)] hover:border-[var(--v-accent)]/40 hover:text-[var(--v-accent)] text-[var(--v-text-faint)] transition-all"
             title="Forçar atualização"
           >
             <RefreshCw size={11} />
@@ -161,7 +161,7 @@ function SindicatoCard({ s, onAtualizar }) {
 
       {/* Erro inline */}
       {s.erro_msg && (
-        <p className="text-[9px] text-[var(--v-accent)]/60 border border-[#ff4d00]/10 bg-[var(--v-accent)]/5 px-2 py-1 rounded-[var(--v-radius)] leading-relaxed">
+        <p className="text-[9px] text-[rgb(var(--v-accent-rgb)_/_0.6)] border border-[var(--v-accent)]/10 bg-[rgb(var(--v-accent-rgb)_/_0.05)] px-2 py-1 rounded-[var(--v-radius)] leading-relaxed">
           {s.erro_msg}
         </p>
       )}
@@ -237,17 +237,17 @@ export function SindicatosView() {
           {/* Contadores */}
           <div className="flex gap-2 text-[9px] font-black uppercase tracking-widest">
             {ok > 0 && (
-              <span className="px-2 py-1 bg-[#34c759]/10 border border-[#34c759]/20 text-[var(--v-accent-3)] rounded-[var(--v-radius)]">
+              <span className="px-2 py-1 bg-[var(--v-ok)]/10 border border-[var(--v-ok)]/20 text-[var(--v-accent-3)] rounded-[var(--v-radius)]">
                 {ok} ok
               </span>
             )}
             {pendentes > 0 && (
-              <span className="px-2 py-1 bg-[#ffcc00]/10 border border-[#ffcc00]/20 text-[var(--v-accent-6)] rounded-[var(--v-radius)]">
+              <span className="px-2 py-1 bg-[var(--v-warn-hi)]/10 border border-[var(--v-warn-hi)]/20 text-[var(--v-accent-6)] rounded-[var(--v-radius)]">
                 {pendentes} buscando
               </span>
             )}
             {comErro > 0 && (
-              <span className="px-2 py-1 bg-[var(--v-accent)]/10 border border-[#ff4d00]/20 text-[var(--v-accent)] rounded-[var(--v-radius)]">
+              <span className="px-2 py-1 bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[var(--v-accent)]/20 text-[var(--v-accent)] rounded-[var(--v-radius)]">
                 {comErro} sem CCT
               </span>
             )}
@@ -255,7 +255,7 @@ export function SindicatosView() {
           <button
             onClick={handleAtualizar}
             disabled={atualizando}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded-[var(--v-radius)] hover:bg-white transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(255,77,0,0.3)]"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--v-accent)] text-[var(--v-text-inv)] text-[9px] font-black uppercase tracking-widest rounded-[var(--v-radius)] hover:bg-[var(--v-hover)] transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(255,77,0,0.3)]"
           >
             <RefreshCw size={12} className={atualizando ? 'animate-spin' : ''} />
             {atualizando ? 'Atualizando...' : 'Atualizar CCTs'}
@@ -265,7 +265,7 @@ export function SindicatosView() {
 
       {/* Erro global */}
       {erro && (
-        <div className="border border-[#ff4d00]/30 bg-[var(--v-accent)]/5 text-[var(--v-accent)] text-xs font-bold px-4 py-3 rounded-[var(--v-radius)] flex items-center gap-2">
+        <div className="border border-[var(--v-accent)]/30 bg-[rgb(var(--v-accent-rgb)_/_0.05)] text-[var(--v-accent)] text-xs font-bold px-4 py-3 rounded-[var(--v-radius)] flex items-center gap-2">
           <AlertTriangle size={14} />
           {erro}
         </div>
@@ -294,7 +294,7 @@ export function SindicatosView() {
             />
           ))}
           {sindicatos.length === 0 && (
-            <div className="col-span-full text-center py-20 text-[var(--v-text-faint)] uppercase tracking-widest text-xs border border-white/5 rounded-[var(--v-radius)]">
+            <div className="col-span-full text-center py-20 text-[var(--v-text-faint)] uppercase tracking-widest text-xs border border-[var(--v-line)] rounded-[var(--v-radius)]">
               Nenhum sindicato carregado ainda.
             </div>
           )}

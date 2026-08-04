@@ -6,17 +6,17 @@ const fmtKB    = (v) => v >= 1024 ? `${(v / 1024).toFixed(1)} MB` : `${v.toFixed
 
 // ── Cores por latência ────────────────────────────────────────────────────────
 const latencyColor = (ms) => {
-  if (!ms || ms < 200)  return '#34c759';
-  if (ms < 800)  return '#ffcc00';
-  if (ms < 2000) return '#ff9f0a';
-  return '#ff4d00';
+  if (!ms || ms < 200)  return 'var(--v-ok)';
+  if (ms < 800)  return 'var(--v-warn-hi)';
+  if (ms < 2000) return 'var(--v-warn)';
+  return 'var(--v-accent)';
 };
 
 const riskColor = (risk) => ({
-  safe_delete: '#34c759',
-  review:      '#ffcc00',
-  keep:        '#007aff',
-}[risk] || '#888');
+  safe_delete: 'var(--v-ok)',
+  review:      'var(--v-warn-hi)',
+  keep:        'var(--v-info)',
+}[risk] || 'var(--v-text-muted)');
 
 const riskLabel = (risk) => ({
   safe_delete: 'Lixo seguro',
@@ -74,10 +74,10 @@ function PerformancePanel({ data }) {
 
   return (
     <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--v-border)] bg-[#007aff]/5">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--v-border)] bg-[var(--v-info)]/5">
         <div className="flex items-center gap-2">
-          <Activity size={14} className="text-[#007aff]" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-[#007aff]">
+          <Activity size={14} className="text-[var(--v-info)]" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-info)]">
             Performance por Endpoint (P50/P95/P99)
           </span>
         </div>
@@ -86,7 +86,7 @@ function PerformancePanel({ data }) {
           {[1, 6, 24, 72].map(h => (
             <button key={h} onClick={() => setJanela(h)}
               className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest transition-all border ${
-                janela === h ? 'bg-[#007aff]/20 border-[#007aff]/50 text-[#007aff]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)]'
+                janela === h ? 'bg-[var(--v-info)]/20 border-[var(--v-info)]/50 text-[var(--v-info)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)]'
               }`}>{h}h</button>
           ))}
         </div>
@@ -111,7 +111,7 @@ function PerformancePanel({ data }) {
             </thead>
             <tbody>
               {endpoints.map((e, i) => (
-                <tr key={i} className="border-b border-[var(--v-bg)] hover:bg-[var(--v-hover)]/40 transition-colors">
+                <tr key={i} className="border-b border-[var(--v-bg)] hover:bg-[rgb(var(--v-hover-rgb)_/_0.4)] transition-colors">
                   <td className="p-2">
                     <div className="font-mono text-[var(--v-text-bold)] font-black text-[10px] truncate max-w-[280px]">{e.path}</div>
                     <div className="text-[8px] text-[var(--v-text-faint)]">{e.method}</div>
@@ -123,7 +123,7 @@ function PerformancePanel({ data }) {
                   <td className="p-2 text-center">
                     {e.n_errors > 0
                       ? <span className="text-[var(--v-accent)] font-black">{e.n_errors}</span>
-                      : <span className="text-[#333]">—</span>
+                      : <span className="text-[var(--v-text-ghost)]">—</span>
                     }
                   </td>
                 </tr>
@@ -220,7 +220,7 @@ function DiskPanel({ onRefresh }) {
   return (
     <div className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--v-border)] bg-[var(--v-accent)]/5 flex-wrap gap-2">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--v-border)] bg-[rgb(var(--v-accent-rgb)_/_0.05)] flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <HardDrive size={14} className="text-[var(--v-accent)]" />
           <span className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)]">
@@ -240,7 +240,7 @@ function DiskPanel({ onRefresh }) {
         {['all', 'safe_delete', 'review'].map(r => (
           <button key={r} onClick={() => setFilterRisk(r)}
             className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border transition-all ${
-              filterRisk === r ? 'bg-[var(--v-accent)]/20 border-[var(--v-accent)]/50 text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)]'
+              filterRisk === r ? 'bg-[rgb(var(--v-accent-rgb)_/_0.2)] border-[rgb(var(--v-accent-rgb)_/_0.5)] text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)]'
             }`}>
             {r === 'all' ? 'Todos' : riskLabel(r)}
           </button>
@@ -256,7 +256,7 @@ function DiskPanel({ onRefresh }) {
 
         <div className="flex items-center gap-2">
           <button onClick={selectAllSafe}
-            className="px-2 py-0.5 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-[8px] font-black uppercase tracking-widest text-[#34c759] hover:bg-[#34c759]/20 transition-all">
+            className="px-2 py-0.5 bg-[var(--v-ok)]/10 border border-[var(--v-ok)]/30 rounded text-[8px] font-black uppercase tracking-widest text-[var(--v-ok)] hover:bg-[var(--v-ok)]/20 transition-all">
             ✓ Selecionar Lixo Seguro ({filtered.filter(c => c.risk === 'safe_delete').length})
           </button>
           <button onClick={selectAll}
@@ -273,7 +273,7 @@ function DiskPanel({ onRefresh }) {
       {/* Lista */}
       <div className="overflow-auto max-h-[500px] custom-scrollbar">
         {filtered.length === 0 ? (
-          <div className="p-8 text-center text-[#34c759] text-[10px] font-black uppercase tracking-widest">
+          <div className="p-8 text-center text-[var(--v-ok)] text-[10px] font-black uppercase tracking-widest">
             <CheckCircle2 className="mx-auto mb-2" size={24} />
             Nenhum arquivo residual encontrado com esses filtros.
           </div>
@@ -299,7 +299,7 @@ function DiskPanel({ onRefresh }) {
                 <tr key={i}
                   onClick={() => toggleSelect(c.path)}
                   className={`border-b border-[var(--v-bg)] cursor-pointer transition-colors ${
-                    selected.has(c.path) ? 'bg-[var(--v-accent)]/10' : 'hover:bg-[var(--v-hover)]/40'
+                    selected.has(c.path) ? 'bg-[rgb(var(--v-accent-rgb)_/_0.1)]' : 'hover:bg-[rgb(var(--v-hover-rgb)_/_0.4)]'
                   }`}>
                   <td className="p-2">
                     <input type="checkbox" checked={selected.has(c.path)} onChange={() => {}}
@@ -333,7 +333,7 @@ function DiskPanel({ onRefresh }) {
                 {selected.size} arquivo(s) selecionado(s) — {fmtKB(totalSelecionado)}
               </span>
               <button onClick={moverParaQuarentena} disabled={quarentando}
-                className="flex items-center gap-2 px-4 py-2 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/40 rounded text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[var(--v-accent)]/20 transition-all disabled:opacity-40">
+                className="flex items-center gap-2 px-4 py-2 bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[rgb(var(--v-accent-rgb)_/_0.4)] rounded text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[rgb(var(--v-accent-rgb)_/_0.2)] transition-all disabled:opacity-40">
                 {quarentando ? <RefreshCw size={10} className="animate-spin" /> : <MoveRight size={10} />}
                 {quarentando ? 'Movendo...' : 'Mover para Quarentena'}
               </button>
@@ -341,8 +341,8 @@ function DiskPanel({ onRefresh }) {
           )}
           {result && (
             <div className="flex items-center gap-2 text-[10px] font-bold">
-              <CheckCircle2 size={12} className="text-[#34c759]" />
-              <span className="text-[#34c759]">{result.movidos} arquivo(s) movidos para quarentena.</span>
+              <CheckCircle2 size={12} className="text-[var(--v-ok)]" />
+              <span className="text-[var(--v-ok)]">{result.movidos} arquivo(s) movidos para quarentena.</span>
               {result.erros > 0 && <span className="text-[var(--v-accent)]">{result.erros} erro(s).</span>}
               <span className="text-[var(--v-text-faint)] text-[8px]">📁 {result.quarentena}</span>
             </div>
@@ -402,15 +402,15 @@ export const JanitorView = () => {
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <button onClick={fetchReport} disabled={loading}
-          className="px-5 py-2 bg-[var(--v-accent)] text-black text-[9px] font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
+          className="px-5 py-2 bg-[var(--v-accent)] text-[var(--v-text-inv)] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[var(--v-hover)] transition-all flex items-center gap-2 disabled:opacity-40">
           {loading ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
           {loading ? 'Atualizando...' : 'Atualizar'}
         </button>
         <button onClick={() => setAutoRefresh(a => !a)}
           className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded border flex items-center gap-2 transition-all ${
             autoRefresh
-              ? 'bg-[#34c759]/20 border-[#34c759]/50 text-[#34c759]'
-              : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#34c759]'
+              ? 'bg-[var(--v-ok)]/20 border-[var(--v-ok)]/50 text-[var(--v-ok)]'
+              : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-ok)]'
           }`}>
           <Zap size={12} className={autoRefresh ? 'animate-pulse' : ''} />
           {autoRefresh ? 'Auto-refresh 30s ativo' : 'Auto-refresh'}
@@ -430,7 +430,7 @@ export const JanitorView = () => {
             label="Endpoints Monitorados"
             value={perf?.total_paths || 0}
             sub={`Janela: ${perf?.janela_horas}h`}
-            color="#007aff"
+            color="var(--v-info)"
           />
           <KpiCard
             icon={<Zap size={16} />}
@@ -444,14 +444,14 @@ export const JanitorView = () => {
             label="Cache Hit Rate"
             value={`${cache?.hit_rate_pct?.toFixed(0) || 0}%`}
             sub={`${cache?.valid_entries || 0} entradas válidas`}
-            color={cache?.hit_rate_pct > 60 ? '#34c759' : '#ffcc00'}
+            color={cache?.hit_rate_pct > 60 ? 'var(--v-ok)' : 'var(--v-warn-hi)'}
           />
           <KpiCard
             icon={<HardDrive size={16} />}
             label="N+1 Queries Fixadas"
             value="3 / 14"
             sub="Endpoint venda cadastro"
-            color="#34c759"
+            color="var(--v-ok)"
           />
         </div>
       )}

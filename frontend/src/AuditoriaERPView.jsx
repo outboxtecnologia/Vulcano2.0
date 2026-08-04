@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
+import { useSearchParamState } from './hooks/useSearchParamState';
+
 import * as XLSX from 'xlsx';
 
 import {
@@ -279,11 +281,11 @@ function Status({ diff }) {
 
 function corDiff(diff) {
 
-  if (abs(diff) < DIVERGENCIA_CORTE) return '#34c759';
+  if (abs(diff) < DIVERGENCIA_CORTE) return 'var(--v-ok)';
 
-  if (abs(diff) < 5000)             return '#ffcc00';
+  if (abs(diff) < 5000)             return 'var(--v-warn-hi)';
 
-  return '#ff4d00';
+  return 'var(--v-accent)';
 
 }
 
@@ -295,7 +297,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
   if (itens.length === 0)
 
-    return <p className="px-4 py-2 text-sm font-bold text-[#333] uppercase italic">{semLabel}</p>;
+    return <p className="px-4 py-2 text-sm font-bold text-[var(--v-text-ghost)] uppercase italic">{semLabel}</p>;
 
 
 
@@ -339,7 +341,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
                 <div>{d.data}</div>
 
-                {d.origem && <span className={`text-[10px] px-1 py-0 rounded ${d.origem === 'VU' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)] border border-[#a259ff]/30' : 'bg-[var(--v-accent)]/20 text-[var(--v-accent)] border border-[var(--v-accent)]/30'}`}>{d.origem}</span>}
+                {d.origem && <span className={`text-[10px] px-1 py-0 rounded ${d.origem === 'VU' ? 'bg-[var(--v-src-vu1)]/20 text-[var(--v-accent-5)] border border-[var(--v-src-vu1)]/30' : 'bg-[rgb(var(--v-accent-rgb)_/_0.2)] text-[var(--v-accent)] border border-[rgb(var(--v-accent-rgb)_/_0.3)]'}`}>{d.origem}</span>}
 
               </td>
 
@@ -397,7 +399,7 @@ function TabelaLancs({ itens, corNaturezaD, corNaturezaC, semLabel, showTotal = 
 
             <td className="px-2 py-1.5 text-right font-mono font-black text-sm whitespace-nowrap"
 
-                style={{ color: Math.abs(liquido) < 0.01 ? '#34c759' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
+                style={{ color: Math.abs(liquido) < 0.01 ? 'var(--v-ok)' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
 
               {fmt(liquido)}
 
@@ -572,41 +574,41 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
   };
 
   const contentToRender = isFullScreen ? (
-     <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col w-screen h-screen overflow-hidden font-mono select-none">
+     <div className="fixed inset-0 bg-[var(--v-deep)] flex flex-col w-screen h-screen overflow-hidden font-mono select-none">
          {/* HEADER MOCKUP STYLE */}
-         <div className="flex flex-col border-b border-[#222]">
+         <div className="flex flex-col border-b border-[var(--v-line)]">
              <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
-                   <div className="px-2 py-1 bg-[#1a1412] border border-[#331c14] rounded text-[#ff6b1a] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#a8440d] mr-1">APTOS</span> {allKeys.length}</div>
-                   <div className="px-2 py-1 bg-[#1a1412] border border-[#331c14] rounded text-[#ff6b1a] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#a8440d] mr-1">DIVERGENTES</span> {allKeys.filter(k => Math.abs(mapAptos[k].totalQuestor - mapAptos[k].totalVulcano2) > 0.5).length}</div>
-                   <div className="px-2 py-1 bg-[#121c15] border border-[#14331e] rounded text-[#22c55e] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#147a38] mr-1">BATEU</span> {allKeys.filter(k => Math.abs(mapAptos[k].totalQuestor - mapAptos[k].totalVulcano2) <= 0.5).length}</div>
-                   <div className="px-2 py-1 bg-[#151515] border border-[#333] rounded text-[#888] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#444] mr-1">LANÇAMENTOS</span> {allKeys.reduce((a,c) => a + mapAptos[c].questor.length + mapAptos[c].vulcano1.length + mapAptos[c].vulcano2.length, 0)}</div>
+                   <div className="px-2 py-1 bg-[var(--v-card)] border border-[#331c14] rounded text-[var(--v-accent)] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#a8440d] mr-1">APTOS</span> {allKeys.length}</div>
+                   <div className="px-2 py-1 bg-[var(--v-card)] border border-[#331c14] rounded text-[var(--v-accent)] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#a8440d] mr-1">DIVERGENTES</span> {allKeys.filter(k => Math.abs(mapAptos[k].totalQuestor - mapAptos[k].totalVulcano2) > 0.5).length}</div>
+                   <div className="px-2 py-1 bg-[#121c15] border border-[#14331e] rounded text-[var(--v-ok)] text-[10px] font-mono tracking-widest leading-none"><span className="text-[#147a38] mr-1">BATEU</span> {allKeys.filter(k => Math.abs(mapAptos[k].totalQuestor - mapAptos[k].totalVulcano2) <= 0.5).length}</div>
+                   <div className="px-2 py-1 bg-[var(--v-bg)] border border-[var(--v-border)] rounded text-[var(--v-text-muted)] text-[10px] font-mono tracking-widest leading-none"><span className="text-[var(--v-text-ghost)] mr-1">LANÇAMENTOS</span> {allKeys.reduce((a,c) => a + mapAptos[c].questor.length + mapAptos[c].vulcano1.length + mapAptos[c].vulcano2.length, 0)}</div>
                 </div>
                 <div className="flex items-center gap-4">
-                   <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-white transition-colors">
+                   <label className="flex items-center gap-2 cursor-pointer text-[var(--v-text-muted)] text-[10px] font-mono uppercase tracking-widest hover:text-[var(--v-text-bold)] transition-colors">
                       <input type="checkbox" checked={soDivergentes} onChange={e => setSoDivergentes(e.target.checked)} className="accent-[#ff6b1a] w-3 h-3" />
                       SÓ DIVERGENTES
                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-[#ffcc00] transition-colors">
+                    <label className="flex items-center gap-2 cursor-pointer text-[var(--v-text-muted)] text-[10px] font-mono uppercase tracking-widest hover:text-[var(--v-warn-hi)] transition-colors">
                        <input type="checkbox" checked={fontesFaltantes} onChange={e => setFontesFaltantes(e.target.checked)} className="accent-[#ffcc00] w-3 h-3" />
                        FONTES FALTANTES
                     </label>
                    <div className="relative">
-                      <input type="text" placeholder="⌕ Filtrar APTO..." value={filtroApto} onChange={e => setFiltroApto(e.target.value)} className="w-[180px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[#ff6b1a] text-white text-[10px] font-mono uppercase px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
+                      <input type="text" placeholder="⌕ Filtrar APTO..." value={filtroApto} onChange={e => setFiltroApto(e.target.value)} className="w-[180px] bg-[var(--v-bg)] border border-[var(--v-border)] hover:border-[#555] focus:border-[#ff6b1a] text-[var(--v-text-bold)] text-[10px] font-mono uppercase px-3 py-1.5 rounded outline-none placeholder-[#444] transition-colors" />
                    </div>
-                   <button onClick={() => setIsFullScreen(false)} className="w-7 h-7 flex items-center justify-center bg-[#1a1a1a] hover:bg-white text-[#888] hover:text-black border border-[#333] rounded transition-colors" title="Fechar Kanban (Esc)">
+                   <button onClick={() => setIsFullScreen(false)} className="w-7 h-7 flex items-center justify-center bg-[var(--v-card)] hover:bg-[var(--v-hover)] text-[var(--v-text-muted)] hover:text-[var(--v-text-inv)] border border-[var(--v-border)] rounded transition-colors" title="Fechar Kanban (Esc)">
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 1L1 11M1 1L11 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                    </button>
                 </div>
              </div>
              <div className="flex items-center justify-between px-4 pb-3">
-                <div className="text-[#666] text-[10px] font-mono tracking-widest leading-none">
-                   <span className="text-[#aaa] mr-2">DICA</span> arraste um card de lançamentos para outro APTO ou banco - o total recalcula em tempo real.
+                <div className="text-[var(--v-text-muted)] text-[10px] font-mono tracking-widest leading-none">
+                   <span className="text-[var(--v-text-muted)] mr-2">DICA</span> arraste um card de lançamentos para outro APTO ou banco - o total recalcula em tempo real.
                 </div>
                 <div className="flex items-center gap-4 text-[10px] font-mono tracking-widest leading-none">
-                   <span className="flex items-center gap-1.5"><span className="text-[#22c55e]">■</span> <span className="text-[#888]">QUESTOR</span></span>
-                   <span className="flex items-center gap-1.5"><span className="text-[#9945ff]">■</span> <span className="text-[#888]">VU 1.0</span></span>
-                   <span className="flex items-center gap-1.5"><span className="text-[#ffb020]">■</span> <span className="text-[#888]">VU 2.0</span></span>
+                   <span className="flex items-center gap-1.5"><span className="text-[var(--v-ok)]">■</span> <span className="text-[var(--v-text-muted)]">QUESTOR</span></span>
+                   <span className="flex items-center gap-1.5"><span className="text-[var(--v-src-vu1)]">■</span> <span className="text-[var(--v-text-muted)]">VU 1.0</span></span>
+                   <span className="flex items-center gap-1.5"><span className="text-[var(--v-warn)]">■</span> <span className="text-[var(--v-text-muted)]">VU 2.0</span></span>
                 </div>
              </div>
          </div>
@@ -616,14 +618,14 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
            ref={boardScrollRef}
            onDragOver={handleContainerDragOver}
            onDragLeave={() => stopAutoScroll()}
-           className="flex-1 overflow-x-auto overflow-y-hidden flex gap-3 p-4 items-start bg-[#0a0a0a] custom-scrollbar">
+           className="flex-1 overflow-x-auto overflow-y-hidden flex gap-3 p-4 items-start bg-[var(--v-deep)] custom-scrollbar">
              {keys.map(k => {
                 const d = mapAptos[k];
                 const hasDiff = Math.abs(d.totalQuestor - d.totalVulcano2) > 0.5;
                 const isDragOver = dragOverApto === k;
 
                 const renderCard = (x, colorKey) => {
-                    const badgeColor = colorKey === 'Q' ? '#3b82f6' : colorKey === 'V1' ? '#9945ff' : '#ff4500';
+                    const badgeColor = colorKey === 'Q' ? 'var(--v-src-questor)' : colorKey === 'V1' ? 'var(--v-src-vu1)' : 'var(--v-src-vu2)';
                     const bgVar = colorKey === 'Q' ? 'bg-[#121c2d]' : colorKey === 'V1' ? 'bg-[#181120]' : 'bg-[#26120e]';
                     const borderVar = colorKey === 'Q' ? 'border-[#1a3a66]' : colorKey === 'V1' ? 'border-[#33114d]' : 'border-[#662211]';
                     return (
@@ -636,10 +638,10 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                           style={{ cursor: x.chave ? 'grab' : 'default', borderLeft: `2px solid ${badgeColor}` }}
                         >
                            <div className="flex items-center justify-between mb-1.5 leading-none">
-                               <span className="text-white font-mono text-[10px] font-bold flex items-baseline gap-1">{fmt(x.valor)} <span className={`text-[8px] font-black ${x.natureza === 'D' ? 'text-[#34c759]' : x.natureza === 'C' ? 'text-[#ff4d00]' : 'text-[#888]'}`}>{x.natureza}</span></span>
-                               <span className="text-[#666] font-mono text-[8px]">{x.data}</span>
+                               <span className="text-[var(--v-text-bold)] font-mono text-[10px] font-bold flex items-baseline gap-1">{fmt(x.valor)} <span className={`text-[8px] font-black ${x.natureza === 'D' ? 'text-[var(--v-ok)]' : x.natureza === 'C' ? 'text-[var(--v-accent)]' : 'text-[var(--v-text-muted)]'}`}>{x.natureza}</span></span>
+                               <span className="text-[var(--v-text-muted)] font-mono text-[8px]">{x.data}</span>
                            </div>
-                           <div className="text-[#999] font-mono text-[9px] leading-tight truncate uppercase" title={x.historico || x.logica || "-"}>
+                           <div className="text-[var(--v-text-muted)] font-mono text-[9px] leading-tight truncate uppercase" title={x.historico || x.logica || "-"}>
                                {x.historico || x.logica || "-"}
                            </div>
                         </div>
@@ -667,41 +669,41 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                            }).catch(err => console.error("Erro salvando memoria arraste:", err));
                         } catch(err) { console.error(err); }
                      }}
-                     className={`w-[320px] flex-shrink-0 flex flex-col bg-[#111] border rounded overflow-hidden transition-colors duration-150 h-[calc(100vh-140px)] ${isDragOver ? 'border-[#ff6b1a] shadow-[0_0_10px_rgba(255,107,26,0.2)]' : 'border-[#222]'}`}
+                     className={`w-[320px] flex-shrink-0 flex flex-col bg-[var(--v-bg)] border rounded overflow-hidden transition-colors duration-150 h-[calc(100vh-140px)] ${isDragOver ? 'border-[var(--v-accent)] shadow-[0_0_10px_rgba(255,107,26,0.2)]' : 'border-[var(--v-line)]'}`}
                    >
                        {/* Column Head */}
                        <div className={`px-3 py-2 flex items-center justify-between border-t-2 ${hasDiff ? 'border-t-[#d32f2f] bg-[#171111]' : 'border-t-[#22c55e] bg-[#111713]'}`}>
                           <div className="flex items-baseline gap-2">
-                             <span className="text-[#555] text-[10px] font-mono tracking-widest">APTO</span>
-                             <span className="text-white text-lg font-black leading-none">{k.replace(/\D/g, '') || k}</span>
+                             <span className="text-[var(--v-text-faint)] text-[10px] font-mono tracking-widest">APTO</span>
+                             <span className="text-[var(--v-text-bold)] text-lg font-black leading-none">{k.replace(/\D/g, '') || k}</span>
                           </div>
                           <div className="flex items-center gap-2">
                              <button
                                onClick={(e) => { e.stopPropagation(); setDetalheApto(k); }}
-                               className="px-2 py-0.5 bg-[#1a1412] border border-[#ff6b1a]/50 hover:border-[#ff6b1a] hover:bg-[#ff6b1a]/10 text-[#ff6b1a] text-[8px] font-black tracking-widest uppercase rounded transition-colors leading-none"
+                               className="px-2 py-0.5 bg-[var(--v-card)] border border-[var(--v-accent)]/50 hover:border-[var(--v-accent)] hover:bg-[var(--v-accent)]/10 text-[var(--v-accent)] text-[8px] font-black tracking-widest uppercase rounded transition-colors leading-none"
                                title="Ver racional da unidade"
                              >
                                RACIONAL
                              </button>
-                          <div className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest leading-none ${hasDiff ? 'bg-[#d32f2f]/20 text-[#d32f2f]' : 'bg-[#22c55e]/20 text-[#22c55e]'}`}>
+                          <div className={`px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest leading-none ${hasDiff ? 'bg-[var(--v-err)]/20 text-[var(--v-err)]' : 'bg-[var(--v-ok)]/20 text-[var(--v-ok)]'}`}>
                              {hasDiff ? 'DIVERGENTE' : 'BATEU'}
                           </div>
                           </div>
                        </div>
                        
                        {/* Totals Sub-head */}
-                       <div className="grid grid-cols-3 divide-x divide-[#222] border-b border-[#222] shrink-0">
+                       <div className="grid grid-cols-3 divide-x divide-[#222] border-b border-[var(--v-line)] shrink-0">
                           <div className="px-2 py-2 flex flex-col gap-1 text-center">
-                             <span className="text-[#888] text-[8px] font-mono uppercase tracking-widest leading-none">Questor</span>
-                             <span className="text-[#3b82f6] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalQuestor)}</span>
+                             <span className="text-[var(--v-text-muted)] text-[8px] font-mono uppercase tracking-widest leading-none">Questor</span>
+                             <span className="text-[var(--v-src-questor)] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalQuestor)}</span>
                           </div>
                           <div className="px-2 py-2 flex flex-col gap-1 text-center">
-                             <span className="text-[#888] text-[8px] font-mono uppercase tracking-widest leading-none">VU 1.0</span>
-                             <span className="text-[#9945ff] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalVulcano1)}</span>
+                             <span className="text-[var(--v-text-muted)] text-[8px] font-mono uppercase tracking-widest leading-none">VU 1.0</span>
+                             <span className="text-[var(--v-src-vu1)] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalVulcano1)}</span>
                           </div>
                           <div className="px-2 py-2 flex flex-col gap-1 text-center">
-                             <span className="text-[#888] text-[8px] font-mono uppercase tracking-widest leading-none">VU 2.0</span>
-                             <span className="text-[#ff4500] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalVulcano2)}</span>
+                             <span className="text-[var(--v-text-muted)] text-[8px] font-mono uppercase tracking-widest leading-none">VU 2.0</span>
+                             <span className="text-[var(--v-src-vu2)] text-[10px] font-bold font-mono leading-none">{fmtK(d.totalVulcano2)}</span>
                           </div>
                        </div>
 
@@ -709,13 +711,13 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col custom-scrollbar">
                           {d.questor.length > 0 && (
                             <div className="flex flex-col">
-                               <div className="mb-2 pb-1 border-b border-[#333] flex justify-between items-center bg-[#111] sticky top-0 z-10 px-1 py-1 pt-2 -mx-1">
+                               <div className="mb-2 pb-1 border-b border-[var(--v-border)] flex justify-between items-center bg-[var(--v-bg)] sticky top-0 z-10 px-1 py-1 pt-2 -mx-1">
                                    <div className="flex items-center gap-2">
-                                       <span className="text-[#3b82f6] text-[8px] leading-none mb-0.5">■</span>
-                                       <span className="text-[#3b82f6] font-mono text-[9px] font-bold tracking-widest leading-none">QUESTOR</span>
-                                       <span className="bg-[#1a3a66] text-[#3b82f6] text-[9px] px-1 rounded leading-none">{d.questor.length}</span>
+                                       <span className="text-[var(--v-src-questor)] text-[8px] leading-none mb-0.5">■</span>
+                                       <span className="text-[var(--v-src-questor)] font-mono text-[9px] font-bold tracking-widest leading-none">QUESTOR</span>
+                                       <span className="bg-[#1a3a66] text-[var(--v-src-questor)] text-[9px] px-1 rounded leading-none">{d.questor.length}</span>
                                    </div>
-                                   <span className="text-[#888] text-[9px] font-mono leading-none">{fmtK(d.totalQuestor)}</span>
+                                   <span className="text-[var(--v-text-muted)] text-[9px] font-mono leading-none">{fmtK(d.totalQuestor)}</span>
                                </div>
                                <div className="p-2 flex flex-col">
                                    {d.questor.map(x => renderCard(x, 'Q'))}
@@ -724,13 +726,13 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                           )}
                           {d.vulcano1.length > 0 && (
                             <div className="flex flex-col">
-                               <div className="px-3 py-1.5 bg-[#17141a] border-b border-[#222] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
+                               <div className="px-3 py-1.5 bg-[#17141a] border-b border-[var(--v-line)] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
                                    <div className="flex items-center gap-2">
-                                       <span className="text-[#9945ff] text-[8px] leading-none mb-0.5">■</span>
-                                       <span className="text-[#9945ff] font-mono text-[9px] font-bold tracking-widest leading-none">VU 1.0</span>
-                                       <span className="bg-[#331a4d] text-[#9945ff] text-[9px] px-1 rounded leading-none">{d.vulcano1.length}</span>
+                                       <span className="text-[var(--v-src-vu1)] text-[8px] leading-none mb-0.5">■</span>
+                                       <span className="text-[var(--v-src-vu1)] font-mono text-[9px] font-bold tracking-widest leading-none">VU 1.0</span>
+                                       <span className="bg-[#331a4d] text-[var(--v-src-vu1)] text-[9px] px-1 rounded leading-none">{d.vulcano1.length}</span>
                                    </div>
-                                   <span className="text-[#888] text-[9px] font-mono leading-none">{fmtK(d.totalVulcano1)}</span>
+                                   <span className="text-[var(--v-text-muted)] text-[9px] font-mono leading-none">{fmtK(d.totalVulcano1)}</span>
                                </div>
                                <div className="p-2 flex flex-col">
                                    {d.vulcano1.map(x => renderCard(x, 'V1'))}
@@ -739,13 +741,13 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                           )}
                           {d.vulcano2.length > 0 && (
                             <div className="flex flex-col">
-                               <div className="px-3 py-1.5 bg-[#1a1814] border-b border-[#222] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
+                               <div className="px-3 py-1.5 bg-[#1a1814] border-b border-[var(--v-line)] flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
                                    <div className="flex items-center gap-2">
-                                       <span className="text-[#ff4500] text-[8px] leading-none mb-0.5">■</span>
-                                       <span className="text-[#ff4500] font-mono text-[9px] font-bold tracking-widest leading-none">VU 2.0</span>
-                                       <span className="bg-[#662211] text-[#ff4500] text-[9px] px-1 rounded leading-none">{d.vulcano2.length}</span>
+                                       <span className="text-[var(--v-src-vu2)] text-[8px] leading-none mb-0.5">■</span>
+                                       <span className="text-[var(--v-src-vu2)] font-mono text-[9px] font-bold tracking-widest leading-none">VU 2.0</span>
+                                       <span className="bg-[#662211] text-[var(--v-src-vu2)] text-[9px] px-1 rounded leading-none">{d.vulcano2.length}</span>
                                    </div>
-                                   <span className="text-[#888] text-[9px] font-mono leading-none">{fmtK(d.totalVulcano2)}</span>
+                                   <span className="text-[var(--v-text-muted)] text-[9px] font-mono leading-none">{fmtK(d.totalVulcano2)}</span>
                                </div>
                                <div className="p-2 flex flex-col">
                                    {d.vulcano2.map(x => renderCard(x, 'V2'))}
@@ -759,19 +761,19 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
          </div>
      </div>
   ) : (
-    <div className="flex flex-col gap-3 p-3 bg-[#0a0a0a]">
+    <div className="flex flex-col gap-3 p-3 bg-[var(--v-deep)]">
      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-white transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer text-[var(--v-text-muted)] text-[10px] font-mono uppercase tracking-widest hover:text-[var(--v-text-bold)] transition-colors">
              <input type="checkbox" checked={soDivergentes} onChange={e => setSoDivergentes(e.target.checked)} className="accent-[#ff6b1a] w-3 h-3" />
              SÓ DIVERGENTES
           </label>
-          <label className="flex items-center gap-2 cursor-pointer text-[#888] text-[10px] font-mono uppercase tracking-widest hover:text-[#ffcc00] transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer text-[var(--v-text-muted)] text-[10px] font-mono uppercase tracking-widest hover:text-[var(--v-warn-hi)] transition-colors">
              <input type="checkbox" checked={fontesFaltantes} onChange={e => setFontesFaltantes(e.target.checked)} className="accent-[#ffcc00] w-3 h-3" />
              FONTES FALTANTES
           </label>
         </div>
-        <button onClick={() => setIsFullScreen(true)} className="px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#ff6b1a]/20 border border-[#333] hover:border-[#ff6b1a] text-[#ff6b1a] text-[11px] font-mono font-bold uppercase tracking-widest transition-colors flex items-center gap-2">
+        <button onClick={() => setIsFullScreen(true)} className="px-3 py-1.5 bg-[var(--v-card)] hover:bg-[var(--v-accent)]/20 border border-[var(--v-border)] hover:border-[var(--v-accent)] text-[var(--v-accent)] text-[11px] font-mono font-bold uppercase tracking-widest transition-colors flex items-center gap-2">
            ⤢ ATIVAR KANBAN E FILTROS DINÂMICOS
         </button>
      </div>
@@ -805,11 +807,11 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                   }}
                   style={{
                      transition: 'border-color 0.1s linear',
-                     borderColor: isDragOver ? '#ff6b1a' : undefined
+                     borderColor: isDragOver ? 'var(--v-accent)' : undefined
                   }}
                   className="bg-[var(--v-deep)] border border-[var(--v-border)] shadow-md rounded-[var(--v-radius)] overflow-hidden">
-                 <div className={`flex items-center justify-between px-3 py-2 bg-[#151515] border-b border-[var(--v-border)] ${isDragOver ? 'bg-[#ff6b1a]/10' : ''}`}>
-                   <div className="flex items-center gap-3"><span className="font-black text-[12px] text-white tracking-widest uppercase">{k.replace('_', ' ')}</span> <button onClick={() => setDetalheApto(k)} className="px-1.5 py-0.5 rounded bg-[#1f1a11] border border-[#ff6b1a] text-[#ff6b1a] hover:bg-[#ff6b1a] hover:text-white text-[9px] font-mono tracking-widest transition-colors font-bold z-10 cursor-pointer">INFO</button></div>
+                 <div className={`flex items-center justify-between px-3 py-2 bg-[var(--v-bg)] border-b border-[var(--v-border)] ${isDragOver ? 'bg-[var(--v-accent)]/10' : ''}`}>
+                   <div className="flex items-center gap-3"><span className="font-black text-[12px] text-[var(--v-text-bold)] tracking-widest uppercase">{k.replace('_', ' ')}</span> <button onClick={() => setDetalheApto(k)} className="px-1.5 py-0.5 rounded bg-[#1f1a11] border border-[var(--v-accent)] text-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-[var(--v-text-bold)] text-[9px] font-mono tracking-widest transition-colors font-bold z-10 cursor-pointer">INFO</button></div>
                    
                    <div className="flex items-center gap-4">
                       <div className="text-xs font-mono">
@@ -822,18 +824,18 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                       </div>
                       
                       {hasDiffVU2 ? (
-                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#ff4d00]/20 text-[#ff4d00]">Divergente</span>
+                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[var(--v-accent)]/20 text-[var(--v-accent)]">Divergente</span>
                       ) : (
-                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[#3b82f6]/20 text-[#3b82f6]">Bateu</span>
+                         <span className="px-1.5 py-0.5 rounded text-xs font-black uppercase tracking-widest bg-[var(--v-src-questor)]/20 text-[var(--v-src-questor)]">Bateu</span>
                       )}
                    </div>
                  </div>
 
                  <div className="grid grid-cols-3 divide-x divide-[var(--v-border)]">
                    <div className="p-2">
-                     <div className="text-[9px] font-black uppercase tracking-widest text-[#3b82f6] mb-1.5 px-1 text-center">Questor ({d.questor.length})</div>
+                     <div className="text-[9px] font-black uppercase tracking-widest text-[var(--v-src-questor)] mb-1.5 px-1 text-center">Questor ({d.questor.length})</div>
                      <div className="flex flex-col gap-1.5">
-                       {d.questor.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                       {d.questor.length === 0 ? <span className="text-[var(--v-text-ghost)] italic text-center text-[10px] py-1">vazio</span> : 
                         d.questor.map((x,i) => (
                          <div 
                            key={i}
@@ -841,9 +843,9 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                            onDragStart={(e) => handleDragStart(e, x, "QUESTOR")}
                            onDragEnd={handleGlobalDragEnd}
                            style={{ cursor: x.chave ? 'grab' : 'default' }}
-                           className="flex flex-col border border-[var(--v-border)] bg-[#111] p-1.5 rounded hover:bg-[#1a1a1a]">
+                           className="flex flex-col border border-[var(--v-border)] bg-[var(--v-bg)] p-1.5 rounded hover:bg-[var(--v-hover)]">
                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs font-mono text-white">{fmt(x.valor)} {x.natureza}</span>
+                              <span className="text-xs font-mono text-[var(--v-text-bold)]">{fmt(x.valor)} {x.natureza}</span>
                               <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
                            </div>
                            <span className="text-xs font-mono text-[var(--v-text-muted)] truncate uppercase" title={x.historico}>{x.historico}</span>
@@ -853,9 +855,9 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                    </div>
                    
                    <div className="p-2">
-                     <div className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-1.5 px-1 text-center">VU 1.0 ({d.vulcano1.length})</div>
+                     <div className="text-[9px] font-black uppercase tracking-widest text-[var(--v-src-vu1)] mb-1.5 px-1 text-center">VU 1.0 ({d.vulcano1.length})</div>
                      <div className="flex flex-col gap-1.5">
-                       {d.vulcano1.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                       {d.vulcano1.length === 0 ? <span className="text-[var(--v-text-ghost)] italic text-center text-[10px] py-1">vazio</span> : 
                         d.vulcano1.map((x,i) => (
                          <div 
                            key={i}
@@ -863,21 +865,21 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                            onDragStart={(e) => handleDragStart(e, x, "VU")}
                            onDragEnd={handleGlobalDragEnd}
                            style={{ cursor: x.chave ? 'grab' : 'default' }}
-                           className="flex flex-col border border-[#a259ff]/20 bg-[#111] p-1.5 rounded hover:bg-[#1a1a1a]">
+                           className="flex flex-col border border-[var(--v-src-vu1)]/20 bg-[var(--v-bg)] p-1.5 rounded hover:bg-[var(--v-hover)]">
                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs font-mono text-white">{fmt(x.valor)} {x.natureza}</span>
+                              <span className="text-xs font-mono text-[var(--v-text-bold)]">{fmt(x.valor)} {x.natureza}</span>
                               <span className="text-[10px] text-[var(--v-text-faint)]">{x.data}</span>
                            </div>
-                           <span className="text-xs font-mono text-[#a259ff]/70 truncate uppercase" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
+                           <span className="text-xs font-mono text-[var(--v-src-vu1)]/70 truncate uppercase" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
                          </div>
                        ))}
                      </div>
                    </div>
 
-                   <div className="p-2 bg-[#ff4500]/5">
-                     <div className="text-[9px] font-black uppercase tracking-widest text-[#ff4500] mb-1.5 px-1 text-center">VU 2.0 ({d.vulcano2.length})</div>
+                   <div className="p-2 bg-[var(--v-src-vu2)]/5">
+                     <div className="text-[9px] font-black uppercase tracking-widest text-[var(--v-src-vu2)] mb-1.5 px-1 text-center">VU 2.0 ({d.vulcano2.length})</div>
                      <div className="flex flex-col gap-1.5">
-                       {d.vulcano2.length === 0 ? <span className="text-[#333] italic text-center text-[10px] py-1">vazio</span> : 
+                       {d.vulcano2.length === 0 ? <span className="text-[var(--v-text-ghost)] italic text-center text-[10px] py-1">vazio</span> : 
                         d.vulcano2.map((x,i) => (
                          <div 
                            key={i}
@@ -885,12 +887,12 @@ function TabelaMapaComparativa({ questor, vulcano1, vulcano2, dashboardMeta, emp
                            onDragStart={(e) => handleDragStart(e, x, "VU")}
                            onDragEnd={handleGlobalDragEnd}
                            style={{ cursor: x.chave ? 'grab' : 'default' }}
-                           className="flex flex-col border border-[#ff4500]/30 bg-[#111] p-1.5 rounded hover:bg-[#1a1a1a]">
+                           className="flex flex-col border border-[var(--v-src-vu2)]/30 bg-[var(--v-bg)] p-1.5 rounded hover:bg-[var(--v-hover)]">
                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs font-mono text-white">{fmt(x.valor)} {x.natureza}</span>
-                              <span className="text-[10px] text-[#34c759]/70">{x.data}</span>
+                              <span className="text-xs font-mono text-[var(--v-text-bold)]">{fmt(x.valor)} {x.natureza}</span>
+                              <span className="text-[10px] text-[var(--v-ok)]/70">{x.data}</span>
                            </div>
-                           <span className="text-xs font-mono text-[#34c759] truncate uppercase" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
+                           <span className="text-xs font-mono text-[var(--v-ok)] truncate uppercase" title={(x.historico || x.logica || "-")}>{(x.historico || x.logica || "-")}</span>
                          </div>
                        ))}
                      </div>
@@ -943,7 +945,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
   if (safeItens.length === 0) {
 
-    return <p className="px-4 py-3 text-sm font-bold text-[#333] uppercase italic">Sem lançamentos</p>;
+    return <p className="px-4 py-3 text-sm font-bold text-[var(--v-text-ghost)] uppercase italic">Sem lançamentos</p>;
 
   }
 
@@ -1023,7 +1025,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
         <span className="text-xs font-mono font-black"
 
-          style={{ color: Math.abs(liquido) < 0.01 ? '#34c759' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
+          style={{ color: Math.abs(liquido) < 0.01 ? 'var(--v-ok)' : liquido > 0 ? corNaturezaD : corNaturezaC }}>
 
           Líq. {fmt(liquido)}
 
@@ -1051,7 +1053,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
         const label = g.key === 'SEM_APTO' ? 'SEM IDENTIFICADOR' : g.key.replace('_', ' ');
 
-        const corGrupo = g.key === 'SEM_APTO' ? '#555' : '#a259ff';
+        const corGrupo = g.key === 'SEM_APTO' ? 'var(--v-text-faint)' : 'var(--v-src-vu1)';
 
 
 
@@ -1139,7 +1141,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
                           {d.cc && (
 
-                            <span className="text-[7px] px-1 rounded bg-[#007aff]/15 text-[#007aff] border border-[#007aff]/30 font-bold">
+                            <span className="text-[7px] px-1 rounded bg-[var(--v-info)]/15 text-[var(--v-info)] border border-[var(--v-info)]/30 font-bold">
 
                               CC:{d.cc}
 
@@ -1149,7 +1151,7 @@ function TabelaMapaAgrupada({ itens, corNaturezaD, corNaturezaC, titulo }) {
 
                           {d.origem && (
 
-                            <span className={`text-[7px] px-1 rounded font-bold ${d.origem === 'VU' ? 'bg-[#a259ff]/20 text-[var(--v-accent-5)]' : 'bg-[var(--v-accent)]/20 text-[var(--v-accent)]'}`}>
+                            <span className={`text-[7px] px-1 rounded font-bold ${d.origem === 'VU' ? 'bg-[var(--v-src-vu1)]/20 text-[var(--v-accent-5)]' : 'bg-[rgb(var(--v-accent-rgb)_/_0.2)] text-[var(--v-accent)]'}`}>
 
                               {d.origem}
 
@@ -1277,7 +1279,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
               onClick={e => { e.stopPropagation(); setAba('orfaos'); }}
 
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[var(--v-accent)]/20 border-[#ff4d00]/40 text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent)]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'orfaos' ? 'bg-[rgb(var(--v-accent-rgb)_/_0.2)] border-[var(--v-accent)]/40 text-[var(--v-accent)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[rgb(var(--v-accent-rgb)_/_0.7)]'}`}
 
             >
 
@@ -1285,7 +1287,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
               {totalOrfaos > 0 && (
 
-                <span className="ml-1 px-1.5 py-0.5 bg-[var(--v-accent)] text-black rounded-[var(--v-radius)] text-[10px] font-black">{totalOrfaos}</span>
+                <span className="ml-1 px-1.5 py-0.5 bg-[var(--v-accent)] text-[var(--v-text-inv)] rounded-[var(--v-radius)] text-[10px] font-black">{totalOrfaos}</span>
 
               )}
 
@@ -1295,13 +1297,13 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
               onClick={e => { e.stopPropagation(); setAba('razao'); }}
 
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[#a259ff]/20 border-[#a259ff]/40 text-[var(--v-accent-5)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'razao' ? 'bg-[var(--v-src-vu1)]/20 border-[var(--v-src-vu1)]/40 text-[var(--v-accent-5)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[rgb(var(--v-accent-5-rgb)_/_0.7)]'}`}
 
             >
 
               <List size={10}/> Razao
 
-              <span className="ml-1 text-xs font-bold text-[#333]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
+              <span className="ml-1 text-xs font-bold text-[var(--v-text-ghost)]">({todosFisico.length}Q/{todosVirtual.length}V)</span>
 
             </button>
 
@@ -1309,7 +1311,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
               onClick={e => { e.stopPropagation(); setAba('mapa'); }}
 
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'mapa' ? 'bg-[#34c759]/20 border-[#34c759]/40 text-[#34c759]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#34c759]/70'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-widest border transition-all ${aba === 'mapa' ? 'bg-[var(--v-ok)]/20 border-[var(--v-ok)]/40 text-[var(--v-ok)]' : 'bg-transparent border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-ok)]/70'}`}
 
             >
 
@@ -1321,7 +1323,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
               onClick={e => { e.stopPropagation(); onAgent(); }}
 
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[var(--v-accent)]/20 transition-all font-mono"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[rgb(var(--v-accent-rgb)_/_0.3)] rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[rgb(var(--v-accent-rgb)_/_0.2)] transition-all font-mono"
 
             >
 
@@ -1337,7 +1339,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
                 onClick={e => { e.stopPropagation(); onRacional(); }}
 
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#a259ff]/15 border border-[#a259ff]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)] hover:bg-[#a259ff]/25 transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--v-src-vu1)]/15 border border-[var(--v-src-vu1)]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)] hover:bg-[var(--v-src-vu1)]/25 transition-all"
 
               >
 
@@ -1351,7 +1353,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
               onClick={handleXLSX}
 
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#34c759]/10 border border-[#34c759]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent-3)] hover:bg-[#34c759]/20 transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--v-ok)]/10 border border-[var(--v-ok)]/30 rounded text-xs font-black uppercase tracking-widest text-[var(--v-accent-3)] hover:bg-[var(--v-ok)]/20 transition-all"
 
             >
 
@@ -1387,11 +1389,11 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
                     <span className="text-xs font-black uppercase tracking-widest text-[var(--v-accent)]">Questor s/ par no Vulcano</span>
 
-                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[var(--v-accent)] text-black rounded text-[10px] font-black">{fisicosOrfaos.length}</span>}
+                    {fisicosOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[var(--v-accent)] text-[var(--v-text-inv)] rounded text-[10px] font-black">{fisicosOrfaos.length}</span>}
 
                   </div>
 
-                  <TabelaLancs itens={fisicosOrfaos} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="Nenhum orfao no Questor"/>
+                  <TabelaLancs itens={fisicosOrfaos} corNaturezaD="var(--v-ok)" corNaturezaC="var(--v-accent)" semLabel="Nenhum orfao no Questor"/>
 
                 </div>
 
@@ -1401,11 +1403,11 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
                     <span className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)]">Vulcano s/ par no Questor</span>
 
-                    {virtuaisOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[#a259ff] text-black rounded text-[10px] font-black">{virtuaisOrfaos.length}</span>}
+                    {virtuaisOrfaos.length > 0 && <span className="px-1 py-0.5 bg-[var(--v-src-vu1)] text-[var(--v-text-inv)] rounded text-[10px] font-black">{virtuaisOrfaos.length}</span>}
 
                   </div>
 
-                  <TabelaLancs itens={virtuaisOrfaos} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Nenhum orfao no Vulcano"/>
+                  <TabelaLancs itens={virtuaisOrfaos} corNaturezaD="var(--v-src-vu1)" corNaturezaC="var(--v-warn)" semLabel="Nenhum orfao no Vulcano"/>
 
                 </div>
 
@@ -1429,7 +1431,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
                 </div>
 
-                <TabelaLancs itens={todosFisico} corNaturezaD="#34c759" corNaturezaC="#ff4d00" semLabel="Sem lancamentos fisicos"/>
+                <TabelaLancs itens={todosFisico} corNaturezaD="var(--v-ok)" corNaturezaC="var(--v-accent)" semLabel="Sem lancamentos fisicos"/>
 
               </div>
 
@@ -1441,7 +1443,7 @@ function DetalheOrfaos({ porComp, contaId, contaNome, todosVirtualLogica, dashbo
 
                 </div>
 
-                <TabelaLancs itens={todosVirtual} corNaturezaD="#a259ff" corNaturezaC="#ff9f0a" semLabel="Sem lancamentos societarios"/>
+                <TabelaLancs itens={todosVirtual} corNaturezaD="var(--v-src-vu1)" corNaturezaC="var(--v-warn)" semLabel="Sem lancamentos societarios"/>
 
               </div>
 
@@ -1632,13 +1634,13 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
   return createPortal(
 
-      <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300" onClick={onClose}>
+      <div className="fixed inset-0 z-[9999] bg-[var(--v-overlay)] backdrop-blur-md flex flex-col items-center justify-center animate-in fade-in duration-300" onClick={onClose}>
 
-        <div className="bg-[var(--v-deep)] border border-[var(--v-accent)]/50 shadow-[0_0_50px_rgba(255,77,0,0.15)] w-full h-full flex flex-col pointer-events-auto overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="bg-[var(--v-deep)] border border-[rgb(var(--v-accent-rgb)_/_0.5)] shadow-[0_0_50px_rgba(255,77,0,0.15)] w-full h-full flex flex-col pointer-events-auto overflow-hidden" onClick={e => e.stopPropagation()}>
 
            {/* HEADER */}
 
-           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--v-accent)]/20 bg-[var(--v-accent)]/5 shrink-0">
+           <div className="flex items-center justify-between px-6 py-4 border-b border-[rgb(var(--v-accent-rgb)_/_0.2)] bg-[rgb(var(--v-accent-rgb)_/_0.05)] shrink-0">
 
              <div className="flex items-center gap-3">
 
@@ -1654,7 +1656,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
              </div>
 
-             <button onClick={onClose} className="text-[var(--v-accent)] hover:text-white font-black px-2 py-1 uppercase tracking-widest text-xs transition-colors border border-transparent hover:border-[var(--v-accent)]/40 rounded">✕ ENCERRAR</button>
+             <button onClick={onClose} className="text-[var(--v-accent)] hover:text-[var(--v-text-bold)] font-black px-2 py-1 uppercase tracking-widest text-xs transition-colors border border-transparent hover:border-[rgb(var(--v-accent-rgb)_/_0.4)] rounded">✕ ENCERRAR</button>
 
            </div>
 
@@ -1682,7 +1684,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                        <p className="text-sm font-bold tracking-[0.15em] text-[var(--v-text-faint)] animate-pulse">{progressMsg}</p>
 
-                       <p className="text-xs mt-4 text-[#333] font-bold uppercase tracking-widest">Pode levar 10–30s · Gemini + Firebird SQL</p>
+                       <p className="text-xs mt-4 text-[var(--v-text-ghost)] font-bold uppercase tracking-widest">Pode levar 10–30s · Gemini + Firebird SQL</p>
 
                    </div>
 
@@ -1694,7 +1696,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
               {status === 'ERROR' && (
 
-                <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[var(--v-accent)]/10 text-center font-bold flex flex-col gap-3">
+                <div className="text-[var(--v-accent)] border border-[var(--v-accent)] p-6 rounded bg-[rgb(var(--v-accent-rgb)_/_0.1)] text-center font-bold flex flex-col gap-3">
 
                    <p className="text-xs uppercase tracking-widest font-black">âš  Falha no Agente</p>
 
@@ -1702,7 +1704,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                    <button onClick={iniciarAgente}
 
-                     className="mt-2 px-4 py-2 bg-[var(--v-accent)]/20 border border-[var(--v-accent)]/40 rounded text-xs font-black uppercase tracking-widest hover:bg-[var(--v-accent)]/30 transition-all">
+                     className="mt-2 px-4 py-2 bg-[rgb(var(--v-accent-rgb)_/_0.2)] border border-[rgb(var(--v-accent-rgb)_/_0.4)] rounded text-xs font-black uppercase tracking-widest hover:bg-[rgb(var(--v-accent-rgb)_/_0.3)] transition-all">
 
                      ↺ Tentar novamente
 
@@ -1752,9 +1754,9 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                     {(agentState.resultados_db || []).length > 0 && (
 
-                      <div className="bg-[var(--v-bg)] border border-[#007aff]/30 p-5 rounded flex flex-col gap-3">
+                      <div className="bg-[var(--v-bg)] border border-[var(--v-info)]/30 p-5 rounded flex flex-col gap-3">
 
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#007aff]">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--v-info)]">
 
                           Dados Coletados pelas Ferramentas SQL ({agentState.resultados_db.length} chamadas)
 
@@ -1768,9 +1770,9 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                           return (
 
-                            <div key={i} className="border border-[#007aff]/20 rounded p-3 bg-[#007aff]/5">
+                            <div key={i} className="border border-[var(--v-info)]/20 rounded p-3 bg-[var(--v-info)]/5">
 
-                              <p className="text-xs font-black uppercase tracking-widest text-[#007aff] mb-2">
+                              <p className="text-xs font-black uppercase tracking-widest text-[var(--v-info)] mb-2">
 
                                 🔧 {r.tool} — args: {JSON.stringify(r.args || {})}
 
@@ -1806,7 +1808,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                     {agentState.sugestao_correcao && Object.keys(agentState.sugestao_correcao).length > 0 && (
 
-                        <div className="bg-[var(--v-card)] border border-[var(--v-accent)]/30 p-6 rounded shadow-lg">
+                        <div className="bg-[var(--v-card)] border border-[rgb(var(--v-accent-rgb)_/_0.3)] p-6 rounded shadow-lg">
 
                            <div className="flex items-center gap-2 mb-4">
 
@@ -1824,15 +1826,15 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
 
                            <div className="grid grid-cols-2 gap-4">
 
-                              <div className="bg-[#34c759]/5 border border-[#34c759]/20 p-4 rounded">
+                              <div className="bg-[var(--v-ok)]/5 border border-[var(--v-ok)]/20 p-4 rounded">
 
-                                 <p className="text-xs font-black uppercase tracking-widest text-[#34c759] mb-1.5">Ação Recomendada</p>
+                                 <p className="text-xs font-black uppercase tracking-widest text-[var(--v-ok)] mb-1.5">Ação Recomendada</p>
 
-                                 <p className="font-mono text-sm font-bold text-[#34c759]">{agentState.sugestao_correcao.acao}</p>
+                                 <p className="font-mono text-sm font-bold text-[var(--v-ok)]">{agentState.sugestao_correcao.acao}</p>
 
                               </div>
 
-                              <div className="bg-[#a259ff]/5 border border-[#a259ff]/20 p-4 rounded">
+                              <div className="bg-[var(--v-src-vu1)]/5 border border-[var(--v-src-vu1)]/20 p-4 rounded">
 
                                  <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-5)] mb-1.5">Contrapartida (Auto-Mapping)</p>
 
@@ -1856,7 +1858,7 @@ function AgentTerminalModal({ contaId, contaNome, onClose }) {
                       <div className="bg-[var(--v-bg)] border border-[var(--v-border)] rounded overflow-hidden flex flex-col mt-2 
 animate-in slide-in-from-bottom-6 duration-500">
                         <div className="bg-[var(--v-deep)] px-4 py-3 border-b border-[var(--v-border)] flex justify-between items-center">
-                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[#10b981] flex items-center gap-2">
+                          <h3 className="text-sm font-black uppercase tracking-[0.2em] text-[var(--v-ok)] flex items-center gap-2">
                              Dossiê Heurístico Temporal
                           </h3>
                           <div className="flex items-center gap-4">
@@ -1871,16 +1873,16 @@ animate-in slide-in-from-bottom-6 duration-500">
                           <table className="w-full text-left border-collapse text-xs">
                             <thead>
                               <tr>
-                                <th className="p-3 border-b border-r border-[#333] font-black text-[var(--v-text-muted)] uppercase tracking-widest bg-[#111] sticky left-0 z-10 w-24">Período</th>
-                                <th className="p-3 border-b border-r border-[#333] font-black text-white uppercase tracking-widest bg-[#111] min-w-[120px]">Obra (Questor LCTOGER)</th>
+                                <th className="p-3 border-b border-r border-[var(--v-border)] font-black text-[var(--v-text-muted)] uppercase tracking-widest bg-[var(--v-bg)] sticky left-0 z-10 w-24">Período</th>
+                                <th className="p-3 border-b border-r border-[var(--v-border)] font-black text-[var(--v-text-bold)] uppercase tracking-widest bg-[var(--v-bg)] min-w-[120px]">Obra (Questor LCTOGER)</th>
                                 {agentState.dossie_heuristico.dossie.amostra_unidades?.map((u, i) => (
-                                  <th key={i} className={`p-3 border-b border-r border-[#333] font-bold bg-[#1a1a1a] ${dossierExpanded ? "min-w-[800px]" : "min-w-[400px]"}`}>
+                                  <th key={i} className={`p-3 border-b border-r border-[var(--v-border)] font-bold bg-[var(--v-card)] ${dossierExpanded ? "min-w-[800px]" : "min-w-[400px]"}`}>
                                      <div className="flex flex-col gap-1">
-                                        <span className="text-[#10b981] uppercase font-black text-sm">{u.unidade}</span>
+                                        <span className="text-[var(--v-ok)] uppercase font-black text-sm">{u.unidade}</span>
                                         <span className="text-[10px] text-[var(--v-accent-4)] font-mono">D.Venda: {u.data_venda} | Venda R$ {u.valor_unidade?.toLocaleString('pt-BR')} | Fração: {u.fracao_obra?.toFixed(2)}%</span>
                                         <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} pt-2 mt-2 border-t border-dashed border-[#555] text-[10.5px] uppercase tracking-wider text-gray-400`}>
-                                            <div className="text-white font-bold">Q. MENSAL</div>
-                                            <div className="text-white font-bold">Q. ACUMUL.</div>
+                                            <div className="text-[var(--v-text-bold)] font-bold">Q. MENSAL</div>
+                                            <div className="text-[var(--v-text-bold)] font-bold">Q. ACUMUL.</div>
                                             <div>V2 MENSAL</div>
                                             <div>V2 ACUMUL.</div>
                                             {dossierExpanded && (
@@ -1900,32 +1902,32 @@ animate-in slide-in-from-bottom-6 duration-500">
                             </thead>
                             <tbody>
                               {agentState.dossie_heuristico.dossie.custo_total_obra_mensal?.map((custo_m, idx) => (
-                                <tr key={idx} className="hover:bg-[#1a1a1a] transition-colors border-b border-[#222]">
-                                  <td className="p-3 font-mono font-bold text-[var(--v-text-faint)] bg-[#111] sticky left-0 border-r border-[#333] whitespace-nowrap">
+                                <tr key={idx} className="hover:bg-[var(--v-hover)] transition-colors border-b border-[var(--v-line)]">
+                                  <td className="p-3 font-mono font-bold text-[var(--v-text-faint)] bg-[var(--v-bg)] sticky left-0 border-r border-[var(--v-border)] whitespace-nowrap">
                                     {String(custo_m.mes).padStart(2, '0')} / {custo_m.ano}
                                   </td>
-                                  <td className="p-3 font-mono border-r border-[#333]">
+                                  <td className="p-3 font-mono border-r border-[var(--v-border)]">
                                     <div className="flex justify-between items-center w-full">
-                                      <span className="font-bold text-white whitespace-nowrap">R$ {custo_m.custo?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                      <span className="font-black text-[#ffcc00] text-[10px] whitespace-nowrap ml-3">R$ {custo_m.custo_acumulado?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                      <span className="font-bold text-[var(--v-text-bold)] whitespace-nowrap">R$ {custo_m.custo?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                      <span className="font-black text-[var(--v-warn-hi)] text-[10px] whitespace-nowrap ml-3">R$ {custo_m.custo_acumulado?.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                     </div>
                                   </td>
                                   {agentState.dossie_heuristico.dossie.amostra_unidades?.map((u, i) => {
                                       const rowData = u.grid_temporal?.find(g => g.ano === custo_m.ano && g.mes === custo_m.mes) || {};
                                       return (
-                                        <td key={i} className="p-3 font-mono text-xs border-r border-[#333]">
-                                            <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} border-l border-[#333] pl-2`}>
-                                                <div className="text-white font-bold bg-[#222] px-1 rounded-sm cursor-pointer hover:bg-blue-900 border border-transparent hover:border-blue-400 transition-colors" onClick={(e) => { e.stopPropagation(); setDetalheModal({ unidade: u.unidade, periodo: `${String(custo_m.mes).padStart(2, '0')} / ${custo_m.ano}`, dados: rowData.questor_creditos_raw || [] }); }} title="Clique para ver extrato detalhado do Razão">{(rowData.credito_questor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                                <div className="text-[#34c759] font-black">{(rowData.credito_questor_acumulado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                        <td key={i} className="p-3 font-mono text-xs border-r border-[var(--v-border)]">
+                                            <div className={`grid ${dossierExpanded ? "grid-cols-9 gap-4" : "grid-cols-4 gap-4"} border-l border-[var(--v-border)] pl-2`}>
+                                                <div className="text-[var(--v-text-bold)] font-bold bg-[var(--v-hover)] px-1 rounded-sm cursor-pointer hover:bg-blue-900 border border-transparent hover:border-blue-400 transition-colors" onClick={(e) => { e.stopPropagation(); setDetalheModal({ unidade: u.unidade, periodo: `${String(custo_m.mes).padStart(2, '0')} / ${custo_m.ano}`, dados: rowData.questor_creditos_raw || [] }); }} title="Clique para ver extrato detalhado do Razão">{(rowData.credito_questor || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                <div className="text-[var(--v-ok)] font-black">{(rowData.credito_questor_acumulado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
                                                 <div className="text-gray-300">{(rowData.custo_v2_ifrs || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                                <div className="text-[#a855f7] font-bold">{(rowData.custo_v2_ifrs_acumulado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                <div className="text-[var(--v-src-vu1)] font-bold">{(rowData.custo_v2_ifrs_acumulado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
                                                 {dossierExpanded && (
                                                   <>
                                                     <div className="text-blue-400 font-bold bg-[#112] px-1 rounded-sm">{(rowData.custo_questor_fracionado || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
                                                     <div className="text-[var(--v-text-faint)]">{(rowData.custo_v1_legacy || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                                    <div className="text-[#10b981] font-bold">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
-                                                    <div className="text-[#a855f7]">{(rowData.poc_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
-                                                    <div className="text-[#facc15]">{(rowData.cub_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
+                                                    <div className="text-[var(--v-ok)] font-bold">{(rowData.fluxo_recebido || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</div>
+                                                    <div className="text-[var(--v-src-vu1)]">{(rowData.poc_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
+                                                    <div className="text-[var(--v-warn-hi)]">{(rowData.cub_mes || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}%</div>
                                                   </>
                                                 )}
                                              </div>
@@ -1944,7 +1946,7 @@ animate-in slide-in-from-bottom-6 duration-500">
 
                     {(!agentState.sugestao_correcao || Object.keys(agentState.sugestao_correcao).length === 0) && status === 'PAUSED' && (
 
-                      <div className="border border-[#ffcc00]/30 bg-[#ffcc00]/5 rounded p-4 text-sm text-[#ffcc00] font-bold">
+                      <div className="border border-[var(--v-warn-hi)]/30 bg-[var(--v-warn-hi)]/5 rounded p-4 text-sm text-[var(--v-warn-hi)] font-bold">
 
                         âš  O agente ainda não gerou uma sugestão de correção. Clique em Aprovar para deixá-lo continuar ou Rejeitar para encerrar.
 
@@ -1965,13 +1967,13 @@ animate-in slide-in-from-bottom-6 duration-500">
            {status === 'PAUSED' && agentState?.prompt_calibracao && (
              <div className="border-t border-[var(--v-border)] bg-[var(--v-bg)] p-6 flex flex-col gap-4 sticky bottom-0 shrink-0">
                 <div className="flex flex-col gap-2">
-                   <p className="text-xs font-black uppercase tracking-widest text-[#10b981]">[HITL] Calibração de Prompt e Contexto</p>
+                   <p className="text-xs font-black uppercase tracking-widest text-[var(--v-ok)]">[HITL] Calibração de Prompt e Contexto</p>
                    
                    <textarea 
                      value={customAnotacao}
                      onChange={(e) => setCustomAnotacao(e.target.value)}
                      placeholder="Diretrizes Adicionais (Ex: Assuma como Venda Concluída, ignore variações de CUB)."
-                     style={{ width: '100%', minHeight: '80px', background: '#1a1a1a', color: '#e2e8f0', border: '1px solid #4ade80', borderRadius: '6px', padding: '12px', fontSize: '13px' }}
+                     style={{ width: '100%', minHeight: '80px', background: 'var(--v-card)', color: '#e2e8f0', border: '1px solid #4ade80', borderRadius: '6px', padding: '12px', fontSize: '13px' }}
                    />
                    
                    <details className="mt-2 text-[10px] text-gray-500">
@@ -1979,11 +1981,11 @@ animate-in slide-in-from-bottom-6 duration-500">
                      <textarea 
                        value={customPrompt || agentState.prompt_calibracao || ''}
                        onChange={(e) => setCustomPrompt(e.target.value)}
-                       style={{ width: '100%', minHeight: '200px', background: '#0a0a0a', color: '#888', border: '1px solid #333', borderRadius: '6px', fontFamily: 'monospace', padding: '10px', fontSize: '9px' }}
+                       style={{ width: '100%', minHeight: '200px', background: 'var(--v-deep)', color: 'var(--v-text-muted)', border: '1px solid var(--v-text-ghost)', borderRadius: '6px', fontFamily: 'monospace', padding: '10px', fontSize: '9px' }}
                      />
                    </details>
                 </div>
-                <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#10b981] hover:bg-[#059669] text-white py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
+                <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[var(--v-ok)] hover:bg-[#059669] text-[var(--v-text-bold)] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
                   APROVAR CONTEXTO & PROCESSAR IA
                 </button>
              </div>
@@ -2014,13 +2016,13 @@ animate-in slide-in-from-bottom-6 duration-500">
 
                 <div className="flex gap-4">
 
-                    <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[#34c759]/10 hover:bg-[#34c759]/20 border border-[#34c759]/50 text-[#34c759] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
+                    <button onClick={() => enviarFeedback(true)} className="flex-1 bg-[var(--v-ok)]/10 hover:bg-[var(--v-ok)]/20 border border-[var(--v-ok)]/50 text-[var(--v-ok)] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
 
                        ✓ APROVAR TRATATIVA
 
                     </button>
 
-                    <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[#ff4d00]/10 hover:bg-[#ff4d00]/20 border border-[#ff4d00]/50 text-[#ff4d00] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
+                    <button onClick={() => enviarFeedback(false)} className="flex-1 bg-[var(--v-accent)]/10 hover:bg-[var(--v-accent)]/20 border border-[var(--v-accent)]/50 text-[var(--v-accent)] py-3.5 rounded-[var(--v-radius)] font-black text-xs uppercase tracking-widest transition-colors">
 
                        ✗ REJEITAR / CORRIGIR
 
@@ -2034,9 +2036,9 @@ animate-in slide-in-from-bottom-6 duration-500">
 
            {status === 'FINISHED' && (
 
-             <div className="border-t border-[#34c759]/20 bg-[#34c759]/5 p-6 text-center shrink-0">
+             <div className="border-t border-[var(--v-ok)]/20 bg-[var(--v-ok)]/5 p-6 text-center shrink-0">
 
-                <p className="text-[#34c759] font-black uppercase tracking-widest text-[13px] flex justify-center items-center gap-2">
+                <p className="text-[var(--v-ok)] font-black uppercase tracking-widest text-[13px] flex justify-center items-center gap-2">
 
                    <CheckCircle2 size={18}/> Auditoria Deste Nodo Finalizada
 
@@ -2050,14 +2052,14 @@ animate-in slide-in-from-bottom-6 duration-500">
         
         {/* POPUP DE DETALHES DA UNIDADE */}
         {detalheModal && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-4 animate-in fade-in" onClick={e => e.stopPropagation()}>
-            <div className="bg-[#111] border border-[#ffcc00]/30 rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[#222] bg-[#1a1a1a]">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-[var(--v-overlay)] p-4 animate-in fade-in" onClick={e => e.stopPropagation()}>
+            <div className="bg-[var(--v-bg)] border border-[var(--v-warn-hi)]/30 rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--v-line)] bg-[var(--v-card)]">
                 <div className="flex flex-col">
-                   <h3 className="text-[#ffcc00] font-black uppercase tracking-widest text-sm flex items-center gap-2">Extrato de Créditos — Razão 5639</h3>
+                   <h3 className="text-[var(--v-warn-hi)] font-black uppercase tracking-widest text-sm flex items-center gap-2">Extrato de Créditos — Razão 5639</h3>
                    <p className="text-xs text-gray-400 font-mono mt-1">Unidade {detalheModal.unidade} • Lote: {detalheModal.periodo}</p>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); setDetalheModal(null); }} className="text-gray-400 hover:text-white bg-[#222] hover:bg-red-500/20 px-3 py-1 rounded transition-colors text-xs uppercase font-bold">FECHAR</button>
+                <button onClick={(e) => { e.stopPropagation(); setDetalheModal(null); }} className="text-gray-400 hover:text-[var(--v-text-bold)] bg-[var(--v-hover)] hover:bg-red-500/20 px-3 py-1 rounded transition-colors text-xs uppercase font-bold">FECHAR</button>
               </div>
               
               <div className="flex-1 overflow-y-auto p-5">
@@ -2066,8 +2068,8 @@ animate-in slide-in-from-bottom-6 duration-500">
                 ) : (
                   <div className="flex flex-col gap-3">
                      {detalheModal.dados.map((d, i) => (
-                       <div key={i} className="bg-[#1a1a1a] p-4 rounded-lg border border-[#333] hover:border-blue-500/50 transition-colors">
-                          <div className="flex justify-between items-start mb-2 border-b border-[#222] pb-2">
+                       <div key={i} className="bg-[var(--v-card)] p-4 rounded-lg border border-[var(--v-border)] hover:border-blue-500/50 transition-colors">
+                          <div className="flex justify-between items-start mb-2 border-b border-[var(--v-line)] pb-2">
                              <span className="text-blue-400 font-mono font-bold text-sm">R$ {d.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
                              <span className="text-[10px] text-gray-500 uppercase tracking-widest">{d.ano}-{String(d.mes).padStart(2, '0')}</span>
                           </div>
@@ -2394,7 +2396,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
       <tr
 
-        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[#ff4d00]/20 hover:bg-[#1a0a00]' : 'border-[#202020] hover:bg-[#171717]'}`}
+        className={`border-b transition-colors cursor-pointer ${temDivergencia ? 'border-[var(--v-accent)]/20 hover:bg-[#1a0a00]' : 'border-[#202020] hover:bg-[#171717]'}`}
 
         onClick={() => setOpen(o => !o)}
 
@@ -2402,7 +2404,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
         {/* Conta + nome */}
 
-        <td className="px-3 py-2 sticky left-0 z-10 bg-[#0d0d0d] min-w-[220px] border-r border-[#222]">
+        <td className="px-3 py-2 sticky left-0 z-10 bg-[var(--v-deep)] min-w-[220px] border-r border-[var(--v-line)]">
 
           <div className="flex items-center gap-2">
 
@@ -2421,7 +2423,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
               })()}
             </span>
 
-            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-6)] border border-[#ffcc00]/30 px-1 py-0.5 rounded">MOV</span>}
+            {usaMovimento && <span title="Conciliação por Movimento do Período" className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-6)] border border-[var(--v-warn-hi)]/30 px-1 py-0.5 rounded">MOV</span>}
 
             <ChevronDown size={10} className={`text-[var(--v-text-faint)] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
 
@@ -2459,7 +2461,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                 {abs(saldoFisico) > 0.01 && (
 
-                  <div className="text-[10px] font-bold font-mono text-[#666] mt-0.5" title="Saldo Final no Mês">
+                  <div className="text-[10px] font-bold font-mono text-[var(--v-text-muted)] mt-0.5" title="Saldo Final no Mês">
 
                     S: {fmt(saldoFisico)}
 
@@ -2489,11 +2491,11 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                     <span className="text-[var(--v-text-faint)] text-xs leading-tight">
 
-                      <span className="text-[var(--v-accent-5)]/60">D:{fmt(movVirtualDeb)}</span>
+                      <span className="text-[rgb(var(--v-accent-5-rgb)_/_0.6)]">D:{fmt(movVirtualDeb)}</span>
 
                       <br/>
 
-                      <span className="text-[var(--v-accent-2)]/60">C:{fmt(movVirtualCred)}</span>
+                      <span className="text-[rgb(var(--v-accent-2-rgb)_/_0.6)]">C:{fmt(movVirtualCred)}</span>
 
                     </span>
 
@@ -2519,7 +2521,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                 {abs(diffMov) < DIVERGENCIA_CORTE ? (
 
-                  <span className="text-[#333]">✓</span>
+                  <span className="text-[var(--v-text-ghost)]">✓</span>
 
                 ) : (
 
@@ -2551,7 +2553,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
               <span className="text-[12px] font-black text-[var(--v-accent-3)] uppercase tracking-wider">Conciliado</span>
 
-              {usaMovimento && <p className="text-xs font-black uppercase tracking-widest text-[var(--v-accent-6)]/60 mt-0.5">via movimento</p>}
+              {usaMovimento && <p className="text-xs font-black uppercase tracking-widest text-[rgb(var(--v-accent-6-rgb)_/_0.6)] mt-0.5">via movimento</p>}
 
             </div>
 
@@ -2641,7 +2643,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
             <div
 
-              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+              className="fixed inset-0 z-50 bg-[var(--v-overlay)] backdrop-blur-sm flex items-center justify-center p-6"
 
               onClick={() => setRacionalOpen(false)}
 
@@ -2649,7 +2651,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
               <div
 
-                className="bg-[var(--v-deep)] border border-[#a259ff]/30 rounded-[var(--v-radius)] w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl shadow-[#a259ff]/10"
+                className="bg-[var(--v-deep)] border border-[var(--v-src-vu1)]/30 rounded-[var(--v-radius)] w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl shadow-[#a259ff]/10"
 
                 onClick={e => e.stopPropagation()}
 
@@ -2683,11 +2685,11 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                   {racionaisAgrupados.map((d, i) => (
 
-                    <div key={i} className="border border-[var(--v-border)] rounded p-4 bg-[var(--v-deep)] hover:border-[#a259ff]/20 transition-colors">
+                    <div key={i} className="border border-[var(--v-border)] rounded p-4 bg-[var(--v-deep)] hover:border-[var(--v-src-vu1)]/20 transition-colors">
 
                       <div className="flex items-center gap-3 mb-2">
 
-                        <span className="text-xs font-black uppercase tracking-widest text-[#a259ff]">{d.comp}</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-[var(--v-src-vu1)]">{d.comp}</span>
 
                         <span className="text-xs font-bold text-[var(--v-text-faint)]">Agregado global de {d.qtd} unidades</span>
 
@@ -2695,7 +2697,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                           className="ml-auto text-xs font-black px-2 py-0.5 rounded"
 
-                          style={{ background: d.natureza === 'D' ? '#a259ff22' : '#ff9f0a22', color: d.natureza === 'D' ? '#a259ff' : '#ff9f0a' }}
+                          style={{ background: d.natureza === 'D' ? '#a259ff22' : '#ff9f0a22', color: d.natureza === 'D' ? 'var(--v-src-vu1)' : 'var(--v-warn)' }}
 
                         >
 
@@ -2711,7 +2713,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                       {d.logicaGlobal && (
 
-                        <p className="text-[12px] font-mono text-[var(--v-accent-5)] bg-[#a259ff]/10 rounded px-3 py-2.5 border-l-2 border-[#a259ff] mb-2 leading-relaxed">
+                        <p className="text-[12px] font-mono text-[var(--v-accent-5)] bg-[var(--v-src-vu1)]/10 rounded px-3 py-2.5 border-l-2 border-[var(--v-src-vu1)] mb-2 leading-relaxed">
 
                           {d.logicaGlobal}
 
@@ -2723,7 +2725,7 @@ function ContaConfronto({ contaId, contaNome, competencias, dadosPorMes, ocultar
 
                       {!d.isPOC && !d.isCusto && d.fallbackLogica && (
 
-                         <p className="text-xs font-mono text-[var(--v-text-faint)] bg-black/20 rounded px-3 py-2 border-l-2 border-[#555] opacity-70">
+                         <p className="text-xs font-mono text-[var(--v-text-faint)] bg-[var(--v-zebra)] rounded px-3 py-2 border-l-2 border-[#555] opacity-70">
 
                            {d.fallbackLogica}
 
@@ -2783,13 +2785,13 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
   const corScore = (s) => {
 
-    if (s >= 0.85) return '#34c759';
+    if (s >= 0.85) return 'var(--v-ok)';
 
-    if (s >= 0.65) return '#ffcc00';
+    if (s >= 0.65) return 'var(--v-warn-hi)';
 
-    if (s >= 0.45) return '#ff9f0a';
+    if (s >= 0.45) return 'var(--v-warn)';
 
-    return '#ff4d00';
+    return 'var(--v-accent)';
 
   };
 
@@ -2913,11 +2915,11 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
   return (
 
-    <div className="bg-[var(--v-bg)] border border-[#34c759]/25 rounded-[var(--v-radius)] overflow-hidden">
+    <div className="bg-[var(--v-bg)] border border-[var(--v-ok)]/25 rounded-[var(--v-radius)] overflow-hidden">
 
       {/* Header */}
 
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#34c759]/15 bg-[#34c759]/5">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--v-ok)]/15 bg-[var(--v-ok)]/5">
 
         <div className="flex items-center gap-3">
 
@@ -2935,7 +2937,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
               {' '}· Scoring: Valor 50% + Histórico 25% + Data 15% + Conta 10%
 
-              {kbStats && <span className="ml-2 text-[#34c759]">· KB: {kbStats.match}✓ {kbStats.no_match}✗</span>}
+              {kbStats && <span className="ml-2 text-[var(--v-ok)]">· KB: {kbStats.match}✓ {kbStats.no_match}✗</span>}
 
             </p>
 
@@ -2943,7 +2945,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
         </div>
 
-        <button onClick={onClose} className="text-[#333] hover:text-[var(--v-text-bold)] text-xs px-2 py-1 transition-colors">✕ Fechar</button>
+        <button onClick={onClose} className="text-[var(--v-text-ghost)] hover:text-[var(--v-text-bold)] text-xs px-2 py-1 transition-colors">✕ Fechar</button>
 
       </div>
 
@@ -2989,7 +2991,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
             return (
 
-              <div key={i} className={`px-4 py-3 hover:bg-[var(--v-deep)] transition-colors ${isMatch ? 'bg-[#34c759]/5' : isNoMatch ? 'bg-[#ff4d00]/5' : ''}`}>
+              <div key={i} className={`px-4 py-3 hover:bg-[var(--v-deep)] transition-colors ${isMatch ? 'bg-[var(--v-ok)]/5' : isNoMatch ? 'bg-[var(--v-accent)]/5' : ''}`}>
 
                 {/* Top row: score bar + badges + sugestão */}
 
@@ -3017,7 +3019,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {m.tipo === 'CROSS_ACCOUNT' && (
 
-                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#a259ff]/15 border border-[#a259ff]/40 text-[var(--v-accent-5)] rounded">
+                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[var(--v-src-vu1)]/15 border border-[var(--v-src-vu1)]/40 text-[var(--v-accent-5)] rounded">
 
                       ⇄ Cross-Account
 
@@ -3027,7 +3029,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {!m.nat_match && (
 
-                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[#ff9f0a]/15 border border-[#ff9f0a]/40 text-[var(--v-accent-2)] rounded">
+                    <span className="text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-[var(--v-warn)]/15 border border-[var(--v-warn)]/40 text-[var(--v-accent-2)] rounded">
 
                       âš  Nat. Invertida
 
@@ -3037,7 +3039,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {fbVeredicto && (
 
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${fbVeredicto === 'MATCH' ? 'bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759]' : 'bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)]'}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${fbVeredicto === 'MATCH' ? 'bg-[var(--v-ok)]/15 border border-[var(--v-ok)]/40 text-[var(--v-ok)]' : 'bg-[var(--v-accent)]/15 border border-[var(--v-accent)]/40 text-[var(--v-accent)]'}`}>
 
                       {fbVeredicto === 'MATCH' ? '✓ Confirmado' : '✗ Rejeitado'}
 
@@ -3049,7 +3051,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   {/* Score breakdown */}
 
-                  <span className="text-xs text-[#333] font-mono ml-auto shrink-0">
+                  <span className="text-xs text-[var(--v-text-ghost)] font-mono ml-auto shrink-0">
 
                     V:{Math.round(m.score_valor*100)}% H:{Math.round(m.score_hist*100)}% D:{Math.round(m.score_data*100)}% C:{Math.round(m.score_conta*100)}%
 
@@ -3063,13 +3065,13 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   <div className="grid grid-cols-2 gap-2 text-xs mb-2">
 
-                    <div className="bg-[var(--v-deep)] border border-[#ff4d00]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
+                    <div className="bg-[var(--v-deep)] border border-[var(--v-accent)]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
 
                       <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent)] ml-1">Questor</p>
 
                       {(m.questor_detalhe && m.questor_detalhe.length > 0 ? m.questor_detalhe : [m.questor]).map((q, idx) => (
 
-                          <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#ff4d00]/10">
+                          <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[var(--v-accent)]/10">
 
                             <p className="font-mono font-bold text-[var(--v-text-faint)] text-[10px]">
 
@@ -3089,13 +3091,13 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                     </div>
 
-                    <div className="bg-[var(--v-deep)] border border-[#a259ff]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
+                    <div className="bg-[var(--v-deep)] border border-[var(--v-src-vu1)]/15 rounded p-2 flex flex-col gap-1 max-h-[140px] overflow-y-auto">
 
                       <p className="text-[10px] font-black uppercase tracking-widest text-[var(--v-accent-5)] ml-1">Vulcano</p>
 
                       {(m.vulcano_detalhe && m.vulcano_detalhe.length > 0 ? m.vulcano_detalhe : [m.vulcano]).map((v, idx) => (
 
-                          <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[#a259ff]/10">
+                          <div key={idx} className="bg-[var(--v-deep)] p-1.5 rounded border border-[var(--v-src-vu1)]/10">
 
                             <p className="font-mono font-bold text-[var(--v-text-faint)] text-[10px]">
 
@@ -3125,7 +3127,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                   <div className="mb-2 px-1">
 
-                    <div className="bg-[#ff9f0a]/5 border border-[#ff9f0a]/30 rounded p-2 flex justify-between items-center flex-wrap gap-2">
+                    <div className="bg-[var(--v-warn)]/5 border border-[var(--v-warn)]/30 rounded p-2 flex justify-between items-center flex-wrap gap-2">
 
                       <div>
 
@@ -3157,7 +3159,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           disabled={state.loading}
 
-                          className="shrink-0 px-2 py-1 text-[10px] font-black uppercase text-[#34c759] bg-[#34c759]/10 border border-[#34c759]/40 rounded hover:bg-[#34c759]/20 transition-all disabled:opacity-40"
+                          className="shrink-0 px-2 py-1 text-[10px] font-black uppercase text-[var(--v-ok)] bg-[var(--v-ok)]/10 border border-[var(--v-ok)]/40 rounded hover:bg-[var(--v-ok)]/20 transition-all disabled:opacity-40"
 
                         >✓ Match pela Contrapartida</button>
 
@@ -3193,7 +3195,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                         disabled={state.loading}
 
-                        className="flex items-center gap-1 px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[#34c759]/15 border border-[#34c759]/40 text-[#34c759] hover:bg-[#34c759]/30 transition-all disabled:opacity-40"
+                        className="flex items-center gap-1 px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[var(--v-ok)]/15 border border-[var(--v-ok)]/40 text-[var(--v-ok)] hover:bg-[var(--v-ok)]/30 transition-all disabled:opacity-40"
 
                       >
 
@@ -3207,7 +3209,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                         disabled={state.loading}
 
-                        className="flex items-center gap-1 px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[#ff4d00]/15 border border-[#ff4d00]/40 text-[var(--v-accent)] hover:bg-[#ff4d00]/30 transition-all disabled:opacity-40"
+                        className="flex items-center gap-1 px-3 py-1 text-xs font-black uppercase tracking-wider rounded bg-[var(--v-accent)]/15 border border-[var(--v-accent)]/40 text-[var(--v-accent)] hover:bg-[var(--v-accent)]/30 transition-all disabled:opacity-40"
 
                       >
 
@@ -3221,7 +3223,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                     {state.showObs && (
 
-                      <div className="flex items-center gap-2 w-full mt-1 bg-[var(--v-deep)] p-2 rounded border border-[#111]">
+                      <div className="flex items-center gap-2 w-full mt-1 bg-[var(--v-deep)] p-2 rounded border border-[var(--v-line)]">
 
                         <input
 
@@ -3247,7 +3249,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           }}
 
-                          className={`flex-1 bg-[var(--v-bg)] border rounded px-2 py-1 text-xs text-[var(--v-text-muted)] outline-none ${state.obsFor === 'MATCH' ? 'border-[#34c759]/40 focus:border-[#34c759]' : 'border-[#ff4d00]/30 focus:border-[#ff4d00]/60'}`}
+                          className={`flex-1 bg-[var(--v-bg)] border rounded px-2 py-1 text-xs text-[var(--v-text-muted)] outline-none ${state.obsFor === 'MATCH' ? 'border-[var(--v-ok)]/40 focus:border-[#34c759]' : 'border-[var(--v-accent)]/30 focus:border-[#ff4d00]/60'}`}
 
                         />
 
@@ -3257,7 +3259,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           onClick={() => sendFeedback(i, m, state.obsFor || 'NO_MATCH', state.obs || '', state.useContra)}
 
-                          className={`px-2 py-1 text-xs font-black uppercase tracking-widest rounded transition-all disabled:opacity-40 ${state.obsFor === 'MATCH' ? 'text-[#34c759] bg-[#34c759]/20 border border-[#34c759]/40 hover:bg-[#34c759]/40' : 'text-[var(--v-accent)] bg-[#ff4d00]/20 border border-[#ff4d00]/40 hover:bg-[#ff4d00]/40'}`}
+                          className={`px-2 py-1 text-xs font-black uppercase tracking-widest rounded transition-all disabled:opacity-40 ${state.obsFor === 'MATCH' ? 'text-[var(--v-ok)] bg-[var(--v-ok)]/20 border border-[var(--v-ok)]/40 hover:bg-[var(--v-ok)]/40' : 'text-[var(--v-accent)] bg-[var(--v-accent)]/20 border border-[var(--v-accent)]/40 hover:bg-[var(--v-accent)]/40'}`}
 
                         >
 
@@ -3269,7 +3271,7 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                           onClick={() => setFb(prev => ({ ...prev, [i]: { ...prev[i], showObs: false, obsFor: null } }))}
 
-                          className="px-1.5 py-1 text-xs text-[#333] hover:text-[var(--v-text-bold)] transition-colors"
+                          className="px-1.5 py-1 text-xs text-[var(--v-text-ghost)] hover:text-[var(--v-text-bold)] transition-colors"
 
                         >✕</button>
 
@@ -3281,13 +3283,13 @@ function CrossMatchPanel({ result, onClose, empresaId }) {
 
                 ) : isSaved ? (
 
-                  <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-black ${isMatch ? 'bg-[#34c759]/10 text-[#34c759]' : 'bg-[#ff4d00]/10 text-[var(--v-accent)]'}`}>
+                  <div className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-black ${isMatch ? 'bg-[var(--v-ok)]/10 text-[var(--v-ok)]' : 'bg-[var(--v-accent)]/10 text-[var(--v-accent)]'}`}>
 
                     {isMatch ? '✓ Salvo como MATCH' : '✗ Salvo como NÃO MATCH'}
 
                     {state.obs && <span className="font-normal text-[var(--v-text-faint)] ml-1">— {state.obs}</span>}
 
-                    <span className="ml-auto text-[#333] font-normal">na base de conhecimento</span>
+                    <span className="ml-auto text-[var(--v-text-ghost)] font-normal">na base de conhecimento</span>
 
                   </div>
 
@@ -3321,11 +3323,14 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
 
 
-  const [periodoInicio, setPeriodoInicio] = useState(mesAtual);
+  // Filtros na URL. Como em Contabilizacoes, o deep-link restaura os filtros mas NAO
+  // dispara a apuracao: fetchTudo varre ate 18 competencias e o gatilho continua sendo
+  // o botao.
+  const [periodoInicio, setPeriodoInicio] = useSearchParamState('de', mesAtual);
 
-  const [periodoFim,    setPeriodoFim]    = useState(mesAtual);
+  const [periodoFim,    setPeriodoFim]    = useSearchParamState('ate', mesAtual);
 
-  const [filtroEmpId,   setFiltroEmpId]   = useState('');
+  const [filtroEmpId,   setFiltroEmpId]   = useSearchParamState('filtroEmp', '');
 
   const [empreendimentos, setEmpreendimentos] = useState([]);
 
@@ -3377,15 +3382,19 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
     if (!selectedEmpresa) return;
 
+    const ac = new AbortController();
+
     setEmpsLoading(true);
 
-    fetch(`${API_BASE}/api/empreendimentos/basico?empresa_id=${selectedEmpresa}`)
+    fetch(`${API_BASE}/api/empreendimentos/basico?empresa_id=${selectedEmpresa}`, { signal: ac.signal })
 
       .then(r => r.json())
 
       .then(j => { setEmpreendimentos(j.empreendimentos || []); setEmpsLoading(false); })
 
-      .catch(() => setEmpsLoading(false));
+      .catch(err => { if (err.name !== 'AbortError') setEmpsLoading(false); });
+
+    return () => ac.abort();
 
   }, [selectedEmpresa]);
 
@@ -4074,7 +4083,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   const erpContent = (
     <div className={`text-[var(--v-text)] ${isErpFullscreen ? 'flex flex-col' : 'flex flex-col gap-5 pb-10 animate-in fade-in'}`}>
 
-      <div className={`flex items-center gap-3 border-b border-[var(--v-border)] ${isErpFullscreen ? 'px-5 py-2 bg-[#0d0d0d] sticky top-0 z-50' : 'pb-3 pt-1'}`}>
+      <div className={`flex items-center gap-3 border-b border-[var(--v-border)] ${isErpFullscreen ? 'px-5 py-2 bg-[var(--v-deep)] sticky top-0 z-50' : 'pb-3 pt-1'}`}>
         <ShieldCheck className="text-[var(--v-accent)] shrink-0" size={isErpFullscreen ? 16 : 22}/>
         <div className="flex flex-col leading-none gap-0.5">
           <h2 className={`font-black tracking-tighter text-[var(--v-text-bold)] leading-none ${isErpFullscreen ? 'text-sm' : 'text-xl'}`}>
@@ -4089,7 +4098,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
         <button
           onClick={() => setIsErpFullscreen(f => !f)}
           title={isErpFullscreen ? 'Sair do modo tela cheia (Esc)' : 'Expandir — sobrepoe sidebar e header para trabalho intensivo'}
-          className={`ml-auto px-3 py-1.5 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all ${isErpFullscreen ? 'bg-[#ef4444]/20 border border-[#ef4444]/60 text-[#ef4444] hover:bg-[#ef4444]/30' : 'bg-[#00bcd4]/15 border border-[#00bcd4]/60 text-[#00bcd4] hover:bg-[#00bcd4]/25 hover:border-[#00bcd4]'}`}
+          className={`ml-auto px-3 py-1.5 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all ${isErpFullscreen ? 'bg-[var(--v-err)]/20 border border-[var(--v-err)]/60 text-[var(--v-err)] hover:bg-[var(--v-err)]/30' : 'bg-[#00bcd4]/15 border border-[#00bcd4]/60 text-[#00bcd4] hover:bg-[#00bcd4]/25 hover:border-[#00bcd4]'}`}
           style={{ borderRadius: '2px' }}
         >
           {isErpFullscreen ? '✕ SAIR' : '⛶ TELA CHEIA'}
@@ -4098,7 +4107,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       {/* Filtros */}
 
-      <div className="flex flex-wrap gap-3 items-end bg-[#0d0d0d] border border-[#222] p-3" style={{borderRadius:'2px'}}>
+      <div className="flex flex-wrap gap-3 items-end bg-[var(--v-deep)] border border-[var(--v-line)] p-3" style={{borderRadius:'2px'}}>
 
         <div className="flex flex-col gap-1">
 
@@ -4158,7 +4167,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <button onClick={fetchTudo} disabled={loading || !periodoValido || !selectedEmpresa}
 
-          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+          className="ml-auto px-6 py-2.5 bg-[var(--v-accent)] text-[var(--v-text-inv)] text-xs font-black uppercase tracking-widest rounded hover:bg-[var(--v-hover)] transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
 
           {loading ? <Zap className="animate-spin" size={13}/> : <RefreshCw size={13}/>}
 
@@ -4172,7 +4181,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
 
-            showDiag ? 'bg-[#a259ff]/20 border-[#a259ff]/60 text-[var(--v-accent-5)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#a259ff]/40'
+            showDiag ? 'bg-[var(--v-src-vu1)]/20 border-[var(--v-src-vu1)]/60 text-[var(--v-accent-5)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[var(--v-src-vu1)]/40'
 
           }`}>
 
@@ -4188,7 +4197,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all disabled:opacity-40 border ${
 
-            showCross ? 'bg-[#34c759]/20 border-[#34c759]/60 text-[var(--v-accent-3)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-3)] hover:border-[#34c759]/40'
+            showCross ? 'bg-[var(--v-ok)]/20 border-[var(--v-ok)]/60 text-[var(--v-accent-3)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-3)] hover:border-[var(--v-ok)]/40'
 
           }`}>
 
@@ -4204,7 +4213,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           className={`px-4 py-2.5 text-xs font-black uppercase tracking-widest rounded flex items-center gap-2 transition-all border ${
 
-            usePgVector ? 'bg-[#ffcc00]/20 border-[#ffcc00]/60 text-[#ffcc00]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#ffcc00] hover:border-[#ffcc00]/40'
+            usePgVector ? 'bg-[var(--v-warn-hi)]/20 border-[var(--v-warn-hi)]/60 text-[var(--v-warn-hi)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-warn-hi)] hover:border-[var(--v-warn-hi)]/40'
 
           }`}>
 
@@ -4222,9 +4231,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
             ocultarSemMovimento
 
-              ? 'bg-[#007aff]/20 border-[#007aff]/60 text-[#007aff]'
+              ? 'bg-[var(--v-info)]/20 border-[var(--v-info)]/60 text-[var(--v-info)]'
 
-              : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[#007aff] hover:border-[#007aff]/40'
+              : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-info)] hover:border-[var(--v-info)]/40'
 
           }`}>
 
@@ -4238,7 +4247,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       {error && (
 
-        <div className="bg-[var(--v-accent)]/10 border border-[#ff4d00]/30 rounded p-3 flex items-center gap-3">
+        <div className="bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[var(--v-accent)]/30 rounded p-3 flex items-center gap-3">
 
           <AlertTriangle size={14} className="text-[var(--v-accent)] shrink-0"/>
 
@@ -4272,9 +4281,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
       {showDiag && (
 
-        <div className="bg-[var(--v-deep)] border border-[#a259ff]/30 rounded-[var(--v-radius)] overflow-hidden">
+        <div className="bg-[var(--v-deep)] border border-[var(--v-src-vu1)]/30 rounded-[var(--v-radius)] overflow-hidden">
 
-          <div className="flex items-center justify-between p-4 border-b border-[#a259ff]/20 bg-[#a259ff]/5">
+          <div className="flex items-center justify-between p-4 border-b border-[var(--v-src-vu1)]/20 bg-[var(--v-src-vu1)]/5">
 
             <div className="flex items-center gap-3">
 
@@ -4368,17 +4377,17 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                       const isAnomalia = c.anomaly_label === 'ANOMALIA';
 
-                      const scoreColor = score > 0.7 ? '#ff4d00' : score > 0.4 ? '#ffcc00' : '#34c759';
+                      const scoreColor = score > 0.7 ? 'var(--v-accent)' : score > 0.4 ? 'var(--v-warn-hi)' : 'var(--v-ok)';
 
                       const padraoColors = {
 
-                        'Exato': 'bg-[#34c759]/10 text-[var(--v-accent-3)] border-[#34c759]/30',
+                        'Exato': 'bg-[var(--v-ok)]/10 text-[var(--v-accent-3)] border-[var(--v-ok)]/30',
 
-                        'Lag Temporal': 'bg-[#007aff]/10 text-[var(--v-accent-4)] border-[#007aff]/30',
+                        'Lag Temporal': 'bg-[var(--v-info)]/10 text-[var(--v-accent-4)] border-[var(--v-info)]/30',
 
-                        'Percentual Fixo': 'bg-[#ffcc00]/10 text-[var(--v-accent-6)] border-[#ffcc00]/30',
+                        'Percentual Fixo': 'bg-[var(--v-warn-hi)]/10 text-[var(--v-accent-6)] border-[var(--v-warn-hi)]/30',
 
-                        'Caótico': 'bg-[var(--v-accent)]/10 text-[var(--v-accent)] border-[#ff4d00]/30',
+                        'Caótico': 'bg-[rgb(var(--v-accent-rgb)_/_0.1)] text-[var(--v-accent)] border-[var(--v-accent)]/30',
 
                       };
 
@@ -4388,7 +4397,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                         <React.Fragment key={i}>
 
-                        <tr className={`border-b border-[var(--v-bg)] ${isAnomalia ? 'bg-[var(--v-accent)]/5' : ''} hover:bg-[var(--v-deep)]/60`}>
+                        <tr className={`border-b border-[var(--v-bg)] ${isAnomalia ? 'bg-[rgb(var(--v-accent-rgb)_/_0.05)]' : ''} hover:bg-[rgb(var(--v-deep-rgb)_/_0.6)]`}>
 
                           <td className="p-2">
 
@@ -4466,7 +4475,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                             ) : (
 
-                              <span className="text-[#333] text-[10px]">—</span>
+                              <span className="text-[var(--v-text-ghost)] text-[10px]">—</span>
 
                             )}
 
@@ -4476,9 +4485,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                         {c.causa_raiz && (
 
-                          <tr className="bg-[#a259ff]/10">
+                          <tr className="bg-[var(--v-src-vu1)]/10">
 
-                            <td colSpan={7} className="p-3 border-b border-[#a259ff]/20">
+                            <td colSpan={7} className="p-3 border-b border-[var(--v-src-vu1)]/20">
 
                               <div className="flex items-start gap-2">
 
@@ -4488,7 +4497,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                                   <div className="text-xs font-black text-[var(--v-accent-5)] uppercase tracking-widest mb-1">Diagnóstico IA (Causa Raiz)</div>
 
-                                  <div className="text-sm text-[#ddd] leading-relaxed mb-1.5">{c.causa_raiz}</div>
+                                  <div className="text-sm text-[var(--v-text)] leading-relaxed mb-1.5">{c.causa_raiz}</div>
 
                                   {c.recomendacao && (
 
@@ -4534,7 +4543,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         crossLoading ? (
 
-          <div className="bg-[var(--v-bg)] border border-[#34c759]/25 rounded-[var(--v-radius)] p-8 flex items-center justify-center gap-3">
+          <div className="bg-[var(--v-bg)] border border-[var(--v-ok)]/25 rounded-[var(--v-radius)] p-8 flex items-center justify-center gap-3">
 
             <Link2 className="animate-spin text-[var(--v-accent-3)]" size={18}/>
 
@@ -4570,7 +4579,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
             <div className="flex items-end gap-2">
 
-              <span className="text-3xl font-black font-mono" style={{ color: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00' }}>
+              <span className="text-3xl font-black font-mono" style={{ color: metrics.pctAdh >= 95 ? 'var(--v-ok)' : metrics.pctAdh >= 80 ? 'var(--v-warn-hi)' : 'var(--v-accent)' }}>
 
                 {metrics.pctAdh.toFixed(0)}%
 
@@ -4586,7 +4595,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                 width: `${metrics.pctAdh}%`,
 
-                background: metrics.pctAdh >= 95 ? '#34c759' : metrics.pctAdh >= 80 ? '#ffcc00' : '#ff4d00'
+                background: metrics.pctAdh >= 95 ? 'var(--v-ok)' : metrics.pctAdh >= 80 ? 'var(--v-warn-hi)' : 'var(--v-accent)'
 
               }}/>
 
@@ -4604,9 +4613,9 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           {[
 
-            { label: 'Movimento Total Questor', val: metrics.totMovFisico,  cor: '#ff4d00' },
+            { label: 'Movimento Total Questor', val: metrics.totMovFisico,  cor: 'var(--v-accent)' },
 
-            { label: 'Movimento Total Vulcano', val: metrics.totMovVirtual, cor: '#a259ff' },
+            { label: 'Movimento Total Vulcano', val: metrics.totMovVirtual, cor: 'var(--v-src-vu1)' },
 
             { label: 'Diferença de Movimento',  val: metrics.diffMov, cor: corDiff(metrics.diffMov) },
 
@@ -4652,7 +4661,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               <span className="flex items-center gap-1.5">
 
-                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[#a259ff] inline-block"/>
+                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-src-vu1)] inline-block"/>
 
                 <span className="text-[var(--v-accent-5)]">Vulcano (Societário)</span>
 
@@ -4660,7 +4669,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
               <span className="flex items-center gap-1.5">
 
-                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[#ffcc00] inline-block"/>
+                <span className="w-2 h-2 rounded-[var(--v-radius)] bg-[var(--v-warn-hi)] inline-block"/>
 
                 <span className="text-[var(--v-accent-6)]">Δ Divergência</span>
 
@@ -4688,7 +4697,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                   {/* Conta */}
 
-                  <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest text-[#8a8a8a] border-b-2 border-[#363636] sticky left-0 top-0 z-30 bg-[#0d0d0d] min-w-[220px]">
+                  <th className="px-3 py-2 text-left text-[10px] font-black uppercase tracking-widest text-[var(--v-text-muted)] border-b-2 border-[var(--v-border)] sticky left-0 top-0 z-30 bg-[var(--v-deep)] min-w-[220px]">
 
                     Conta
 
@@ -4702,7 +4711,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                         style={{ minWidth: '270px' }}>
 
-                      <div className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-widest text-[#c8c8c8] border-b-2 border-[#363636] bg-[#0d0d0d]">
+                      <div className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-widest text-[var(--v-text)] border-b-2 border-[var(--v-border)] bg-[var(--v-deep)]">
 
                         {labelMes(comp)}
 
@@ -4710,11 +4719,11 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                       <div className="flex text-[9px] font-black uppercase tracking-widest">
 
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[#2a2a2a] text-[#ff6b1a]/80">Questor</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[var(--v-border)] text-[var(--v-accent)]/80">Questor</div>
 
-                        <div className="flex-1 px-2 py-1 text-right border-r border-[#2a2a2a] text-[#a259ff]/80">Vulcano</div>
+                        <div className="flex-1 px-2 py-1 text-right border-r border-[var(--v-border)] text-[var(--v-src-vu1)]/80">Vulcano</div>
 
-                        <div className="flex-1 px-2 py-1 text-right text-[#eab308]/80">Δ</div>
+                        <div className="flex-1 px-2 py-1 text-right text-[var(--v-warn-hi)]/80">Δ</div>
 
                       </div>
 
@@ -4722,7 +4731,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
                   ))}
 
-                  <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-widest text-[#e8e8e8] border-b-2 border-[#363636] sticky top-0 z-20 bg-[#0d0d0d] min-w-[130px]">
+                  <th className="px-3 py-2 text-right text-[10px] font-black uppercase tracking-widest text-[var(--v-text)] border-b-2 border-[var(--v-border)] sticky top-0 z-20 bg-[var(--v-deep)] min-w-[130px]">
 
                     Status Final
 
@@ -4794,7 +4803,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
 
-          <div className="w-16 h-16 bg-[var(--v-accent)]/10 border border-[#ff4d00]/20 rounded flex items-center justify-center">
+          <div className="w-16 h-16 bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[var(--v-accent)]/20 rounded flex items-center justify-center">
 
             <ShieldCheck className="text-[var(--v-accent)]" size={28}/>
 
@@ -4814,7 +4823,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           <button onClick={fetchTudo} disabled={!selectedEmpresa}
 
-            className="mt-2 px-6 py-3 bg-[var(--v-accent)] text-black text-xs font-black uppercase tracking-widest rounded hover:bg-white transition-all flex items-center gap-2 disabled:opacity-40">
+            className="mt-2 px-6 py-3 bg-[var(--v-accent)] text-[var(--v-text-inv)] text-xs font-black uppercase tracking-widest rounded hover:bg-[var(--v-hover)] transition-all flex items-center gap-2 disabled:opacity-40">
 
             <Zap size={13}/> Iniciar Auditoria
 

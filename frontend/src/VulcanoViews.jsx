@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useTableSort } from './hooks/useTableSort';
+import SortIcon from './components/SortIcon';
 import { 
     Download, RefreshCw, Upload, Play, CheckCircle2, CheckCircle, ChevronDown, Layers, Activity,
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
@@ -40,10 +42,15 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
         setLoading(true);
         setError(null);
 
+        // Cancela ao desmontar/trocar de filtro: esta consulta e vetorizada em Pandas e
+        // demora, entao sem abort a resposta antiga pode chegar depois da nova e pintar
+        // a tela com os numeros da empresa anterior.
+        const ac = new AbortController();
+
         // Fetching the vectorized Pandas data (Limited to filters)
         Promise.all([
-            fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIniFilter ? `&data_ini=${dataIniFilter}` : ''}${dataFimFilter ? `&data_fim=${dataFimFilter}` : ''}`).then(res => res.json()),
-            fetch(`${API_BASE}/api/vulcano/dashboard-lancamentos?empresa_id=${selectedEmpresa}`).then(res => res.json()).catch((err) => ({ error: err.message }))
+            fetch(`${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIniFilter ? `&data_ini=${dataIniFilter}` : ''}${dataFimFilter ? `&data_fim=${dataFimFilter}` : ''}`, { signal: ac.signal }).then(res => res.json()),
+            fetch(`${API_BASE}/api/vulcano/dashboard-lancamentos?empresa_id=${selectedEmpresa}`, { signal: ac.signal }).then(res => res.json()).catch((err) => (err.name === 'AbortError' ? Promise.reject(err) : { error: err.message }))
         ])
         .then(([caixaJson, lancJson]) => {
             setData(caixaJson);
@@ -51,10 +58,13 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
             setLoading(false);
         })
         .catch(err => {
+            if (err.name === 'AbortError') return;
             console.error("Dashboard Fetch Error:", err);
             setError(err.message);
             setLoading(false);
         });
+
+        return () => ac.abort();
     }, [selectedEmpresa, fetchTrigger, dataIniFilter, dataFimFilter]);
 
     const stats = useMemo(() => {
@@ -103,7 +113,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
             <h3 className="text-xl font-bold uppercase mb-2">Falha na Sincronização</h3>
             <p className="text-sm opacity-70 mb-6">{error}</p>
             <button 
-                onClick={() => window.location.reload()}
+                onClick={() => setFetchTrigger(t => t + 1)}
                 className="bg-[var(--v-error)] text-[var(--v-text-bold)] px-6 py-2 rounded-[var(--v-radius)] font-bold uppercase text-[10px] tracking-widest"
             >
                 Tentar Novamente
@@ -130,22 +140,22 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                             value={empreendimentoFilter}
                             onChange={(e) => setEmpreendimentoFilter(e.target.value)}
                             placeholder="Buscar res./cond. ..."
-                            className="w-full bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono pl-9 py-1.5 rounded outline-none placeholder-[#444] transition-colors"
+                            className="w-full bg-[var(--v-bg)] border border-[var(--v-border)] hover:border-[#555] focus:border-[var(--v-accent-3)] text-[var(--v-text-bold)] text-[11px] font-mono pl-9 py-1.5 rounded outline-none placeholder-[#444] transition-colors"
                         />
                     </div>
                 </div>
                 <div>
                     <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Mês Inicial</label>
-                    <input type="month" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
+                    <input type="month" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="min-w-[140px] bg-[var(--v-bg)] border border-[var(--v-border)] hover:border-[#555] focus:border-[var(--v-accent-3)] text-[var(--v-text-bold)] text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
                 </div>
                 <div>
                     <label className="text-[9px] uppercase tracking-widest text-[var(--v-text-muted)] font-black mb-1 block">Mês Final</label>
-                    <input type="month" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="min-w-[140px] bg-[#111] border border-[#333] hover:border-[#555] focus:border-[var(--v-accent-3)] text-white text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
+                    <input type="month" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="min-w-[140px] bg-[var(--v-bg)] border border-[var(--v-border)] hover:border-[#555] focus:border-[var(--v-accent-3)] text-[var(--v-text-bold)] text-[11px] font-mono px-3 py-1.5 rounded outline-none transition-colors dark-calendar" />
                 </div>
                 <div className="flex-1 flex justify-end">
                     <button 
                         onClick={() => setFetchTrigger(prev => prev + 1)}
-                        className="bg-[var(--v-accent-4)] text-black font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-[var(--v-radius)] hover:opacity-80 transition-opacity flex items-center gap-2"
+                        className="bg-[var(--v-accent-4)] text-[var(--v-text-inv)] font-black uppercase tracking-widest text-[10px] px-6 py-2 rounded-[var(--v-radius)] hover:opacity-80 transition-opacity flex items-center gap-2"
                     >
                         <RefreshCw size={14} /> Atualizar Matriz
                     </button>
@@ -279,10 +289,10 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
-                                <XAxis dataKey="period" stroke="#444" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#444" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+                                <XAxis dataKey="period" stroke="var(--v-text-ghost)" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="var(--v-text-ghost)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
                                 <RechartsTooltip 
-                                    contentStyle={{ backgroundColor: '#131313', border: '1px solid #333', borderRadius: '4px' }}
+                                    contentStyle={{ backgroundColor: '#131313', border: '1px solid var(--v-text-ghost)', borderRadius: '4px' }}
                                     itemStyle={{ fontSize: '10px', textTransform: 'uppercase' }}
                                 />
                                 <Area type="monotone" dataKey="caixa" stroke="var(--v-accent-3)" fillOpacity={1} fill="url(#colorCaixa)" />
@@ -311,7 +321,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                                     <Cell fill="var(--v-accent-5)" />
                                 </Pie>
                                 <RechartsTooltip 
-                                    contentStyle={{ backgroundColor: '#131313', border: '1px solid #333', borderRadius: '4px' }}
+                                    contentStyle={{ backgroundColor: '#131313', border: '1px solid var(--v-text-ghost)', borderRadius: '4px' }}
                                 />
                                 <Legend verticalAlign="bottom" align="center" iconType="circle" />
                             </PieChart>
@@ -328,12 +338,12 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
             <div className="magma-card rounded-[var(--v-radius)] overflow-hidden border border-[var(--v-border)]">
                 <div className="p-4 bg-[var(--v-surface-container)] border-b border-[var(--v-border)] flex justify-between items-center">
                     <h3 className="text-[10px] uppercase font-black tracking-widest text-[var(--v-text-muted)]">Detalhamento por Empreendimento</h3>
-                    <div className="text-[9px] text-[var(--v-text-faint)] uppercase font-bold bg-black/30 px-2 py-1 rounded">Visualização Consolidada Pandas</div>
+                    <div className="text-[9px] text-[var(--v-text-faint)] uppercase font-bold bg-[var(--v-scrim)] px-2 py-1 rounded">Visualização Consolidada Pandas</div>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left text-xs border-collapse">
                         <thead>
-                            <tr className="bg-black/20 text-[var(--v-text-faint)] uppercase tracking-widest font-black border-b border-[var(--v-border)]">
+                            <tr className="bg-[var(--v-zebra)] text-[var(--v-text-faint)] uppercase tracking-widest font-black border-b border-[var(--v-border)]">
                                 <th className="p-4">Empreendimento</th>
                                 <th className="p-4 text-right">VGV</th>
                                 <th className="p-4 text-right">POC (%)</th>
@@ -361,7 +371,7 @@ export const DashboardMeta = ({ selectedEmpresa }) => {
                                         <td className="p-4 text-right font-mono">{formatCurrency(isFiltered ? meta.tributos_soc_mes : meta.tributos_soc_acumulado)}</td>
                                     </tr>
                                     {expandedRow === idx && meta.unidades && meta.unidades.length > 0 && (
-                                        <tr className="bg-[var(--v-bg)]/50">
+                                        <tr className="bg-[rgb(var(--v-bg-rgb)_/_0.5)]">
                                             <td colSpan={7} className="p-4">
                                                 <div className="overflow-x-auto max-h-[300px] custom-scrollbar border border-[var(--v-border)]">
                                                     <table className="w-full text-left text-[10px]">
@@ -669,10 +679,12 @@ export const VendasView = ({ selectedEmpresa }) => {
 
   useEffect(() => {
     if (!selectedEmpresa) return;
-    fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
+    const ac = new AbortController();
+    fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`, { signal: ac.signal })
       .then(res => res.json())
       .then(d => setEmpreendimentosList(d))
-      .catch(err => console.error(err));
+      .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+    return () => ac.abort();
   }, [selectedEmpresa]);
 
   const handleSearch = () => {
@@ -770,51 +782,51 @@ export const VendasView = ({ selectedEmpresa }) => {
   const totalGeral = filtered.reduce((acc, curr) => acc + (curr.total || 0), 0);
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in" style={{ background: '#0c0908' }}>
+    <div className="flex flex-col h-full animate-in fade-in" style={{ background: 'var(--v-shell)' }}>
       {/* HEADER PODEROSO */}
-      <div className="px-6 py-4 flex flex-col gap-4 shrink-0 z-20" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+      <div className="px-6 py-4 flex flex-col gap-4 shrink-0 z-20" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
         <div className="flex justify-between items-end">
             <div className="flex items-baseline gap-3">
-                <h2 className="text-[24px] font-black tracking-tighter" style={{ color: '#f0e6d8' }}>VENDAS</h2>
-                <span className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>· {filtered.length}</span>
+                <h2 className="text-[24px] font-black tracking-tighter" style={{ color: 'var(--v-text-bold)' }}>VENDAS</h2>
+                <span className="font-mono text-[10px]" style={{ color: 'var(--v-text-faint)' }}>· {filtered.length}</span>
             </div>
             
             <div className="flex gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                     <Search size={12}/>
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar venda..." className="bg-transparent border-none outline-none text-[12px] w-48 placeholder-[#5a4e42]" style={{ color: '#f0e6d8' }} />
-                    <kbd className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>/</kbd>
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar venda..." className="bg-transparent border-none outline-none text-[12px] w-48 placeholder-[#5a4e42]" style={{ color: 'var(--v-text-bold)' }} />
+                    <kbd className="font-mono text-[10px]" style={{ color: 'var(--v-text-faint)' }}>/</kbd>
                 </div>
                 
-                <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#f0e6d8' }}>
-                    <Filter size={12}/> Comandos <kbd className="ml-1 text-[10px]" style={{ color: '#8a7a68' }}>⌘K</kbd>
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'var(--v-text-bold)' }}>
+                    <Filter size={12}/> Comandos <kbd className="ml-1 text-[10px]" style={{ color: 'var(--v-text-muted)' }}>⌘K</kbd>
                 </button>
-                <button onClick={handleExportXLSX} disabled={!filtered.length} title={filtered.length ? 'Exportar a lista filtrada para Excel' : 'Busque vendas primeiro'} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#f0e6d8' }}>
+                <button onClick={handleExportXLSX} disabled={!filtered.length} title={filtered.length ? 'Exportar a lista filtrada para Excel' : 'Busque vendas primeiro'} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'var(--v-text-bold)' }}>
                     <FileSpreadsheet size={12}/> Excel
                 </button>
-                <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
-                    <Plus size={12}/> Nova venda <kbd className="ml-1 text-[10px] bg-black/20 border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘N</kbd>
+                <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg" style={{ background: 'linear-gradient(135deg, var(--v-accent), var(--v-accent-2))', color: 'var(--v-accent-soft)' }}>
+                    <Plus size={12}/> Nova venda <kbd className="ml-1 text-[10px] bg-[var(--v-zebra)] border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘N</kbd>
                 </button>
             </div>
         </div>
         
         <div className="flex gap-3">
-            <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+            <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                 <option value="">Selecione Empreendimento</option>
                 {empreendimentosList.map((emp) => <option key={emp.id} value={emp.id}>{emp.nome}</option>)}
             </select>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                 <span className="text-[11px] font-mono">De</span>
-                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: 'var(--v-text-bold)' }} />
                 <span className="text-[11px] font-mono">Até</span>
-                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: 'var(--v-text-bold)' }} />
             </div>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                 <option value="TODOS">Status</option>
                 <option value="ATIVA">ATIVA</option>
                 <option value="DISTRATADA">DISTRATADA</option>
             </select>
-            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-white/10" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: '#ff7a1a' }}>
+            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-[var(--v-tint)]" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: 'var(--v-accent)' }}>
                 Buscar
             </button>
         </div>
@@ -833,10 +845,10 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <div className="flex flex-col">
                     {Object.entries(groupedVendas).filter(([_, items]) => items.length > 0).map(([groupName, items]) => (
                         <div key={groupName} className="mb-4">
-                            <div className="px-6 py-2 flex items-center gap-3 sticky top-0 z-10" style={{ background: '#0c0908' }}>
-                                <span className="font-mono text-[9.5px] font-bold tracking-[0.28em]" style={{ color: '#5a4e42' }}>{groupName}</span>
-                                <div className="flex-1 h-[1px]" style={{ background: 'rgba(255, 160, 80, 0.08)' }}></div>
-                                <span className="font-mono text-[9.5px]" style={{ color: '#5a4e42' }}>{items.length}</span>
+                            <div className="px-6 py-2 flex items-center gap-3 sticky top-0 z-10" style={{ background: 'var(--v-shell)' }}>
+                                <span className="font-mono text-[9.5px] font-bold tracking-[0.28em]" style={{ color: 'var(--v-text-faint)' }}>{groupName}</span>
+                                <div className="flex-1 h-[1px]" style={{ background: 'var(--v-line-warm)' }}></div>
+                                <span className="font-mono text-[9.5px]" style={{ color: 'var(--v-text-faint)' }}>{items.length}</span>
                             </div>
                             <div className="flex flex-col">
                                 {items.map(v => {
@@ -849,10 +861,10 @@ export const VendasView = ({ selectedEmpresa }) => {
                                             className="grid grid-cols-[60px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors"
                                             style={{
                                                 background: isSelected ? 'rgba(255, 122, 26, 0.05)' : 'transparent',
-                                                borderBottom: '1px solid rgba(255, 160, 80, 0.08)'
+                                                borderBottom: '1px solid var(--v-line-warm)'
                                             }}
                                         >
-                                            <span className="font-mono text-[10.5px]" style={{ color: isSelected ? '#ff7a1a' : '#5a4e42' }}>#{v.id}</span>
+                                            <span className="font-mono text-[10.5px]" style={{ color: isSelected ? 'var(--v-accent)' : 'var(--v-text-faint)' }}>#{v.id}</span>
                                             
                                             <div className="w-[30px] h-[22px] rounded flex items-center justify-center font-mono text-[9.5px] font-bold" 
                                                  style={{ background: 'linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15))', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
@@ -860,7 +872,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                                             </div>
                                             
                                             <div className="min-w-0">
-                                                <div className="font-medium text-[13.5px] truncate flex items-center gap-2" style={{ color: '#f0e6d8' }}>
+                                                <div className="font-medium text-[13.5px] truncate flex items-center gap-2" style={{ color: 'var(--v-text-bold)' }}>
                                                     {v.cliente_nome}
                                                     {(v.qtd_compradores || 1) > 1 && (
                                                         <span title={(v.compradores || []).map(c => c.nome).join('\n')} className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold shrink-0" style={{ background: 'rgba(255, 122, 26, 0.15)', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
@@ -868,24 +880,24 @@ export const VendasView = ({ selectedEmpresa }) => {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="font-mono text-[10.5px] mt-1" style={{ color: '#8a7a68' }}>
-                                                    {v.descricao} · <span style={{ color: '#5a4e42' }}>{v.cliente_cnpj}</span>
+                                                <div className="font-mono text-[10.5px] mt-1" style={{ color: 'var(--v-text-muted)' }}>
+                                                    {v.descricao} · <span style={{ color: 'var(--v-text-faint)' }}>{v.cliente_cnpj}</span>
                                                 </div>
                                             </div>
                                             
-                                            <div className="font-mono text-[11px]" style={{ color: '#8a7a68' }}>{v.empreendimento}</div>
+                                            <div className="font-mono text-[11px]" style={{ color: 'var(--v-text-muted)' }}>{v.empreendimento}</div>
                                             
-                                            <div className="font-medium text-[13.5px]" style={{ color: '#f0e6d8' }}>{formatCurrency(v.total)}</div>
+                                            <div className="font-medium text-[13.5px]" style={{ color: 'var(--v-text-bold)' }}>{formatCurrency(v.total)}</div>
                                             
                                             <div className="flex items-center gap-2">
                                                 {isDistratada ? (
                                                     <><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_red]"></span><span className="font-mono text-[9.5px] tracking-[0.16em] text-red-500">DISTRATADA</span></>
                                                 ) : (
-                                                    <><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ffc247', boxShadow: '0 0 6px #ffc247' }}></span><span className="font-mono text-[9.5px] tracking-[0.16em]" style={{ color: '#ffc247' }}>ATIVA</span></>
+                                                    <><span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--v-warn)', boxShadow: '0 0 6px var(--v-warn)' }}></span><span className="font-mono text-[9.5px] tracking-[0.16em]" style={{ color: 'var(--v-warn)' }}>ATIVA</span></>
                                                 )}
                                             </div>
                                             
-                                            <div className="font-mono text-[10px] text-right" style={{ color: '#5a4e42' }}>{v.data}</div>
+                                            <div className="font-mono text-[10px] text-right" style={{ color: 'var(--v-text-faint)' }}>{v.data}</div>
                                         </div>
                                     );
                                 })}
@@ -898,105 +910,105 @@ export const VendasView = ({ selectedEmpresa }) => {
 
         {/* RIGHT PANEL (DETALHES DA VENDA) */}
         {selectedVenda && (
-            <div className="w-[450px] flex flex-col shrink-0 animate-in slide-in-from-right-8 duration-300 z-10" style={{ background: '#0c0908', borderLeft: '1px solid rgba(255, 160, 80, 0.08)' }}>
-                <div className="p-5 flex justify-between items-start" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+            <div className="w-[450px] flex flex-col shrink-0 animate-in slide-in-from-right-8 duration-300 z-10" style={{ background: 'var(--v-shell)', borderLeft: '1px solid var(--v-line-warm)' }}>
+                <div className="p-5 flex justify-between items-start" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
                     <div>
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono text-[10px] font-bold" style={{ color: '#ff7a1a' }}>#{selectedVenda.id}</span>
-                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono tracking-widest" style={{ background: 'rgba(255, 194, 71, 0.1)', color: '#ffc247' }}>ATIVA</span>
+                            <span className="font-mono text-[10px] font-bold" style={{ color: 'var(--v-accent)' }}>#{selectedVenda.id}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[8px] font-mono tracking-widest" style={{ background: 'rgba(255, 194, 71, 0.1)', color: 'var(--v-warn)' }}>ATIVA</span>
                         </div>
-                        <h3 className="text-[16px] font-bold" style={{ color: '#f0e6d8' }}>{selectedVenda.cliente_nome}</h3>
-                        <p className="font-mono text-[11px] mt-1" style={{ color: '#8a7a68' }}>{selectedVenda.cliente_cnpj}</p>
+                        <h3 className="text-[16px] font-bold" style={{ color: 'var(--v-text-bold)' }}>{selectedVenda.cliente_nome}</h3>
+                        <p className="font-mono text-[11px] mt-1" style={{ color: 'var(--v-text-muted)' }}>{selectedVenda.cliente_cnpj}</p>
                     </div>
-                    <button onClick={() => setSelectedVenda(null)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/5 transition-colors" style={{ color: '#8a7a68' }}><X size={14}/></button>
+                    <button onClick={() => setSelectedVenda(null)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-[var(--v-tint)] transition-colors" style={{ color: 'var(--v-text-muted)' }}><X size={14}/></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {/* INFO GRID */}
-                    <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
-                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
-                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: '#5a4e42' }}>UNIDADE</span>
-                            <span className="text-[12.5px]" style={{ color: '#f0e6d8' }}>{selectedVenda.descricao}</span>
+                    <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
+                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'var(--v-line-warm)' }}>
+                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: 'var(--v-text-faint)' }}>UNIDADE</span>
+                            <span className="text-[12.5px]" style={{ color: 'var(--v-text-bold)' }}>{selectedVenda.descricao}</span>
                         </div>
-                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
-                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: '#5a4e42' }}>OBRA</span>
-                            <span className="text-[12.5px]" style={{ color: '#f0e6d8' }}>{selectedVenda.empreendimento}</span>
+                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'var(--v-line-warm)' }}>
+                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: 'var(--v-text-faint)' }}>OBRA</span>
+                            <span className="text-[12.5px]" style={{ color: 'var(--v-text-bold)' }}>{selectedVenda.empreendimento}</span>
                         </div>
-                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'rgba(255, 160, 80, 0.08)' }}>
-                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: '#5a4e42' }}>ASSINADO</span>
-                            <span className="text-[12.5px]" style={{ color: '#f0e6d8' }}>{selectedVenda.data}</span>
+                        <div className="flex justify-between py-1.5 border-b border-dashed" style={{ borderColor: 'var(--v-line-warm)' }}>
+                            <span className="font-mono text-[10px] tracking-[0.18em]" style={{ color: 'var(--v-text-faint)' }}>ASSINADO</span>
+                            <span className="text-[12.5px]" style={{ color: 'var(--v-text-bold)' }}>{selectedVenda.data}</span>
                         </div>
                     </div>
 
                     {/* KPIs */}
-                    <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                    <div className="p-5" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>VALOR DA VENDA</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total)}</div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: 'var(--v-text-faint)' }}>VALOR DA VENDA</div>
+                                <div className="text-[15px] font-semibold" style={{ color: 'var(--v-text-bold)' }}>{formatCurrency(selectedVenda.total)}</div>
                             </div>
                             <div>
-                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>PARCELAS</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{condicoesData?.tabela ? condicoesData.tabela.length + 'x' : '...'}</div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: 'var(--v-text-faint)' }}>PARCELAS</div>
+                                <div className="text-[15px] font-semibold" style={{ color: 'var(--v-text-bold)' }}>{condicoesData?.tabela ? condicoesData.tabela.length + 'x' : '...'}</div>
                             </div>
                             <div className="mt-2">
-                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>ENTRADA</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total * 0.1)}</div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: 'var(--v-text-faint)' }}>ENTRADA</div>
+                                <div className="text-[15px] font-semibold" style={{ color: 'var(--v-text-bold)' }}>{formatCurrency(selectedVenda.total * 0.1)}</div>
                             </div>
                             <div className="mt-2">
-                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>VPL ESTIMADO</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total * 0.78)}</div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: 'var(--v-text-faint)' }}>VPL ESTIMADO</div>
+                                <div className="text-[15px] font-semibold" style={{ color: 'var(--v-text-bold)' }}>{formatCurrency(selectedVenda.total * 0.78)}</div>
                             </div>
                         </div>
                     </div>
 
                     {/* Chart Area */}
-                    <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
-                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>CRONOGRAMA · 12 MESES</div>
+                    <div className="p-5" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
+                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: 'var(--v-text-faint)' }}>CRONOGRAMA · 12 MESES</div>
                         <div className="h-12 flex items-end justify-center">
                             {condicoesLoading ? (
-                                <Loader2 className="animate-spin" size={16} style={{ color: '#5a4e42' }}/>
+                                <Loader2 className="animate-spin" size={16} style={{ color: 'var(--v-text-faint)' }}/>
                             ) : condicoesData?.tabela ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={condicoesData.tabela.slice(0, 12).map(c => ({ name: c.Data.substring(3,5), val: c.Valor }))}>
-                                        <RechartsTooltip cursor={{fill: 'rgba(255, 160, 80, 0.08)'}} contentStyle={{backgroundColor: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', fontSize: '10px'}} />
+                                        <RechartsTooltip cursor={{fill: 'var(--v-line-warm)'}} contentStyle={{backgroundColor: 'var(--v-card)', border: '1px solid var(--v-line-warm)', fontSize: '10px'}} />
                                         <Bar dataKey="val" fill="url(#colorUv)" radius={[1, 1, 0, 0]} />
                                         <defs>
                                             <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
                                                 <stop offset="0%" stopColor="#ff9a4a" stopOpacity={1}/>
-                                                <stop offset="100%" stopColor="#c93a12" stopOpacity={1}/>
+                                                <stop offset="100%" stopColor="var(--v-accent-2)" stopOpacity={1}/>
                                             </linearGradient>
                                         </defs>
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <span className="text-[9px] uppercase" style={{ color: '#5a4e42' }}>N/A</span>
+                                <span className="text-[9px] uppercase" style={{ color: 'var(--v-text-faint)' }}>N/A</span>
                             )}
                         </div>
                     </div>
 
                     {/* Actions */}
                     <div className="p-5">
-                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>AÇÕES</div>
+                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: 'var(--v-text-faint)' }}>AÇÕES</div>
                         <div className="flex flex-col gap-1.5">
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><Layers size={14} style={{ color: '#8a7a68' }}/> Abrir estrutura financeira</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>Enter</span>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[var(--v-tint)]" style={{ color: 'var(--v-text-bold)' }}>
+                                <span className="flex items-center gap-3"><Layers size={14} style={{ color: 'var(--v-text-muted)' }}/> Abrir estrutura financeira</span>
+                                <span className="font-mono text-[10px] bg-[var(--v-scrim)] px-1.5 rounded" style={{ color: 'var(--v-text-faint)' }}>Enter</span>
                             </button>
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><DollarSign size={14} style={{ color: '#8a7a68' }}/> Lançar parcela manual</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⌘L</span>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[var(--v-tint)]" style={{ color: 'var(--v-text-bold)' }}>
+                                <span className="flex items-center gap-3"><DollarSign size={14} style={{ color: 'var(--v-text-muted)' }}/> Lançar parcela manual</span>
+                                <span className="font-mono text-[10px] bg-[var(--v-scrim)] px-1.5 rounded" style={{ color: 'var(--v-text-faint)' }}>⌘L</span>
                             </button>
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><RefreshCw size={14} style={{ color: '#8a7a68' }}/> Reconciliar com Questor</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⇧⌘R</span>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[var(--v-tint)]" style={{ color: 'var(--v-text-bold)' }}>
+                                <span className="flex items-center gap-3"><RefreshCw size={14} style={{ color: 'var(--v-text-muted)' }}/> Reconciliar com Questor</span>
+                                <span className="font-mono text-[10px] bg-[var(--v-scrim)] px-1.5 rounded" style={{ color: 'var(--v-text-faint)' }}>⇧⌘R</span>
                             </button>
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><FileText size={14} style={{ color: '#8a7a68' }}/> Exportar contrato (.pdf)</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⇧⌘E</span>
+                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[var(--v-tint)]" style={{ color: 'var(--v-text-bold)' }}>
+                                <span className="flex items-center gap-3"><FileText size={14} style={{ color: 'var(--v-text-muted)' }}/> Exportar contrato (.pdf)</span>
+                                <span className="font-mono text-[10px] bg-[var(--v-scrim)] px-1.5 rounded" style={{ color: 'var(--v-text-faint)' }}>⇧⌘E</span>
                             </button>
                             {selectedVenda.distrato !== 'S' && (
-                                <button onClick={() => setDistratoModal(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium mt-2 transition-colors hover:bg-red-950/30" style={{ color: '#ef4444' }}>
+                                <button onClick={() => setDistratoModal(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium mt-2 transition-colors hover:bg-red-950/30" style={{ color: 'var(--v-err)' }}>
                                     <span className="flex items-center gap-3"><AlertCircle size={14} className="text-red-500/70"/> Distratar contrato</span>
                                     <span className="font-mono text-[10px] bg-red-950/50 px-1.5 rounded text-red-900 border border-red-900/30">⇧⌘D</span>
                                 </button>
@@ -1008,15 +1020,15 @@ export const VendasView = ({ selectedEmpresa }) => {
         )}
       </div>
 
-      <div className="px-6 py-2 flex justify-between items-center shrink-0 z-20" style={{ background: '#0c0908', borderTop: '1px solid rgba(255, 160, 80, 0.08)' }}>
-        <div className="flex gap-4 font-mono text-[9px] font-bold tracking-[0.16em]" style={{ color: '#5a4e42' }}>
+      <div className="px-6 py-2 flex justify-between items-center shrink-0 z-20" style={{ background: 'var(--v-shell)', borderTop: '1px solid var(--v-line-warm)' }}>
+        <div className="flex gap-4 font-mono text-[9px] font-bold tracking-[0.16em]" style={{ color: 'var(--v-text-faint)' }}>
             <span>↑ ↓ NAVEGAR</span>
             <span>↵ AÇÃO</span>
             <span>/ BUSCAR</span>
             <span>⌘K COMANDOS</span>
             <span>⇧⌘N NOVA VENDA</span>
         </div>
-        <div className="font-mono text-[9.5px] font-bold tracking-[0.2em]" style={{ color: '#8a7a68' }}>
+        <div className="font-mono text-[9.5px] font-bold tracking-[0.2em]" style={{ color: 'var(--v-text-muted)' }}>
             EXIBINDO {filtered.length} · TOTAL {formatCurrency(totalGeral)}
         </div>
       </div>
@@ -1033,31 +1045,31 @@ export const VendasView = ({ selectedEmpresa }) => {
 
       {/* MODAL DISTRATO */}
       {distratoModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in p-6">
-            <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6" style={{ background: '#0c0908', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+        <div className="fixed inset-0 bg-[var(--v-overlay)] backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in p-6">
+            <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6" style={{ background: 'var(--v-shell)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
                 <h3 className="text-red-500 text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-4">
                     <AlertCircle size={24}/> Confirmar Distrato
                 </h3>
-                <p className="text-[12px] mb-4" style={{ color: '#8a7a68' }}>
-                    Você está prestes a distratar o contrato <strong style={{ color: '#f0e6d8' }}>#{distratoModal.id}</strong> ({distratoModal.cliente_nome}).
+                <p className="text-[12px] mb-4" style={{ color: 'var(--v-text-muted)' }}>
+                    Você está prestes a distratar o contrato <strong style={{ color: 'var(--v-text-bold)' }}>#{distratoModal.id}</strong> ({distratoModal.cliente_nome}).
                     Esta ação <span className="text-red-500 font-bold">cancelará as parcelas futuras</span> vinculadas a esta venda.
                 </p>
                 <div className="grid grid-cols-2 gap-3 mb-6">
                     <div>
-                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Data do distrato</label>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: 'var(--v-text-muted)' }}>Data do distrato</label>
                         <input type="date" value={distratoModal.data_distrato_form || hojeLocal()}
                             onChange={(e) => setDistratoModal({ ...distratoModal, data_distrato_form: e.target.value })}
-                            className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                            className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.08)', color: 'var(--v-text-bold)' }} />
                     </div>
                     <div>
-                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Valor devolvido</label>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: 'var(--v-text-muted)' }}>Valor devolvido</label>
                         <input type="number" step="0.01" value={distratoModal.valor_devolvido_form ?? ''} placeholder="0,00"
                             onChange={(e) => setDistratoModal({ ...distratoModal, valor_devolvido_form: e.target.value })}
-                            className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                            className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.08)', color: 'var(--v-text-bold)' }} />
                     </div>
                 </div>
                 <div className="flex justify-end gap-3">
-                    <button onClick={() => setDistratoModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>
+                    <button onClick={() => setDistratoModal(null)} className="px-4 py-2 hover:bg-[var(--v-tint)] transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: 'var(--v-text-muted)' }}>
                         Cancelar
                     </button>
                     <button
@@ -1094,6 +1106,28 @@ export const VendasView = ({ selectedEmpresa }) => {
 };
 
 
+/**
+ * As 7 colunas do grid da lista, na ordem visual.
+ *
+ * A #1 ordena por num_parcela e nao por id: o id e numero nas parcelas reais e
+ * "prazo_123" nas projetadas, entao a ordenacao seria indefinida em metade das
+ * linhas. A #7 exibe `data` em DD/MM/YYYY mas ordena por `vencimento_iso`, que o
+ * backend ja manda pronto.
+ *
+ * Sem ordenacao: a #2 e o mesmo dado da #4, e o status (#6) e derivado em render
+ * e quase constante dentro de cada bloco — BAIXADAS e todo PAGO, VENCIDAS e todo
+ * ATRASADA, entao ordenar por ele nao moveria quase nada.
+ */
+const COLUNAS_RECEB = [
+  { key: 'num_parcela',    label: '# / Parcela',    type: 'parcela' },
+  { key: '_emp_badge',     label: '' },
+  { key: 'cliente',        label: 'Cliente',        type: 'text' },
+  { key: 'empreendimento', label: 'Empreendimento', type: 'text' },
+  { key: 'parcela',        label: 'Valor',          type: 'number', firstDir: 'desc' },
+  { key: '_status',        label: 'Status' },
+  { key: 'data',           label: 'Vencimento',     type: 'date', field: 'vencimento_iso', right: true },
+];
+
 export const RecebimentosView = ({ selectedEmpresa }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1109,12 +1143,34 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   
   const [baixaForm, setBaixaForm] = useState({ valor_pago: '', data_pagamento: '', acrescimos: '', descontos: '' });
 
+  // Ordenacao em estado local, nao na URL — ao contrario da Receb. Mensal. Aqui
+  // nenhum filtro esta na URL e handleSearch exige empreendimento + periodo, entao
+  // um link compartilhado abriria numa tela vazia de qualquer forma. Se um dia os
+  // filtros migrarem para a URL, basta passar { persistKey: 'ord' } aqui.
+  const sort = useTableSort(COLUNAS_RECEB);
+
+  // Reordenar move a linha aberta para longe. O React reordena os nos em vez de
+  // remontar (key={r.id} e estavel), entao o formulario e o que foi digitado
+  // sobrevivem — so a posicao se perde. Traz de volta ao centro, SEM focar: o
+  // usuario acabou de clicar num cabecalho, roubar o foco seria hostil.
+  useEffect(() => {
+    if (!selectedRecebimento) return;
+    const t = setTimeout(() => {
+      document.getElementById(`row-${selectedRecebimento.id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- so reage a troca de ordenacao
+  }, [sort.key, sort.dir]);
+
   useEffect(() => {
     if (!selectedEmpresa) return;
-    fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`)
+    const ac = new AbortController();
+    fetch(`${API_BASE}/api/vulcano/empreendimentos?empresa_id=${selectedEmpresa}`, { signal: ac.signal })
       .then(res => res.json())
       .then(d => setEmpreendimentosList(d))
-      .catch(err => console.error(err));
+      .catch(err => { if (err.name !== 'AbortError') console.error(err); });
+    return () => ac.abort();
   }, [selectedEmpresa]);
 
   const handleSearch = () => {
@@ -1150,47 +1206,63 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
     });
   };
 
-  const filtered = data.filter(r => {
-    let ok = true;
-    
-    const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
-    if (statusFilter === 'ABERTA' && !isAberto && !r._justPaid) ok = false;
-    if (statusFilter === 'BAIXADA' && isAberto) ok = false;
+  // A cadeia inteira num memo so: flatGrouped e dependencia do efeito de teclado
+  // logo abaixo, e sem memo o listener de keydown era removido e re-registrado a
+  // cada render. Com o sort no caminho, isso pioraria.
+  const { filtered, grouped, flatGrouped } = useMemo(() => {
+    const filtrado = data.filter(r => {
+      let ok = true;
 
-    if (dataIniFilter && r.vencimento_iso && r.vencimento_iso < dataIniFilter) ok = false;
-    if (dataFimFilter && r.vencimento_iso && r.vencimento_iso > dataFimFilter) ok = false;
+      const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
+      if (statusFilter === 'ABERTA' && !isAberto && !r._justPaid) ok = false;
+      if (statusFilter === 'BAIXADA' && isAberto) ok = false;
 
-    if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const str = `${r.cliente} ${r.descricao_venda} ${r.id} ${r.cliente_cnpj}`.toLowerCase();
-        if (!str.includes(query)) ok = false;
-    }
-    return ok;
-  });
+      if (dataIniFilter && r.vencimento_iso && r.vencimento_iso < dataIniFilter) ok = false;
+      if (dataFimFilter && r.vencimento_iso && r.vencimento_iso > dataFimFilter) ok = false;
 
-  const grouped = { 'VENCIDAS': [], 'VENCE HOJE': [], 'VENCE ESTA SEMANA': [], 'VENCE ESTE MÊS': [], 'PRÓXIMOS MESES': [], 'BAIXADAS': [] };
-  const today = new Date(); today.setHours(0,0,0,0);
-  
-  filtered.forEach(r => {
-    const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
-    if (!isAberto && !r._justPaid) { grouped['BAIXADAS'].push(r); return; }
+      if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const str = `${r.cliente} ${r.descricao_venda} ${r.id} ${r.cliente_cnpj}`.toLowerCase();
+          if (!str.includes(query)) ok = false;
+      }
+      return ok;
+    });
 
-    if (!r.vencimento_iso) { grouped['PRÓXIMOS MESES'].push(r); return; }
-    
-    const vDate = new Date(`${r.vencimento_iso}T00:00:00`);
-    const diffTime = vDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // Ordena ANTES de agrupar. O bloco de cada linha depende so do vencimento e
+    // do status, nunca da posicao, entao o forEach abaixo distribui em ordem e
+    // cada bloco sai ordenado — sem tocar no agrupamento nem no flatGrouped, que
+    // continua sendo exatamente a ordem visual (do que dependem o teclado e o
+    // auto-advance da baixa).
+    const ordenado = sort.apply(filtrado);
 
-    if (diffDays < 0) grouped['VENCIDAS'].push(r);
-    else if (diffDays === 0) grouped['VENCE HOJE'].push(r);
-    else if (diffDays <= 7) grouped['VENCE ESTA SEMANA'].push(r);
-    else if (vDate.getMonth() === today.getMonth() && vDate.getFullYear() === today.getFullYear()) grouped['VENCE ESTE MÊS'].push(r);
-    else grouped['PRÓXIMOS MESES'].push(r);
-  });
+    const g = { 'VENCIDAS': [], 'VENCE HOJE': [], 'VENCE ESTA SEMANA': [], 'VENCE ESTE MÊS': [], 'PRÓXIMOS MESES': [], 'BAIXADAS': [] };
+    const today = new Date(); today.setHours(0,0,0,0);
 
-  const flatGrouped = [
-      ...grouped['VENCIDAS'], ...grouped['VENCE HOJE'], ...grouped['VENCE ESTA SEMANA'], ...grouped['VENCE ESTE MÊS'], ...grouped['PRÓXIMOS MESES'], ...grouped['BAIXADAS']
-  ];
+    ordenado.forEach(r => {
+      const isAberto = (!r.total || r.total <= 0) && !!r.num_parcela && r.num_parcela.toUpperCase() !== 'ATO';
+      if (!isAberto && !r._justPaid) { g['BAIXADAS'].push(r); return; }
+
+      if (!r.vencimento_iso) { g['PRÓXIMOS MESES'].push(r); return; }
+
+      const vDate = new Date(`${r.vencimento_iso}T00:00:00`);
+      const diffTime = vDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) g['VENCIDAS'].push(r);
+      else if (diffDays === 0) g['VENCE HOJE'].push(r);
+      else if (diffDays <= 7) g['VENCE ESTA SEMANA'].push(r);
+      else if (vDate.getMonth() === today.getMonth() && vDate.getFullYear() === today.getFullYear()) g['VENCE ESTE MÊS'].push(r);
+      else g['PRÓXIMOS MESES'].push(r);
+    });
+
+    return {
+      filtered: ordenado,
+      grouped: g,
+      flatGrouped: [
+        ...g['VENCIDAS'], ...g['VENCE HOJE'], ...g['VENCE ESTA SEMANA'], ...g['VENCE ESTE MÊS'], ...g['PRÓXIMOS MESES'], ...g['BAIXADAS']
+      ],
+    };
+  }, [data, statusFilter, dataIniFilter, dataFimFilter, searchQuery, sort]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1316,19 +1388,19 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const totalGeral = filtered.reduce((acc, curr) => acc + (curr.parcela || 0), 0);
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in" style={{ background: '#0c0908' }}>
-      <div className="px-6 py-4 flex flex-col gap-4 shrink-0 z-20" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+    <div className="flex flex-col h-full animate-in fade-in" style={{ background: 'var(--v-shell)' }}>
+      <div className="px-6 py-4 flex flex-col gap-4 shrink-0 z-20" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
         <div className="flex justify-between items-end">
             <div className="flex items-baseline gap-3">
-                <h2 className="text-[24px] font-black tracking-tighter uppercase" style={{ color: '#f0e6d8' }}>Recebimentos</h2>
-                <span className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>· {filtered.length} parcelas</span>
+                <h2 className="text-[24px] font-black tracking-tighter uppercase" style={{ color: 'var(--v-text-bold)' }}>Recebimentos</h2>
+                <span className="font-mono text-[10px]" style={{ color: 'var(--v-text-faint)' }}>· {filtered.length} parcelas</span>
             </div>
             
             <div className="flex gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                     <Search size={12}/>
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar parcela..." className="bg-transparent border-none outline-none text-[12px] w-48 placeholder-[#5a4e42]" style={{ color: '#f0e6d8' }} />
-                    <kbd className="font-mono text-[10px]" style={{ color: '#5a4e42' }}>/</kbd>
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar parcela..." className="bg-transparent border-none outline-none text-[12px] w-48 placeholder-[#5a4e42]" style={{ color: 'var(--v-text-bold)' }} />
+                    <kbd className="font-mono text-[10px]" style={{ color: 'var(--v-text-faint)' }}>/</kbd>
                 </div>
                 
                 <button onClick={() => {
@@ -1340,49 +1412,85 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
-                }} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg transition-colors hover:bg-[#ff7a1a]/90" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
-                    <Download size={12}/> Exportar CSV <kbd className="ml-1 text-[10px] bg-black/20 border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘E</kbd>
+                }} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg transition-colors hover:bg-[var(--v-accent)]/90" style={{ background: 'linear-gradient(135deg, var(--v-accent), var(--v-accent-2))', color: 'var(--v-accent-soft)' }}>
+                    <Download size={12}/> Exportar CSV <kbd className="ml-1 text-[10px] bg-[var(--v-zebra)] border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘E</kbd>
                 </button>
             </div>
         </div>
         
         <div className="flex flex-wrap gap-3 items-center">
-            <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+            <select value={empreendimentoFilter} onChange={(e) => setEmpreendimentoFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                 <option value="">Selecione Empreendimento</option>
                 {empreendimentosList.map((emp) => <option key={emp.id} value={emp.id}>{emp.nome}</option>)}
             </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 rounded-lg text-[12px] outline-none" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                 <option value="TODOS">Todas Parcelas</option>
                 <option value="ABERTA">Abertas (Pendentes)</option>
                 <option value="BAIXADA">Baixadas (Pagas)</option>
             </select>
             
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
                 <span className="text-[11px] font-mono">De</span>
-                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: 'var(--v-text-bold)' }} />
                 <span className="text-[11px] font-mono">Até</span>
-                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
+                <input type="date" value={dataFimFilter} onChange={(e) => setDataFimFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: 'var(--v-text-bold)' }} />
                 {(dataIniFilter || dataFimFilter) && (
-                  <button onClick={() => {setDataIniFilter(''); setDataFimFilter('');}} className="ml-1 hover:text-[#ff7a1a]"><X size={12}/></button>
+                  <button onClick={() => {setDataIniFilter(''); setDataFimFilter('');}} className="ml-1 hover:text-[var(--v-accent)]"><X size={12}/></button>
                 )}
             </div>
 
-            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-white/10" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: '#ff7a1a' }}>
+            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-[var(--v-tint)]" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: 'var(--v-accent)' }}>
                 Buscar
             </button>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg ml-auto" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)' }}>
-                <span className="text-[12px]" style={{ color: '#8a7a68' }}>Total Listado:</span>
-                <span className="text-[12px] font-mono font-bold" style={{ color: '#f0e6d8' }}>{formatCurrency(totalGeral)}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg ml-auto" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)' }}>
+                <span className="text-[12px]" style={{ color: 'var(--v-text-muted)' }}>Total Listado:</span>
+                <span className="text-[12px] font-mono font-bold" style={{ color: 'var(--v-text-bold)' }}>{formatCurrency(totalGeral)}</span>
             </div>
         </div>
       </div>
+
+      {/* Cabecalho das colunas — FORA do scroller de proposito: os cabecalhos de
+          grupo ja sao sticky dentro dele, e dois stickies no mesmo scroller se
+          sobrepoem a cada troca de bloco. Aqui ele fica sempre visivel.
+
+          O grid e o borderLeft precisam ser IDENTICOS aos da linha de dados mais
+          abaixo, senao as sete colunas saem do prumo. */}
+      {hasSearched && !loading && filtered.length > 0 && (
+        <div className="shrink-0 grid grid-cols-[80px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-2"
+             style={{ borderLeft: '2px solid transparent', borderBottom: '1px solid var(--v-line-warm)' }}>
+          {COLUNAS_RECEB.map((c) => {
+            const { sortable, active, dir } = sort.headerProps(c.key);
+            const alinhamento = c.right ? 'justify-end text-right' : 'justify-start text-left';
+            if (!sortable) {
+              return (
+                <span key={c.key} className={`text-[9px] font-bold uppercase tracking-[0.2em] ${alinhamento}`}
+                      style={{ color: 'var(--v-text-faint)' }}>
+                  {c.label}
+                </span>
+              );
+            }
+            return (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => sort.toggle(c.key)}
+                aria-label={`${c.label}${active ? (dir === 'asc' ? ' — ordenado crescente' : ' — ordenado decrescente') : ''}; ativar para ${active ? 'inverter' : 'ordenar'}`}
+                className={`group inline-flex items-center gap-1 select-none text-[9px] font-bold uppercase tracking-[0.2em] cursor-pointer transition-colors focus-visible:outline-1 focus-visible:outline-[var(--v-accent)] ${alinhamento} ${active ? 'text-[var(--v-accent)]' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text-muted)]'}`}
+              >
+                {c.label}
+                <SortIcon active={active} dir={dir} />
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto custom-scrollbar relative">
             {loading && data.length === 0 ? (
                 <div className="flex flex-col justify-center items-center h-full gap-3 text-[#8a7a68] animate-pulse">
-                    <Loader2 size={32} className="animate-spin text-[#ff7a1a]" />
+                    <Loader2 size={32} className="animate-spin text-[var(--v-accent)]" />
                     <span className="text-[12px] uppercase font-bold tracking-widest">Carregando carteira...</span>
                 </div>
             ) : !hasSearched ? (
@@ -1393,12 +1501,12 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                 <div className="flex flex-col">
                     {Object.entries(grouped).filter(([_, items]) => items.length > 0).map(([groupName, items]) => (
                         <div key={groupName} className="mb-4">
-                            <div className="px-6 py-2 flex items-center gap-3 sticky top-0 z-10" style={{ background: '#0c0908' }}>
+                            <div className="px-6 py-2 flex items-center gap-3 sticky top-0 z-10" style={{ background: 'var(--v-shell)' }}>
                                 <span className={`font-mono text-[9.5px] font-bold tracking-[0.28em] ${groupName === 'VENCIDAS' ? 'text-red-500' : groupName === 'VENCE HOJE' ? 'text-orange-500' : 'text-[#5a4e42]'}`}>
                                     {groupName}
                                 </span>
-                                <div className="flex-1 h-[1px]" style={{ background: 'rgba(255, 160, 80, 0.08)' }}></div>
-                                <span className="font-mono text-[9.5px]" style={{ color: '#5a4e42' }}>{items.length}</span>
+                                <div className="flex-1 h-[1px]" style={{ background: 'var(--v-line-warm)' }}></div>
+                                <span className="font-mono text-[9.5px]" style={{ color: 'var(--v-text-faint)' }}>{items.length}</span>
                             </div>
                             <div className="flex flex-col">
                                 {items.map(r => {
@@ -1407,7 +1515,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                                     const isVencida = groupName === 'VENCIDAS';
                                     
                                     return (
-                                        <div id={`row-${r.id}`} key={r.id} className="flex flex-col" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                                        <div id={`row-${r.id}`} key={r.id} className="flex flex-col" style={{ borderBottom: '1px solid var(--v-line-warm)' }}>
                                             <div 
                                                 onClick={() => {
                                                     handleSelectRecebimento(r);
@@ -1421,12 +1529,12 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                                                 className="grid grid-cols-[80px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors"
                                                 style={{
                                                     background: isSelected ? 'rgba(255, 122, 26, 0.05)' : isVencida ? 'rgba(239, 68, 68, 0.02)' : 'transparent',
-                                                    borderLeft: isSelected ? '2px solid #ff7a1a' : isVencida ? '2px solid #ef4444' : '2px solid transparent'
+                                                    borderLeft: isSelected ? '2px solid var(--v-accent)' : isVencida ? '2px solid var(--v-err)' : '2px solid transparent'
                                                 }}
                                             >
                                                 <div className="flex flex-col">
-                                                    <span className="font-mono text-[10.5px]" style={{ color: isSelected ? '#ff7a1a' : '#5a4e42' }}>#{r.id?.toString().replace('prazo_', 'pr_') || 'N/A'}</span>
-                                                    <span className="font-mono text-[9px]" style={{ color: '#8a7a68' }}>{r.num_parcela || 'ATO'}</span>
+                                                    <span className="font-mono text-[10.5px]" style={{ color: isSelected ? 'var(--v-accent)' : 'var(--v-text-faint)' }}>#{r.id?.toString().replace('prazo_', 'pr_') || 'N/A'}</span>
+                                                    <span className="font-mono text-[9px]" style={{ color: 'var(--v-text-muted)' }}>{r.num_parcela || 'ATO'}</span>
                                                 </div>
                                                 
                                                 <div className="w-[30px] h-[22px] rounded flex items-center justify-center font-mono text-[9.5px] font-bold" 
@@ -1435,13 +1543,13 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                                                 </div>
                                                 
                                                 <div className="min-w-0">
-                                                    <div className="font-medium text-[13.5px] truncate" style={{ color: '#f0e6d8' }}>{r.cliente}</div>
-                                                    <div className="font-mono text-[10.5px] mt-1" style={{ color: '#8a7a68' }}>
-                                                        {r.descricao_venda} · <span style={{ color: '#5a4e42' }}>{r.cliente_cnpj || 'Sem CPF/CNPJ'}</span>
+                                                    <div className="font-medium text-[13.5px] truncate" style={{ color: 'var(--v-text-bold)' }}>{r.cliente}</div>
+                                                    <div className="font-mono text-[10.5px] mt-1" style={{ color: 'var(--v-text-muted)' }}>
+                                                        {r.descricao_venda} · <span style={{ color: 'var(--v-text-faint)' }}>{r.cliente_cnpj || 'Sem CPF/CNPJ'}</span>
                                                     </div>
                                                 </div>
                                                 
-                                                <div className="font-mono text-[11px] truncate" style={{ color: '#8a7a68' }}>{r.empreendimento}</div>
+                                                <div className="font-mono text-[11px] truncate" style={{ color: 'var(--v-text-muted)' }}>{r.empreendimento}</div>
                                                 
                                                 <div className={`font-medium text-[13.5px] font-mono ${isVencida ? 'text-red-400' : 'text-[#f0e6d8]'}`}>{formatCurrency(r.parcela)}</div>
                                                 
@@ -1451,43 +1559,43 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                                                     ) : isVencida ? (
                                                         <><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]"></span><span className="font-mono text-[9.5px] tracking-[0.16em] text-red-500">ATRASADA</span></>
                                                     ) : (
-                                                        <><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ffc247', boxShadow: '0 0 6px #ffc247' }}></span><span className="font-mono text-[9.5px] tracking-[0.16em]" style={{ color: '#ffc247' }}>ABERTA</span></>
+                                                        <><span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--v-warn)', boxShadow: '0 0 6px var(--v-warn)' }}></span><span className="font-mono text-[9.5px] tracking-[0.16em]" style={{ color: 'var(--v-warn)' }}>ABERTA</span></>
                                                     )}
                                                 </div>
                                                 
-                                                <div className="font-mono text-[10px] text-right" style={{ color: '#5a4e42' }}>{r.data}</div>
+                                                <div className="font-mono text-[10px] text-right" style={{ color: 'var(--v-text-faint)' }}>{r.data}</div>
                                             </div>
 
                                             {isSelected && isAberto && (
-                                                <div className="px-6 py-4 animate-in slide-in-from-top-2" style={{ background: 'rgba(255, 122, 26, 0.02)', borderLeft: '2px solid #ff7a1a' }}>
+                                                <div className="px-6 py-4 animate-in slide-in-from-top-2" style={{ background: 'rgba(255, 122, 26, 0.02)', borderLeft: '2px solid var(--v-accent)' }}>
                                                     <form onSubmit={(e) => submitBaixa(e, r.id)} className="flex items-end gap-4">
                                                         <div className="flex-1 grid grid-cols-4 gap-4">
                                                             <div>
                                                                 <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Valor</label>
-                                                                <input id={`input-valor-${r.id}`} autoFocus type="number" step="0.01" required value={baixaForm.valor_pago} onChange={e => setBaixaForm({...baixaForm, valor_pago: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-[#f0e6d8] rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
+                                                                <input id={`input-valor-${r.id}`} autoFocus type="number" step="0.01" required value={baixaForm.valor_pago} onChange={e => setBaixaForm({...baixaForm, valor_pago: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[var(--v-card)] border border-[rgba(255,160,80,0.08)] text-[#f0e6d8] rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
                                                             </div>
                                                             <div>
                                                                 <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Acréscimos</label>
-                                                                <input type="number" step="0.01" value={baixaForm.acrescimos} onChange={e => setBaixaForm({...baixaForm, acrescimos: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-green-400 rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
+                                                                <input type="number" step="0.01" value={baixaForm.acrescimos} onChange={e => setBaixaForm({...baixaForm, acrescimos: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[var(--v-card)] border border-[rgba(255,160,80,0.08)] text-green-400 rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
                                                             </div>
                                                             <div>
                                                                 <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Descontos</label>
-                                                                <input type="number" step="0.01" value={baixaForm.descontos} onChange={e => setBaixaForm({...baixaForm, descontos: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-red-400 rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
+                                                                <input type="number" step="0.01" value={baixaForm.descontos} onChange={e => setBaixaForm({...baixaForm, descontos: e.target.value})} onFocus={(e) => e.target.select()} className="w-full bg-[var(--v-card)] border border-[rgba(255,160,80,0.08)] text-red-400 rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] font-mono" />
                                                             </div>
                                                             <div>
                                                                 <label className="text-[9.5px] uppercase font-bold text-[#8a7a68] block mb-1.5 tracking-widest">Data Pgto</label>
-                                                                <input type="date" required value={baixaForm.data_pagamento} onChange={e => setBaixaForm({...baixaForm, data_pagamento: e.target.value})} className="w-full bg-[#1a1614] border border-[rgba(255,160,80,0.08)] text-[#f0e6d8] rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] dark-calendar font-mono" />
+                                                                <input type="date" required value={baixaForm.data_pagamento} onChange={e => setBaixaForm({...baixaForm, data_pagamento: e.target.value})} className="w-full bg-[var(--v-card)] border border-[rgba(255,160,80,0.08)] text-[#f0e6d8] rounded p-2 text-[11px] outline-none focus:border-[#ff7a1a] dark-calendar font-mono" />
                                                             </div>
                                                         </div>
-                                                        <button type="submit" className="h-[34px] px-6 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(255,122,26,0.2)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
-                                                            <CheckCircle2 size={12} /> Salvar <kbd className="ml-1 text-[9px] bg-black/20 px-1 rounded">↵</kbd>
+                                                        <button type="submit" className="h-[34px] px-6 rounded-lg text-[10px] font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(255,122,26,0.2)] hover:opacity-90 transition-opacity flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, var(--v-accent), var(--v-accent-2))', color: 'var(--v-accent-soft)' }}>
+                                                            <CheckCircle2 size={12} /> Salvar <kbd className="ml-1 text-[9px] bg-[var(--v-zebra)] px-1 rounded">↵</kbd>
                                                         </button>
                                                     </form>
                                                 </div>
                                             )}
                                             
                                             {isSelected && !isAberto && (
-                                                <div className="px-6 py-4 flex gap-8 items-center animate-in slide-in-from-top-2" style={{ background: 'rgba(34, 197, 94, 0.02)', borderLeft: '2px solid #22c55e' }}>
+                                                <div className="px-6 py-4 flex gap-8 items-center animate-in slide-in-from-top-2" style={{ background: 'rgba(34, 197, 94, 0.02)', borderLeft: '2px solid var(--v-ok)' }}>
                                                     <div>
                                                         <span className="font-mono text-[9px] tracking-[0.18em] text-green-600/70 block mb-1">DATA EFETIVA</span>
                                                         <span className="text-[12px] font-mono text-green-500 font-bold">{r.data_pagamento || r.data}</span>
@@ -1513,8 +1621,8 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
         </div>
       </div>
 
-      <div className="px-6 py-2 flex justify-between items-center shrink-0 z-20" style={{ background: '#0c0908', borderTop: '1px solid rgba(255, 160, 80, 0.08)' }}>
-        <div className="flex gap-4 font-mono text-[9px] font-bold tracking-[0.16em]" style={{ color: '#5a4e42' }}>
+      <div className="px-6 py-2 flex justify-between items-center shrink-0 z-20" style={{ background: 'var(--v-shell)', borderTop: '1px solid var(--v-line-warm)' }}>
+        <div className="flex gap-4 font-mono text-[9px] font-bold tracking-[0.16em]" style={{ color: 'var(--v-text-faint)' }}>
             <span>↑ ↓ NAVEGAR</span>
             <span>⇥ CAMPOS</span>
             <span>↵ SALVAR E PULAR</span>
@@ -1603,16 +1711,18 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
     setChatTab('chat');
   };
 
-  const fetchTemplates = () => {
+  const fetchTemplates = (signal) => {
     const q = selectedEmpresa ? `?empresa_id=${encodeURIComponent(selectedEmpresa)}` : '';
-    fetch(`${API_BASE}/api/parser/templates${q}`)
+    fetch(`${API_BASE}/api/parser/templates${q}`, { signal })
       .then((r) => r.json())
       .then((d) => setSavedTemplates(Array.isArray(d) ? d : []))
-      .catch(() => setSavedTemplates([]));
+      .catch((err) => { if (err.name !== 'AbortError') setSavedTemplates([]); });
   };
 
   useEffect(() => {
-    fetchTemplates();
+    const ac = new AbortController();
+    fetchTemplates(ac.signal);
+    return () => ac.abort();
   }, [selectedEmpresa]);
 
   const handleLoadSavedTemplate = async () => {
@@ -2010,7 +2120,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                <button 
                  key={m}
                  onClick={() => setImportMode(m)}
-                 className={`px-4 py-2 text-[10px] uppercase font-bold tracking-widest transition-colors ${importMode === m ? 'bg-[#007aff] text-[var(--v-text-bold)]' : 'text-[var(--v-text-faint)] hover:text-[#bbb]'}`}
+                 className={`px-4 py-2 text-[10px] uppercase font-bold tracking-widest transition-colors ${importMode === m ? 'bg-[var(--v-info)] text-[var(--v-text-bold)]' : 'text-[var(--v-text-faint)] hover:text-[var(--v-text-muted)]'}`}
                >
                  {m === 'conciliacao' ? 'Conciliação Bancária' : m}
                </button>
@@ -2020,7 +2130,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
             <button
               type="button"
               onClick={handleDownloadCode}
-              className="bg-[var(--v-hover)] border border-[#007aff]/50 text-[var(--v-accent-4)] hover:bg-[#007aff] hover:text-[var(--v-text-bold)] py-2 px-6 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] transition-colors flex items-center gap-2"
+              className="bg-[var(--v-hover)] border border-[var(--v-info)]/50 text-[var(--v-accent-4)] hover:bg-[var(--v-info)] hover:text-[var(--v-text-bold)] py-2 px-6 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] transition-colors flex items-center gap-2"
             >
               <Download size={14} /> Baixar .py
             </button>
@@ -2067,7 +2177,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                 alert('Falha ao deletar o modelo.');
               }
             }}
-            className="bg-[var(--v-hover)] border border-[#ff4d00]/40 text-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-black p-2 rounded-[var(--v-radius)] transition-colors flex items-center justify-center"
+            className="bg-[var(--v-hover)] border border-[var(--v-accent)]/40 text-[var(--v-accent)] hover:bg-[var(--v-accent)] hover:text-[var(--v-text-inv)] p-2 rounded-[var(--v-radius)] transition-colors flex items-center justify-center"
             title="Excluir este modelo"
           >
             <Trash2 size={16} />
@@ -2077,7 +2187,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
           type="button"
           onClick={handleLoadSavedTemplate}
           disabled={!pickTemplateId}
-          className="bg-[var(--v-hover)] border border-[#F97316]/40 text-[var(--v-accent-5)] hover:bg-[#F97316] hover:text-black py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
+          className="bg-[var(--v-hover)] border border-[var(--v-accent)]/40 text-[var(--v-accent-5)] hover:bg-[var(--v-accent)] hover:text-[var(--v-text-inv)] py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
         >
           Carregar código
         </button>
@@ -2085,7 +2195,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
           type="button"
           onClick={handleSetPadraoLista}
           disabled={!selectedEmpresa || !pickTemplateId}
-          className="bg-[var(--v-hover)] border border-[#34c759]/40 text-[var(--v-accent-3)] hover:bg-[#34c759] hover:text-black py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
+          className="bg-[var(--v-hover)] border border-[var(--v-ok)]/40 text-[var(--v-accent-3)] hover:bg-[var(--v-ok)] hover:text-[var(--v-text-inv)] py-2 px-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-50 transition-colors"
           title="Marca o modelo escolhido como padrão da empresa selecionada no topo do app"
         >
           Definir padrão empresa
@@ -2093,7 +2203,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
       </div>
 
       {errorMsg && (
-        <div className="bg-[var(--v-card)] border border-[#ff4d00]/50 p-4 rounded-[var(--v-radius)] text-[var(--v-accent)] text-xs font-bold uppercase tracking-widest">
+        <div className="bg-[var(--v-card)] border border-[var(--v-accent)]/50 p-4 rounded-[var(--v-radius)] text-[var(--v-accent)] text-xs font-bold uppercase tracking-widest">
           {errorMsg}
         </div>
       )}
@@ -2114,7 +2224,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
             />
             <button
                onClick={() => fileInputRef.current.click()}
-               className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] hover:border-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-xs transition-colors flex justify-center items-center gap-2"
+               className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] hover:border-[var(--v-info)] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-xs transition-colors flex justify-center items-center gap-2"
             >
               <UploadCloud size={16} /> {pdfFile ? pdfFile.name : `Escolher Arquivo de ${importMode.toUpperCase()} (PDF/Imagem)`}
             </button>
@@ -2133,7 +2243,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
             <button 
               onClick={handleExtract}
               disabled={isProcessing || !pdfFile} 
-              className="w-full bg-[#007aff] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[#005bb5] transition-colors disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_10px_rgba(0,122,255,0.4)]"
+              className="w-full bg-[var(--v-info)] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[var(--v-info)] transition-colors disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_10px_rgba(0,122,255,0.4)]"
             >
               {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
               {isProcessing ? 'Extraindo...' : extractForceAi ? 'Extrair com IA (Gemini)' : 'Extrair PDF'}
@@ -2143,7 +2253,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
       ) : (
         <div className="flex flex-col flex-1 overflow-hidden relative">
           {isProcessing && (
-            <div className="absolute inset-0 bg-[var(--v-deep)]/80 backdrop-blur-md flex flex-col items-center justify-center z-10 rounded-[var(--v-radius)] border border-[var(--v-border)]">
+            <div className="absolute inset-0 bg-[rgb(var(--v-deep-rgb)_/_0.8)] backdrop-blur-md flex flex-col items-center justify-center z-10 rounded-[var(--v-radius)] border border-[var(--v-border)]">
               <Loader2 className="animate-spin text-[var(--v-accent-4)] mb-6" size={48} />
               <h3 className="text-xl font-bold uppercase tracking-widest text-[var(--v-text-bold)] mb-2">{extractOverlay.title}</h3>
               <p className="text-sm font-bold text-[var(--v-text-muted)] tracking-wide text-center max-w-md px-4 leading-relaxed">
@@ -2172,7 +2282,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                     <button
                       onClick={handleGeneratePython}
                       disabled={isSaving}
-                      className="bg-[var(--v-hover)] border border-[#ffcc00]/50 text-[var(--v-accent-6)] hover:bg-[#ffcc00] hover:text-black px-6 py-2 font-bold uppercase tracking-widest text-[10px] rounded-[var(--v-radius)] disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                      className="bg-[var(--v-hover)] border border-[var(--v-warn-hi)]/50 text-[var(--v-accent-6)] hover:bg-[var(--v-warn-hi)] hover:text-[var(--v-text-inv)] px-6 py-2 font-bold uppercase tracking-widest text-[10px] rounded-[var(--v-radius)] disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
                       title="Força a IA a escrever um manifest Python para toda a abstração acima ficar salva pra sempre"
                     >
                       {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Code size={14} />}
@@ -2195,13 +2305,13 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                       <div className="flex bg-[var(--v-deep)] rounded-[var(--v-radius)] p-1 border border-[var(--v-border)]">
                         <button 
                           onClick={() => setViewMode('raw')} 
-                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors ${viewMode === 'raw' ? 'bg-[#F97316] text-[var(--v-text-bold)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)]'}`}
+                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors ${viewMode === 'raw' ? 'bg-[var(--v-accent)] text-[var(--v-text-bold)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)]'}`}
                         >
                           JSON Cru
                         </button>
                         <button 
                           onClick={() => setViewMode('preview')} 
-                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors flex items-center gap-2 ${viewMode === 'preview' ? 'bg-[#34c759] text-black' : 'text-[var(--v-text-muted)] hover:text-[var(--v-accent-3)]'}`}
+                          className={`px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest rounded-[var(--v-radius)] transition-colors flex items-center gap-2 ${viewMode === 'preview' ? 'bg-[var(--v-ok)] text-[var(--v-text-inv)]' : 'text-[var(--v-text-muted)] hover:text-[var(--v-accent-3)]'}`}
                         >
                           <ShieldAlert size={12}/> {previewData ? 'Lote Conciliado' : 'Simulação'}
                         </button>
@@ -2215,8 +2325,8 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                         title={useSplinkMatch ? 'Modo: Splink Probabilístico (clique para voltar ao Heurístico)' : 'Modo: Heurístico (clique para usar Splink)'}
                         className={`flex items-center gap-1.5 px-3 py-2 rounded text-[10px] font-black uppercase tracking-widest border transition-all ${
                           useSplinkMatch
-                            ? 'bg-[#F97316]/20 border-[#F97316]/60 text-[var(--v-accent-5)] shadow-[0_0_10px_rgba(162,89,255,0.3)]'
-                            : 'bg-[var(--v-hover)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[#F97316]/40'
+                            ? 'bg-[var(--v-accent)]/20 border-[var(--v-accent)]/60 text-[var(--v-accent-5)] shadow-[0_0_10px_rgba(162,89,255,0.3)]'
+                            : 'bg-[var(--v-hover)] border-[var(--v-border)] text-[var(--v-text-faint)] hover:text-[var(--v-accent-5)] hover:border-[var(--v-accent)]/40'
                         }`}
                       >
                         <Zap size={12} className={useSplinkMatch ? 'text-[var(--v-accent-5)]' : 'text-[var(--v-text-faint)]'}/>
@@ -2224,7 +2334,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                       </button>
                       <button
                         onClick={() => setIsFullscreen(!isFullscreen)}
-                        className="bg-[var(--v-hover)] border border-[var(--v-border)] hover:border-[#F97316] text-[var(--v-text-muted)] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
+                        className="bg-[var(--v-hover)] border border-[var(--v-border)] hover:border-[var(--v-accent)] text-[var(--v-text-muted)] hover:text-[#fff] px-3 py-2 rounded transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
                       >
                          {isFullscreen ? <><Minimize size={14}/> Ocultar Expansão</> : <><Maximize size={14}/> Expandir Tabela</>}
                       </button>
@@ -2234,8 +2344,8 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                         className={`px-6 py-3 rounded text-[11px] font-black tracking-widest text-[var(--v-text-bold)] uppercase disabled:opacity-50 transition-all flex items-center gap-2`}
                         style={{
                           background: viewMode === 'raw' 
-                            ? 'linear-gradient(90deg, #9333ea, #3b82f6)' 
-                            : 'linear-gradient(90deg, #22c55e, #10b981)',
+                            ? 'linear-gradient(90deg, #9333ea, var(--v-src-questor))' 
+                            : 'linear-gradient(90deg, var(--v-ok), #10b981)',
                           boxShadow: viewMode === 'raw' 
                             ? '0 0 20px rgba(147,51,234,0.4)'
                             : '0 0 20px rgba(34,197,94,0.4)',
@@ -2258,7 +2368,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                 </div>
                 
                 {viewMode === 'raw' ? (
-                  <div className="flex-1 overflow-auto p-4 bg-black custom-scrollbar">
+                  <div className="flex-1 overflow-auto p-4 bg-[var(--v-deep)] custom-scrollbar">
                     <pre className="text-[11px] font-mono text-[var(--v-text)] leading-relaxed">
                       <code>{JSON.stringify(extractedData.slice(0, 200), null, 2)}</code>
                     </pre>
@@ -2293,7 +2403,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                              const isExpanded = expandedRowIndex === i;
                              return (
                              <React.Fragment key={i}>
-                               <tr className={`border-b border-[var(--v-border)] ${d.status === 'MATCH_PERFEITO' ? 'hover:bg-[#34c759]/5' : isProjetada ? 'hover:bg-[#007aff]/10 bg-[#007aff]/5' : isJaPago ? 'hover:bg-[#ff9500]/5 bg-[#ff9500]/10' : isAcessorio ? 'hover:bg-[#333]/30 bg-[var(--v-deep)]' : 'hover:bg-[var(--v-accent)]/5 bg-[var(--v-accent)]/10'}`}>
+                               <tr className={`border-b border-[var(--v-border)] ${d.status === 'MATCH_PERFEITO' ? 'hover:bg-[var(--v-ok)]/5' : isProjetada ? 'hover:bg-[var(--v-info)]/10 bg-[var(--v-info)]/5' : isJaPago ? 'hover:bg-[var(--v-warn)]/5 bg-[var(--v-warn)]/10' : isAcessorio ? 'hover:bg-[#333]/30 bg-[var(--v-deep)]' : 'hover:bg-[rgb(var(--v-accent-rgb)_/_0.05)] bg-[rgb(var(--v-accent-rgb)_/_0.1)]'}`}>
                                  <td className="p-3 text-[var(--v-text)] align-top max-w-[300px]">
                                     <div className="font-bold text-[var(--v-text)] mb-2">{d.row.comprador || d.row.cpf_cnpj || '---'}</div>
                                     <div className="flex flex-wrap gap-1.5">
@@ -2313,7 +2423,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                         <div className="text-[10px] text-[var(--v-text-muted)]">Status Banco: {d.db_estado_atual.pago_hoje > 0 ? `Pago ${formatCurrency(d.db_estado_atual.pago_hoje)}` : 'Aberto'}</div>
                                         {d.match_engine && (
                                           <div className="mt-1.5 flex items-center gap-1.5">
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${d.match_engine === 'splink' ? 'bg-[#F97316]/20 text-[var(--v-accent-5)] border border-[#F97316]/30' : 'bg-[var(--v-hover)] text-[var(--v-text-faint)] border border-[var(--v-border)]'}`}>
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${d.match_engine === 'splink' ? 'bg-[var(--v-accent)]/20 text-[var(--v-accent-5)] border border-[var(--v-accent)]/30' : 'bg-[var(--v-hover)] text-[var(--v-text-faint)] border border-[var(--v-border)]'}`}>
                                               {d.match_engine === 'splink' ? 'Splink' : 'Heuristico'}
                                             </span>
                                             {d.match_probability != null && <span className="text-[9px] font-mono text-[var(--v-text-faint)]">P={Math.round(d.match_probability*100)}%</span>}
@@ -2322,9 +2432,9 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                       </>
                                     ) : isJaPago ? (
                                       <>
-                                        <div className="font-bold text-[#ff9500] flex items-center gap-1"><Lock size={12}/> ID: {d.id_receber || '—'} — JÁ QUITADA</div>
+                                        <div className="font-bold text-[var(--v-warn)] flex items-center gap-1"><Lock size={12}/> ID: {d.id_receber || '—'} — JÁ QUITADA</div>
                                         <div className="text-[10px] text-[var(--v-text-muted)] mt-1">Vencimento: {d.db_estado_atual?.vencimento} (Parc {d.db_estado_atual?.parcela})</div>
-                                        <div className="text-[10px] text-[#ff9500] mt-1 bg-[#ff9500]/10 px-1 inline-block border border-[#ff9500]/30 rounded">
+                                        <div className="text-[10px] text-[var(--v-warn)] mt-1 bg-[var(--v-warn)]/10 px-1 inline-block border border-[var(--v-warn)]/30 rounded">
                                           Pago no ERP: {formatCurrency(d.db_estado_atual?.pago_hoje)}
                                         </div>
                                       </>
@@ -2332,7 +2442,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                       <>
                                         <div className="font-bold text-[var(--v-accent-4)] flex items-center gap-1"><Sparkles size={12}/> ⚡ FUTURA (SERÁ GERADA)</div>
                                         <div className="text-[10px] text-[var(--v-text-muted)] mt-1">Previsto: {d.db_estado_atual.vencimento} - {d.db_estado_atual.parcela}</div>
-                                        <div className="text-[10px] text-[var(--v-accent-4)] mt-1 bg-[#007aff]/10 px-1 inline-block border border-[#007aff]/30 rounded">Linha será induzida no RECEBER</div>
+                                        <div className="text-[10px] text-[var(--v-accent-4)] mt-1 bg-[var(--v-info)]/10 px-1 inline-block border border-[var(--v-info)]/30 rounded">Linha será induzida no RECEBER</div>
                                       </>
                                     ) : (
                                       <>
@@ -2349,15 +2459,15 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                                  <td className="p-3 align-top text-right text-[var(--v-text-muted)] font-mono">{d.db_estado_atual ? formatCurrency(d.db_estado_atual.valor_parcela) : '-'}</td>
                                  <td className="p-3 align-top flex flex-col items-center gap-2">
                                    {d.status === 'MATCH_PERFEITO' || isProjetada ? (
-                                     <span className={`${isProjetada ? 'bg-[#007aff] hover:bg-[#005bb5]' : 'bg-[#34c759] hover:bg-[#2da94f]'} text-${isProjetada ? 'white' : 'black'} px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center transition-colors`}>
+                                     <span className={`${isProjetada ? 'bg-[var(--v-info)] hover:bg-[var(--v-info)]' : 'bg-[var(--v-ok)] hover:bg-[var(--v-ok)]'} text-${isProjetada ? 'white' : 'black'} px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center transition-colors`}>
                                        {isProjetada ? 'PROJETAR + BAIXAR' : 'BAIXAR'}
                                      </span>
                                    ) : isJaPago ? (
-                                     <span className="bg-[#ff9500] text-black px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center flex items-center justify-center gap-1">
+                                     <span className="bg-[var(--v-warn)] text-[var(--v-text-inv)] px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center flex items-center justify-center gap-1">
                                        <Lock size={10}/> JÁ PAGO
                                      </span>
                                    ) : (
-                                     <span className={`${isAcessorio ? 'bg-[#333] text-[#fff]' : 'bg-[var(--v-accent)] text-black'} px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center`}>
+                                     <span className={`${isAcessorio ? 'bg-[#333] text-[#fff]' : 'bg-[var(--v-accent)] text-[var(--v-text-inv)]'} px-2 py-1 rounded-[var(--v-radius)] tracking-widest shadow-sm text-[10px] font-bold uppercase w-full text-center`}>
                                        IGNORAR
                                      </span>
                                    )}
@@ -2433,7 +2543,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                     >
                       <FileText size={14}/> Amostras Limpas
                       {selectedRawLines.length > 0 && (
-                        <span className="bg-[#007aff] text-[var(--v-text-bold)] px-1.5 py-0.5 rounded-[var(--v-radius)] text-[9px] leading-none ml-1">{selectedRawLines.length}</span>
+                        <span className="bg-[var(--v-info)] text-[var(--v-text-bold)] px-1.5 py-0.5 rounded-[var(--v-radius)] text-[9px] leading-none ml-1">{selectedRawLines.length}</span>
                       )}
                     </button>
                   </div>
@@ -2473,7 +2583,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                           <button
                             onClick={handleChatAdjust}
                             disabled={isChatting || !chatInput.trim()}
-                            className="bg-[#F97316] text-black px-3 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
+                            className="bg-[var(--v-accent)] text-[var(--v-text-inv)] px-3 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
                           >
                             {isChatting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                             Enviar
@@ -2499,7 +2609,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                             {rawPdfLines.map((line, idx) => {
                               const isSelected = selectedRawLines.includes(idx);
                               return (
-                                <label key={idx} className={`block p-2 text-[10px] font-mono whitespace-pre-wrap break-all border rounded cursor-pointer transition-colors ${isSelected ? 'bg-[#007aff]/10 border-[#007aff] text-[var(--v-text-bold)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}>
+                                <label key={idx} className={`block p-2 text-[10px] font-mono whitespace-pre-wrap break-all border rounded cursor-pointer transition-colors ${isSelected ? 'bg-[var(--v-info)]/10 border-[var(--v-info)] text-[var(--v-text-bold)]' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}>
                                   <div className="flex items-start gap-2">
                                     <input type="checkbox" className="mt-0.5 accent-[#007aff]" checked={isSelected}
                                       onChange={(e) => {
@@ -2539,7 +2649,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                    <span>{codeStats.lines} linhas · {codeStats.chars.toLocaleString('pt-BR')} caracteres</span>
                  </div>
                </div>
-               <div className="flex-1 overflow-auto p-6 custom-scrollbar bg-black min-h-0">
+               <div className="flex-1 overflow-auto p-6 custom-scrollbar bg-[var(--v-deep)] min-h-0">
                  <pre className="text-[11px] font-mono text-[var(--v-accent-5)] leading-relaxed whitespace-pre-wrap break-words">
                    <code>{codePreview}</code>
                  </pre>

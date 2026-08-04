@@ -86,6 +86,8 @@ export default function RacionalModalAsync({
   React.useEffect(() => { fracaoRef.current = fracaoTotal; }, [fracaoTotal]);
 
   useEffect(() => {
+    const ac = new AbortController();
+
     async function loadHistory() {
       setIsLoading(true);
       if (!contasCsv) {
@@ -96,7 +98,7 @@ export default function RacionalModalAsync({
 
       try {
         const url = `${API_BASE}/api/questor/saldo-contas?empresa_id=${selectedEmpresa}&contas=${contasCsv}${ccId ? `&empreendimento_id=${ccId}` : ''}`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: ac.signal });
         const json = await res.json();
 
         const targetUnit = detalheApto.trim();
@@ -147,6 +149,7 @@ export default function RacionalModalAsync({
           setIsProporcionalMode(false);
         }
       } catch (e) {
+        if (e.name === 'AbortError') return; // modal fechou ou trocou de apto
         console.error('Failed to load historical timeline', e);
         setQuestorHistory([]);
         setIsProporcionalMode(false);
@@ -154,6 +157,7 @@ export default function RacionalModalAsync({
       setIsLoading(false);
     }
     if (detalheApto) loadHistory();
+    return () => ac.abort();
   }, [detalheApto, selectedEmpresa, contasCsv, ccId, API_BASE]);
 
   // ───── VU 2.0 HISTÓRICO (derivado do historico_poc × custo_global × fracaoTotal) ─────
@@ -232,61 +236,61 @@ export default function RacionalModalAsync({
 
   return createPortal(
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black/85 backdrop-blur-sm"
+      className="fixed inset-0 flex items-center justify-center bg-[var(--v-overlay)] backdrop-blur-sm"
       style={{ zIndex: 999999 }}
       onClick={() => setDetalheApto(null)}
     >
       <div
-        className="bg-[#0e0e0e] border border-[#2a2a2a] w-[960px] max-w-[95vw] max-h-[90vh] flex flex-col rounded-lg shadow-2xl overflow-hidden text-white font-mono"
+        className="bg-[var(--v-deep)] border border-[var(--v-border)] w-[960px] max-w-[95vw] max-h-[90vh] flex flex-col rounded-lg shadow-2xl overflow-hidden text-[var(--v-text-bold)] font-mono"
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-5 py-3.5 border-b border-[#1e1e1e] flex items-center justify-between bg-[#141414] shrink-0">
+        <div className="px-5 py-3.5 border-b border-[var(--v-line)] flex items-center justify-between bg-[var(--v-bg)] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-1 h-8 bg-[#ff6b1a] rounded-full"/>
+            <div className="w-1 h-8 bg-[var(--v-accent)] rounded-full"/>
             <div>
-              <div className="text-[10px] text-[#555] tracking-widest uppercase">Racional da Unidade</div>
-              <h2 className="text-xl font-black tracking-widest uppercase text-white leading-none">
+              <div className="text-[10px] text-[var(--v-text-faint)] tracking-widest uppercase">Racional da Unidade</div>
+              <h2 className="text-xl font-black tracking-widest uppercase text-[var(--v-text-bold)] leading-none">
                 {detalheApto.replace('_', ' ')}
               </h2>
             </div>
           </div>
-          <button onClick={() => setDetalheApto(null)} className="w-8 h-8 flex items-center justify-center bg-[#1a1a1a] hover:bg-white text-[#888] hover:text-black border border-[#333] rounded transition-colors text-lg leading-none">×</button>
+          <button onClick={() => setDetalheApto(null)} className="w-8 h-8 flex items-center justify-center bg-[var(--v-card)] hover:bg-[var(--v-hover)] text-[var(--v-text-muted)] hover:text-[var(--v-text-inv)] border border-[var(--v-border)] rounded transition-colors text-lg leading-none">×</button>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
 
-          <div className="px-5 py-4 border-b border-[#1a1a1a]">
-            <div className="text-[9px] font-black uppercase tracking-widest text-[#ff6b1a] mb-3 flex items-center gap-2">
-              <span className="text-[#ff6b1a]">◈</span> DADOS DA VENDA
+          <div className="px-5 py-4 border-b border-[var(--v-line)]">
+            <div className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)] mb-3 flex items-center gap-2">
+              <span className="text-[var(--v-accent)]">◈</span> DADOS DA VENDA
             </div>
             {todasVendas.length === 0 ? (
-              <p className="text-[#444] italic text-xs">Nenhuma venda vinculada a esta unidade na DIMOB.</p>
+              <p className="text-[var(--v-text-ghost)] italic text-xs">Nenhuma venda vinculada a esta unidade na DIMOB.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {todasVendas.map((v, i) => (
-                  <div key={i} className="grid grid-cols-4 gap-3 p-3 bg-[#161616] rounded-lg border border-[#222]">
+                  <div key={i} className="grid grid-cols-4 gap-3 p-3 bg-[var(--v-bg)] rounded-lg border border-[var(--v-line)]">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] text-[#555] uppercase tracking-widest">Comprador</span>
-                      <span className="text-[11px] font-bold text-[#ffb020] uppercase leading-tight">{v.comprador || '—'}</span>
+                      <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Comprador</span>
+                      <span className="text-[11px] font-bold text-[var(--v-warn)] uppercase leading-tight">{v.comprador || '—'}</span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] text-[#555] uppercase tracking-widest">Unidade</span>
-                      <span className="text-[11px] font-bold text-white">{v.unidade || '—'}</span>
+                      <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Unidade</span>
+                      <span className="text-[11px] font-bold text-[var(--v-text-bold)]">{v.unidade || '—'}</span>
                       {v.fracao > 0 && (
-                        <span className="text-[9px] text-[#888]">Fração: <span className="text-[#22c55e] font-bold">{(v.fracao * 100).toFixed(4)}%</span></span>
+                        <span className="text-[9px] text-[var(--v-text-muted)]">Fração: <span className="text-[var(--v-ok)] font-bold">{(v.fracao * 100).toFixed(4)}%</span></span>
                       )}
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] text-[#555] uppercase tracking-widest">Data da Venda</span>
-                      <span className="text-[13px] font-black text-white">{v.data_venda || '—'}</span>
+                      <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Data da Venda</span>
+                      <span className="text-[13px] font-black text-[var(--v-text-bold)]">{v.data_venda || '—'}</span>
                     </div>
                     <div className="flex flex-col gap-0.5 text-right">
-                      <span className="text-[8px] text-[#555] uppercase tracking-widest">VGV</span>
-                      <span className="text-[13px] font-black text-[#22c55e]">
+                      <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">VGV</span>
+                      <span className="text-[13px] font-black text-[var(--v-ok)]">
                         {(v.vgv || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                       </span>
                       {v.percentual_pago > 0 && (
-                        <span className="text-[9px] text-[#888]">{(v.percentual_pago * 100).toFixed(1)}% pago</span>
+                        <span className="text-[9px] text-[var(--v-text-muted)]">{(v.percentual_pago * 100).toFixed(1)}% pago</span>
                       )}
                     </div>
                   </div>
@@ -295,53 +299,53 @@ export default function RacionalModalAsync({
             )}
           </div>
 
-          <div className="px-5 py-4 border-b border-[#1a1a1a] flex flex-col gap-3">
+          <div className="px-5 py-4 border-b border-[var(--v-line)] flex flex-col gap-3">
             {/* Bug #2 fix: grid de 5 KPIs — adicionado Acumulado Questor Histórico */}
             <div className="grid grid-cols-5 gap-2">
-              <div className="bg-[#161616] rounded-lg border border-[#222] p-3 flex flex-col gap-1">
-                <span className="text-[8px] text-[#555] uppercase tracking-widest">Custo Físico (Mês Kanban)</span>
-                <span className="text-base font-black text-[#3b82f6]">
+              <div className="bg-[var(--v-bg)] rounded-lg border border-[var(--v-line)] p-3 flex flex-col gap-1">
+                <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Custo Físico (Mês Kanban)</span>
+                <span className="text-base font-black text-[var(--v-src-questor)]">
                   {(d.totalQuestor || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                 </span>
-                <span className="text-[9px] text-[#555]">{d.questor.length} lançamentos</span>
+                <span className="text-[9px] text-[var(--v-text-faint)]">{d.questor.length} lançamentos</span>
               </div>
               <div className="bg-[#0a1628] rounded-lg border border-[#1a3a66] p-3 flex flex-col gap-1">
-                <span className="text-[8px] text-[#3b82f6]/70 uppercase tracking-widest">
+                <span className="text-[8px] text-[var(--v-src-questor)]/70 uppercase tracking-widest">
                   {isProporcionalMode ? `Acumulado Questor (${(fracaoTotal*100).toFixed(4)}% da Obra)` : 'Acumulado Questor (Histórico)'}
                 </span>
                 {isLoading ? (
-                  <span className="text-sm font-black text-[#3b82f6]/40 animate-pulse">...</span>
+                  <span className="text-sm font-black text-[var(--v-src-questor)]/40 animate-pulse">...</span>
                 ) : (
-                  <span className="text-base font-black text-[#3b82f6]">
+                  <span className="text-base font-black text-[var(--v-src-questor)]">
                     {mesesQ.length > 0
                       ? mesesQ[mesesQ.length - 1].acumulado.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
                       : '—'}
                   </span>
                 )}
-                <span className="text-[9px] text-[#3b82f6]/40">
+                <span className="text-[9px] text-[var(--v-src-questor)]/40">
                   {isProporcionalMode ? '⅀ CC proporcional' : `${questorHistory.length} lnç históricos`}
                 </span>
               </div>
-              <div className="bg-[#161616] rounded-lg border border-[#222] p-3 flex flex-col gap-1">
-                <span className="text-[8px] text-[#555] uppercase tracking-widest">Custo Sistêmico (VU 2.0)</span>
-                <span className="text-base font-black text-[#ff4500]">
+              <div className="bg-[var(--v-bg)] rounded-lg border border-[var(--v-line)] p-3 flex flex-col gap-1">
+                <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Custo Sistêmico (VU 2.0)</span>
+                <span className="text-base font-black text-[var(--v-src-vu2)]">
                   {(d.totalVulcano2 || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                 </span>
-                <span className="text-[9px] text-[#555]">{d.vulcano2.length} lançamentos virtuais</span>
+                <span className="text-[9px] text-[var(--v-text-faint)]">{d.vulcano2.length} lançamentos virtuais</span>
               </div>
-              <div className="bg-[#161616] rounded-lg border border-[#222] p-3 flex flex-col gap-1">
-                <span className="text-[8px] text-[#555] uppercase tracking-widest">Divergência do Período</span>
-                <span className={`text-base font-black ${Math.abs((d.totalQuestor||0) - (d.totalVulcano2||0)) < 0.5 ? 'text-[#22c55e]' : 'text-[#d32f2f]'}`}>
+              <div className="bg-[var(--v-bg)] rounded-lg border border-[var(--v-line)] p-3 flex flex-col gap-1">
+                <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Divergência do Período</span>
+                <span className={`text-base font-black ${Math.abs((d.totalQuestor||0) - (d.totalVulcano2||0)) < 0.5 ? 'text-[var(--v-ok)]' : 'text-[var(--v-err)]'}`}>
                   {((d.totalQuestor||0) - (d.totalVulcano2||0)).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                 </span>
-                <span className="text-[9px] text-[#555]">Q vs VU 2.0</span>
+                <span className="text-[9px] text-[var(--v-text-faint)]">Q vs VU 2.0</span>
               </div>
-              <div className="bg-[#161616] rounded-lg border border-[#222] p-3 flex flex-col gap-1">
-                <span className="text-[8px] text-[#555] uppercase tracking-widest">Representatividade</span>
-                <span className="text-base font-black text-[#ffb020]">
+              <div className="bg-[var(--v-bg)] rounded-lg border border-[var(--v-line)] p-3 flex flex-col gap-1">
+                <span className="text-[8px] text-[var(--v-text-faint)] uppercase tracking-widest">Representatividade</span>
+                <span className="text-base font-black text-[var(--v-warn)]">
                   {fracaoTotal > 0 ? `${(fracaoTotal * 100).toFixed(4)}%` : '-'}
                 </span>
-                <span className="text-[9px] text-[#555]">Fração DIMOB VGV</span>
+                <span className="text-[9px] text-[var(--v-text-faint)]">Fração DIMOB VGV</span>
               </div>
             </div>
 
@@ -365,80 +369,80 @@ export default function RacionalModalAsync({
             </div>
           </div>
 
-          <div className="px-5 py-4 border-b border-[#1a1a1a]">
-            <div className="text-[9px] font-black uppercase tracking-widest text-[#3b82f6] mb-2 flex items-center gap-2">
+          <div className="px-5 py-4 border-b border-[var(--v-line)]">
+            <div className="text-[9px] font-black uppercase tracking-widest text-[var(--v-src-questor)] mb-2 flex items-center gap-2">
               <span>◈</span>
               {isProporcionalMode
                 ? `EVOLUÇÃO MENSAL — QUESTOR (MODO PROPORCIONAL CC · ${(fracaoTotal * 100).toFixed(4)}% da Obra)`
                 : `EVOLUÇÃO MENSAL DE GASTOS — QUESTOR (Histórico${periodoFim ? ` até ${periodoFim}` : ' Completo'})`}
             </div>
             {isProporcionalMode && (
-              <div className="mb-3 px-3 py-2 bg-[#1a1400] border border-[#ffb020]/30 rounded text-[9px] text-[#ffb020] leading-snug">
+              <div className="mb-3 px-3 py-2 bg-[#1a1400] border border-[var(--v-warn)]/30 rounded text-[9px] text-[var(--v-warn)] leading-snug">
                 ⚡ <strong>Modo Proporcional POC:</strong> Lançamentos LCTOGER de obra não contêm a unidade no histórico.
                 Os valores exibidos = custo total do CC × <strong>{(fracaoTotal * 100).toFixed(4)}%</strong> (fração DIMOB VGV desta unidade).
                 Use o Kanban para arrastar lançamentos e criar atribuição direta.
               </div>
             )}
             {isLoading ? (
-              <div className="px-4 py-8 text-center text-[#555] animate-pulse uppercase tracking-widest text-[10px]">Baixando histórico LCTOGER...</div>
+              <div className="px-4 py-8 text-center text-[var(--v-text-faint)] animate-pulse uppercase tracking-widest text-[10px]">Baixando histórico LCTOGER...</div>
             ) : mesesQ.length === 0 ? (
-              <p className="text-[#444] italic text-xs">Sem lançamentos Questor para esta unidade em nenhum ano.</p>
+              <p className="text-[var(--v-text-ghost)] italic text-xs">Sem lançamentos Questor para esta unidade em nenhum ano.</p>
             ) : (
               <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-[10px] border-collapse">
                   <thead>
-                    <tr className="border-b border-[#222]">
-                      <th className="text-left px-3 py-2 text-[#555] font-black uppercase tracking-widest w-24">Mês</th>
-                      <th className="text-right px-3 py-2 text-[#3b82f6] font-black uppercase tracking-widest">Débitos</th>
-                      <th className="text-right px-3 py-2 text-[#ff4500] font-black uppercase tracking-widest">Créditos</th>
-                      <th className="text-right px-3 py-2 text-white font-black uppercase tracking-widest">Líquido</th>
-                      <th className="text-right px-3 py-2 text-[#ffb020] font-black uppercase tracking-widest">Acumulado</th>
-                      <th className="text-right px-3 py-2 text-[#555] font-black uppercase tracking-widest">Lançtos</th>
+                    <tr className="border-b border-[var(--v-line)]">
+                      <th className="text-left px-3 py-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest w-24">Mês</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-src-questor)] font-black uppercase tracking-widest">Débitos</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-src-vu2)] font-black uppercase tracking-widest">Créditos</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-text-bold)] font-black uppercase tracking-widest">Líquido</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-warn)] font-black uppercase tracking-widest">Acumulado</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest">Lançtos</th>
                     </tr>
                   </thead>
                   <tbody>
                     {mesesQ.map((m, i) => {
                       const pct = mesesQ.length > 0 ? Math.abs(m.acumulado) / Math.max(...mesesQ.map(x => Math.abs(x.acumulado)), 1) * 100 : 0;
                       return (
-                        <tr key={m.mes} className={`border-b border-[#111] ${i % 2 === 0 ? 'bg-[#131313]' : 'bg-[#0e0e0e]'} hover:bg-[#1e1e1e] transition-colors`}>
-                          <td className="px-3 py-2 font-bold text-white font-mono">{m.mes}</td>
-                          <td className="px-3 py-2 text-right text-[#3b82f6] font-bold font-mono">
+                        <tr key={m.mes} className={`border-b border-[var(--v-line)] ${i % 2 === 0 ? 'bg-[var(--v-bg)]' : 'bg-[var(--v-deep)]'} hover:bg-[var(--v-hover)] transition-colors`}>
+                          <td className="px-3 py-2 font-bold text-[var(--v-text-bold)] font-mono">{m.mes}</td>
+                          <td className="px-3 py-2 text-right text-[var(--v-src-questor)] font-bold font-mono">
                             {m.debitos.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                           </td>
-                          <td className="px-3 py-2 text-right text-[#ff4500] font-bold font-mono">
+                          <td className="px-3 py-2 text-right text-[var(--v-src-vu2)] font-bold font-mono">
                             {m.creditos > 0 ? m.creditos.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) : '—'}
                           </td>
-                          <td className={`px-3 py-2 text-right font-black font-mono ${m.liquido >= 0 ? 'text-[#22c55e]' : 'text-[#d32f2f]'}`}>
+                          <td className={`px-3 py-2 text-right font-black font-mono ${m.liquido >= 0 ? 'text-[var(--v-ok)]' : 'text-[var(--v-err)]'}`}>
                             {m.liquido.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                           </td>
                           <td className="px-3 py-2 text-right font-black font-mono">
                             <div className="flex flex-col items-end gap-1">
-                              <span className="text-[#ffb020]">
+                              <span className="text-[var(--v-warn)]">
                                 {m.acumulado.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}
                               </span>
-                              <div className="w-full bg-[#1a1a1a] rounded-full h-1 max-w-[80px]">
-                                <div className="bg-[#ffb020] h-1 rounded-full transition-all" style={{ width: `${Math.min(pct, 100).toFixed(1)}%` }}/>
+                              <div className="w-full bg-[var(--v-card)] rounded-full h-1 max-w-[80px]">
+                                <div className="bg-[var(--v-warn)] h-1 rounded-full transition-all" style={{ width: `${Math.min(pct, 100).toFixed(1)}%` }}/>
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-right text-[#555]">{m.lancamentos.length}</td>
+                          <td className="px-3 py-2 text-right text-[var(--v-text-faint)]">{m.lancamentos.length}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-[#333] bg-[#141414]">
-                      <td className="px-3 py-2 font-black text-[#888] uppercase text-[9px] tracking-widest">TOTAL GERAL</td>
-                      <td className="px-3 py-2 text-right font-black text-[#3b82f6] font-mono">
+                    <tr className="border-t-2 border-[var(--v-border)] bg-[var(--v-bg)]">
+                      <td className="px-3 py-2 font-black text-[var(--v-text-muted)] uppercase text-[9px] tracking-widest">TOTAL GERAL</td>
+                      <td className="px-3 py-2 text-right font-black text-[var(--v-src-questor)] font-mono">
                         {mesesQ.reduce((s,m) => s+m.debitos,0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}
                       </td>
-                      <td className="px-3 py-2 text-right font-black text-[#ff4500] font-mono">
+                      <td className="px-3 py-2 text-right font-black text-[var(--v-src-vu2)] font-mono">
                         {mesesQ.reduce((s,m) => s+m.creditos,0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}
                       </td>
-                      <td colSpan={2} className="px-3 py-2 text-right font-black text-[#ffb020] font-mono text-base">
+                      <td colSpan={2} className="px-3 py-2 text-right font-black text-[var(--v-warn)] font-mono text-base">
                         {mesesQ.length > 0 ? mesesQ[mesesQ.length-1].acumulado.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}) : '—'}
                       </td>
-                      <td className="px-3 py-2 text-right text-[#555] font-bold">{questorHistory.length}</td>
+                      <td className="px-3 py-2 text-right text-[var(--v-text-faint)] font-bold">{questorHistory.length}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -447,21 +451,21 @@ export default function RacionalModalAsync({
           </div>
 
           <div className="px-5 py-4">
-            <div className="text-[9px] font-black uppercase tracking-widest text-[#a259ff] mb-3 flex items-center gap-2">
+            <div className="text-[9px] font-black uppercase tracking-widest text-[var(--v-src-vu1)] mb-3 flex items-center gap-2">
               <span>◈</span> EVOLUÇÃO MENSAL DE CUSTOS RECONHECIDOS — VU 2.0 (Motor POC Histórico{periodoFim ? ` até ${periodoFim}` : ''})
             </div>
             {mesesV2Hist.length === 0 ? (
-              <p className="text-[#444] italic text-xs">Sem dados de POC histórico disponíveis para construir evolução VU 2.0.</p>
+              <p className="text-[var(--v-text-ghost)] italic text-xs">Sem dados de POC histórico disponíveis para construir evolução VU 2.0.</p>
             ) : (
               <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-[10px] border-collapse">
                   <thead>
-                    <tr className="border-b border-[#222]">
-                      <th className="text-left px-3 py-2 text-[#555] font-black uppercase tracking-widest w-24">Mês</th>
-                      <th className="text-right px-3 py-2 text-[#a259ff] font-black uppercase tracking-widest">POC (%)</th>
-                      <th className="text-right px-3 py-2 text-[#a259ff]/70 font-black uppercase tracking-widest">ΔPOC</th>
-                      <th className="text-right px-3 py-2 text-white font-black uppercase tracking-widest">Custo Reconhec.</th>
-                      <th className="text-right px-3 py-2 text-[#ffb020] font-black uppercase tracking-widest">Acumulado</th>
+                    <tr className="border-b border-[var(--v-line)]">
+                      <th className="text-left px-3 py-2 text-[var(--v-text-faint)] font-black uppercase tracking-widest w-24">Mês</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-src-vu1)] font-black uppercase tracking-widest">POC (%)</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-src-vu1)]/70 font-black uppercase tracking-widest">ΔPOC</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-text-bold)] font-black uppercase tracking-widest">Custo Reconhec.</th>
+                      <th className="text-right px-3 py-2 text-[var(--v-warn)] font-black uppercase tracking-widest">Acumulado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -469,20 +473,20 @@ export default function RacionalModalAsync({
                       const maxAcum = Math.max(...mesesV2Hist.map(x => x.acumulado), 1);
                       const pct = (m.acumulado / maxAcum) * 100;
                       return (
-                        <tr key={m.mes} className={`border-b border-[#111] ${i % 2 === 0 ? 'bg-[#130e18]' : 'bg-[#0e0e0e]'} hover:bg-[#1e1828] transition-colors`}>
-                          <td className="px-3 py-2 font-bold text-white font-mono">{m.mes}</td>
-                          <td className="px-3 py-2 text-right text-[#a259ff] font-bold font-mono">{m.pocAtual.toFixed(2)}%</td>
-                          <td className="px-3 py-2 text-right text-[#a259ff]/70 font-mono">
+                        <tr key={m.mes} className={`border-b border-[var(--v-line)] ${i % 2 === 0 ? 'bg-[#130e18]' : 'bg-[var(--v-deep)]'} hover:bg-[#1e1828] transition-colors`}>
+                          <td className="px-3 py-2 font-bold text-[var(--v-text-bold)] font-mono">{m.mes}</td>
+                          <td className="px-3 py-2 text-right text-[var(--v-src-vu1)] font-bold font-mono">{m.pocAtual.toFixed(2)}%</td>
+                          <td className="px-3 py-2 text-right text-[var(--v-src-vu1)]/70 font-mono">
                             {m.deltaPoc > 0 ? `+${m.deltaPoc.toFixed(2)}%` : '—'}
                           </td>
-                          <td className={`px-3 py-2 text-right font-black font-mono ${m.custoMes > 0 ? 'text-[#22c55e]' : 'text-[#555]'}`}>
+                          <td className={`px-3 py-2 text-right font-black font-mono ${m.custoMes > 0 ? 'text-[var(--v-ok)]' : 'text-[var(--v-text-faint)]'}`}>
                             {m.custoMes > 0.01 ? m.custoMes.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}) : '—'}
                           </td>
                           <td className="px-3 py-2 text-right font-black font-mono">
                             <div className="flex flex-col items-end gap-1">
-                              <span className="text-[#ffb020]">{m.acumulado.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}</span>
-                              <div className="w-full bg-[#1a1a1a] rounded-full h-1 max-w-[80px]">
-                                <div className="bg-[#a259ff] h-1 rounded-full transition-all" style={{ width: `${Math.min(pct,100).toFixed(1)}%` }}/>
+                              <span className="text-[var(--v-warn)]">{m.acumulado.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}</span>
+                              <div className="w-full bg-[var(--v-card)] rounded-full h-1 max-w-[80px]">
+                                <div className="bg-[var(--v-src-vu1)] h-1 rounded-full transition-all" style={{ width: `${Math.min(pct,100).toFixed(1)}%` }}/>
                               </div>
                             </div>
                           </td>
@@ -491,12 +495,12 @@ export default function RacionalModalAsync({
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-[#333] bg-[#14101a]">
-                      <td colSpan={2} className="px-3 py-2 font-black text-[#888] uppercase text-[9px] tracking-widest">ACUMULADO TARGET</td>
-                      <td className="px-3 py-2 text-right font-black text-[#a259ff] font-mono"></td>
-                      <td colSpan={2} className="px-3 py-2 text-right font-black text-[#ffb020] font-mono text-base">
+                    <tr className="border-t-2 border-[var(--v-border)] bg-[#14101a]">
+                      <td colSpan={2} className="px-3 py-2 font-black text-[var(--v-text-muted)] uppercase text-[9px] tracking-widest">ACUMULADO TARGET</td>
+                      <td className="px-3 py-2 text-right font-black text-[var(--v-src-vu1)] font-mono"></td>
+                      <td colSpan={2} className="px-3 py-2 text-right font-black text-[var(--v-warn)] font-mono text-base">
                         {mesesV2Hist.length > 0 ? mesesV2Hist[mesesV2Hist.length-1].acumulado.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}) : '—'}
-                        <span className="ml-2 text-[9px] text-[#555] font-normal">{mesesV2Hist.length}</span>
+                        <span className="ml-2 text-[9px] text-[var(--v-text-faint)] font-normal">{mesesV2Hist.length}</span>
                       </td>
                     </tr>
                   </tfoot>

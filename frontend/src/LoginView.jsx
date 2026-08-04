@@ -393,21 +393,27 @@ export default function LoginView({ onLogin }) {
     };
   }, []);
 
+  // Cortina de abertura: cobre a tela inteira (.login-wrapper .curtain, z-index 99) e
+  // SO sai quando este efeito adiciona a classe `hidden`. Sem ele o login fica preto
+  // para sempre, com o texto "FORJANDO O TERRENO" no meio — foi exatamente o que
+  // aconteceu quando este bloco foi removido por engano.
+  // Os ids #curtain e #lbar estao no JSX deste arquivo (o EmpresaSelectionView tem os
+  // seus proprios, com o mesmo nome, mas as duas telas nunca coexistem).
   useEffect(() => {
-    // loader curtain removal
     const curtain = document.getElementById('curtain');
     const lbar = document.getElementById('lbar');
     let loaded = 0;
+    let timer = null;
     const fakeLoad = setInterval(() => {
-      loaded += 4 + Math.random()*8;
-      if (loaded >= 100) { 
-        loaded = 100; 
-        clearInterval(fakeLoad); 
-        setTimeout(() => { if (curtain) curtain.classList.add('hidden'); }, 350); 
+      loaded += 4 + Math.random() * 8;
+      if (loaded >= 100) {
+        loaded = 100;
+        clearInterval(fakeLoad);
+        timer = setTimeout(() => { if (curtain) curtain.classList.add('hidden'); }, 350);
       }
       if (lbar) lbar.style.width = loaded + '%';
     }, 60);
-    return () => clearInterval(fakeLoad);
+    return () => { clearInterval(fakeLoad); if (timer) clearTimeout(timer); };
   }, []);
 
   const handleMouseMoveCard = (e) => {
@@ -515,7 +521,10 @@ export default function LoginView({ onLogin }) {
   };
 
   return (
-    <div className="login-wrapper">
+    /* data-theme="dark" fixo: esta tela e escura por design (cena three.js + CSS
+       proprio). Sem isto, com o tema claro ativo os <input> herdariam o color-scheme
+       light e ganhariam fundo branco nativo sobre a cena escura. */
+    <div className="login-wrapper" data-theme="dark">
       <style>{`
         /* Minimal css injection to avoid conflicting with existing app css */
         .login-wrapper { position: fixed; inset: 0; z-index: 99999; background: #050304; color: #f0e6d8; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }

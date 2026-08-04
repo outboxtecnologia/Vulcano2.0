@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { Layers, CheckSquare, AlertCircle, RefreshCw, HandCoins, UploadCloud, Plus, Calendar, Building2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { API_BASE } from './apiBase';
+import { useSearchParamState } from './hooks/useSearchParamState';
 
 const formatCurrency = (val) => {
     if (val === null || val === undefined) return 'R$ --,--';
@@ -38,23 +40,23 @@ const ExtratRow = ({ g, selectedEmp, selectedEmpresa, filterMes, filterAno }) =>
         <>
             <tr
                 onClick={handleExpand}
-                className={`border-b border-[var(--v-bg)] hover:bg-[var(--v-hover)] cursor-pointer transition-colors ${isMesAtivo ? 'bg-[var(--v-accent-2)]/5' : ''}`}
+                className={`border-b border-[var(--v-bg)] hover:bg-[var(--v-hover)] cursor-pointer transition-colors ${isMesAtivo ? 'bg-[rgb(var(--v-accent-2-rgb)_/_0.05)]' : ''}`}
             >
-                <td className="p-3 font-mono text-[#ddd] flex items-center gap-2">
+                <td className="p-3 font-mono text-[var(--v-text)] flex items-center gap-2">
                     {loading ? <Loader2 size={12} className="animate-spin text-[var(--v-accent-2)]" /> :
                         expanded ? <ChevronDown size={12} className="text-[var(--v-accent-2)]" /> :
                             <ChevronRight size={12} className="text-[var(--v-text-faint)]" />}
                     {g.ano} - {strPad(g.mes)}
-                    {isMesAtivo && <span className="text-[8px] bg-[var(--v-accent-2)] text-black px-1.5 py-0.5 rounded font-black uppercase ml-1">Competência Ativa</span>}
+                    {isMesAtivo && <span className="text-[8px] bg-[var(--v-accent-2)] text-[var(--v-text-inv)] px-1.5 py-0.5 rounded font-black uppercase ml-1">Competência Ativa</span>}
                 </td>
                 <td className="p-3 font-bold text-[var(--v-text-bold)] font-mono text-right">{formatCurrency(g.valor)}</td>
             </tr>
             {expanded && lancamentos !== null && (
-                <tr className="bg-[#0a0a0a]">
+                <tr className="bg-[var(--v-deep)]">
                     <td colSpan={2} className="p-0">
-                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar border-l-2 border-[var(--v-accent-2)]/40">
+                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar border-l-2 border-[rgb(var(--v-accent-2-rgb)_/_0.4)]">
                             <table className="w-full text-left text-[10px]">
-                                <thead className="bg-[#060606] sticky top-0">
+                                <thead className="bg-[var(--v-deep)] sticky top-0">
                                     <tr className="text-[var(--v-text-faint)] uppercase tracking-widest font-bold border-b border-[var(--v-border)]">
                                         <th className="px-3 py-2">Data</th>
                                         <th className="px-3 py-2">Ct. Débito</th>
@@ -68,10 +70,10 @@ const ExtratRow = ({ g, selectedEmp, selectedEmpresa, filterMes, filterAno }) =>
                                         <tr><td colSpan={5} className="p-4 text-center text-[var(--v-text-faint)] italic">Nenhum lançamento analítico encontrado.</td></tr>
                                     ) : (
                                         lancamentos.map((l, i) => (
-                                            <tr key={i} className="border-b border-[#111] hover:bg-[#111] transition-colors">
+                                            <tr key={i} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors">
                                                 <td className="px-3 py-1.5 font-mono text-[var(--v-text-muted)]">{l.data}</td>
-                                                <td className="px-3 py-1.5 font-mono text-[#aaa]">{l.conta_deb}</td>
-                                                <td className="px-3 py-1.5 font-mono text-[#777]">{l.conta_cred}</td>
+                                                <td className="px-3 py-1.5 font-mono text-[var(--v-text-muted)]">{l.conta_deb}</td>
+                                                <td className="px-3 py-1.5 font-mono text-[var(--v-text-muted)]">{l.conta_cred}</td>
                                                 <td className="px-3 py-1.5 text-[var(--v-text-muted)] max-w-[200px] truncate" title={l.historico}>{l.historico || `Hist. ${l.hist_codigo}`}</td>
                                                 <td className={`px-3 py-1.5 text-right font-mono font-bold ${l.valor >= 0 ? 'text-[var(--v-accent-2)]' : 'text-[var(--v-error)]'}`}>
                                                     {formatCurrency(l.valor)}
@@ -81,7 +83,7 @@ const ExtratRow = ({ g, selectedEmp, selectedEmpresa, filterMes, filterAno }) =>
                                     )}
                                 </tbody>
                                 {lancamentos.length > 0 && (
-                                    <tfoot className="bg-[#060606] border-t border-[var(--v-border)]">
+                                    <tfoot className="bg-[var(--v-deep)] border-t border-[var(--v-border)]">
                                         <tr>
                                             <td colSpan={4} className="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">
                                                 {lancamentos.length} lançamentos LCTOGER
@@ -107,10 +109,19 @@ export const CustosView = ({ selectedEmpresa }) => {
     const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState(null);
 
-    // Filters State
-    const [selectedEmp, setSelectedEmp] = useState('');
-    const [filterMes, setFilterMes] = useState('');
-    const [filterAno, setFilterAno] = useState(new Date().getFullYear().toString());
+    // Filters State — o empreendimento e um segmento da rota
+    // (/empresa/959/custos/4995), entao a obra aberta e compartilhavel por link e
+    // sobrevive ao F5. E o que permite ao card de Empreendimentos abrir o custo DA
+    // obra clicada, em vez de largar o usuario na tela pedindo que selecione de novo.
+    const { empId } = useParams();
+    const navigate = useNavigate();
+    const selectedEmp = empId || '';
+    const setSelectedEmp = useCallback((id) => {
+        navigate(`/empresa/${selectedEmpresa}/custos${id ? `/${id}` : ''}`);
+    }, [navigate, selectedEmpresa]);
+
+    const [filterMes, setFilterMes] = useSearchParamState('mes', '');
+    const [filterAno, setFilterAno] = useSearchParamState('ano', new Date().getFullYear().toString());
 
     // Detalhamento State (LCTOGER/LCTOCTB)
     const [detalhamento, setDetalhamento] = useState({ extrato_gerencial: [], extrato_contabil: [] });
@@ -126,19 +137,20 @@ export const CustosView = ({ selectedEmpresa }) => {
 
     const [activeEmpData, setActiveEmpData] = useState(null);
 
-    const loadData = async () => {
+    const loadData = async (signal) => {
         if (!selectedEmpresa) return;
         try {
-            const response = await fetch(`${API_BASE}/api/empreendimentos/basico?empresa_id=${selectedEmpresa}`);
+            const response = await fetch(`${API_BASE}/api/empreendimentos/basico?empresa_id=${selectedEmpresa}`, { signal });
             if (!response.ok) throw new Error("Falha ao buscar empreendimentos.");
             const json = await response.json();
             setData(json.empreendimentos || []);
         } catch (e) {
+            if (e.name === 'AbortError') return;
             setError(e.message);
         }
     };
 
-    const handlePesquisar = async () => {
+    const handlePesquisar = async (signal) => {
         if (!selectedEmp || !filterMes || !filterAno) {
             alert("Selecione o empreendimento, mês e ano para pesquisar.");
             return;
@@ -148,18 +160,19 @@ export const CustosView = ({ selectedEmpresa }) => {
         setActiveEmpData(null);
 
         try {
-            const response = await fetch(`${API_BASE}/api/custos/dashboard/${selectedEmp}?mes=${filterMes}&ano=${filterAno}&empresa_id=${selectedEmpresa}`);
+            const response = await fetch(`${API_BASE}/api/custos/dashboard/${selectedEmp}?mes=${filterMes}&ano=${filterAno}&empresa_id=${selectedEmpresa}`, { signal });
             if (!response.ok) throw new Error("Erro ao buscar dashboard da obra.");
             const json = await response.json();
             setActiveEmpData(json.empreendimento);
 
             // Traz o detalhamento também
-            const dRes = await fetch(`${API_BASE}/api/custos/detalhamento/${selectedEmp}?empresa_id=${selectedEmpresa}`);
+            const dRes = await fetch(`${API_BASE}/api/custos/detalhamento/${selectedEmp}?empresa_id=${selectedEmpresa}`, { signal });
             if (dRes.ok) {
                 const dJson = await dRes.json();
                 setDetalhamento(dJson);
             }
         } catch (e) {
+            if (e.name === 'AbortError') return;
             setError(e.message);
             setDetalhamento({ extrato_gerencial: [], extrato_contabil: [] });
         } finally {
@@ -167,7 +180,21 @@ export const CustosView = ({ selectedEmpresa }) => {
         }
     };
 
-    useEffect(() => { loadData(); }, [selectedEmpresa]);
+    // Obra e competencia vem da URL: com os tres definidos a consulta roda sozinha.
+    // O guard evita cair no alert() de handlePesquisar quando o link vem incompleto
+    // (ex.: /custos/4995 sem mes) — nesse caso a tela so espera o usuario completar.
+    useEffect(() => {
+        if (!selectedEmpresa || !selectedEmp || !filterMes || !filterAno) return;
+        const ac = new AbortController();
+        handlePesquisar(ac.signal);
+        return () => ac.abort();
+    }, [selectedEmpresa, selectedEmp, filterMes, filterAno]);
+
+    useEffect(() => {
+        const ac = new AbortController();
+        loadData(ac.signal);
+        return () => ac.abort();
+    }, [selectedEmpresa]);
 
     // Auto-calculate suggested POC when Modal opens
     useEffect(() => {
@@ -273,7 +300,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                     <select
                         value={selectedEmp}
                         onChange={(e) => setSelectedEmp(e.target.value)}
-                        className="w-full bg-[#151515] border border-[var(--v-border)] text-[var(--v-text-bold)] p-3 rounded-[var(--v-radius)] appearance-none focus:outline-none focus:border-[var(--v-accent-2)] pr-10 hover:bg-[var(--v-hover)] transition-colors"
+                        className="w-full bg-[var(--v-bg)] border border-[var(--v-border)] text-[var(--v-text-bold)] p-3 rounded-[var(--v-radius)] appearance-none focus:outline-none focus:border-[var(--v-accent-2)] pr-10 hover:bg-[var(--v-hover)] transition-colors"
                     >
                         <option value="" disabled>-- SELECIONE UMA OBRA PARA VER O CUSTO --</option>
                         {data.map(emp => (
@@ -292,14 +319,14 @@ export const CustosView = ({ selectedEmpresa }) => {
                             placeholder="Mês"
                             value={filterMes}
                             onChange={(e) => setFilterMes(e.target.value)}
-                            className="w-full bg-[#151515] border border-[var(--v-border)] p-3 text-center text-[var(--v-text-bold)] rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]"
+                            className="w-full bg-[var(--v-bg)] border border-[var(--v-border)] p-3 text-center text-[var(--v-text-bold)] rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]"
                         />
                         <input
                             type="number"
                             placeholder="Ano"
                             value={filterAno}
                             onChange={(e) => setFilterAno(e.target.value)}
-                            className="w-full bg-[#151515] border border-[var(--v-border)] p-3 text-center text-[var(--v-text-bold)] rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]"
+                            className="w-full bg-[var(--v-bg)] border border-[var(--v-border)] p-3 text-center text-[var(--v-text-bold)] rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]"
                         />
                     </div>
                 </div>
@@ -320,7 +347,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                         setIsModalOpen(true);
                     }}
                     disabled={!selectedEmp || loading}
-                    className="bg-[var(--v-accent-2)] hover:bg-[#ff6a00] text-black w-48 py-3 rounded-[var(--v-radius)] text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_var(--v-accent-2)] disabled:opacity-50 disabled:shadow-none"
+                    className="bg-[var(--v-accent-2)] hover:bg-[var(--v-accent)] text-[var(--v-text-inv)] w-48 py-3 rounded-[var(--v-radius)] text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_var(--v-accent-2)] disabled:opacity-50 disabled:shadow-none"
                 >
                     {loading ? <RefreshCw className="animate-spin" size={14}/> : <Plus size={14}/>}
                     Apropriar Custo
@@ -329,15 +356,15 @@ export const CustosView = ({ selectedEmpresa }) => {
 
             {/* PESQUISAR BOTÃO */}
             <button
-                onClick={handlePesquisar}
+                onClick={() => handlePesquisar()}
                 disabled={loading || !selectedEmp}
-                className="w-full py-3 bg-[var(--v-accent-2)]/20 hover:bg-[var(--v-accent-2)]/30 border border-[var(--v-accent-2)]/40 text-[var(--v-accent-2)] font-black uppercase text-[11px] tracking-widest rounded-[var(--v-radius)] flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+                className="w-full py-3 bg-[rgb(var(--v-accent-2-rgb)_/_0.2)] hover:bg-[rgb(var(--v-accent-2-rgb)_/_0.3)] border border-[rgb(var(--v-accent-2-rgb)_/_0.4)] text-[var(--v-accent-2)] font-black uppercase text-[11px] tracking-widest rounded-[var(--v-radius)] flex items-center justify-center gap-2 transition-all disabled:opacity-40"
             >
                 {loading ? <><RefreshCw className="animate-spin" size={14}/> Carregando...</> : <><Layers size={14}/> Carregar Dashboard</>}
             </button>
 
             {error && (
-                <div className="bg-[var(--v-error)]/10 border border-[var(--v-error)] p-4 rounded-[var(--v-radius)] flex items-center gap-3 text-[var(--v-error)]">
+                <div className="bg-[rgb(var(--v-error-rgb)_/_0.1)] border border-[var(--v-error)] p-4 rounded-[var(--v-radius)] flex items-center gap-3 text-[var(--v-error)]">
                     <AlertCircle size={18}/> <span className="text-sm font-bold">{error}</span>
                 </div>
             )}
@@ -354,7 +381,7 @@ export const CustosView = ({ selectedEmpresa }) => {
 
                         {/* ALERTA PARAMETRIZAÇÃO */}
                         {(!activeEmpData.conta_custo || !activeEmpData.conta_estoque) && (
-                            <div className="bg-[var(--v-error)]/10 border border-[var(--v-error)] p-4 rounded-[var(--v-radius)] flex items-center gap-4 text-[var(--v-error)] mb-2 shadow-[0_0_15px_var(--v-error)]">
+                            <div className="bg-[rgb(var(--v-error-rgb)_/_0.1)] border border-[var(--v-error)] p-4 rounded-[var(--v-radius)] flex items-center gap-4 text-[var(--v-error)] mb-2 shadow-[0_0_15px_var(--v-error)]">
                                 <AlertCircle size={20} />
                                 <div>
                                     <h4 className="font-bold text-sm">Alerta Contábil Crítico</h4>
@@ -418,7 +445,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                                         <span className="font-bold">- Custo Acumulado Reconhecido Anteriormente</span>
                                         <span className="font-bold">{formatCurrency((activeEmpData.custo_reconhecido_anterior || 0))}</span>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-[var(--v-accent)]/10 border border-[var(--v-accent)]/30 mt-4 rounded-[var(--v-radius)] shadow-[0_0_20px_rgba(255,100,0,0.1)]">
+                                    <div className="flex justify-between items-center p-4 bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[rgb(var(--v-accent-rgb)_/_0.3)] mt-4 rounded-[var(--v-radius)] shadow-[0_0_20px_rgba(255,100,0,0.1)]">
                                         <div className="flex flex-col">
                                             <span className="text-[var(--v-accent)] font-black text-sm uppercase">Lançamento a Efetuar Neste Mês</span>
                                             <span className="text-[9px] text-[var(--v-text-muted)] mt-1 track-widest">
@@ -444,14 +471,14 @@ export const CustosView = ({ selectedEmpresa }) => {
                                 {/* Extrato Financeiro LCTOGER com Drill-Down */}
                                 <div className="magma-card flex-1 flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden min-h-[250px] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
                                     <div className="p-3 border-b border-[var(--v-border)] bg-[var(--v-deep)] flex justify-between items-center shrink-0">
-                                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#999] flex flex-col">
+                                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-muted)] flex flex-col">
                                             <span className="text-[var(--v-accent-2)]">Extrato Financeiro Incorrido (LCTOGER)</span>
                                             <span className="text-[8px] text-[var(--v-text-faint)] opacity-80 mt-0.5">Clique em um mês para expandir lançamentos analíticos</span>
                                         </h3>
                                     </div>
                                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                                         <table className="w-full text-left text-[11px] whitespace-nowrap">
-                                            <thead className="bg-[#0b0b0b] sticky top-0 z-10 shadow-sm">
+                                            <thead className="bg-[var(--v-deep)] sticky top-0 z-10 shadow-sm">
                                                 <tr>
                                                     <th className="p-3 text-[var(--v-text-faint)] tracking-widest font-bold border-b border-[var(--v-border)]">Ano / Mês</th>
                                                     <th className="p-3 text-[var(--v-text-faint)] tracking-widest font-bold border-b border-[var(--v-border)] text-right">Custo Acumulado R$</th>
@@ -480,14 +507,14 @@ export const CustosView = ({ selectedEmpresa }) => {
                                 {/* Extrato DRTEE Lançado (LCTOCTB) */}
                                 <div className="magma-card flex-1 flex flex-col border border-[var(--v-border)] rounded-[var(--v-radius)] overflow-hidden min-h-[200px] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
                                     <div className="p-3 border-b border-[var(--v-border)] bg-[var(--v-deep)] flex justify-between items-center shrink-0">
-                                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#999] flex flex-col">
+                                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-muted)] flex flex-col">
                                             <span className="text-green-500">Apropriações de Custo Emitidas (LCTOCTB)</span>
                                             <span className="text-[8px] text-[var(--v-text-faint)] opacity-80 mt-0.5">Lançamentos efetivados nesta conta baseados no POC</span>
                                         </h3>
                                     </div>
                                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                                         <table className="w-full text-left text-[10px] whitespace-nowrap">
-                                            <thead className="bg-[#0b0b0b] sticky top-0 z-10 shadow-sm">
+                                            <thead className="bg-[var(--v-deep)] sticky top-0 z-10 shadow-sm">
                                                 <tr>
                                                     <th className="p-2 text-[var(--v-text-faint)] border-b border-[var(--v-border)]">Data Operação</th>
                                                     <th className="p-2 text-[var(--v-text-faint)] border-b border-[var(--v-border)]">Chave Contábil</th>
@@ -518,7 +545,7 @@ export const CustosView = ({ selectedEmpresa }) => {
 
             {/* MODAL DE LANÇAMENTO */}
             {isModalOpen && activeEmpData && (
-                <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-8 animate-in fade-in">
+                <div className="fixed inset-0 z-50 bg-[var(--v-overlay)] flex items-center justify-center p-8 animate-in fade-in">
                     <div className="magma-card w-[500px] border border-[var(--v-accent-2)] shadow-[0_0_30px_rgba(255,77,0,0.15)] rounded-[var(--v-radius)] p-8 flex flex-col gap-6 relative">
                         <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-[var(--v-text-faint)] hover:text-[#fff] transition-colors p-2 text-[10px] font-bold uppercase tracking-widest bg-[var(--v-deep)] rounded-[var(--v-radius)]">X Fechar</button>
                         <div className="flex flex-col gap-1 pr-6">
@@ -534,14 +561,14 @@ export const CustosView = ({ selectedEmpresa }) => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2 block">Mês a Apropriar</label>
-                                    <input type="number" min="1" max="12" value={formMes} onChange={e => setFormMes(e.target.value)} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] p-3 text-[var(--v-text-bold)] text-center rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]" required />
+                                    <input type="number" min="1" max="12" value={formMes} onChange={e => setFormMes(e.target.value)} className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] p-3 text-[var(--v-text-bold)] text-center rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]" required />
                                 </div>
                                 <div>
                                     <label className="text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2 block">Ano Contábil</label>
-                                    <input type="number" min="2000" max="2100" value={formAno} onChange={e => setFormAno(e.target.value)} className="w-full bg-[#0b0b0b] border border-[var(--v-border)] p-3 text-[var(--v-text-bold)] text-center rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]" required />
+                                    <input type="number" min="2000" max="2100" value={formAno} onChange={e => setFormAno(e.target.value)} className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] p-3 text-[var(--v-text-bold)] text-center rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)]" required />
                                 </div>
                             </div>
-                            <div className="p-4 border border-[var(--v-accent)]/30 rounded-[var(--v-radius)] bg-[var(--v-accent)]/5">
+                            <div className="p-4 border border-[rgb(var(--v-accent-rgb)_/_0.3)] rounded-[var(--v-radius)] bg-[rgb(var(--v-accent-rgb)_/_0.05)]">
                                 <label className="text-[9px] font-black uppercase tracking-widest text-[var(--v-accent-2)] mb-2 flex justify-between">Percentual POC Apurado (%)</label>
                                 <input type="number" step="0.01" value={formPoc} onChange={e => setFormPoc(e.target.value)} placeholder="0.00" className="w-full bg-transparent border-0 border-b border-[var(--v-accent-2)] text-[var(--v-accent-2)] font-black text-2xl font-mono p-0 outline-none pb-1" required />
                             </div>
@@ -549,13 +576,13 @@ export const CustosView = ({ selectedEmpresa }) => {
                                 <label className="text-[9px] font-black uppercase tracking-widest text-[#fff] mb-2 flex justify-between items-center gap-2">
                                     Valor de Custo do Mês (R$) <span className="opacity-50 font-normal normal-case text-[9px] bg-[var(--v-hover)] px-2 py-0.5 rounded-[var(--v-radius)]">Conta Débito Contábil</span>
                                 </label>
-                                <input type="number" step="0.01" value={formValor} onChange={e => setFormValor(e.target.value)} placeholder="0.00" className="w-full bg-black border border-white p-4 text-[var(--v-text-bold)] text-2xl font-black font-mono rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-glow)] shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-colors" required />
+                                <input type="number" step="0.01" value={formValor} onChange={e => setFormValor(e.target.value)} placeholder="0.00" className="w-full bg-[var(--v-deep)] border border-white p-4 text-[var(--v-text-bold)] text-2xl font-black font-mono rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-glow)] shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-colors" required />
                             </div>
                             <div>
                                 <label className="text-[9px] font-black uppercase tracking-widest text-[var(--v-text-faint)] mb-2 block">Histórico LCTO (Questor)</label>
-                                <input type="text" value={formHistorico} onChange={e => setFormHistorico(e.target.value)} placeholder="VALOR REF. CUSTO OBRA..." className="w-full bg-[#0b0b0b] border border-[var(--v-border)] p-3 text-[var(--v-text-muted)] font-bold rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)] uppercase" required />
+                                <input type="text" value={formHistorico} onChange={e => setFormHistorico(e.target.value)} placeholder="VALOR REF. CUSTO OBRA..." className="w-full bg-[var(--v-deep)] border border-[var(--v-border)] p-3 text-[var(--v-text-muted)] font-bold rounded-[var(--v-radius)] outline-none focus:border-[var(--v-accent-2)] uppercase" required />
                             </div>
-                            <button type="submit" disabled={submitting} className="mt-2 bg-[var(--v-accent-2)] hover:bg-[#ff6a00] text-black w-full py-4 text-[12px] font-black tracking-[0.2em] uppercase flex items-center justify-center gap-3 rounded-[var(--v-radius)] shadow-[0_0_20px_var(--v-accent-2)] active:scale-95 transition-all">
+                            <button type="submit" disabled={submitting} className="mt-2 bg-[var(--v-accent-2)] hover:bg-[var(--v-accent)] text-[var(--v-text-inv)] w-full py-4 text-[12px] font-black tracking-[0.2em] uppercase flex items-center justify-center gap-3 rounded-[var(--v-radius)] shadow-[0_0_20px_var(--v-accent-2)] active:scale-95 transition-all">
                                 {submitting ? <RefreshCw className="animate-spin" size={16}/> : <UploadCloud size={16}/>}
                                 Gravar no Questor
                             </button>

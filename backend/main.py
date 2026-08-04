@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebirdsql
 from db_pg import connect_questor_pg, questor_kind  # ponte Questor Firebird->Postgres
+from db_app import connect_app  # banco operacional do app: SQLite ou Postgres (APP_DB_KIND)
 import pdfplumber
 import platform
 import functools
@@ -817,7 +818,7 @@ def api_custos_dashboard_by_id(id_emp: int, mes: int, ano: int, empresa_id: int 
         spends = cur.fetchall()
 
         import sqlite3
-        conn_lite = sqlite3.connect(POC_DATABASE_FILE)
+        conn_lite = connect_app()
         cur_lite = conn_lite.cursor()
         
         cur_lite.execute("SELECT periodo, percentual FROM evolucao_obras WHERE empreendimento = ?", (nome_emp,))
@@ -1238,7 +1239,7 @@ def api_sero_salvar_importacao(payload: SeroSalvarInput):
     conn = None
     try:
         import sqlite3
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         cur = conn.cursor()
         
         def norm_comp(c):
@@ -1496,7 +1497,7 @@ def api_sero_maodeobra(empresa_id: int = 959, ano: int = 2025, mes: int = 12, cn
         # Os terceiros virão exclusivamente do PDF SERO importado.
 
         import sqlite3
-        conn_lite = sqlite3.connect(POC_DATABASE_FILE)
+        conn_lite = connect_app()
         cur_lite = conn_lite.cursor()
         cur_lite.execute("SELECT competencia, cnpj_cpf, origem, valor_atualizado FROM SERO_IMPORTACOES WHERE empresa_id = ?", (empresa_id,))
         sero_importados = cur_lite.fetchall()
@@ -1722,7 +1723,7 @@ async def salvar_memoria_arraste(payload: MemoriaArrasteInput):
             return JSONResponse({"status": "error", "message": "Chave ou destino vazio"}, status_code=400)
             
         import sqlite3
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         conn.execute('''
             CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (
                 chave_lancamento TEXT PRIMARY KEY,
@@ -2067,7 +2068,7 @@ class CrossMatchFeedbackInput(BaseModel):
 
 def _ensure_feedback_table():
     import sqlite3
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cross_match_feedback (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2102,7 +2103,7 @@ def _tokenize_hist(text: str) -> set:
 def _load_cross_match_feedback(empresa_id: int) -> list:
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT veredicto, q_conta, q_historico, q_valor, v_conta, v_historico, v_valor, q_tokens, v_tokens "
             "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
@@ -2159,7 +2160,7 @@ def _feedback_score_override(match: dict, feedback: list, rules: list = None) ->
 # ── Pattern analysis pipeline ────────────────────────────────────────────────
 def _ensure_rules_table():
     import sqlite3
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cross_match_rules (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2181,7 +2182,7 @@ _ensure_rules_table()
 def _load_cross_match_rules(empresa_id: int) -> list:
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT rule_type, q_conta, v_conta, confidence, n_samples, payload "
             "FROM cross_match_rules WHERE empresa_id=? ORDER BY confidence DESC",
@@ -2198,7 +2199,7 @@ def _run_pattern_analysis(empresa_id: int):
     import sqlite3, threading
     from collections import Counter
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT veredicto, q_conta, v_conta, q_historico, v_historico, score_algoritmo "
             "FROM cross_match_feedback WHERE empresa_id=?", (empresa_id,)
@@ -2282,7 +2283,7 @@ def _run_llm_pattern_extraction(empresa_id: int, matches, rejects):
 
         if regras:
             import sqlite3
-            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn = connect_app()
             conn.execute("DELETE FROM cross_match_rules WHERE empresa_id=? AND rule_type='LLM_RULE'", (empresa_id,))
             for reg in regras:
                 conn.execute(
@@ -2303,7 +2304,7 @@ def api_cross_match_feedback_post(data: CrossMatchFeedbackInput):
     try:
         q_tok = _json.dumps(list(_tokenize_hist(data.q_historico)))
         v_tok = _json.dumps(list(_tokenize_hist(data.v_historico)))
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         conn.execute(
             "INSERT INTO cross_match_feedback "
             "(empresa_id, veredicto, obs, score_algoritmo, "
@@ -2343,7 +2344,7 @@ def api_cross_match_rules_get(empresa_id: int = 959):
     """Retorna regras derivadas da base de conhecimento."""
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         conta_pairs = conn.execute(
             "SELECT q_conta, v_conta, confidence, n_samples FROM cross_match_rules "
             "WHERE empresa_id=? AND rule_type='CONTA_PAIR' ORDER BY confidence DESC",
@@ -2378,7 +2379,7 @@ def api_cross_match_rules_get(empresa_id: int = 959):
 def api_cross_match_feedback_get(empresa_id: int = 959, limit: int = 300):
     import sqlite3
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         rows = conn.execute(
             "SELECT id, created_at, veredicto, obs, score_algoritmo, "
             "       q_conta, q_historico, q_valor, q_data, "
@@ -2461,7 +2462,7 @@ def api_saldo_contas(
         memoria_arraste = {}
         try:
             import sqlite3
-            conn_poc = sqlite3.connect(POC_DATABASE_FILE)
+            conn_poc = connect_app()
             cur_poc = conn_poc.cursor()
             cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')
             for chv, dest in cur_poc.fetchall():
@@ -2838,7 +2839,7 @@ import sqlite3
 from pydantic import BaseModel
 
 def init_sqlite():
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS evolucao_obras (
@@ -2884,7 +2885,7 @@ init_sqlite()
 def get_conn(db_name="vulcano", empresa_id=None):
     if db_name == "sqlite":
         import sqlite3
-        return sqlite3.connect(POC_DATABASE_FILE)
+        return connect_app()
 
     # Questor migrou Firebird->Postgres. Quando QUESTOR_DB_KIND=postgres, o banco
     # `questor` abre via psycopg (queries Firebird traduzidas em runtime, ver db_pg).
@@ -2973,7 +2974,7 @@ class PocInput(BaseModel):
 
 @app.post("/api/poc")
 def save_poc(input_data: PocInput):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute('''
         INSERT INTO evolucao_obras (empreendimento, periodo, percentual) 
@@ -3005,7 +3006,7 @@ class QuestorLotePayload(BaseModel):
 
 @app.get("/api/poc")
 def get_poc():
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras ORDER BY periodo DESC')
     rows = c.fetchall()
@@ -3390,7 +3391,7 @@ def get_compare_receitas(emp: str = None, empresa_id: int | None = None):
             cur_v.execute(venda_query)
         vendas_v = cur_v.fetchall()
         
-        conn_sq = sqlite3.connect(POC_DATABASE_FILE)
+        conn_sq = connect_app()
         c_sq = conn_sq.cursor()
         c_sq.execute('SELECT empreendimento, periodo, percentual FROM evolucao_obras')
         poc_map = {(r[0], r[1]): r[2] for r in c_sq.fetchall()}
@@ -3678,7 +3679,11 @@ def get_vulcano_empreendimentos(empresa_id: int):
             "aliqret": float(r[35] or 0), "codigoimposto": r[36] or 0, "variacaoimposto": r[37] or 0,
             "tributarnormalaposconclusao": dec(r[38]),
             
-            "ajustefinalpoc": dec(r[39]), "reajustar_pelo_cub": dec(r[40]), "adquirido_terceiros": dec(r[41]),
+            # AJUSTEFINALPOC e DOUBLE (valor de ajuste do POC, ha registros na casa dos
+            # milhoes), nao um flag S/N. Devolver como numero para que o round-trip do
+            # formulario reescreva o mesmo valor em vez de corrompe-lo.
+            "ajustefinalpoc": float(r[39]) if r[39] is not None else None,
+            "reajustar_pelo_cub": dec(r[40]), "adquirido_terceiros": dec(r[41]),
             "sem_custos": dec(r[42]), "considerar_poc_receita": dec(r[43]),
             
             "hist_adiantamento": r[44] or 0, "hist_aprcusto": r[45] or 0, "hist_despesa": r[46] or 0, "hist_estorno_custo": r[47] or 0,
@@ -3718,7 +3723,8 @@ class EmpreendimentoInput(BaseModel):
     
     reajustar_pelo_cub: str = 'N'
     considerar_poc_receita: str = 'N'
-    ajustefinalpoc: str = 'N'
+    # DOUBLE no banco, nao flag S/N — ver nota no GET.
+    ajustefinalpoc: Optional[float] = None
     adquirido_terceiros: str = 'N'
     sem_custos: str = 'N'
     
@@ -3741,7 +3747,8 @@ class EmpreendimentoInput(BaseModel):
     hist_venda: int = 0
     hist_recebimento: int = 0
     hist_variacao: int = 0
-    hist_distrato: int = 0
+    # Sem hist_distrato: nao existe coluna de historico de distrato em EMPREENDIMENTO.
+    # O distrato e tratado por DISTRATOCTB e por VENDA.DISTRATO/DATADISTRATO.
     hist_estorno: int = 0
     hist_adiantamento: int = 0
     hist_baixaadi: int = 0
@@ -3752,14 +3759,26 @@ class EmpreendimentoInput(BaseModel):
     
     empresa_id: int
 
-def _int_or_none(v):
-    """Colunas INTEGER/SMALLINT do EMPREENDIMENTO (CODIGOESTAB/FILIAL/MATRIZ/MUNIC)
-    chegam como str do frontend; '' vira NULL (senao Firebird da SQL -303)."""
-    try:
-        s = str(v).strip()
-        return int(s) if s else None
-    except (TypeError, ValueError):
+
+def _num_or_none(v):
+    """Numero para colunas numericas, ou NULL.
+
+    CODIGOMUNIC (SMALLINT), CODIGOESTAB, CODIGOFILIAL e CODIGOMATRIZ (INTEGER) sao
+    numericas no banco mas chegam como string do formulario. Mandar '' direto fazia
+    o Firebird recusar o INSERT/UPDATE inteiro com
+    "SQL error code = -303, conversion error from string" — ou seja, bastava um
+    desses campos em branco (o caso normal) para nenhum empreendimento salvar.
+    """
+    if v is None:
         return None
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return int(float(s))
+    except ValueError:
+        return None
+
 
 def _float_or_none(v):
     """AJUSTEFINALPOC e DOUBLE na base atual (era CHAR S/N na antiga) — o model
@@ -3768,6 +3787,8 @@ def _float_or_none(v):
         return float(str(v).strip())
     except (TypeError, ValueError):
         return None
+
+
 
 @app.post("/api/vulcano/empreendimentos")
 def post_vulcano_empreendimento(data: EmpreendimentoInput):
@@ -3779,15 +3800,14 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
         new_id = cur.fetchone()[0]
         
         query = """INSERT INTO EMPREENDIMENTO (
-            ID, CODIGOEMPRESA, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, CNO, ATIVO, OBRACONCLUIDA, ENDERECO, DATACONCLUSAO,
+            ID, CODIGOEMPRESA, NOME, METRAGEMTOTAL, CUSTOORCADO, RET, CNO, CNPJ, ATIVO, OBRACONCLUIDA, ENDERECO, DATACONCLUSAO,
             CONTACAIXA, CONTACLI, CONTAADICLI, CONTAESTAND, CONTAESTCON, CONTADESPESA, CONTAREC, 
             CONTAVARIACAO, CONTADEVOLUCAO, CODIGOCENTROCUSTO, CONTACUSTO, CONTALUCROACUM, CONTA_ESTORNO_DEVOLUCAO,
             CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTBAIXAADI, CODIGO_HIST_ESTORNO_SALDO,
             CODIGOHISTADIANTAMENTO, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CODIGO_HIST_ESTORNO_CUSTO,
             CEP, SIGLAESTADO, CODIGOMUNIC, CODIGOESTAB, CODIGOFILIAL, CODIGOMATRIZ,
             DATAINICIORET, ALIQRET, CODIGOIMPOSTO, VARIACAOIMPOSTO, TRIBUTARNORMALAPOSCONCLUSAO,
-            AJUSTEFINALPOC, REAJUSTAR_PELO_CUB, ADQUIRIDO_TERCEIROS, SEM_CUSTOS, CONSIDERAR_POC_RECEITA,
-            CNPJ
+            AJUSTEFINALPOC, REAJUSTAR_PELO_CUB, ADQUIRIDO_TERCEIROS, SEM_CUSTOS, CONSIDERAR_POC_RECEITA
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         
         params = (
@@ -3797,8 +3817,9 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             data.metragem, 
             data.custo, 
             data.ret, 
-            data.cno.encode("cp1252", "ignore"), 
-            data.ativo, 
+            data.cno.encode("cp1252", "ignore"),
+            data.cnpj.encode("cp1252", "ignore") if data.cnpj else None,
+            data.ativo,
             data.obra_concluida,
             data.endereco.encode("cp1252", "ignore") if data.endereco else None, 
             data.data_conclusao or None,
@@ -3807,10 +3828,10 @@ def post_vulcano_empreendimento(data: EmpreendimentoInput):
             data.contacusto, data.contalucroacum, data.conta_estorno_devolucao,
             data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_baixaadi, data.hist_estorno_saldo,
             data.hist_adiantamento, data.hist_aprcusto, data.hist_despesa, data.hist_estorno_custo,
-            data.cep, data.siglaestado, _int_or_none(data.codigomunic), _int_or_none(data.codigoestab), _int_or_none(data.codigofilial), _int_or_none(data.codigomatriz),
+            data.cep, data.siglaestado, _num_or_none(data.codigomunic), _num_or_none(data.codigoestab),
+            _num_or_none(data.codigofilial), _num_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
-            _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
-            data.cnpj.encode("cp1252", "ignore") if data.cnpj else None
+            _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita
         )
         cur.execute(query, params)
         conn.commit()
@@ -3827,15 +3848,14 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
         conn = get_conn("vulcano")
         cur = conn.cursor()
         query = """UPDATE EMPREENDIMENTO SET 
-            NOME = ?, METRAGEMTOTAL = ?, CUSTOORCADO = ?, RET = ?, CNO = ?, ATIVO = ?, OBRACONCLUIDA = ?, ENDERECO = ?, DATACONCLUSAO = ?,
+            NOME = ?, METRAGEMTOTAL = ?, CUSTOORCADO = ?, RET = ?, CNO = ?, CNPJ = ?, ATIVO = ?, OBRACONCLUIDA = ?, ENDERECO = ?, DATACONCLUSAO = ?,
             CONTACAIXA = ?, CONTACLI = ?, CONTAADICLI = ?, CONTAESTAND = ?, CONTAESTCON = ?, CONTADESPESA = ?, 
             CONTAREC = ?, CONTAVARIACAO = ?, CONTADEVOLUCAO = ?, CODIGOCENTROCUSTO = ?, CONTACUSTO = ?, CONTALUCROACUM = ?, CONTA_ESTORNO_DEVOLUCAO = ?,
             CODIGOHISTVENDA = ?, CODIGOHISTRECEBIMENTO = ?, CODIGOHISTVARIACAO = ?, CODIGOHISTBAIXAADI = ?, CODIGO_HIST_ESTORNO_SALDO = ?,
             CODIGOHISTADIANTAMENTO = ?, CODIGOHISTAPRCUSTO = ?, CODIGOHISTDESPESA = ?, CODIGO_HIST_ESTORNO_CUSTO = ?,
             CEP = ?, SIGLAESTADO = ?, CODIGOMUNIC = ?, CODIGOESTAB = ?, CODIGOFILIAL = ?, CODIGOMATRIZ = ?,
             DATAINICIORET = ?, ALIQRET = ?, CODIGOIMPOSTO = ?, VARIACAOIMPOSTO = ?, TRIBUTARNORMALAPOSCONCLUSAO = ?,
-            AJUSTEFINALPOC = ?, REAJUSTAR_PELO_CUB = ?, ADQUIRIDO_TERCEIROS = ?, SEM_CUSTOS = ?, CONSIDERAR_POC_RECEITA = ?,
-            CNPJ = ?
+            AJUSTEFINALPOC = ?, REAJUSTAR_PELO_CUB = ?, ADQUIRIDO_TERCEIROS = ?, SEM_CUSTOS = ?, CONSIDERAR_POC_RECEITA = ?
             WHERE ID = ?"""
         
         params = (
@@ -3843,7 +3863,8 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
             data.metragem, 
             data.custo, 
             data.ret, 
-            data.cno.encode("cp1252", "ignore"), 
+            data.cno.encode("cp1252", "ignore"),
+            data.cnpj.encode("cp1252", "ignore") if data.cnpj else None,
             data.ativo,
             data.obra_concluida,
             data.endereco.encode("cp1252", "ignore") if data.endereco else None, 
@@ -3853,10 +3874,10 @@ def patch_vulcano_empreendimento(emp_id: int, data: EmpreendimentoInput):
             data.contacusto, data.contalucroacum, data.conta_estorno_devolucao,
             data.hist_venda, data.hist_recebimento, data.hist_variacao, data.hist_baixaadi, data.hist_estorno_saldo,
             data.hist_adiantamento, data.hist_aprcusto, data.hist_despesa, data.hist_estorno_custo,
-            data.cep, data.siglaestado, _int_or_none(data.codigomunic), _int_or_none(data.codigoestab), _int_or_none(data.codigofilial), _int_or_none(data.codigomatriz),
+            data.cep, data.siglaestado, _num_or_none(data.codigomunic), _num_or_none(data.codigoestab),
+            _num_or_none(data.codigofilial), _num_or_none(data.codigomatriz),
             data.datainicioret or None, data.aliqret, data.codigoimposto, data.variacaoimposto, data.tributarnormalaposconclusao,
             _float_or_none(data.ajustefinalpoc), data.reajustar_pelo_cub, data.adquirido_terceiros, data.sem_custos, data.considerar_poc_receita,
-            data.cnpj.encode("cp1252", "ignore") if data.cnpj else None,
             emp_id
         )
         cur.execute(query, params)
@@ -3986,7 +4007,7 @@ def put_empreendimento_endereco(emp_id: int, data: EnderecoInput):
     # Sync best-effort das colunas legadas existentes (sem DDL; conexao distinta).
     # CODIGOMUNIC e SMALLINT na base viva: '' vira NULL e valores fora do range
     # (ex. codigo IBGE de 7 digitos) tambem — o valor completo fica no banco do app.
-    munic = _int_or_none(data.codigo_munic)
+    munic = _num_or_none(data.codigo_munic)
     if munic is not None and not (-32768 <= munic <= 32767):
         munic = None
     vconn = None
@@ -4356,19 +4377,25 @@ def get_vulcano_venda_condicoes(venda_id: int):
                 }
             )
 
-        # GERAÇÃO DAS PARCELAS ABERTAS (A partir do SQLite Vulcano 2.0)
-        conn_sq = get_conn("sqlite")
-        cur_sq = conn_sq.cursor()
-        cur_sq.execute(
-            """
-            SELECT prazo_id, data_venc, parcela_ref, valor, forma_pagto_id
-            FROM parcelas_abertas_projetadas
-            WHERE venda_id = ?
-            ORDER BY data_venc, prazo_id
-            """,
-            (int(venda_id),),
-        )
-        for p in cur_sq.fetchall():
+        # PARCELAS PROJETADAS — desativadas por padrão: na base viva as parcelas em
+        # aberto JÁ estão no RECEBER com TOTALPAGO=0. Reative com PROJETADAS_ATIVAS=1
+        # apenas para bases cujo RECEBER não contém as parcelas futuras.
+        _proj_rows = []
+        if os.environ.get("PROJETADAS_ATIVAS") == "1":
+            conn_sq = get_conn("sqlite")
+            cur_sq = conn_sq.cursor()
+            cur_sq.execute(
+                """
+                SELECT prazo_id, data_venc, parcela_ref, valor, forma_pagto_id
+                FROM parcelas_abertas_projetadas
+                WHERE venda_id = ?
+                ORDER BY data_venc, prazo_id
+                """,
+                (int(venda_id),),
+            )
+            _proj_rows = cur_sq.fetchall()
+            conn_sq.close()
+        for p in _proj_rows:
             data_str = p[1]
             valor = float(p[3] or 0)
             # Evita duplicar se a parcela já foi efetivada no Firebird (RECEBER)
@@ -4390,8 +4417,7 @@ def get_vulcano_venda_condicoes(venda_id: int):
                     "forma_pagto_descricao": forma_by_id.get(forma_id, {}).get("descricao", "") if forma_id is not None else "",
                 }
             )
-        conn_sq.close()
-            
+
         # Reordena o array combinado de parcelas (recebidas e previstas) pela data
         parcelas.sort(key=lambda x: (x["data"] or "", str(x["id"])))
 
@@ -4440,7 +4466,7 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
     try:
         locais = {}
         try:
-            s_conn = sqlite3.connect(POC_DATABASE_FILE)
+            s_conn = connect_app()
             s_curr = s_conn.cursor()
             s_curr.execute("SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos FROM operacoes_baixas WHERE empresa_id = ?", (empresa_id,))
             # Chaves como str: id_receber pode ser o ID da RECEBER ou "prazo_<id>" (projetada)
@@ -4537,8 +4563,11 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                 item['acrescimo_local'] = 0.0
                 item['status_sistema'] = 'BAIXADO_LEGADO' if float(item.get('total', 0) or 0) > 0 else 'ABERTO'
                 
-        # --- PARCELAS ABERTAS PROJETADAS ---
+        # --- PARCELAS ABERTAS PROJETADAS (desativadas por padrão: abertas = RECEBER
+        #     com TOTALPAGO=0 na base viva; reative com PROJETADAS_ATIVAS=1) ---
         try:
+            if os.environ.get("PROJETADAS_ATIVAS") != "1":
+                raise InterruptedError("projetadas desativadas")
             conn_sq = get_conn("sqlite")
             cur_sq = conn_sq.cursor()
             
@@ -4619,6 +4648,8 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
                             item_proj['status_sistema'] = 'BAIXADO_NOVO'
                         result_list.append(item_proj)
             conn_sq.close()
+        except InterruptedError:
+            pass  # projeção desligada (PROJETADAS_ATIVAS != 1)
         except Exception as e_sq:
             print("Erro ao integrar parcelas projetadas:", e_sq)
 
@@ -4646,7 +4677,7 @@ def baixa_recebimento(data: BaixaInput):
     import sqlite3
     s_conn = None
     try:
-        s_conn = sqlite3.connect(POC_DATABASE_FILE)
+        s_conn = connect_app()
         s_curr = s_conn.cursor()
         import datetime
         data_pgto = data.data_pagamento if data.data_pagamento else datetime.date.today().isoformat()
@@ -4683,178 +4714,59 @@ def sync_recebimentos_projetadas():
         raise HTTPException(status_code=503, detail=f"Falha ao sincronizar parcelas projetadas: {e}")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# SINCRONIZAR PARCELAS EM ABERTO — VENDAFORMAPAGTOPRAZO → RECEBER
-# Popula RECEBER com parcelas projetadas que ainda não possuem linha efetiva.
+# GERAR PARCELAS — VENDAFORMAPAGTOPRAZO → RECEBER
+#
+# Motor compartilhado em core/services/receber_generator.py, usado tambem pelo CLI
+# gerar_receber_vendas_sem_parcela.py e pela tela "Geracao de Parcelas".
+#
+# Modo A: venda sem NENHUMA parcela em RECEBER -> gera a matriz inteira dela.
+# Modo B: parcelas orfas (prazo sem linha), inclusive de vendas ja lancadas. B ⊇ A.
+#
+# O ID NAO e informado no INSERT: quem atribui e a trigger RECEBER_BI via
+# GEN_RECEBER_ID. Calcular MAX(ID)+1 na mao (como estas rotas faziam) nao avanca o
+# generator e quebra as insercoes seguintes do Vulcano legado com violacao de PK.
+#
+# Execucao e sincrona e pode levar minutos. Se algum dia entrar um reverse proxy na
+# frente da API, estas rotas precisam de proxy_read_timeout 600s.
 # ──────────────────────────────────────────────────────────────────────────────
-class PopularReceberInput(BaseModel):
-    empresa_id: int | None = None       # None = todas as empresas
-    data_inicio: str | None = None      # "YYYY-MM-DD", None = sem filtro
-    dry_run: bool = True                # True = só preview, False = grava
-    limite: int | None = None           # None = sem limite (testes: 10)
+class GerarParcelasInput(BaseModel):
+    modo: str = "A"                  # "A" = venda sem parcela | "B" = parcelas orfas
+    empresa_id: int | None = None    # None = todas as empresas
+    empreendimento_id: int | None = None  # None = todos os empreendimentos
+    data_inicio: str | None = None   # "YYYY-MM-DD" — so vale no modo B
+    data_fim: str | None = None      # "YYYY-MM-DD" — so vale no modo B
+    dry_run: bool = True             # True = so simula
+    limite: int | None = None        # FIRST N, para piloto
 
-@app.post("/api/vulcano/popular-receber-abertas")
-def popular_receber_abertas(data: PopularReceberInput):
-    """
-    Cruza VENDAFORMAPAGTOPRAZO (parcelas projetadas) com RECEBER (efetivas).
-    Insere as que ainda não possuem registro em RECEBER com TOTALPAGO = 0 (em aberto).
 
-    Regras de inclusão:
-    - VENDAFORMAPAGTO.ATIVA = 'S'
-    - VENDA.DISTRATO <> 'S'
-    - VENDAFORMAPAGTOPRAZO.VALOR_PAGO = 0 (ainda não quitadas)
-    - NOT EXISTS em RECEBER por IDVENDAFORMAPAGTOPRAZO
-    """
+def _rodar_geracao(modo, empresa_id, data_inicio, data_fim, dry_run, limite,
+                   empreendimento_id=None):
+    """Executa o motor e devolve o resultado pronto para virar JSON."""
+    from core.services.receber_generator import executar
+
     conn_v = None
     try:
         conn_v = get_conn("vulcano")
-        cur = conn_v.cursor()
-
-        # 1. Próximo ID disponível
-        cur.execute("SELECT MAX(ID) FROM RECEBER")
-        max_id = cur.fetchone()[0] or 0
-        next_id = max_id + 1
-
-        # 2. Montar condicionais
-        empresa_cond  = f"AND v.CODIGOEMPRESA = {data.empresa_id}" if data.empresa_id else ""
-        data_ini_cond = f"AND vpp.DATA >= '{data.data_inicio}'" if data.data_inicio else ""
-        limite_cond   = f"ROWS 1 TO {data.limite}" if data.limite else ""
-
-        query = f"""
-            SELECT
-                vpp.ID             AS prazo_id,
-                vpp.DATA           AS vencimento,
-                vpp.VALOR          AS valor_parcela,
-                vpp.REFERENCIA,
-                vfp.ID             AS idvendaformapagto,
-                vfp.IDVENDA,
-                vfp.DESCRICAO      AS obs_descricao,
-                v.ID_CLIENTE,
-                v.CODIGOEMPRESA
-            FROM VENDAFORMAPAGTOPRAZO vpp
-            JOIN VENDAFORMAPAGTO vfp ON vfp.ID = vpp.IDVENDAFORMAPAGTO
-            JOIN VENDA v ON v.ID = vfp.IDVENDA
-            WHERE NOT EXISTS (
-                SELECT 1 FROM RECEBER r
-                WHERE r.IDVENDAFORMAPAGTOPRAZO = vpp.ID
-            )
-            AND vfp.ATIVA = 'S'
-            AND (v.DISTRATO IS NULL OR v.DISTRATO <> 'S')
-            AND (vpp.VALOR_PAGO = 0 OR vpp.VALOR_PAGO IS NULL)
-            {empresa_cond}
-            {data_ini_cond}
-            ORDER BY v.CODIGOEMPRESA, vfp.IDVENDA, vpp.DATA
-            {limite_cond}
-        """
-        cur.execute(query)
-        cols = [d[0] for d in cur.description]
-        orfas = [dict(zip(cols, row)) for row in cur.fetchall()]
-
-        if not orfas:
-            return {
-                "modo": "dry_run" if data.dry_run else "execucao",
-                "empresa": data.empresa_id,
-                "data_inicio": data.data_inicio,
-                "total_orfas": 0,
-                "valor_total": 0.0,
-                "preview": [],
-                "inseridos": 0,
-                "mensagem": "Nenhuma parcela orfã encontrada. Banco já está completo."
-            }
-
-        # 3. Preparar inserts
-        from datetime import datetime as _dt
-        insercoes = []
-        for row in orfas:
-            venc = row["VENCIMENTO"]
-            if hasattr(venc, 'strftime'):
-                parcela_str = venc.strftime("%m/%Y")
-                data_ins = venc
-            else:
-                parcela_str = "00/0000"
-                data_ins = _dt.now()
-
-            insercoes.append({
-                "id":                     next_id,
-                "idvenda":                row["IDVENDA"],
-                "idcliente":              row["ID_CLIENTE"],
-                "data":                   data_ins,
-                "valorparcela":           float(row["VALOR_PARCELA"] or 0),
-                "valorvariacao":          0.0,
-                "totalpago":              0.0,
-                "parcela":                parcela_str,
-                "obs":                    (str(row["OBS_DESCRICAO"] or "PARCELA"))[:50],
-                "idvendaformapagto":      row["IDVENDAFORMAPAGTO"],
-                "desconto":               0.0,
-                "idvendaformapagtoprazo": row["PRAZO_ID"],
-            })
-            next_id += 1
-
-        valor_total = sum(r["valorparcela"] for r in insercoes)
-        preview = [
-            {
-                "prazo_id":  ins["idvendaformapagtoprazo"],
-                "idvenda":   ins["idvenda"],
-                "data":      ins["data"].strftime("%Y-%m-%d") if hasattr(ins["data"], 'strftime') else str(ins["data"])[:10],
-                "valor":     ins["valorparcela"],
-                "parcela":   ins["parcela"],
-                "obs":       ins["obs"],
-                "empresa":   orfas[i].get("CODIGOEMPRESA"),
-            }
-            for i, ins in enumerate(insercoes[:20])
-        ]
-
-        if data.dry_run:
-            return {
-                "modo": "dry_run",
-                "empresa": data.empresa_id,
-                "data_inicio": data.data_inicio,
-                "total_orfas": len(insercoes),
-                "valor_total": valor_total,
-                "preview": preview,
-                "inseridos": 0,
-                "mensagem": f"Simulação: {len(insercoes)} parcelas seriam inseridas totalizando R$ {valor_total:,.2f}. Envie dry_run=false para gravar."
-            }
-
-        # 4. EXECUÇÃO REAL
-        insert_sql = """
-            INSERT INTO RECEBER
-                (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO,
-                 TOTALPAGO, PARCELA, OBS, IDVENDAFORMAPAGTO, DESCONTO,
-                 IDVENDAFORMAPAGTOPRAZO)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        inseridos = 0
-        erros_detalhe = []
-        cur2 = conn_v.cursor()
-        for ins in insercoes:
-            try:
-                cur2.execute(insert_sql, (
-                    ins["id"], ins["idvenda"], ins["idcliente"], ins["data"],
-                    ins["valorparcela"], ins["valorvariacao"], ins["totalpago"],
-                    ins["parcela"], ins["obs"], ins["idvendaformapagto"],
-                    ins["desconto"], ins["idvendaformapagtoprazo"],
-                ))
-                inseridos += 1
-                if inseridos % 200 == 0:
-                    conn_v.commit()
-            except Exception as e_ins:
-                erros_detalhe.append({"id": ins["id"], "erro": str(e_ins)[:120]})
-
-        conn_v.commit()
-
-        return {
-            "modo": "execucao",
-            "empresa": data.empresa_id,
-            "data_inicio": data.data_inicio,
-            "total_orfas": len(insercoes),
-            "valor_total": valor_total,
-            "preview": preview,
-            "inseridos": inseridos,
-            "erros": len(erros_detalhe),
-            "erros_detalhe": erros_detalhe[:10],
-            "mensagem": f"{inseridos} parcelas inseridas em RECEBER com TOTALPAGO=0 (em aberto)."
-        }
-
+        resultado = executar(
+            conn_v,
+            modo=modo,
+            empresa_id=empresa_id,
+            empreendimento_id=empreendimento_id,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            limite=limite,
+            dry_run=dry_run,
+            log_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"),
+        )
+        # Lista de ate ~10k ids: vai para o JSON de rollback em disco, nao para a
+        # resposta HTTP. O caminho do arquivo volta em log_rollback.
+        resultado.pop("prazos_gravados", None)
+        resultado["erros_detalhe"] = resultado.get("erros_detalhe", [])[:20]
+        return resultado
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         if conn_v:
             try: conn_v.rollback()
@@ -4863,6 +4775,59 @@ def popular_receber_abertas(data: PopularReceberInput):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn_v: conn_v.close()
+
+
+@app.post("/api/vulcano/gerar-parcelas")
+def gerar_parcelas(data: GerarParcelasInput):
+    """
+    Simula (dry_run=True) ou grava (dry_run=False) parcelas em RECEBER com
+    TOTALPAGO = 0, a partir dos prazos de VENDAFORMAPAGTOPRAZO.
+
+    Filtros fixos: VENDAFORMAPAGTO.ATIVA = 'S' e VENDA.DISTRATO <> 'S'.
+
+    Acima do teto (core.services.receber_generator.TETO_PARCELAS) a execucao volta
+    com HTTP 200, acima_do_teto=True e inseridos=0 — nao e erro, e um pedido para
+    estreitar o filtro, e a tela precisa continuar mostrando o resumo. A simulacao
+    nunca e recusada: e assim que o operador descobre como fatiar.
+    """
+    return _rodar_geracao(
+        modo=data.modo,
+        empresa_id=data.empresa_id,
+        empreendimento_id=data.empreendimento_id,
+        data_inicio=data.data_inicio,
+        data_fim=data.data_fim,
+        dry_run=data.dry_run,
+        limite=data.limite,
+    )
+
+
+class PopularReceberInput(BaseModel):
+    empresa_id: int | None = None
+    data_inicio: str | None = None
+    dry_run: bool = True
+    limite: int | None = None
+
+
+@app.post("/api/vulcano/popular-receber-abertas")
+def popular_receber_abertas(data: PopularReceberInput):
+    """
+    Mantido por compatibilidade: equivale a /api/vulcano/gerar-parcelas no modo B.
+    Prefira a rota nova, que expõe os dois modos e o filtro de data final.
+    """
+    resultado = _rodar_geracao(
+        modo="B",
+        empresa_id=data.empresa_id,
+        empreendimento_id=None,   # contrato antigo: sem recorte por obra
+        data_inicio=data.data_inicio,
+        data_fim=None,
+        dry_run=data.dry_run,
+        limite=data.limite,
+    )
+    # Chaves do contrato antigo, para nao quebrar quem ja chamava esta rota.
+    resultado["modo"] = "dry_run" if data.dry_run else "execucao"
+    resultado["empresa"] = data.empresa_id
+    resultado["total_orfas"] = resultado.get("total_parcelas", 0)
+    return resultado
 
 import pandas as pd
 import re
@@ -4933,7 +4898,7 @@ def _sanitize_extracted_rows(rows: list) -> list:
 
 
 def _extract_with_saved_parser(content: bytes, filename: str, template_id: int):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute("SELECT python_code FROM pdf_parser_templates WHERE id = ?", (int(template_id),))
     row = c.fetchone()
@@ -5097,7 +5062,7 @@ async def conversor_salvar_extraidos(payload: ConversorSavePayload):
     Grava a extração no SQLite, dividindo em um Batch Pai (onde mora o texto do PDF)
     e os Registros Filhos (o JSON). Converte automaticamente as datas D/M/Y em ISO.
     """
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     cur = conn.cursor()
     try:
         cur.execute('''
@@ -5155,7 +5120,7 @@ async def conversor_salvar_extraidos(payload: ConversorSavePayload):
 @app.get("/api/conversor/listar-extraidos")
 def conversor_listar_extraidos():
     """Retorna os batches pai já gravados"""
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     try:
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
@@ -5304,7 +5269,7 @@ async def extract_pdf(
         # Só busca template padrão da empresa se force_ai=False
         # (force_ai=True deve mandar SEMPRE ao Gemini sem nenhum parser intermediário)
         if not force_ai and tid is None and empresa_id is not None and import_mode == 'recebimentos':
-            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn = connect_app()
             c = conn.cursor()
             c.execute(
                 "SELECT parser_template_id FROM empresa_parser_padrao WHERE empresa_id = ?",
@@ -5661,7 +5626,7 @@ Retorne APENAS um JSON com a chave `python_code` cujo valor seja este pequeno gu
         filename = "sem_codigo_ollama.txt"
         
         try:
-            conn = sqlite3.connect(POC_DATABASE_FILE)
+            conn = connect_app()
             c = conn.cursor()
             sample_store = json.dumps(sample, ensure_ascii=False)[:80000]
             c.execute(
@@ -5705,7 +5670,7 @@ class ParserTemplateSetDefault(BaseModel):
 
 @app.get("/api/parser/templates")
 def list_parser_templates(empresa_id: int | None = None):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     padrao_id = None
     if empresa_id is not None:
@@ -5738,7 +5703,7 @@ def list_parser_templates(empresa_id: int | None = None):
 @app.delete("/api/parser/template/{template_id}")
 def delete_parser_template(template_id: int):
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         c = conn.cursor()
         c.execute("SELECT arquivo_gerado FROM pdf_parser_templates WHERE id = ?", (template_id,))
         row = c.fetchone()
@@ -5768,7 +5733,7 @@ def delete_parser_template(template_id: int):
 @app.delete("/api/parser/template/{template_id}")
 def delete_parser_template(template_id: int):
     try:
-        conn = sqlite3.connect(POC_DATABASE_FILE)
+        conn = connect_app()
         c = conn.cursor()
         c.execute("SELECT arquivo_gerado FROM pdf_parser_templates WHERE id = ?", (template_id,))
         row = c.fetchone()
@@ -5797,7 +5762,7 @@ def delete_parser_template(template_id: int):
 
 @app.get("/api/parser/templates/{template_id}")
 def get_parser_template(template_id: int):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute(
         "SELECT id, nome, descricao, python_code, sample_json, data_criacao, arquivo_gerado FROM pdf_parser_templates WHERE id = ?",
@@ -5820,7 +5785,7 @@ def get_parser_template(template_id: int):
 
 @app.post("/api/parser/templates/set-default")
 def set_parser_template_default(body: ParserTemplateSetDefault):
-    conn = sqlite3.connect(POC_DATABASE_FILE)
+    conn = connect_app()
     c = conn.cursor()
     c.execute("SELECT 1 FROM pdf_parser_templates WHERE id = ?", (body.parser_template_id,))
     if not c.fetchone():
@@ -7830,7 +7795,7 @@ def get_sero_cub(compet: str = Query(..., description="Mes YYYY-MM")):
 @app.get("/api/sped/f200/preview")
 def sped_f200_preview(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_f200
-    res = processar_f200(empresa_id, ano, mes, dry_run=True)
+    res = processar_f200(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
@@ -7838,7 +7803,7 @@ def sped_f200_preview(empresa_id: int, ano: int, mes: int):
 @app.post("/api/sped/f200/commit")
 def sped_f200_commit(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_f200
-    res = processar_f200(empresa_id, ano, mes, dry_run=False)
+    res = processar_f200(empresa_id, ano, mes, dry_run=False, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
@@ -7846,7 +7811,7 @@ def sped_f200_commit(empresa_id: int, ano: int, mes: int):
 @app.get("/api/sped/ret/preview")
 def sped_ret_preview(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_ret
-    res = processar_ret(empresa_id, ano, mes, dry_run=True)
+    res = processar_ret(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
@@ -7854,10 +7819,198 @@ def sped_ret_preview(empresa_id: int, ano: int, mes: int):
 @app.post("/api/sped/ret/commit")
 def sped_ret_commit(empresa_id: int, ano: int, mes: int):
     from injector_sped import processar_ret
-    res = processar_ret(empresa_id, ano, mes, dry_run=False)
+    res = processar_ret(empresa_id, ano, mes, dry_run=False, get_conn=get_conn)
     if not res.get("success"):
         raise HTTPException(status_code=500, detail=res.get("error", "Unknown error"))
     return res
+
+@app.get("/api/sped/resumo")
+def sped_resumo(empresa_id: int, ano: int, mes: int):
+    """Quadro Resumo por empreendimento (tela legada 'Consultar F200'):
+    F200 (parcela/variação/base/PIS/COFINS) + RET (base/valor) + distratos do mês."""
+    from injector_sped import processar_ret, processar_f200
+    ret = processar_ret(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
+    if not ret.get("success"):
+        raise HTTPException(status_code=500, detail=f"RET: {ret.get('error')}")
+    f200 = processar_f200(empresa_id, ano, mes, dry_run=True, get_conn=get_conn)
+    if not f200.get("success"):
+        raise HTTPException(status_code=500, detail=f"F200: {f200.get('error')}")
+
+    obras = {}
+    def _slot(nome):
+        nome = (nome or "(sem empreendimento)").strip() or "(sem empreendimento)"
+        return obras.setdefault(nome.upper(), {
+            "empreendimento": nome, "recebimentos": 0.0, "valor_parcela": 0.0,
+            "variacao": 0.0, "bc_f200": 0.0, "pis": 0.0, "cofins": 0.0,
+            "bc_ret": 0.0, "valor_ret": 0.0, "aliq_ret": None, "distrato": 0.0,
+        })
+
+    for r in f200.get("data", []):
+        s = _slot(r.get("obra"))
+        s["recebimentos"] += r["vltotrec"]
+        s["valor_parcela"] += r.get("valor_parcela", r["vltotrec"])
+        s["variacao"] += r.get("variacao", 0.0)
+        s["bc_f200"] += r["vlbc"]
+        s["pis"] += r["vlpis"]
+        s["cofins"] += r["vlcofins"]
+    for r in ret.get("data", []):
+        s = _slot(r.get("unidade"))
+        s["recebimentos"] += r["base_calculo"]
+        s["valor_parcela"] += r["receita_principal"]
+        s["variacao"] += r["receita_financeira"]
+        s["bc_ret"] += r["base_calculo"]
+        s["valor_ret"] += r["total_ret"]
+        s["aliq_ret"] = r["aliqret"]
+
+    # Distratos do mês (informativo)
+    import calendar as _cal
+    import datetime as _dt
+    dt_ini = _dt.date(ano, mes, 1)
+    dt_fim = _dt.date(ano, mes, _cal.monthrange(ano, mes)[1])
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT E.NOME, SUM(V.TOTALVENDA)
+            FROM VENDA V
+            LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
+            WHERE V.CODIGOEMPRESA = ? AND V.DISTRATO = 'S'
+              AND V.DATADISTRATO >= ? AND V.DATADISTRATO <= ?
+            GROUP BY E.NOME
+        """, (empresa_id, dt_ini, dt_fim))
+        for nome, valor in cur.fetchall():
+            nome = nome.decode("cp1252", "ignore") if isinstance(nome, bytes) else str(nome or "")
+            _slot(nome)["distrato"] += float(valor or 0)
+    except Exception:
+        pass
+    finally:
+        if conn: conn.close()
+
+    rows = sorted(obras.values(), key=lambda x: x["empreendimento"])
+    for r in rows:
+        for k in ("recebimentos", "valor_parcela", "variacao", "bc_f200", "pis",
+                  "cofins", "bc_ret", "valor_ret", "distrato"):
+            r[k] = round(r[k], 2)
+    tot = {k: round(sum(r[k] for r in rows), 2)
+           for k in ("recebimentos", "valor_parcela", "variacao", "bc_f200", "pis",
+                     "cofins", "bc_ret", "valor_ret", "distrato")}
+    return {"success": True, "data": rows, "totais": tot}
+
+@app.get("/api/vulcano/recebimentos-mensal")
+def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_id: int = None):
+    """Visão mensal legada (tela do analista): parcelas do mês de referência + abertas
+    vencidas até o fim do mês, com saldos da venda e totais de rodapé."""
+    import sqlite3
+    import calendar as _cal
+    import datetime as _dt
+    dt_ini = _dt.date(ano, mes, 1)
+    dt_fim = _dt.date(ano, mes, _cal.monthrange(ano, mes)[1])
+    conn = None
+    try:
+        # baixas novas (SQLite): valor/data/variação/desconto — fundidas na visão
+        baixas = {}
+        try:
+            s_conn = connect_app()
+            s_cur = s_conn.cursor()
+            s_cur.execute("""SELECT id_receber, valor_pago, data_pagamento, descontos, acrescimos
+                             FROM operacoes_baixas WHERE empresa_id = ?""", (empresa_id,))
+            baixas = {str(r[0]): {"valor_pago": float(r[1] or 0), "data": r[2],
+                                  "desconto": float(r[3] or 0), "variacao": float(r[4] or 0)}
+                      for r in s_cur.fetchall()}
+            s_conn.close()
+        except Exception:
+            pass
+
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        filtro_emp = " AND V.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+        params = [empresa_id, dt_ini, dt_fim, dt_fim]
+        if empreendimento_id:
+            params.append(empreendimento_id)
+        cur.execute(f"""
+            SELECT R.ID, V.ID, C.NOME, C.CNPJ, V.DESCUNIDIMOB, V.TOTALVENDA,
+                   R.DATA, R.VALORPARCELA, R.DESCONTO, R.VALORVARIACAO, R.TOTALPAGO,
+                   R.PARCELA, R.OBS, E.NOME
+            FROM RECEBER R
+            JOIN VENDA V ON R.IDVENDA = V.ID
+            LEFT JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
+            LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
+            WHERE V.CODIGOEMPRESA = ?
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND ((R.DATA >= ? AND R.DATA <= ?)
+                   OR (COALESCE(R.TOTALPAGO, 0) = 0 AND R.DATA <= ?))
+              {filtro_emp}
+            ORDER BY C.NOME, R.DATA, R.ID
+        """, tuple(params))
+        rows = cur.fetchall()
+
+        # acumulados por venda: pago total e pago antes do mês (saldos)
+        def _acum(extra_sql, extra_params):
+            cur.execute(f"""
+                SELECT R.IDVENDA, SUM(R.TOTALPAGO)
+                FROM RECEBER R
+                JOIN VENDA V ON R.IDVENDA = V.ID
+                WHERE V.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0 {extra_sql}
+                GROUP BY R.IDVENDA
+            """, tuple([empresa_id] + extra_params))
+            return {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+        pago_total = _acum("", [])
+        pago_antes = _acum(" AND R.DATA < ?", [dt_ini])
+
+        def _s(v):
+            return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
+
+        # baixas novas ainda não refletidas no FDB reduzem o saldo da venda
+        baixa_extra = {}
+        result = []
+        for r in rows:
+            (rid, vid, cliente, cnpj, unidade, totalvenda, data, vparc,
+             desc, var, pago, parcela, obs, obra) = r
+            if isinstance(data, _dt.datetime):
+                data = data.date()
+            totalvenda = float(totalvenda or 0)
+            pago_f = float(pago or 0)
+            bx = baixas.get(str(rid))
+            if bx and pago_f <= 0:
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+            item = {
+                "id": rid, "venda_id": vid,
+                "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
+                "unidade": _s(unidade), "empreendimento": _s(obra),
+                "vlr_venda": round(totalvenda, 2),
+                "saldo_anterior": round(totalvenda - pago_antes.get(vid, 0.0), 2),
+                "vencimento": data.isoformat() if data else None,
+                "data_pagto": bx["data"] if bx else "",
+                "valor_parcela": round(float(vparc or 0), 2),
+                "desconto": round(float(desc or 0), 2),
+                "variacao": round(float(var or 0), 2),
+                "total_pago": round(pago_f, 2),
+                "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
+                "parcela": _s(parcela), "obs": _s(obs),
+                "status": "PAGO" if pago_f > 0 else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+            }
+            if bx and pago_f <= 0:  # baixada pelo Vulcano 2.0 (SQLite), FDB ainda em aberto
+                item["total_pago"] = round(bx["valor_pago"], 2)
+                item["variacao"] = round(bx["variacao"], 2)
+                item["desconto"] = round(bx["desconto"], 2)
+                item["status"] = "PAGO"
+            result.append(item)
+
+        for x in result:
+            x["saldo_atual"] = round(x["saldo_atual"] - baixa_extra.get(x["venda_id"], 0.0), 2)
+
+        tot = {k: round(sum(x[k] for x in result), 2)
+               for k in ("valor_parcela", "desconto", "variacao", "total_pago")}
+        tot["saldo_atual"] = round(sum({x["venda_id"]: x["saldo_atual"] for x in result}.values()), 2)
+        return {"success": True, "data": result, "totais": tot,
+                "periodo": {"ano": ano, "mes": mes}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn: conn.close()
+
 
 @app.post("/api/sero/config")
 def sero_salvar_config():
@@ -8090,23 +8243,27 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 val = round(float(p[3] or 0), 2)
                 assinaturas_fb.add((dt_str, val))
             
-            # GERAÇÃO DINÂMICA DAS ABERTAS VINDAS DO SQLITE VULCANO 2.0
-            conn_sq = get_conn("sqlite")
-            cur_sq = conn_sq.cursor()
-            sq_where = ["1=1"]
-            sq_params = []
-            if payload.empreendimento_id:
-                sq_where.append("empreendimento_id = ?")
-                sq_params.append(payload.empreendimento_id)
-                
-            cur_sq.execute(f"""
-                SELECT prazo_id, parcela_ref, data_venc, valor, 0.0,
-                       cliente_nome, unidade_descricao
-                FROM parcelas_abertas_projetadas
-                WHERE {" AND ".join(sq_where)}
-            """, sq_params)
-            
-            for row in cur_sq.fetchall():
+            # PROJETADAS — desativadas por padrão (abertas = RECEBER TOTALPAGO<=0,
+            # já carregadas acima da base viva); reative com PROJETADAS_ATIVAS=1.
+            _proj_rows = []
+            if os.environ.get("PROJETADAS_ATIVAS") == "1":
+                conn_sq = get_conn("sqlite")
+                cur_sq = conn_sq.cursor()
+                sq_where = ["1=1"]
+                sq_params = []
+                if payload.empreendimento_id:
+                    sq_where.append("empreendimento_id = ?")
+                    sq_params.append(payload.empreendimento_id)
+                cur_sq.execute(f"""
+                    SELECT prazo_id, parcela_ref, data_venc, valor, 0.0,
+                           cliente_nome, unidade_descricao
+                    FROM parcelas_abertas_projetadas
+                    WHERE {" AND ".join(sq_where)}
+                """, sq_params)
+                _proj_rows = cur_sq.fetchall()
+                conn_sq.close()
+
+            for row in _proj_rows:
                 try:
                     dt_venc = datetime.datetime.strptime(row[2], "%Y-%m-%d").date() if row[2] else None
                 except:
@@ -8119,7 +8276,6 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                     continue
                     
                 abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
-            conn_sq.close()
             TOLE = 1.0
 
             from collections import defaultdict
@@ -8385,8 +8541,8 @@ _SMART_IMPORTER_SCHEMAS = {
 # SQLite para persistência de templates do Smart Importer
 import sqlite3 as _sqlite3
 
-def _get_smart_importer_db() -> _sqlite3.Connection:
-    conn = _sqlite3.connect(POC_DATABASE_FILE)
+def _get_smart_importer_db():
+    conn = connect_app()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS smart_importer_templates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

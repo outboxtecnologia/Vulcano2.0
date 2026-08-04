@@ -34,8 +34,12 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
     setLoading(true);
     setError(null);
 
+    // Sem abort, a resposta lenta da empresa anterior pode sobrescrever a atual.
+    const ac = new AbortController();
+
     fetch(
       `${API_BASE}/api/receitas-caixa?empresa_id=${selectedEmpresa}${dataIni ? `&data_ini=${dataIni}` : ""}${dataFim ? `&data_fim=${dataFim}` : ""}`,
+      { signal: ac.signal },
     )
       .then((res) => {
         if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
@@ -46,9 +50,12 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
         setLoading(false);
       })
       .catch((err) => {
+        if (err.name === 'AbortError') return;
         setError(err.message);
         setLoading(false);
       });
+
+    return () => ac.abort();
   }, [selectedEmpresa, fetchTrigger]);
 
   let totalCaixaAcumulado = 0;
@@ -87,8 +94,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
       {/* NOVO HEADER */}
       <header
         style={{
-          borderBottom: "1px solid rgba(255, 160, 80, 0.08)",
-          background: "rgb(18, 16, 14)",
+          borderBottom: "1px solid var(--v-line-warm)",
+          background: "var(--v-bg)",
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -102,7 +109,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
             alignItems: "center",
             gap: "9px",
             paddingRight: "14px",
-            borderRight: "1px solid rgba(255, 160, 80, 0.08)",
+            borderRight: "1px solid var(--v-line-warm)",
           }}
         >
           <div
@@ -111,8 +118,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
               width: "6px",
               height: "6px",
               borderRadius: "50%",
-              background: "rgb(255, 122, 26)",
-              boxShadow: "rgb(255, 122, 26) 0px 0px 8px",
+              background: "var(--v-accent)",
+              boxShadow: "var(--v-accent) 0px 0px 8px",
             }}
           ></div>
           <span
@@ -120,7 +127,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
               fontFamily: '"JetBrains Mono"',
               fontSize: "10px",
               letterSpacing: "0.22em",
-              color: "rgb(240, 230, 216)",
+              color: "var(--v-text-bold)",
             }}
           >
             TRIBUTOS GLOBAIS
@@ -129,7 +136,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
             style={{
               fontFamily: '"JetBrains Mono"',
               fontSize: "10px",
-              color: "rgb(90, 78, 66)",
+              color: "var(--v-text-faint)",
             }}
           >
             · {dashboardMetaKeys.length} obras
@@ -153,7 +160,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                 fontFamily: '"JetBrains Mono"',
                 fontSize: "8.5px",
                 letterSpacing: "0.2em",
-                color: "rgb(90, 78, 66)",
+                color: "var(--v-text-faint)",
                 lineHeight: 1,
               }}
             >
@@ -167,7 +174,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "rgb(240, 230, 216)",
+                color: "var(--v-text-bold)",
                 fontFamily: '"JetBrains Mono"',
                 fontSize: "11.5px",
                 padding: "2px 0 0",
@@ -184,8 +191,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
             gap: "8px",
             padding: "5px 10px 5px 12px",
             borderRadius: "7px",
-            background: "rgb(26, 22, 20)",
-            border: "1px solid rgba(255, 160, 80, 0.08)",
+            background: "var(--v-card)",
+            border: "1px solid var(--v-line-warm)",
           }}
         >
           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -194,7 +201,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                 fontFamily: '"JetBrains Mono"',
                 fontSize: "8.5px",
                 letterSpacing: "0.2em",
-                color: "rgb(90, 78, 66)",
+                color: "var(--v-text-faint)",
                 lineHeight: 1,
               }}
             >
@@ -209,7 +216,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: "rgb(240, 230, 216)",
+                color: "var(--v-text-bold)",
                 fontFamily: '"JetBrains Mono"',
                 fontSize: "11.5px",
                 padding: "2px 0 0",
@@ -223,8 +230,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
           style={{
             display: "flex",
             alignItems: "center",
-            background: "rgb(26, 22, 20)",
-            border: "1px solid rgba(255, 160, 80, 0.08)",
+            background: "var(--v-card)",
+            border: "1px solid var(--v-line-warm)",
             borderRadius: "7px",
             padding: "3px",
             gap: "2px",
@@ -246,8 +253,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                   : "1px solid transparent",
               color:
                 regimeFilter === "TODOS"
-                  ? "rgb(255, 122, 26)"
-                  : "rgb(138, 122, 104)",
+                  ? "var(--v-accent)"
+                  : "var(--v-text-muted)",
               fontFamily: '"JetBrains Mono"',
               fontSize: "10px",
               letterSpacing: "0.16em",
@@ -271,8 +278,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                   : "1px solid transparent",
               color:
                 regimeFilter === "PRESUMIDO"
-                  ? "rgb(255, 122, 26)"
-                  : "rgb(138, 122, 104)",
+                  ? "var(--v-accent)"
+                  : "var(--v-text-muted)",
               fontFamily: '"JetBrains Mono"',
               fontSize: "10px",
               letterSpacing: "0.16em",
@@ -296,8 +303,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                   : "1px solid transparent",
               color:
                 regimeFilter === "RET 4%"
-                  ? "rgb(255, 122, 26)"
-                  : "rgb(138, 122, 104)",
+                  ? "var(--v-accent)"
+                  : "var(--v-text-muted)",
               fontFamily: '"JetBrains Mono"',
               fontSize: "10px",
               letterSpacing: "0.16em",
@@ -318,9 +325,9 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
             padding: "8px 14px",
             borderRadius: "7px",
             background:
-              "linear-gradient(135deg, rgb(255, 122, 26), rgb(201, 58, 18))",
+              "linear-gradient(135deg, var(--v-accent), var(--v-accent-2))",
             border: "none",
-            color: "rgb(26, 10, 4)",
+            color: "var(--v-accent-soft)",
             fontSize: "12px",
             fontWeight: 600,
             fontFamily: "Inter",
@@ -368,11 +375,11 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                   fontWeight: 600,
                   fontSize: "22px",
                   letterSpacing: "-0.01em",
-                  color: "rgb(240, 230, 216)",
+                  color: "var(--v-text-bold)",
                 }}
               >
                 Tributos Globais{" "}
-                <span style={{ color: "rgb(90, 78, 66)", fontWeight: 400 }}>
+                <span style={{ color: "var(--v-text-faint)", fontWeight: 400 }}>
                   · Caixa vs Competência
                 </span>
               </h1>
@@ -384,7 +391,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                   padding: "3px 8px",
                   borderRadius: "3px",
                   background: "rgba(255, 122, 26, 0.12)",
-                  color: "rgb(255, 122, 26)",
+                  color: "var(--v-accent)",
                   border: "1px solid rgba(255, 122, 26, 0.3)",
                   fontFamily: '"JetBrains Mono", monospace',
                   fontSize: "10px",
@@ -399,7 +406,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
             <div
               style={{
                 fontSize: "12.5px",
-                color: "rgb(138, 122, 104)",
+                color: "var(--v-text-muted)",
                 lineHeight: 1.55,
                 maxWidth: "780px",
                 paddingLeft: "44px",
@@ -408,14 +415,14 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
               Apuração Presumido{" "}
               <span
                 style={{
-                  color: "rgb(240, 230, 216)",
+                  color: "var(--v-text-bold)",
                   fontFamily: '"JetBrains Mono"',
                   fontSize: "11px",
                 }}
               >
                 (PIS 0,65% · COFINS 3% · CSLL 1,08% · IRPJ 1,2% + 10%)
               </span>{" "}
-              versus <span style={{ color: "rgb(240, 230, 216)" }}>RET 4%</span>{" "}
+              versus <span style={{ color: "var(--v-text-bold)" }}>RET 4%</span>{" "}
               — diferimento entre regime de competência (faturamento societário)
               e regime de caixa (recebimento fiscal).
             </div>
@@ -434,7 +441,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
           )}
 
           {error && (
-            <div className="m-6 bg-[var(--v-error)]/10 text-[var(--v-error)] border border-[var(--v-error)]/30 p-4 rounded-[10px] flex items-center gap-3">
+            <div className="m-6 bg-[rgb(var(--v-error-rgb)_/_0.1)] text-[var(--v-error)] border border-[rgb(var(--v-error-rgb)_/_0.3)] p-4 rounded-[10px] flex items-center gap-3">
               <AlertCircle size={20} />{" "}
               <span className="text-sm font-bold">{error}</span>
             </div>
@@ -455,11 +462,11 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     style={{
                       position: "relative",
                       overflow: "hidden",
-                      background: "rgb(26, 22, 20)",
+                      background: "var(--v-card)",
                       borderWidth: "1px 1px 1px 3px",
                       borderStyle: "solid",
                       borderColor:
-                        "rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgb(255, 122, 26)",
+                        "var(--v-line-warm) var(--v-line-warm) var(--v-line-warm) var(--v-accent)",
                       borderRadius: "10px",
                       padding: "16px 18px",
                     }}
@@ -489,7 +496,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                           fontFamily: '"JetBrains Mono"',
                           fontSize: "9.5px",
                           letterSpacing: "0.22em",
-                          color: "rgb(90, 78, 66)",
+                          color: "var(--v-text-faint)",
                         }}
                       >
                         BASE ACUM. FATURAMENTO
@@ -500,7 +507,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         fontFamily: '"Space Grotesk"',
                         fontSize: "24px",
                         fontWeight: 600,
-                        color: "rgb(240, 230, 216)",
+                        color: "var(--v-text-bold)",
                         fontVariantNumeric: "tabular-nums",
                         letterSpacing: "-0.01em",
                       }}
@@ -510,7 +517,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "rgb(138, 122, 104)",
+                        color: "var(--v-text-muted)",
                         marginTop: "6px",
                       }}
                     >
@@ -521,11 +528,11 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     style={{
                       position: "relative",
                       overflow: "hidden",
-                      background: "rgb(26, 22, 20)",
+                      background: "var(--v-card)",
                       borderWidth: "1px 1px 1px 3px",
                       borderStyle: "solid",
                       borderColor:
-                        "rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgb(255, 122, 26)",
+                        "var(--v-line-warm) var(--v-line-warm) var(--v-line-warm) var(--v-accent)",
                       borderRadius: "10px",
                       padding: "16px 18px",
                     }}
@@ -555,7 +562,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                           fontFamily: '"JetBrains Mono"',
                           fontSize: "9.5px",
                           letterSpacing: "0.22em",
-                          color: "rgb(90, 78, 66)",
+                          color: "var(--v-text-faint)",
                         }}
                       >
                         TOTAL ACUM. A RECOLHER
@@ -566,7 +573,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         fontFamily: '"Space Grotesk"',
                         fontSize: "24px",
                         fontWeight: 600,
-                        color: "rgb(255, 122, 26)",
+                        color: "var(--v-accent)",
                         fontVariantNumeric: "tabular-nums",
                         letterSpacing: "-0.01em",
                       }}
@@ -576,7 +583,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "rgb(138, 122, 104)",
+                        color: "var(--v-text-muted)",
                         marginTop: "6px",
                       }}
                     >
@@ -587,11 +594,11 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     style={{
                       position: "relative",
                       overflow: "hidden",
-                      background: "rgb(26, 22, 20)",
+                      background: "var(--v-card)",
                       borderWidth: "1px 1px 1px 3px",
                       borderStyle: "solid",
                       borderColor:
-                        "rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgba(255, 160, 80, 0.08) rgb(255, 194, 71)",
+                        "var(--v-line-warm) var(--v-line-warm) var(--v-line-warm) var(--v-warn)",
                       borderRadius: "10px",
                       padding: "16px 18px",
                     }}
@@ -621,7 +628,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                           fontFamily: '"JetBrains Mono"',
                           fontSize: "9.5px",
                           letterSpacing: "0.22em",
-                          color: "rgb(90, 78, 66)",
+                          color: "var(--v-text-faint)",
                         }}
                       >
                         SALDO DIFERIMENTO FISCAL
@@ -632,7 +639,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         fontFamily: '"Space Grotesk"',
                         fontSize: "24px",
                         fontWeight: 600,
-                        color: "rgb(255, 194, 71)",
+                        color: "var(--v-warn)",
                         fontVariantNumeric: "tabular-nums",
                         letterSpacing: "-0.01em",
                       }}
@@ -642,7 +649,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "rgb(138, 122, 104)",
+                        color: "var(--v-text-muted)",
                         marginTop: "6px",
                       }}
                     >
@@ -656,8 +663,8 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
               <div style={{ padding: "0px 24px 22px" }}>
                 <div
                   style={{
-                    background: "rgb(26, 22, 20)",
-                    border: "1px solid rgba(255, 160, 80, 0.08)",
+                    background: "var(--v-card)",
+                    border: "1px solid var(--v-line-warm)",
                     borderRadius: "10px",
                     overflow: "hidden",
                   }}
@@ -665,7 +672,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                   <div
                     style={{
                       padding: "14px 18px",
-                      borderBottom: "1px solid rgba(255, 160, 80, 0.08)",
+                      borderBottom: "1px solid var(--v-line-warm)",
                       display: "flex",
                       alignItems: "center",
                       gap: "10px",
@@ -676,7 +683,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         fontFamily: '"JetBrains Mono"',
                         fontSize: "10.5px",
                         letterSpacing: "0.22em",
-                        color: "rgb(240, 230, 216)",
+                        color: "var(--v-text-bold)",
                       }}
                     >
                       MATRIZ POR EMPREENDIMENTO
@@ -685,14 +692,14 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                       style={{
                         width: "1px",
                         height: "12px",
-                        background: "rgba(255, 160, 80, 0.08)",
+                        background: "var(--v-line-warm)",
                       }}
                     ></span>
                     <span
                       style={{
                         fontFamily: '"JetBrains Mono"',
                         fontSize: "10px",
-                        color: "rgb(90, 78, 66)",
+                        color: "var(--v-text-faint)",
                       }}
                     >
                       {filteredRows.length} obras ·{" "}
@@ -708,12 +715,12 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                           gridTemplateColumns:
                             "minmax(220px, 1.6fr) 70px 1fr 1fr 1fr 1fr 1.1fr 1.1fr 130px",
                           padding: "10px 18px",
-                          borderBottom: "1px solid rgba(255, 160, 80, 0.08)",
+                          borderBottom: "1px solid var(--v-line-warm)",
                           background: "rgba(0, 0, 0, 0.22)",
                           fontFamily: '"JetBrains Mono"',
                           fontSize: "9.5px",
                           letterSpacing: "0.18em",
-                          color: "rgb(90, 78, 66)",
+                          color: "var(--v-text-faint)",
                         }}
                       >
                         <span>OBRA / EMPREENDIMENTO</span>
@@ -723,7 +730,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         <span
                           style={{
                             textAlign: "right",
-                            color: "rgb(255, 194, 71)",
+                            color: "var(--v-warn)",
                           }}
                         >
                           ADIC. IR (10%)
@@ -731,7 +738,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                         <span
                           style={{
                             textAlign: "right",
-                            color: "rgb(61, 214, 140)",
+                            color: "var(--v-ok)",
                           }}
                         >
                           RET 4%
@@ -784,10 +791,10 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                 borderLeft: "none",
                                 borderRight: "none",
                                 borderBottom:
-                                  "1px solid rgba(255, 160, 80, 0.08)",
+                                  "1px solid var(--v-line-warm)",
                                 cursor: "pointer",
                                 textAlign: "left",
-                                color: "rgb(240, 230, 216)",
+                                color: "var(--v-text-bold)",
                                 transition: "background 0.2s",
                               }}
                             >
@@ -829,7 +836,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                 <span
                                   style={{
                                     fontSize: "12.5px",
-                                    color: "rgb(240, 230, 216)",
+                                    color: "var(--v-text-bold)",
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
                                     whiteSpace: "nowrap",
@@ -849,7 +856,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                       padding: "2px 7px",
                                       borderRadius: "3px",
                                       background: "rgba(61, 214, 140, 0.1)",
-                                      color: "rgb(61, 214, 140)",
+                                      color: "var(--v-ok)",
                                       border:
                                         "1px solid rgba(61, 214, 140, 0.2)",
                                     }}
@@ -866,9 +873,9 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                       padding: "2px 7px",
                                       borderRadius: "3px",
                                       background: "rgba(255, 160, 80, 0.06)",
-                                      color: "rgb(138, 122, 104)",
+                                      color: "var(--v-text-muted)",
                                       border:
-                                        "1px solid rgba(255, 160, 80, 0.08)",
+                                        "1px solid var(--v-line-warm)",
                                     }}
                                   >
                                     PRES
@@ -880,7 +887,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                   textAlign: "right",
                                   fontFamily: '"JetBrains Mono"',
                                   fontSize: "11.5px",
-                                  color: "rgb(90, 78, 66)",
+                                  color: "var(--v-text-faint)",
                                   fontVariantNumeric: "tabular-nums",
                                 }}
                               >
@@ -891,7 +898,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                   textAlign: "right",
                                   fontFamily: '"JetBrains Mono"',
                                   fontSize: "11.5px",
-                                  color: "rgb(90, 78, 66)",
+                                  color: "var(--v-text-faint)",
                                   fontVariantNumeric: "tabular-nums",
                                 }}
                               >
@@ -902,7 +909,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                   textAlign: "right",
                                   fontFamily: '"JetBrains Mono"',
                                   fontSize: "11.5px",
-                                  color: "rgb(255, 194, 71)",
+                                  color: "var(--v-warn)",
                                   fontVariantNumeric: "tabular-nums",
                                   fontWeight: 600,
                                 }}
@@ -914,7 +921,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                   textAlign: "right",
                                   fontFamily: '"JetBrains Mono"',
                                   fontSize: "11.5px",
-                                  color: "rgb(61, 214, 140)",
+                                  color: "var(--v-ok)",
                                   fontVariantNumeric: "tabular-nums",
                                   fontWeight: 600,
                                 }}
@@ -934,7 +941,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     fontFamily: '"JetBrains Mono"',
                                     fontSize: "11.5px",
                                     fontWeight: 600,
-                                    color: "rgb(240, 230, 216)",
+                                    color: "var(--v-text-bold)",
                                     fontVariantNumeric: "tabular-nums",
                                   }}
                                 >
@@ -945,7 +952,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     style={{
                                       fontFamily: '"JetBrains Mono"',
                                       fontSize: "9px",
-                                      color: "rgb(90, 78, 66)",
+                                      color: "var(--v-text-faint)",
                                       marginTop: "2px",
                                     }}
                                   >
@@ -965,7 +972,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     fontFamily: '"JetBrains Mono"',
                                     fontSize: "11.5px",
                                     fontWeight: 600,
-                                    color: "rgb(255, 122, 26)",
+                                    color: "var(--v-accent)",
                                     fontVariantNumeric: "tabular-nums",
                                   }}
                                 >
@@ -976,7 +983,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     style={{
                                       fontFamily: '"JetBrains Mono"',
                                       fontSize: "9px",
-                                      color: "rgb(90, 78, 66)",
+                                      color: "var(--v-text-faint)",
                                       marginTop: "2px",
                                     }}
                                   >
@@ -1007,9 +1014,9 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                           width: "5px",
                                           height: "5px",
                                           borderRadius: "50%",
-                                          background: "rgb(61, 214, 140)",
+                                          background: "var(--v-ok)",
                                           boxShadow:
-                                            "rgb(61, 214, 140) 0px 0px 6px",
+                                            "var(--v-ok) 0px 0px 6px",
                                         }}
                                       ></span>
                                       <span
@@ -1017,7 +1024,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                           fontFamily: '"JetBrains Mono"',
                                           fontSize: "9px",
                                           letterSpacing: "0.14em",
-                                          color: "rgb(61, 214, 140)",
+                                          color: "var(--v-ok)",
                                         }}
                                       >
                                         ANTECIPADO
@@ -1027,7 +1034,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                       style={{
                                         fontFamily: '"JetBrains Mono"',
                                         fontSize: "9px",
-                                        color: "rgb(90, 78, 66)",
+                                        color: "var(--v-text-faint)",
                                         fontVariantNumeric: "tabular-nums",
                                       }}
                                     >
@@ -1049,9 +1056,9 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                           width: "5px",
                                           height: "5px",
                                           borderRadius: "50%",
-                                          background: "rgb(255, 194, 71)",
+                                          background: "var(--v-warn)",
                                           boxShadow:
-                                            "rgb(255, 194, 71) 0px 0px 6px",
+                                            "var(--v-warn) 0px 0px 6px",
                                         }}
                                       ></span>
                                       <span
@@ -1059,7 +1066,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                           fontFamily: '"JetBrains Mono"',
                                           fontSize: "9px",
                                           letterSpacing: "0.14em",
-                                          color: "rgb(255, 194, 71)",
+                                          color: "var(--v-warn)",
                                         }}
                                       >
                                         DIFERIDO PI
@@ -1069,7 +1076,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                       style={{
                                         fontFamily: '"JetBrains Mono"',
                                         fontSize: "9px",
-                                        color: "rgb(90, 78, 66)",
+                                        color: "var(--v-text-faint)",
                                         fontVariantNumeric: "tabular-nums",
                                       }}
                                     >
@@ -1082,7 +1089,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                     style={{
                                       fontFamily: '"JetBrains Mono"',
                                       fontSize: "9px",
-                                      color: "rgb(90, 78, 66)",
+                                      color: "var(--v-text-faint)",
                                     }}
                                   >
                                     -
@@ -1098,7 +1105,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                   style={{
                                     background: "rgba(0, 0, 0, 0.3)",
                                     borderBottom:
-                                      "1px solid rgba(255, 160, 80, 0.08)",
+                                      "1px solid var(--v-line-warm)",
                                   }}
                                 >
                                   <div
@@ -1110,7 +1117,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                       fontFamily: '"JetBrains Mono"',
                                       fontSize: "9px",
                                       letterSpacing: "0.18em",
-                                      color: "rgb(90, 78, 66)",
+                                      color: "var(--v-text-faint)",
                                     }}
                                   >
                                     <span>UNIDADE</span>
@@ -1157,7 +1164,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                             "120px minmax(200px, 1fr) 1fr 1fr 1fr 1fr 1fr 1fr",
                                           fontFamily: '"JetBrains Mono"',
                                           fontSize: "10.5px",
-                                          color: "rgb(138, 122, 104)",
+                                          color: "var(--v-text-muted)",
                                           borderTop:
                                             "1px solid rgba(255, 160, 80, 0.03)",
                                           hover: {
@@ -1169,7 +1176,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         <span
                                           style={{
                                             fontWeight: 600,
-                                            color: "rgb(240, 230, 216)",
+                                            color: "var(--v-text-bold)",
                                           }}
                                         >
                                           {u.unidade}
@@ -1186,7 +1193,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         <span
                                           style={{
                                             textAlign: "right",
-                                            color: "#aa3333",
+                                            color: "var(--v-err)",
                                           }}
                                         >
                                           {formatCurrency(u.vgv)}
@@ -1197,7 +1204,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         <span
                                           style={{
                                             textAlign: "right",
-                                            color: "rgb(61, 214, 140)",
+                                            color: "var(--v-ok)",
                                           }}
                                         >
                                           {formatCurrency(cxMes)}
@@ -1205,7 +1212,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         <span
                                           style={{
                                             textAlign: "right",
-                                            color: "rgb(240, 230, 216)",
+                                            color: "var(--v-text-bold)",
                                           }}
                                         >
                                           {formatCurrency(tSocMes)}
@@ -1213,7 +1220,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                         <span
                                           style={{
                                             textAlign: "right",
-                                            color: "rgb(255, 122, 26)",
+                                            color: "var(--v-accent)",
                                           }}
                                         >
                                           {formatCurrency(tFisMes)}
@@ -1223,9 +1230,9 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                                             textAlign: "right",
                                             color:
                                               sDiff > 10
-                                                ? "rgb(255, 194, 71)"
+                                                ? "var(--v-warn)"
                                                 : sDiff < -10
-                                                  ? "rgb(61, 214, 140)"
+                                                  ? "var(--v-ok)"
                                                   : "inherit",
                                             fontWeight: 600,
                                           }}
@@ -1248,7 +1255,7 @@ export const TributosGlobaisView = ({ selectedEmpresa }) => {
                             fontFamily: '"JetBrains Mono"',
                             fontSize: "10px",
                             letterSpacing: "0.2em",
-                            color: "rgb(90, 78, 66)",
+                            color: "var(--v-text-faint)",
                           }}
                         >
                           NENHUM DADO ENCONTRADO PARA OS FILTROS SELECIONADOS

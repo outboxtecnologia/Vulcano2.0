@@ -30,7 +30,12 @@ class AccountingGraphPipeline:
             # configurada (CONTAESTAND ou CONTAESTCON), independente de ter CC.
             # - COM CC: gastos de obra vem do LCTOGER filtrado pelo CC
             # - SEM CC: gastos de obra vem do LCTOCTB filtrado pela conta de estoque
-            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO, CODIGO_HIST_ESTORNO_CUSTO, CODIGOHISTDISTRATO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
+            # Sem CODIGOHISTDISTRATO: essa coluna nao existe em EMPREENDIMENTO e o SELECT
+            # inteiro falhava com "Column unknown", derrubando /api/questor/contabilizacoes
+            # (e com ela as telas de Contabilizacoes e Auditoria ERP) com 500.
+            # O distrato e tratado por DISTRATOCTB e por VENDA.DISTRATO/DATADISTRATO; aqui
+            # so se precisa do rotulo do historico, que cai no default "DISTRATO UNID".
+            query = "SELECT ID, NOME, CODIGOCENTROCUSTO, CONTACUSTO, CONTACLI, CONTAADICLI, CONTACAIXA, CONTAESTAND, CONTAESTCON, OBRACONCLUIDA, CONTAREC, CODIGOHISTVENDA, CODIGOHISTRECEBIMENTO, CODIGOHISTVARIACAO, CODIGOHISTADIANTAMENTO, CODIGOHISTBAIXAADI, CODIGOHISTAPRCUSTO, CODIGOHISTDESPESA, CONTAVARIACAO, CODIGO_HIST_ESTORNO_CUSTO FROM EMPREENDIMENTO WHERE CODIGOEMPRESA = ? AND ATIVO = 'S'"
             params = [empresa_id]
             if empreendimento_id:
                 query += f" AND ID = {int(empreendimento_id)}"
@@ -64,7 +69,7 @@ class AccountingGraphPipeline:
                     "hist_aprcusto": hist_questor.get(r[16] if r[16] else 0, "CUSTO UNID"),
                     "conta_variacao": int(r[18]) if r[18] else 0,
                     "hist_estorno_custo": hist_questor.get(r[19] if r[19] else 0, "ESTORNO CUSTO UNID"),
-                    "hist_distrato": hist_questor.get(r[20] if len(r) > 20 and r[20] else 0, "DISTRATO UNID"),
+                    "hist_distrato": "DISTRATO UNID",  # ver nota na query: nao ha coluna de historico de distrato
                 })
     
             # Caching Global Vulcano (Receitas e Tributos)
@@ -160,8 +165,8 @@ class AccountingGraphPipeline:
             import sqlite3
             memoria_arraste = {}
             try:
-                from main import POC_DATABASE_FILE
-                conn_poc = sqlite3.connect(POC_DATABASE_FILE)
+                from db_app import connect_app
+                conn_poc = connect_app()
                 cur_poc = conn_poc.cursor()
                 cur_poc.execute('CREATE TABLE IF NOT EXISTS auditoria_memoria_arraste (chave_lancamento TEXT PRIMARY KEY, conta_destino TEXT, origem TEXT, data_modificacao TIMESTAMP)')
                 cur_poc.execute('SELECT chave_lancamento, conta_destino FROM auditoria_memoria_arraste')

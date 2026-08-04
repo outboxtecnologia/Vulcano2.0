@@ -54,7 +54,7 @@ def sync_parcelas_projetadas(get_conn, poc_db_path):
             abertas[p[0]] = p
     abertas = list(abertas.values())
 
-    conn_sq = sqlite3.connect(poc_db_path)
+    conn_sq = get_conn("sqlite")
     try:
         cur_sq = conn_sq.cursor()
         cur_sq.execute("""

@@ -81,9 +81,12 @@ export default function EmpresaSelectionView({ globalEmpresas, onSelectEmpresa, 
     const lenis = new Lenis({ duration: 1.2, easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), smoothWheel: true });
     lenisRef.current = lenis;
 
-    gsap.ticker.add((time) => {
-      lenis.raf(time * 1000);
-    });
+    // A MESMA referencia precisa ir para o add e para o remove: gsap.ticker.remove()
+    // faz indexOf na lista interna, entao uma arrow nova nunca casa e o callback fica
+    // preso no ticker para sempre. Como esta tela virou rota, isso acumularia um loop
+    // de raf() por visita, chamando um Lenis ja destruido.
+    const rafFn = (time) => { lenis.raf(time * 1000); };
+    gsap.ticker.add(rafFn);
     gsap.ticker.lagSmoothing(0);
 
     lenis.on('scroll', ({ scroll, velocity }) => {
@@ -119,8 +122,11 @@ export default function EmpresaSelectionView({ globalEmpresas, onSelectEmpresa, 
 
     return () => {
       window.removeEventListener('pointermove', onPointerMove);
+      // Remover do ticker ANTES de destruir o lenis, senao o ultimo frame chama raf()
+      // num objeto ja destruido.
+      gsap.ticker.remove(rafFn);
       lenis.destroy();
-      gsap.ticker.remove((time) => lenis.raf(time * 1000));
+      gsap.ticker.lagSmoothing(1000, 16); // restaura o default do GSAP (era global)
       clearInterval(ticker);
     };
   }, []);
@@ -164,7 +170,8 @@ export default function EmpresaSelectionView({ globalEmpresas, onSelectEmpresa, 
   };
 
   return (
-    <div className="empresa-selection-wrapper">
+    /* Escura por design, como o login: o CSS proprio nao usa as variaveis de tema. */
+    <div className="empresa-selection-wrapper" data-theme="dark">
       <LavaBackground />
       <div className="vignette"></div>
       <div className="grain"></div>

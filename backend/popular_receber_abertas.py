@@ -1,6 +1,25 @@
 """
 popular_receber_abertas.py
 ==========================
+OBSOLETO — NAO USE. Substituido por:
+
+    python gerar_receber_vendas_sem_parcela.py --modo B
+
+Dois motivos para nao rodar este arquivo:
+
+  1. BUG: calcula o ID novo como MAX(ID)+1 e o informa no INSERT. A trigger
+     RECEBER_BI so consome GEN_RECEBER_ID quando o ID vem null/0, entao o
+     generator NAO avanca — e as insercoes seguintes do Vulcano legado quebram
+     com violacao de PRIMARY KEY. O caminho novo omite a coluna ID.
+  2. O DB_PATH abaixo esta fixo na maquina de um usuario; o motor novo le a
+     conexao do .env, igual ao resto do backend.
+
+A logica vive agora em core/services/receber_generator.py, compartilhada pelo
+CLI, pelo endpoint POST /api/vulcano/gerar-parcelas e pela tela de Geracao de
+Parcelas. Mantido apenas como referencia historica.
+
+--- documentacao original ---
+
 Popula RECEBER com as parcelas de VENDAFORMAPAGTOPRAZO que ainda nao
 possuem registro correspondente em RECEBER (TOTALPAGO=0 = em aberto).
 
