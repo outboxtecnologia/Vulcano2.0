@@ -6292,11 +6292,24 @@ async def post_vendas(request: Request):
 
         conta_permuta = int(data.get("conta_permuta") or 0) or None
 
+        # NUMCADIMOB e INTEGER na base viva (nao aceita o antigo "MVP-<id>"):
+        # usa o numero de cadastro imobiliario da 1a unidade vendida, se houver.
+        num_cad = None
+        _unids = data.get("unidades_selecionadas") or []
+        if _unids:
+            try:
+                cur.execute("SELECT NUMCADIMOB FROM UNIDADE WHERE ID = ?", (int(_unids[0]),))
+                _row = cur.fetchone()
+                if _row and _row[0] is not None:
+                    num_cad = int(str(_row[0]).strip() or 0) or None
+            except Exception:
+                num_cad = None
+
         query = "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, CONTA_PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?)"
         params = (
             new_id,
             id_empreendimento,
-            "MVP-" + str(new_id),
+            num_cad,
             date_str,
             str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100],
             float(data.get("total", 0) or 0),
@@ -6321,7 +6334,7 @@ async def post_vendas(request: Request):
                 (
                     sat_id,
                     id_empreendimento,
-                    "MVP-" + str(sat_id),
+                    num_cad,
                     date_str,
                     desc_unid,
                     int(empresa_id),
