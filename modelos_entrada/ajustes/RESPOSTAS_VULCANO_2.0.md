@@ -122,7 +122,7 @@ mostra as condições e parcelas no painel direito da tela de Vendas (clicar na 
 - Zero DDL no Firebird do Vulcano legado — só DML em colunas que já existiam
   (CNPJ, CONTA_PERMUTA, IDVENDAVINCULADA, INFCOMP).
 - **Bugs herdados da troca de base (03/08) corrigidos de brinde**: na base atual
-  (`/Klaus/ArquivoQuestor.fdb`) `VENDA.NUMCADIMOB` é INTEGER (o insert antigo gravava
+  (`/caminho/para/QUESTOR.FDB`) `VENDA.NUMCADIMOB` é INTEGER (o insert antigo gravava
   a string "MVP-id" e estourava SQL -303 — nenhuma venda nova funcionava) e
   `EMPREENDIMENTO.AJUSTEFINALPOC` é DOUBLE (o form mandava 'N' e **salvar qualquer
   empreendimento falhava**); campos CODIGOESTAB/FILIAL/MATRIZ/MUNIC agora aceitam

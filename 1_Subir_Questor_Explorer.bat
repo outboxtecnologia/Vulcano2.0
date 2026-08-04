@@ -6,7 +6,7 @@ echo             INICIANDO VULCANO2.0
 echo ==============================================================
 echo.
 
-set ROOT=C:\Users\dirfe\Projetos\Vulcano2.0
+set ROOT=C:\projetos\Vulcano2.0
 set BACKEND=%ROOT%\backend
 set FRONTEND=%ROOT%\frontend
 set VENV=%BACKEND%\.venv
