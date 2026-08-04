@@ -2912,6 +2912,7 @@ def get_conn(db_name="vulcano", empresa_id=None):
     )
 
 _APP_ENDERECO_DDL_OK = False
+_APP_ENDERECO_DDL_LOCK = __import__("threading").Lock()
 
 def get_app_conn():
     """Banco OPERACIONAL do app via db_app (APP_DB_KIND: sqlite ou postgres `vulcano2`).
@@ -2919,21 +2920,25 @@ def get_app_conn():
     Garante lazy o DDL da tabela de endereco estruturado (layout DIMOB) do
     empreendimento. DDL em dialeto SQLite de proposito: o translate_app do
     db_app converte para Postgres, e o fallback sqlite funciona sem mudanca.
+    Lock: endpoints sync rodam no threadpool — sem ele, dois cold starts
+    concorrentes disparam o CREATE em paralelo (UniqueViolation no PG).
     """
     from db_app import connect_app
     conn = connect_app()
     global _APP_ENDERECO_DDL_OK
     if not _APP_ENDERECO_DDL_OK:
-        conn.execute("""CREATE TABLE IF NOT EXISTS empreendimento_endereco (
-            empreendimento_id INTEGER PRIMARY KEY,
-            tipo_logradouro TEXT, logradouro TEXT, numero TEXT,
-            complemento TEXT, bairro TEXT, cep TEXT, uf TEXT,
-            codigo_munic TEXT,
-            fonte TEXT, codigo_outemp INTEGER, codigo_estab INTEGER,
-            atualizado_em TEXT DEFAULT (datetime('now'))
-        )""")
-        conn.commit()
-        _APP_ENDERECO_DDL_OK = True
+        with _APP_ENDERECO_DDL_LOCK:
+            if not _APP_ENDERECO_DDL_OK:
+                conn.execute("""CREATE TABLE IF NOT EXISTS empreendimento_endereco (
+                    empreendimento_id INTEGER PRIMARY KEY,
+                    tipo_logradouro TEXT, logradouro TEXT, numero TEXT,
+                    complemento TEXT, bairro TEXT, cep TEXT, uf TEXT,
+                    codigo_munic TEXT,
+                    fonte TEXT, codigo_outemp INTEGER, codigo_estab INTEGER,
+                    atualizado_em TEXT DEFAULT (datetime('now'))
+                )""")
+                conn.commit()
+                _APP_ENDERECO_DDL_OK = True
     return conn
 
 def _table_has_column(cur, table_name: str, column_name: str) -> bool:
@@ -3887,6 +3892,7 @@ def _endereco_legado_str(e: "EnderecoInput") -> str:
 @app.get("/api/vulcano/empreendimentos/{emp_id}/endereco")
 def get_empreendimento_endereco(emp_id: int):
     """Endereco estruturado (layout DIMOB) do banco do app; fallback campos legados."""
+    conn = vconn = None
     try:
         conn = get_app_conn()
         cur = conn.cursor()
@@ -3897,7 +3903,6 @@ def get_empreendimento_endereco(emp_id: int):
             (int(emp_id),),
         )
         row = cur.fetchone()
-        conn.close()
         if row:
             return {
                 "found": True,
@@ -3916,7 +3921,6 @@ def get_empreendimento_endereco(emp_id: int):
         vcur = vconn.cursor()
         vcur.execute("SELECT ENDERECO, CEP, SIGLAESTADO, CODIGOMUNIC FROM EMPREENDIMENTO WHERE ID = ?", (int(emp_id),))
         vrow = vcur.fetchone()
-        vconn.close()
 
         def dec(v):
             if v is None: return ""
@@ -3940,51 +3944,68 @@ def get_empreendimento_endereco(emp_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        for c in (conn, vconn):
+            try:
+                if c: c.close()
+            except Exception:
+                pass
 
 @app.put("/api/vulcano/empreendimentos/{emp_id}/endereco")
 def put_empreendimento_endereco(emp_id: int, data: EnderecoInput):
     """Upsert do endereco estruturado no banco do app + sync das colunas legadas."""
+    conn = None
     try:
         conn = get_app_conn()
         cur = conn.cursor()
         cur.execute(
-            """UPDATE empreendimento_endereco SET
-                 tipo_logradouro=?, logradouro=?, numero=?, complemento=?, bairro=?,
-                 cep=?, uf=?, codigo_munic=?, fonte=?, codigo_outemp=?, codigo_estab=?,
-                 atualizado_em=(datetime('now'))
-               WHERE empreendimento_id = ?""",
-            (data.tipo_logradouro, data.logradouro, data.numero, data.complemento,
-             data.bairro, data.cep, data.uf, data.codigo_munic, data.fonte,
-             data.codigo_outemp, data.codigo_estab, int(emp_id)),
+            """INSERT INTO empreendimento_endereco (
+                 empreendimento_id, tipo_logradouro, logradouro, numero, complemento,
+                 bairro, cep, uf, codigo_munic, fonte, codigo_outemp, codigo_estab
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(empreendimento_id) DO UPDATE SET
+                 tipo_logradouro=excluded.tipo_logradouro, logradouro=excluded.logradouro,
+                 numero=excluded.numero, complemento=excluded.complemento,
+                 bairro=excluded.bairro, cep=excluded.cep, uf=excluded.uf,
+                 codigo_munic=excluded.codigo_munic, fonte=excluded.fonte,
+                 codigo_outemp=excluded.codigo_outemp, codigo_estab=excluded.codigo_estab,
+                 atualizado_em=(datetime('now'))""",
+            (int(emp_id), data.tipo_logradouro, data.logradouro, data.numero,
+             data.complemento, data.bairro, data.cep, data.uf, data.codigo_munic,
+             data.fonte, data.codigo_outemp, data.codigo_estab),
         )
-        if cur.rowcount == 0:
-            cur.execute(
-                """INSERT INTO empreendimento_endereco (
-                     empreendimento_id, tipo_logradouro, logradouro, numero, complemento,
-                     bairro, cep, uf, codigo_munic, fonte, codigo_outemp, codigo_estab
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (int(emp_id), data.tipo_logradouro, data.logradouro, data.numero,
-                 data.complemento, data.bairro, data.cep, data.uf, data.codigo_munic,
-                 data.fonte, data.codigo_outemp, data.codigo_estab),
-            )
         conn.commit()
-        conn.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Banco do app (endereco): {e}")
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
 
     # Sync best-effort das colunas legadas existentes (sem DDL; conexao distinta).
+    # CODIGOMUNIC e SMALLINT na base viva: '' vira NULL e valores fora do range
+    # (ex. codigo IBGE de 7 digitos) tambem — o valor completo fica no banco do app.
+    munic = _int_or_none(data.codigo_munic)
+    if munic is not None and not (-32768 <= munic <= 32767):
+        munic = None
+    vconn = None
     try:
         vconn = get_conn("vulcano")
         vcur = vconn.cursor()
         vcur.execute(
             "UPDATE EMPREENDIMENTO SET ENDERECO = ?, CEP = ?, SIGLAESTADO = ?, CODIGOMUNIC = ? WHERE ID = ?",
             (_endereco_legado_str(data).encode("cp1252", "ignore"),
-             data.cep, data.uf, data.codigo_munic, int(emp_id)),
+             data.cep, data.uf, munic, int(emp_id)),
         )
         vconn.commit()
-        vconn.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Endereco salvo no banco do app, mas falhou sync no legado: {e}")
+    finally:
+        try:
+            if vconn: vconn.close()
+        except Exception:
+            pass
 
     return {"success": True}
 
