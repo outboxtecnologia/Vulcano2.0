@@ -25,12 +25,15 @@ def format_doc(val, tamanho=14):
     return v.zfill(tamanho)[:tamanho]
 
 def get_vulcano_conn():
+    # Mesma configuracao do get_conn("vulcano") do main.py (.env ja carregado la);
+    # os defaults antigos ficam so como ultimo fallback.
+    import os
     return firebirdsql.connect(
-        host="localhost",
-        database="C:\\Users\\dirfe\\OneDrive\\Documentos\\Vulcano\\VULCANO.FDB",
-        port=3050,
-        user="SYSDBA",
-        password="masterkey",
+        host=os.environ.get("FIREBIRD_HOST_VULCANO", "localhost"),
+        database=os.environ.get("DB_PATH_VULCANO", "C:\\Users\\dirfe\\OneDrive\\Documentos\\Vulcano\\VULCANO.FDB"),
+        port=int(os.environ.get("FIREBIRD_PORT", "3050")),
+        user=os.environ.get("FIREBIRD_USER", "SYSDBA"),
+        password=os.environ.get("FIREBIRD_PASSWORD", "masterkey"),
         charset="WIN1252"
     )
 
@@ -60,13 +63,15 @@ def gerar_dimob(ano, cod_empresa, output_file):
     
     # Puxar todas Vendas onde ocorram distratos nulos ou falsos
     query_vendas = """
-    SELECT 
-        V.ID, 
-        V.NUMCONT, 
-        V.DTOPER, 
+    SELECT
+        V.ID,
+        V.NUMCONT,
+        V.DTOPER,
         V.TOTALVENDA,
         C.NOME AS CLIENTE_NOME,
-        C.CNPJ AS CLIENTE_DOC
+        C.CNPJ AS CLIENTE_DOC,
+        V.IDVENDAVINCULADA,
+        V.INFCOMP
     FROM VENDA V
     JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
     WHERE (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
@@ -74,11 +79,28 @@ def gerar_dimob(ano, cod_empresa, output_file):
     """
     cur.execute(query_vendas, (cod_empresa,))
     vendas = cur.fetchall()
-    
+
+    # Multi-comprador com rateio: satelites marcadas 'VINCULADA VENDA' no INFCOMP
+    # carregam a cota do CPF; o RECEBER fica todo na venda principal. Para a DIMOB
+    # por adquirente, o valor pago no ano tambem e rateado na proporcao da cota.
+    def _dec_txt(x):
+        if isinstance(x, bytes):
+            return x.decode('cp1252', 'ignore').strip()
+        return str(x).strip() if x is not None else ""
+
+    grupos = {}  # id_principal -> soma das cotas (principal + satelites marcadas)
+    for v in vendas:
+        vinc, infcomp = v[6], _dec_txt(v[7]).upper()
+        if vinc and infcomp.startswith("VINCULADA VENDA"):
+            grupos[int(vinc)] = grupos.get(int(vinc), 0.0) + float(v[3] or 0)
+    for v in vendas:
+        if v[0] in grupos:
+            grupos[v[0]] += float(v[3] or 0)  # soma a cota da principal
+
     seq = 1
     total_recebido = 0.0
     total_vendido = 0.0
-    
+
     for v in vendas:
         id_venda = v[0]
         num_cont = v[1]
@@ -86,22 +108,33 @@ def gerar_dimob(ano, cod_empresa, output_file):
         val_venda = v[3] or 0.0
         c_nome = v[4]
         c_doc = v[5]
-        
+        id_vinculada = v[6]
+        infcomp = _dec_txt(v[7]).upper()
+        eh_satelite_rateada = bool(id_vinculada) and infcomp.startswith("VINCULADA VENDA")
+
         # Essa venda foi assinada/firmada em 2025?
         venda_no_ano = False
         if dt_venda and hasattr(dt_venda, 'year'):
             venda_no_ano = (dt_venda.year == int(ano))
-        
+
         # Pega recebimentos liquidados naquele ano em especifico!
+        # (nas vendas rateadas o RECEBER esta na principal — busca la e rateia)
+        id_receber = int(id_vinculada) if eh_satelite_rateada else id_venda
         query_r = """
-        SELECT SUM(TOTALPAGO) 
-        FROM RECEBER 
-        WHERE IDVENDA = ? 
+        SELECT SUM(TOTALPAGO)
+        FROM RECEBER
+        WHERE IDVENDA = ?
         AND EXTRACT(YEAR FROM DATA) = ?
         """
-        cur.execute(query_r, (id_venda, int(ano)))
+        cur.execute(query_r, (id_receber, int(ano)))
         r_row = cur.fetchone()
         val_pago_ano = float(r_row[0]) if (r_row and r_row[0]) else 0.0
+
+        # rateio do pago pela cota do CPF no contrato
+        id_grupo = int(id_vinculada) if eh_satelite_rateada else id_venda
+        total_grupo = grupos.get(id_grupo)
+        if total_grupo and total_grupo > 0 and (eh_satelite_rateada or id_venda in grupos):
+            val_pago_ano = round(val_pago_ano * float(val_venda) / total_grupo, 2)
         
         # Restrição legal RFB: A DIMOB exige declaração da operação R03 EXCLUSIVAMENTE no ano de assinatura do contrato.
         if not venda_no_ano:

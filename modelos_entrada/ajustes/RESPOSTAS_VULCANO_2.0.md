@@ -92,13 +92,15 @@ O formulário antigo (ID na mão + texto livre) foi substituído. O fluxo agora 
 
 **Venda com mais de um comprador** (campo "vincular venda"): seguimos o modelo do
 Vulcano antigo — cada comprador extra vira uma venda **vinculada** à principal (campo
-`IDVENDAVINCULADA`, que existia no banco mas nunca era preenchido). Diferença importante:
-a venda principal carrega o **valor cheio** e as vinculadas ficam com **valor zero**,
-para o total da carteira **não somar em dobro** (no modelo antigo as duas linhas
-carregavam o valor cheio — ex.: as vendas #19608/#19609 de R$ 901.636,49 que hoje
-aparecem somando R$ 1,8 mi). Na lista, a venda aparece **uma vez** com um selo `+1`
-mostrando os demais compradores. Parcelas e recebimentos ficam só na principal; o
-distrato da principal cancela também as vinculadas.
+`IDVENDAVINCULADA`, que existia no banco mas nunca era preenchido) — e o **contrato é
+RATEADO entre os CPFs**: no formulário você define o **% de cada comprador** (padrão:
+divisão igual) e cada linha grava a **cota daquele CPF**, somando exatamente o valor
+do contrato. É essa cota por adquirente que alimenta a **DIMOB** (o R03 sai por CPF
+com o valor da participação, e o valor pago no ano também é rateado na mesma
+proporção) e serve de base para a **EFD-Contribuições**. Na lista, a venda aparece
+**uma vez** com o valor do contrato e um selo `+N` mostrando os compradores e suas
+cotas. Parcelas e recebimentos ficam só na principal (o fluxo financeiro do contrato
+é um só); o distrato da principal cancela também as vinculadas.
 
 *Caso LIGIA/LARISSA*: verificamos que a venda #19609 **já estava vinculada** à #19608
 na base (campo preenchido); com a listagem nova o par passa a aparecer **uma única

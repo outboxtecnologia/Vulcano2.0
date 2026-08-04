@@ -4639,8 +4639,11 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
         df_vendas = pd.read_sql_query(query_vendas, conn, params=tuple(params))
         df_vendas['UNIDADE_ID'] = None # Legacy vendas might not have precise array backlink
 
-        # Compradores extras: vendas satelites vinculadas via IDVENDAVINCULADA
-        # (multi-comprador estilo legado; satelites tem TOTALVENDA=0 e ficam fora da lista)
+        # Compradores extras: vendas satelites vinculadas via IDVENDAVINCULADA.
+        # Satelites NOVAS (marcadas 'VINCULADA VENDA' no INFCOMP) carregam a COTA
+        # do comprador no contrato — o total do grupo soma principal + cotas.
+        # Vinculos legados sem marcador (linhas duplicadas com valor cheio) NAO
+        # entram na soma, senao o contrato dobraria.
         co_compradores = {}
         ids = [int(i) for i in df_vendas['ID'].tolist()] if len(df_vendas) else []
         if ids:
@@ -4649,7 +4652,7 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
                 chunk = ids[chunk_start:chunk_start + 500]
                 placeholders = ",".join("?" * len(chunk))
                 cur2.execute(
-                    f"""SELECT v2.IDVENDAVINCULADA, c2.NOME, c2.CNPJ
+                    f"""SELECT v2.IDVENDAVINCULADA, c2.NOME, c2.CNPJ, v2.TOTALVENDA, v2.INFCOMP
                         FROM VENDA v2
                         JOIN CLIENTE c2 ON c2.ID = v2.ID_CLIENTE
                         WHERE v2.IDVENDAVINCULADA IN ({placeholders})""",
@@ -4657,7 +4660,13 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
                 )
                 for rr in cur2.fetchall():
                     dec_ = lambda v: v.decode('cp1252', 'ignore').strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
-                    co_compradores.setdefault(int(rr[0]), []).append({"nome": dec_(rr[1]), "cpf_cnpj": dec_(rr[2])})
+                    marcada = dec_(rr[4]).upper().startswith("VINCULADA VENDA")
+                    co_compradores.setdefault(int(rr[0]), []).append({
+                        "nome": dec_(rr[1]),
+                        "cpf_cnpj": dec_(rr[2]),
+                        "valor": float(rr[3] or 0) if marcada else None,
+                        "rateada": marcada,
+                    })
 
         df = df_vendas
         df = df.replace({np.nan: None})
@@ -4695,9 +4704,14 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
         records = df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
         for rec in records:
             extras = co_compradores.get(int(rec['id']), [])
-            rec['compradores'] = [{"nome": rec['cliente_nome'], "cpf_cnpj": rec['cliente_cnpj'], "principal": True}] + \
-                                 [{**c, "principal": False} for c in extras]
+            cota_principal = rec['total']
+            soma_cotas_extras = sum(c['valor'] for c in extras if c.get('rateada') and c.get('valor'))
+            total_contrato = round(cota_principal + soma_cotas_extras, 2)
+            rec['compradores'] = [{"nome": rec['cliente_nome'], "cpf_cnpj": rec['cliente_cnpj'],
+                                   "principal": True, "valor": cota_principal if extras else None}] + \
+                                 [{k: c[k] for k in ("nome", "cpf_cnpj", "valor")} | {"principal": False} for c in extras]
             rec['qtd_compradores'] = 1 + len(extras)
+            rec['total'] = total_contrato  # valor do CONTRATO (cotas somadas)
         return records
 
     except Exception as e:
@@ -4759,16 +4773,22 @@ def get_vulcano_venda_condicoes(venda_id: int):
             },
         }
 
-        # Compradores extras (vendas satelites vinculadas a esta principal)
+        # Compradores extras (vendas satelites vinculadas a esta principal).
+        # Satelites marcadas carregam a cota do comprador; total_contrato = soma.
         cur.execute(
-            """SELECT c2.NOME, c2.CNPJ FROM VENDA v2
+            """SELECT c2.NOME, c2.CNPJ, v2.TOTALVENDA, v2.INFCOMP FROM VENDA v2
                JOIN CLIENTE c2 ON c2.ID = v2.ID_CLIENTE
                WHERE v2.IDVENDAVINCULADA = ?""",
             (int(venda_id),),
         )
-        venda["compradores"] = [{"nome": venda["cliente"]["nome"], "cpf_cnpj": venda["cliente"]["cnpj"], "principal": True}] + [
-            {"nome": dec(rr[0]), "cpf_cnpj": dec(rr[1]), "principal": False} for rr in cur.fetchall()
-        ]
+        extras = []
+        for rr in cur.fetchall():
+            marcada = dec(rr[3]).upper().startswith("VINCULADA VENDA")
+            extras.append({"nome": dec(rr[0]), "cpf_cnpj": dec(rr[1]), "principal": False,
+                           "valor": float(rr[2] or 0) if marcada else None, "rateada": marcada})
+        venda["compradores"] = [{"nome": venda["cliente"]["nome"], "cpf_cnpj": venda["cliente"]["cnpj"],
+                                 "principal": True, "valor": venda["total"] if extras else None}] + extras
+        venda["total_contrato"] = round(venda["total"] + sum(e["valor"] for e in extras if e.get("rateada") and e["valor"]), 2)
 
         # Formas de pagamento (condições)
         cur.execute(
@@ -6735,6 +6755,22 @@ async def post_vendas(request: Request):
         ids_clientes = [_get_or_create_cliente(c) for c in compradores]
         id_cliente = ids_clientes[0] if ids_clientes else None
 
+        # Rateio do contrato entre os CPFs (DIMOB/EFD-Contribuicoes precisam do
+        # valor por adquirente): percentual informado por comprador, normalizado
+        # p/ fechar 100; sem percentuais, divide igual. As cotas somam EXATAMENTE
+        # o total (ultima absorve arredondamento).
+        total_contrato = float(data.get("total", 0) or 0)
+        n_comp = max(1, len(compradores))
+        percs = [float(c.get("percentual") or 0) for c in compradores] or [100.0]
+        soma_percs = sum(p for p in percs if p > 0)
+        if soma_percs <= 0:
+            percs = [100.0 / n_comp] * n_comp
+        else:
+            percs = [max(0.0, p) * 100.0 / soma_percs for p in percs]
+        cotas = [round(total_contrato * p / 100.0, 2) for p in percs]
+        if cotas:
+            cotas[-1] = round(total_contrato - sum(cotas[:-1]), 2)
+
         # --- VENDA ---
         cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDA")
         new_id = cur.fetchone()[0]
@@ -6767,7 +6803,7 @@ async def post_vendas(request: Request):
             num_cad,
             date_str,
             str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100],
-            float(data.get("total", 0) or 0),
+            cotas[0] if cotas else total_contrato,
             int(empresa_id),
             permuta,
             conta_permuta,
@@ -6775,23 +6811,26 @@ async def post_vendas(request: Request):
         )
         cur.execute(query, params)
 
-        # --- VENDAS SATELITES (multi-comprador estilo legado) ---
-        # 1 linha VENDA por comprador extra, TOTALVENDA=0 (valor cheio fica na
-        # principal — evita somar em dobro em listas/POC/DIMOB), vinculada pela
-        # IDVENDAVINCULADA. Unidades, condicoes e RECEBER existem so na principal.
+        # --- VENDAS SATELITES (multi-comprador, valores rateados por CPF) ---
+        # 1 linha VENDA por comprador extra com a SUA cota do contrato (DIMOB e
+        # EFD-Contribuicoes declaram por adquirente), vinculada pela
+        # IDVENDAVINCULADA e marcada no INFCOMP. As cotas do grupo somam o
+        # contrato — listas/POC nao dobram. Unidades, condicoes e RECEBER
+        # existem so na principal (fluxo financeiro e um so).
         desc_unid = str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100]
         for offset, cid_extra in enumerate(ids_clientes[1:], start=1):
             if cid_extra is None:
                 continue
             sat_id = new_id + offset
             cur.execute(
-                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, 0, ?, 'N', ?, ?, ?, ?)",
+                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?, ?)",
                 (
                     sat_id,
                     id_empreendimento,
                     num_cad,
                     date_str,
                     desc_unid,
+                    cotas[offset] if offset < len(cotas) else 0,
                     int(empresa_id),
                     permuta,
                     cid_extra,
