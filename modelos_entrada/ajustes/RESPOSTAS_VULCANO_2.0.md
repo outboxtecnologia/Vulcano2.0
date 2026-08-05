@@ -1,3 +1,32 @@
+# Respostas — Guia de correções e implementos (05/08/2026)
+
+**Tudo do guia foi implementado**, com três respostas diretas:
+
+1. **"Vincular contas ou lançamento manual" (Integração Questor)** — o lançamento
+   manual **já funciona**: em qualquer campo de conta da aba, digite o número da
+   conta direto (não precisa escolher da lista); a lista do Questor é só um
+   facilitador de busca.
+2. **"Onde fica para incluir novos clientes?"** — o cliente nasce **no próprio
+   cadastro da venda**: digite nome e CPF/CNPJ do comprador; se o CPF já existir
+   (no Vulcano ou no Questor) o nome preenche sozinho, senão o cliente é criado
+   automaticamente ao registrar a venda. Não há (nem precisa) tela separada.
+3. **"Tag todas as parcelas/abertas não funciona"** — o caso testado tinha uma
+   única parcela vencendo em **20/04** e paga em **05/06**: pesquisando junho ela
+   não aparecia porque a busca era só por *vencimento*. Agora a parcela **aparece
+   também no mês do pagamento**; as tags funcionam normalmente.
+
+E o que mudou nas telas: filtros de empreendimento/unidade no cadastro de venda;
+campo **Nº Contrato** (único por venda — resolve o erro da DIMOB com o mesmo CPF
+comprando 2 unidades); painel da venda sem números inventados (entrada/VPL eram
+10%/78% fixos!) e com **Lançar parcela manual funcionando**; totalizador de áreas
+e **"usar como metragem total"** na Estrutura; excluir bloco visível + excluir
+todos; Smart Importer **sugerindo o de-para sozinho** (usava um serviço que não
+existe no servidor — por isso vinha tudo "Ignorar"); Recebimentos Mensal com
+setas navegando de verdade, **trava de data fora da competência** e botão
+**desfazer baixa** (✕) nas baixas feitas pelo sistema.
+
+---
+
 # Respostas — Ajustes VULCANO 2.0 (doc de 04/08/2026)
 
 Este arquivo responde as perguntas do documento `VULCANO 2.0.docx` e resume o que foi
