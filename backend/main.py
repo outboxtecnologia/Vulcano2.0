@@ -4461,7 +4461,7 @@ def importar_estrutura(data: ImportarEstruturaInput):
                     metragem = float(metragem) if metragem not in (None, "") else None
                 except (TypeError, ValueError):
                     metragem = None
-                inscricao = _int_or_none(u.get("inscricao"))
+                inscricao = _num_or_none(u.get("inscricao"))
                 cur.execute(
                     "INSERT INTO UNIDADE (ID, IDBLOCO, DESCRICAO, METRAGEM, NUMCADIMOB) VALUES (?, ?, ?, ?, ?)",
                     (next_unid_id, bloco_id, descricao.encode('cp1252', 'ignore')[:100], metragem, inscricao),
