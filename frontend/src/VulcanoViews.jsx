@@ -417,7 +417,9 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
   const labelCls = "text-[10px] uppercase font-bold mb-2 block";
   const labelStyle = { color: '#8a7a68' };
 
-  const [vendaForm, setVendaForm] = useState({ id_empreendimento: '', data: '', total: '', permuta: 'N', conta_permuta: '' });
+  const [vendaForm, setVendaForm] = useState({ id_empreendimento: '', data: '', total: '', permuta: 'N', conta_permuta: '', num_contrato: '' });
+  const [filtroEmp, setFiltroEmp] = useState('');
+  const [filtroUnidade, setFiltroUnidade] = useState('');
   const [compradores, setCompradores] = useState([{ nome: '', cpf_cnpj: '', percentual: 100 }]);
 
   // divisao igualitaria do contrato entre N compradores (ultimo absorve o arredondamento)
@@ -524,6 +526,7 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
       total: totalNum,
       permuta: vendaForm.permuta,
       conta_permuta: vendaForm.permuta === 'S' && vendaForm.conta_permuta ? parseInt(vendaForm.conta_permuta) : null,
+      num_contrato: vendaForm.num_contrato.trim() || null,
       compradores: compradores.filter(c => c.nome && c.cpf_cnpj).map((c, i) => ({ nome: c.nome, cpf_cnpj: c.cpf_cnpj, percentual: parseFloat(c.percentual) || 0, principal: i === 0 })),
       condicoes: condicoes
         .filter(c => parseFloat(c.valor || 0) > 0 && c.vencimento)
@@ -555,20 +558,29 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls} style={labelStyle}>Empreendimento</label>
-                <select value={vendaForm.id_empreendimento} onChange={(e) => handleSelectEmpreendimento(e.target.value)} required className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle}>
-                  <option value="">Selecione...</option>
-                  {empreendimentosList.map(emp => <option key={emp.id} value={emp.id}>{emp.id} — {emp.nome}</option>)}
+                <input value={filtroEmp} onChange={(e) => setFiltroEmp(e.target.value)} placeholder="Filtrar por nº ou nome..." className="w-full p-2 mb-1.5 rounded text-[11px] outline-none" style={inputStyle} />
+                <select value={vendaForm.id_empreendimento} onChange={(e) => handleSelectEmpreendimento(e.target.value)} required size={6} className="w-full p-1 rounded text-[11px] outline-none" style={inputStyle}>
+                  {empreendimentosList
+                    .filter(emp => !filtroEmp.trim() || `${emp.id} ${emp.nome}`.toLowerCase().includes(filtroEmp.trim().toLowerCase()))
+                    .map(emp => <option key={emp.id} value={emp.id} className="py-1">{emp.id} — {emp.nome}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelCls} style={labelStyle}>Unidades disponíveis {loadingUnidades && '(carregando...)'}</label>
+                <label className={labelCls} style={labelStyle}>Unidades disponíveis {loadingUnidades && '(carregando...)'} {unidadesSel.length > 0 && `· ${unidadesSel.length} selecionada(s)`}</label>
+                <input value={filtroUnidade} onChange={(e) => setFiltroUnidade(e.target.value)} placeholder="Filtrar unidade (ex.: 1002, bloco B)..." className="w-full p-2 mb-1.5 rounded text-[11px] outline-none" style={inputStyle} />
                 <div className="max-h-36 overflow-y-auto rounded custom-scrollbar p-1" style={inputStyle}>
                   {!vendaForm.id_empreendimento ? (
                     <div className="p-2 text-[10px] uppercase" style={{ color: '#5a4e42' }}>Selecione o empreendimento</div>
                   ) : !unidadesDisp.length && !loadingUnidades ? (
                     <div className="p-2 text-[10px] uppercase" style={{ color: '#5a4e42' }}>Sem unidades livres (vendidas ou sem estrutura)</div>
                   ) : (
-                    unidadesDisp.map(u => (
+                    unidadesDisp
+                      .filter(u => {
+                        const q = filtroUnidade.trim().toLowerCase();
+                        if (!q) return true;
+                        return `${blocosById[u.id_bloco] || ''} ${u.descricao}`.toLowerCase().includes(q) || unidadesSel.includes(u.id);
+                      })
+                      .map(u => (
                       <label key={u.id} className="flex items-center gap-2 px-2 py-1.5 text-[11px] cursor-pointer hover:bg-white/5 rounded" style={{ color: '#f0e6d8' }}>
                         <input type="checkbox" checked={unidadesSel.includes(u.id)} onChange={() => toggleUnidade(u.id)} />
                         <span>{blocosById[u.id_bloco] ? `${blocosById[u.id_bloco]} — ` : ''}{u.descricao}</span>
@@ -580,10 +592,11 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
               </div>
             </div>
 
-            {/* DATA / TOTAL / PERMUTA */}
+            {/* DATA / TOTAL / CONTRATO / PERMUTA */}
             <div className="grid grid-cols-4 gap-4">
-              <div><label className={labelCls} style={labelStyle}>Data Venda</label><input type="date" value={vendaForm.data} onChange={(e) => setVendaForm({ ...vendaForm, data: e.target.value })} required className="w-full p-3 rounded text-[11px] outline-none dark-calendar" style={inputStyle} /></div>
+              <div><label className={labelCls} style={labelStyle}>Data Venda</label><input type="date" min="1990-01-01" value={vendaForm.data} onChange={(e) => setVendaForm({ ...vendaForm, data: e.target.value })} required className="w-full p-3 rounded text-[11px] outline-none dark-calendar" style={inputStyle} /></div>
               <div><label className={labelCls} style={labelStyle}>Total Venda</label><input type="number" step="0.01" value={vendaForm.total} onChange={(e) => setVendaForm({ ...vendaForm, total: e.target.value })} required className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle} /></div>
+              <div><label className={labelCls} style={labelStyle}>Nº Contrato <span className="normal-case font-normal" title="Precisa ser único por venda: a DIMOB rejeita duas vendas do mesmo CPF com o mesmo contrato">(vazio = nº da venda)</span></label><input value={vendaForm.num_contrato} onChange={(e) => setVendaForm({ ...vendaForm, num_contrato: e.target.value })} placeholder="automático" className="w-full p-3 rounded text-[11px] outline-none font-mono" style={inputStyle} /></div>
               <div>
                 <label className={labelCls} style={labelStyle}>Imóvel Permutado?</label>
                 <select value={vendaForm.permuta} onChange={(e) => setVendaForm({ ...vendaForm, permuta: e.target.value })} className="w-full p-3 rounded text-[11px] outline-none" style={inputStyle}>
@@ -689,6 +702,34 @@ export const VendasView = ({ selectedEmpresa }) => {
   const [distratoModal, setDistratoModal] = useState(null);
   const [condicoesLoading, setCondicoesLoading] = useState(false);
   const [condicoesData, setCondicoesData] = useState(null);
+  const [estruturaAberta, setEstruturaAberta] = useState(false);
+  const [parcelaManualModal, setParcelaManualModal] = useState(null);
+  const [salvandoParcela, setSalvandoParcela] = useState(false);
+
+  const salvarParcelaManual = async () => {
+    const m = parcelaManualModal;
+    if (!m) return;
+    if (!m.data || m.data < '1990-01-01') { alert('Data inválida.'); return; }
+    if (!(parseFloat(m.valor) > 0)) { alert('Informe o valor da parcela.'); return; }
+    setSalvandoParcela(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas/${m.venda.id}/parcelas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: m.data, valor: parseFloat(m.valor), referencia: m.referencia })
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
+      alert(body.message || 'Parcela lançada.');
+      setParcelaManualModal(null);
+      // recarrega as condições da venda aberta (sem des-selecionar)
+      setCondicoesLoading(true);
+      fetch(`${API_BASE}/api/vulcano/vendas/${m.venda.id}/condicoes`)
+        .then(r => r.json()).then(j => setCondicoesData(j))
+        .catch(() => {})
+        .finally(() => setCondicoesLoading(false));
+    } catch (e) { alert('Falha ao lançar parcela: ' + e.message); }
+    finally { setSalvandoParcela(false); }
+  };
 
   useEffect(() => {
     if (!selectedEmpresa) return;
@@ -951,7 +992,13 @@ export const VendasView = ({ selectedEmpresa }) => {
                         </div>
                     </div>
 
-                    {/* KPIs */}
+                    {/* KPIs — dados REAIS das condições/parcelas (nada estimado) */}
+                    {(() => {
+                        const parcelas = condicoesData?.parcelas || [];
+                        const formas = condicoesData?.formas_pagto || condicoesData?.formas || [];
+                        const entradaForma = formas.find(f => /SINAL|ATO|ENTRADA/i.test(f.descricao || ''));
+                        const recebido = parcelas.reduce((s, p) => s + (p.total_pago || 0), 0);
+                        return (
                     <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
@@ -960,28 +1007,33 @@ export const VendasView = ({ selectedEmpresa }) => {
                             </div>
                             <div>
                                 <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>PARCELAS</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{condicoesData?.tabela ? condicoesData.tabela.length + 'x' : '...'}</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{condicoesLoading ? '...' : (parcelas.length ? parcelas.length + 'x' : '—')}</div>
                             </div>
                             <div className="mt-2">
-                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>ENTRADA</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total * 0.1)}</div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>ENTRADA (SINAL/ATO)</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{condicoesLoading ? '...' : (entradaForma ? formatCurrency(entradaForma.valor) : '—')}</div>
                             </div>
                             <div className="mt-2">
-                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>VPL ESTIMADO</div>
-                                <div className="text-[15px] font-semibold" style={{ color: '#f0e6d8' }}>{formatCurrency(selectedVenda.total * 0.78)}</div>
+                                <div className="font-mono text-[9.5px] tracking-[0.22em] mb-1" style={{ color: '#5a4e42' }}>RECEBIDO</div>
+                                <div className="text-[15px] font-semibold" style={{ color: '#22c55e' }}>{condicoesLoading ? '...' : formatCurrency(recebido)}</div>
                             </div>
                         </div>
+                        {!condicoesLoading && !formas.length && !parcelas.length && (
+                            <p className="mt-3 text-[9.5px] uppercase tracking-widest" style={{ color: '#8a7a68' }}>Venda sem condições de pagamento cadastradas — use "Lançar parcela manual" ou recadastre com condições.</p>
+                        )}
                     </div>
+                        );
+                    })()}
 
-                    {/* Chart Area */}
+                    {/* Cronograma — próximas parcelas reais */}
                     <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
-                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>CRONOGRAMA · 12 MESES</div>
+                        <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>CRONOGRAMA · PRÓXIMAS 12</div>
                         <div className="h-12 flex items-end justify-center">
                             {condicoesLoading ? (
                                 <Loader2 className="animate-spin" size={16} style={{ color: '#5a4e42' }}/>
-                            ) : condicoesData?.tabela ? (
+                            ) : (condicoesData?.parcelas || []).length ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={condicoesData.tabela.slice(0, 12).map(c => ({ name: c.Data.substring(3,5), val: c.Valor }))}>
+                                    <BarChart data={(condicoesData.parcelas.filter(p => !p.total_pago).slice(0, 12)).map(p => ({ name: (p.data || '').substring(5, 7), val: p.valor_parcela }))}>
                                         <RechartsTooltip cursor={{fill: 'rgba(255, 160, 80, 0.08)'}} contentStyle={{backgroundColor: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', fontSize: '10px'}} />
                                         <Bar dataKey="val" fill="url(#colorUv)" radius={[1, 1, 0, 0]} />
                                         <defs>
@@ -993,30 +1045,44 @@ export const VendasView = ({ selectedEmpresa }) => {
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <span className="text-[9px] uppercase" style={{ color: '#5a4e42' }}>N/A</span>
+                                <span className="text-[9px] uppercase" style={{ color: '#5a4e42' }}>Sem parcelas em aberto</span>
                             )}
                         </div>
                     </div>
+
+                    {/* Estrutura financeira (parcelas reais) */}
+                    {estruturaAberta && (
+                        <div className="p-5" style={{ borderBottom: '1px solid rgba(255, 160, 80, 0.08)' }}>
+                            <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>ESTRUTURA FINANCEIRA · {(condicoesData?.parcelas || []).length} PARCELAS</div>
+                            <div className="max-h-56 overflow-y-auto custom-scrollbar">
+                                <table className="w-full text-[10.5px]">
+                                    <tbody>
+                                        {(condicoesData?.parcelas || []).map(p => (
+                                            <tr key={p.id} className="border-b" style={{ borderColor: 'rgba(255, 160, 80, 0.06)' }}>
+                                                <td className="py-1 pr-2 font-mono" style={{ color: '#8a7a68' }}>{p.parcela || '—'}</td>
+                                                <td className="py-1 pr-2 font-mono" style={{ color: '#8a7a68' }}>{p.data}</td>
+                                                <td className="py-1 pr-2 font-mono text-right" style={{ color: '#f0e6d8' }}>{formatCurrency(p.valor_parcela)}</td>
+                                                <td className="py-1 font-mono text-right" style={{ color: p.total_pago > 0 ? '#22c55e' : '#5a4e42' }}>{p.total_pago > 0 ? formatCurrency(p.total_pago) : 'aberta'}</td>
+                                            </tr>
+                                        ))}
+                                        {!(condicoesData?.parcelas || []).length && (
+                                            <tr><td className="py-2 text-[10px] uppercase" style={{ color: '#5a4e42' }}>Sem parcelas — lance manualmente abaixo.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Actions */}
                     <div className="p-5">
                         <div className="font-mono text-[9.5px] tracking-[0.22em] mb-3" style={{ color: '#5a4e42' }}>AÇÕES</div>
                         <div className="flex flex-col gap-1.5">
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><Layers size={14} style={{ color: '#8a7a68' }}/> Abrir estrutura financeira</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>Enter</span>
+                            <button onClick={() => setEstruturaAberta(v => !v)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                                <span className="flex items-center gap-3"><Layers size={14} style={{ color: '#8a7a68' }}/> {estruturaAberta ? 'Ocultar' : 'Abrir'} estrutura financeira</span>
                             </button>
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                            <button onClick={() => setParcelaManualModal({ venda: selectedVenda, data: hojeLocal(), valor: '', referencia: '' })} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
                                 <span className="flex items-center gap-3"><DollarSign size={14} style={{ color: '#8a7a68' }}/> Lançar parcela manual</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⌘L</span>
-                            </button>
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><RefreshCw size={14} style={{ color: '#8a7a68' }}/> Reconciliar com Questor</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⇧⌘R</span>
-                            </button>
-                            <button className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
-                                <span className="flex items-center gap-3"><FileText size={14} style={{ color: '#8a7a68' }}/> Exportar contrato (.pdf)</span>
-                                <span className="font-mono text-[10px] bg-black/40 px-1.5 rounded" style={{ color: '#5a4e42' }}>⇧⌘E</span>
                             </button>
                             {selectedVenda.distrato !== 'S' && (
                                 <button onClick={() => setDistratoModal(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium mt-2 transition-colors hover:bg-red-950/30" style={{ color: '#ef4444' }}>
@@ -1052,6 +1118,38 @@ export const VendasView = ({ selectedEmpresa }) => {
           onClose={() => setShowForm(false)}
           onSaved={handleVendaSalva}
         />
+      )}
+
+      {/* MODAL PARCELA MANUAL */}
+      {parcelaManualModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] animate-in fade-in p-6">
+            <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6" style={{ background: '#0c0908', border: '1px solid rgba(255, 160, 80, 0.18)' }}>
+                <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-1" style={{ color: '#f0e6d8' }}>
+                    <DollarSign size={20} color="#ff7a1a"/> Lançar Parcela Manual
+                </h3>
+                <p className="text-[11px] mb-5" style={{ color: '#8a7a68' }}>Venda <b style={{ color: '#f0e6d8' }}>#{parcelaManualModal.venda.id}</b> — {parcelaManualModal.venda.cliente_nome}. A parcela entra como prevista (em aberto) e pode ser baixada normalmente.</p>
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Vencimento</label>
+                        <input type="date" min="1990-01-01" value={parcelaManualModal.data} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, data: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Valor</label>
+                        <input type="number" step="0.01" value={parcelaManualModal.valor} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, valor: e.target.value })} placeholder="0,00" className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Referência</label>
+                        <input value={parcelaManualModal.referencia} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, referencia: e.target.value })} placeholder="ex.: 95/240" className="w-full p-2.5 rounded text-[11px] outline-none font-mono" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setParcelaManualModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
+                    <button onClick={salvarParcelaManual} disabled={salvandoParcela} className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                        {salvandoParcela ? 'Gravando...' : 'Lançar Parcela'}
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
 
       {/* MODAL DISTRATO */}
@@ -1196,8 +1294,14 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
     if (statusFilter === 'ABERTA' && !isAberto && !r._justPaid) ok = false;
     if (statusFilter === 'BAIXADA' && isAberto) ok = false;
 
-    if (dataIniFilter && r.vencimento_iso && r.vencimento_iso < dataIniFilter) ok = false;
-    if (dataFimFilter && r.vencimento_iso && r.vencimento_iso > dataFimFilter) ok = false;
+    // no periodo se o VENCIMENTO cai nele OU se foi PAGA nele (parcela vencida
+    // em abril e baixada em junho aparece ao pesquisar junho)
+    const pagto = (r.data_pagamento || '').slice(0, 10);
+    const pagoNoPeriodo = pagto && (!dataIniFilter || pagto >= dataIniFilter) && (!dataFimFilter || pagto <= dataFimFilter);
+    if (!pagoNoPeriodo) {
+        if (dataIniFilter && r.vencimento_iso && r.vencimento_iso < dataIniFilter) ok = false;
+        if (dataFimFilter && r.vencimento_iso && r.vencimento_iso > dataFimFilter) ok = false;
+    }
 
     if (searchQuery) {
         const query = searchQuery.toLowerCase();

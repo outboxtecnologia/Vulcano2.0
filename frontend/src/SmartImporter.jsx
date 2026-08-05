@@ -142,9 +142,9 @@ export default function SmartImporter({ selectedEmpresa }) {
       setPreviewData(data.preview || []);
       setAllRows(data.all_rows || data.preview || []);
       setStep(2);
-      
+
       // Auto-suggest mapping if possible
-      callGeminiMatching(data.columns || []);
+      callGeminiMatching(data.columns || [], (data.preview || [])[0]);
     } catch (err) {
       alert("Erro ao enviar arquivo.");
     } finally {
@@ -152,25 +152,32 @@ export default function SmartImporter({ selectedEmpresa }) {
     }
   };
 
-  const callGeminiMatching = async (colsToMap = columns) => {
-    if (!colsToMap.length) return;
+  const callGeminiMatching = async (colsToMap = columns, amostraRow = null) => {
+    if (!colsToMap.length) { alert('Envie uma planilha primeiro.'); return; }
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/schema-match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columns: colsToMap, target_table: targetTable })
+        body: JSON.stringify({
+          columns: colsToMap,
+          target_table: targetTable,
+          campos: (TARGET_SCHEMAS[targetTable] || []).map(f => f.value),
+          amostras: amostraRow || previewData[0] || {},
+        })
       });
-      if (!res.ok) throw new Error("Falha no mapeamento IA");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || 'Falha no mapeamento IA');
       const raw = data.mapping || {};
       const normalized = {};
       for (const [k, v] of Object.entries(raw)) {
         normalized[k] = (v === null || v === undefined || v === '' || v === 'null') ? 'null' : v;
       }
       setMapping(normalized);
+      const mapeadas = Object.values(normalized).filter(v => v !== 'null').length;
+      if (!mapeadas) alert('A IA não reconheceu nenhuma coluna para este destino — confira se o Destino (VENDAS/RECEBIMENTOS) está correto e mapeie manualmente.');
     } catch(err) {
-      console.error(err);
+      alert('Sugestão de mapeamento falhou: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -422,13 +429,21 @@ export default function SmartImporter({ selectedEmpresa }) {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2 z-10 mb-auto">
+              {/* Único card ACIONÁVEL: refaz a sugestão de de-para da IA.
+                  Os demais descrevem etapas automáticas do fluxo (rodam sozinhos). */}
+              <button onClick={() => callGeminiMatching()} disabled={loading || !columns.length}
+                title={columns.length ? 'Refazer a sugestão de mapeamento da IA para o destino selecionado' : 'Envie uma planilha primeiro'}
+                className="flex items-center gap-2 p-2 bg-black/30 border border-[var(--v-accent)]/40 rounded-md hover:bg-[var(--v-accent)]/10 transition-colors disabled:opacity-40 text-left">
+                <div className="text-[var(--v-accent)]"><Sparkles size={14}/></div>
+                <span className="flex-1 text-[11px] text-[var(--v-text-bold)] truncate">Sugerir mapeamento</span>
+                <span className="font-mono text-[9px] text-[var(--v-accent)]">{loading ? '...' : 'IA'}</span>
+              </button>
               {[
-                { icon: <Sparkles size={14}/>, label: 'Sugerir mapeamento', value: 'IA · 0.96' },
-                { icon: <CheckCircle2 size={14}/>, label: 'Validar com regras', value: '+12 regras' },
-                { icon: <AlertCircle size={14}/>, label: 'Marcar divergências', value: 'auto' },
-                { icon: <Zap size={14}/>, label: 'Aprender com correções', value: 'on' }
+                { icon: <CheckCircle2 size={14}/>, label: 'Validar com regras', value: 'auto', tip: 'Validação automática no Preview de Match' },
+                { icon: <AlertCircle size={14}/>, label: 'Marcar divergências', value: 'auto', tip: 'Divergências aparecem no Preview de Match' },
+                { icon: <Zap size={14}/>, label: 'Aprender com correções', value: 'on', tip: 'Templates salvos reaproveitam suas correções' }
               ].map((f, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 bg-black/30 border border-[var(--v-border)] rounded-md">
+                <div key={i} title={f.tip} className="flex items-center gap-2 p-2 bg-black/30 border border-[var(--v-border)] rounded-md cursor-default">
                   <div className="text-[var(--v-text-muted)]">{f.icon}</div>
                   <span className="flex-1 text-[11px] text-[var(--v-text-bold)] truncate">{f.label}</span>
                   <span className="font-mono text-[9px] text-[var(--v-text-faint)]">{f.value}</span>
