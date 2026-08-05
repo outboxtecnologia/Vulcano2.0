@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-    Download, RefreshCw, Upload, Play, CheckCircle2, CheckCircle, ChevronDown, Layers, Activity,
+    Download, RefreshCw, Upload, Play, CheckCircle2, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Layers, Activity,
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
     Zap, Link as LinkIcon, Cpu, AlertCircle, FileText, CheckSquare, MessageSquare, Plus, PlusCircle, PenTool, Hash, Filter,
     LayoutGrid, History, ListFilter, ShoppingCart, Users, DollarSign, Building2, Loader2, ShieldAlert,
@@ -1136,25 +1136,41 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
       .catch(err => console.error(err));
   }, [selectedEmpresa]);
 
-  const handleSearch = () => {
+  const handleSearch = (dIni = dataIniFilter, dFim = dataFimFilter) => {
     if (!selectedEmpresa) return;
-    if (!empreendimentoFilter || !dataIniFilter || !dataFimFilter) {
+    if (!empreendimentoFilter || !dIni || !dFim) {
       alert("Por favor, selecione um empreendimento e um período de datas antes de buscar.");
       return;
     }
     setLoading(true);
     setHasSearched(true);
-    
+
     let url = `${API_BASE}/api/vulcano/recebimentos?empresa_id=${selectedEmpresa}`;
     if (empreendimentoFilter) url += `&empreendimento_id=${empreendimentoFilter}`;
-    if (dataIniFilter) url += `&data_ini=${dataIniFilter}`;
-    if (dataFimFilter) url += `&data_fim=${dataFimFilter}`;
+    if (dIni) url += `&data_ini=${dIni}`;
+    if (dFim) url += `&data_fim=${dFim}`;
 
     fetch(url)
       .then(res => res.json())
       .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); })
       .catch(err => { console.error(err); setLoading(false); });
   };
+
+  // Navegacao por competencia: as setas preenchem o mes inteiro em De/Ate e,
+  // com empreendimento selecionado, ja rebuscam — a baixa age no periodo em tela.
+  const navegarCompetencia = (delta, irParaAtual = false) => {
+    const base = (!irParaAtual && dataIniFilter)
+      ? new Date(`${dataIniFilter.slice(0, 7)}-01T00:00:00`)
+      : new Date();
+    const alvo = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const ini = `${alvo.getFullYear()}-${pad(alvo.getMonth() + 1)}-01`;
+    const fim = `${alvo.getFullYear()}-${pad(alvo.getMonth() + 1)}-${pad(new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate())}`;
+    setDataIniFilter(ini);
+    setDataFimFilter(fim);
+    if (empreendimentoFilter) handleSearch(ini, fim);
+  };
+  const competenciaLabel = dataIniFilter ? `${dataIniFilter.slice(5, 7)}/${dataIniFilter.slice(0, 4)}` : 'mês';
 
   const uniqueEmps = [...new Set(data.map(r => r.empreendimento))].sort();
 
@@ -1376,6 +1392,12 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                 <option value="BAIXADA">Baixadas (Pagas)</option>
             </select>
             
+            <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)' }}>
+                <button onClick={() => navegarCompetencia(-1)} title="Mês anterior" className="p-1.5 rounded hover:bg-white/10 transition-colors" style={{ color: '#ff7a1a' }}><ChevronLeft size={14}/></button>
+                <button onClick={() => navegarCompetencia(0, true)} title="Ir para o mês atual" className="min-w-[64px] text-center font-mono text-[12px] font-bold px-1 hover:text-[#ff7a1a] transition-colors" style={{ color: '#f0e6d8' }}>{competenciaLabel}</button>
+                <button onClick={() => navegarCompetencia(1)} title="Próximo mês" className="p-1.5 rounded hover:bg-white/10 transition-colors" style={{ color: '#ff7a1a' }}><ChevronRight size={14}/></button>
+            </div>
+
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#8a7a68' }}>
                 <span className="text-[11px] font-mono">De</span>
                 <input type="date" value={dataIniFilter} onChange={(e) => setDataIniFilter(e.target.value)} className="bg-transparent border-none outline-none text-[11px] font-mono dark-calendar" style={{ color: '#f0e6d8' }} />
@@ -1386,7 +1408,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                 )}
             </div>
 
-            <button onClick={handleSearch} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-white/10" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: '#ff7a1a' }}>
+            <button onClick={() => handleSearch()} className="px-4 py-1.5 rounded-lg text-[12px] font-bold transition-colors hover:bg-white/10" style={{ background: 'rgba(255, 160, 80, 0.1)', border: '1px solid rgba(255, 160, 80, 0.2)', color: '#ff7a1a' }}>
                 Buscar
             </button>
 
