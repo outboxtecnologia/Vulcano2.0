@@ -8532,10 +8532,16 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         """, tuple(params))
         rows = cur.fetchall()
 
-        # acumulados por venda: pago total e pago antes do mês (saldos)
+        # acumulados por venda: PRINCIPAL amortizado (total e antes do mês).
+        # TOTALPAGO inclui a variação monetária — abatê-la do valor histórico do
+        # contrato deixava o saldo NEGATIVO em contratos longos (caso Luiz Osnildo,
+        # venda 121: 494.682,21 pagos com 184.947,21 de variação x contrato de
+        # 311.291,00 = saldo -183.391,21). Amortização = TOTALPAGO - VARIACAO
+        # + DESCONTO (para parcela quitada integral, é o valor nominal dela).
         def _acum(extra_sql, extra_params):
             cur.execute(f"""
-                SELECT R.IDVENDA, SUM(R.TOTALPAGO)
+                SELECT R.IDVENDA,
+                       SUM(R.TOTALPAGO - COALESCE(R.VALORVARIACAO, 0) + COALESCE(R.DESCONTO, 0))
                 FROM RECEBER R
                 JOIN VENDA V ON R.IDVENDA = V.ID
                 WHERE V.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0 {extra_sql}
@@ -8560,7 +8566,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             pago_f = float(pago or 0)
             bx = baixas.get(str(rid))
             if bx and pago_f <= 0:
-                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
                 "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
@@ -8618,7 +8624,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
             if bx:
-                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
                 "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
