@@ -6275,6 +6275,25 @@ def set_parser_template_default(body: ParserTemplateSetDefault):
     conn.close()
     return {"success": True}
 
+def _detectar_linha_header_excel(content: bytes) -> int:
+    """Planilha de cliente costuma ter linhas decorativas antes do cabeçalho
+    (título, logotipo, vazias) — com header=0 o pandas devolve 'Unnamed: N' e a
+    sugestão de mapeamento da IA morre. Procura nas 15 primeiras linhas a que
+    mais parece cabeçalho: maior contagem de células TEXTUAIS distintas."""
+    try:
+        raw = pd.read_excel(io.BytesIO(content), header=None, nrows=15)
+    except Exception:
+        return 0
+    melhor_linha, melhor_score = 0, 0
+    for i in range(len(raw)):
+        celulas = [str(c).strip() for c in raw.iloc[i].tolist()
+                   if c is not None and str(c).strip() not in ("", "nan", "NaT")]
+        textuais = [c for c in celulas if not c.replace(".", "").replace(",", "").replace("-", "").replace("/", "").isdigit()]
+        score = len(set(textuais))
+        if score > melhor_score:
+            melhor_linha, melhor_score = i, score
+    return melhor_linha if melhor_score >= 2 else 0
+
 @app.post("/api/upload-planilha")
 async def upload_planilha(file: UploadFile = File(...)):
     try:
@@ -6285,11 +6304,16 @@ async def upload_planilha(file: UploadFile = File(...)):
             except:
                 df = pd.read_csv(io.BytesIO(content), encoding='latin1', sep=None, engine='python')
         elif file.filename.lower().endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(io.BytesIO(content))
+            header_row = _detectar_linha_header_excel(content)
+            df = pd.read_excel(io.BytesIO(content), header=header_row)
+            df = df.dropna(how='all').loc[:, ~df.columns.astype(str).str.startswith('Unnamed')]
         else:
             raise HTTPException(status_code=400, detail="Formato não suportado. Use CSV ou Excel.")
-            
+
         columns = df.columns.tolist()
+        for col in df.columns:  # datas viram ISO (senao NaT vaza como string na previa)
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.strftime('%Y-%m-%d')
         df = df.fillna('')
         data_preview = df.head(10).to_dict(orient='records')
         
@@ -6731,8 +6755,19 @@ async def post_vendas(request: Request):
         conn = get_conn("vulcano")
         cur = conn.cursor()
 
+        # data da venda: guarda contra ano digitado curto no input date (ex.: 0026)
+        _d = str(data.get("data", "") or "")
+        if _d and (len(_d) < 10 or _d[:4] < "1990"):
+            raise HTTPException(status_code=400, detail=f"Data da venda inválida: {_d}. Confira o ano (ex.: 2026).")
+
         # --- CLIENTES (todos os compradores; o principal vai na VENDA principal,
         # os demais viram vendas satelites vinculadas via IDVENDAVINCULADA) ---
+        # A base viva atual tem CLIENTE só com (ID, NOME, CNPJ) — CODIGOEMPRESA
+        # existia no schema antigo e derruba o INSERT com SQL -206 (caso real da
+        # analista no GRAND LIFE). Detecta a coluna e monta o INSERT compatível.
+        cur.execute("SELECT 1 FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'CLIENTE' AND TRIM(RDB$FIELD_NAME) = 'CODIGOEMPRESA'")
+        cliente_tem_empresa = cur.fetchone() is not None
+
         def _get_or_create_cliente(comp) -> int | None:
             raw_doc = "".join(filter(str.isdigit, comp.get("cpf_cnpj", "")))
             if not raw_doc:
@@ -6743,8 +6778,13 @@ async def post_vendas(request: Request):
                 return cli_row[0]
             cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
             cid = cur.fetchone()[0]
-            cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
-                (cid, str(comp.get("nome", "")).encode('cp1252', 'ignore')[:100], comp.get("cpf_cnpj", ""), int(empresa_id)))
+            nome_enc = str(comp.get("nome", "")).encode('cp1252', 'ignore')[:100]
+            if cliente_tem_empresa:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
+                    (cid, nome_enc, comp.get("cpf_cnpj", ""), int(empresa_id)))
+            else:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ) VALUES (?, ?, ?)",
+                    (cid, nome_enc, comp.get("cpf_cnpj", "")))
             return cid
 
         compradores = data.get("compradores", [])
