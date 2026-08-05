@@ -35,8 +35,11 @@ const MagmaBtn = ({ onClick, disabled, loading, icon: Icon, label, accent, fille
             : { borderColor: `${accent}44`, color: accent }}
         className={`flex items-center gap-2 ${filled ? '' : 'bg-transparent border'} rounded-lg px-4 py-2 text-[9px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-40 hover:opacity-80`}
     >
+        {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de referencia
+            do insertBefore e quebra o commit do React se algo (tradutor de pagina) tiver
+            embrulhado o texto. Este botao e compartilhado por toda a tela. */}
         {loading ? <RefreshCw size={11} className="animate-spin" /> : <Icon size={11} />}
-        {loading ? 'Aguarde...' : label}
+        <span>{loading ? 'Aguarde...' : label}</span>
     </button>
 );
 

@@ -307,7 +307,10 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                 </div>
                 <button onClick={() => pesquisar()} disabled={loading}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--v-ok)]/15 border border-[var(--v-ok)]/30 text-[var(--v-ok)] text-[11px] font-bold uppercase tracking-wider hover:bg-[var(--v-ok)]/25 disabled:opacity-40">
-                    {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Pesquisar
+                    {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de referencia
+                        do insertBefore e quebra o commit do React se algo (tradutor de pagina) tiver
+                        embrulhado o texto. */}
+                    {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} <span>Pesquisar</span>
                 </button>
                 <div className="min-w-56">
                     <label htmlFor="busca-receb" className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">

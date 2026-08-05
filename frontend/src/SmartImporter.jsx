@@ -367,8 +367,11 @@ export default function SmartImporter({ selectedEmpresa }) {
               </label>
               
               <button type="submit" disabled={!file || loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-gradient-to-br from-[var(--v-accent)] to-[#c93a12] text-[var(--v-text-inv)] font-semibold text-xs whitespace-nowrap shadow-[inset_0_1px_0_rgba(255,220,180,0.4),0_4px_12px_rgba(201,58,18,0.35)] disabled:opacity-50 hover:brightness-110 transition-all cursor-pointer border-none">
+                {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de referencia
+                    do insertBefore e quebra o commit do React se algo (tradutor de pagina) tiver
+                    embrulhado o texto. */}
                 {loading ? <div className="animate-spin w-3 h-3 border-2 border-black border-t-transparent rounded-full" /> : <ChevronRight size={14} />}
-                {loading ? 'Analisando...' : 'Iniciar'}
+                <span>{loading ? 'Analisando...' : 'Iniciar'}</span>
               </button>
             </div>
             {file && <p className="mt-4 text-[10px] text-[var(--v-text-bold)] truncate w-full max-w-xs">{file.name}</p>}

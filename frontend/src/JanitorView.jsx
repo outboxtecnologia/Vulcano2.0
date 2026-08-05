@@ -334,8 +334,11 @@ function DiskPanel({ onRefresh }) {
               </span>
               <button onClick={moverParaQuarentena} disabled={quarentando}
                 className="flex items-center gap-2 px-4 py-2 bg-[rgb(var(--v-accent-rgb)_/_0.1)] border border-[rgb(var(--v-accent-rgb)_/_0.4)] rounded text-[9px] font-black uppercase tracking-widest text-[var(--v-accent)] hover:bg-[rgb(var(--v-accent-rgb)_/_0.2)] transition-all disabled:opacity-40">
+                {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de referencia
+                    do insertBefore e quebra o commit do React se algo (tradutor de pagina) tiver
+                    embrulhado o texto. */}
                 {quarentando ? <RefreshCw size={10} className="animate-spin" /> : <MoveRight size={10} />}
-                {quarentando ? 'Movendo...' : 'Mover para Quarentena'}
+                <span>{quarentando ? 'Movendo...' : 'Mover para Quarentena'}</span>
               </button>
             </>
           )}
@@ -404,7 +407,7 @@ export const JanitorView = () => {
         <button onClick={fetchReport} disabled={loading}
           className="px-5 py-2 bg-[var(--v-accent)] text-[var(--v-text-inv)] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[var(--v-hover)] transition-all flex items-center gap-2 disabled:opacity-40">
           {loading ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          {loading ? 'Atualizando...' : 'Atualizar'}
+          <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>
         </button>
         <button onClick={() => setAutoRefresh(a => !a)}
           className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded border flex items-center gap-2 transition-all ${

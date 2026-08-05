@@ -149,7 +149,10 @@ export const RawExplorerView = () => {
                                  disabled={loading}
                                  className="h-16 w-full bg-[var(--v-accent-2)] hover:bg-[var(--v-hover)] text-[var(--v-text-inv)] font-black uppercase tracking-widest text-[11px] rounded-[var(--v-radius)] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_var(--v-accent-2)]"
                              >
-                                 {loading ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />} Executar SQL
+                                 {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de
+                                     referencia do insertBefore e quebra o commit do React se algo
+                                     (tradutor de pagina) tiver embrulhado o texto. */}
+                                 {loading ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />} <span>Executar SQL</span>
                              </button>
                              <p className="text-[8px] text-[var(--v-text-faint)] uppercase text-center mt-3 font-bold">SQL Custom só afeta Vulcano</p>
                         </div>

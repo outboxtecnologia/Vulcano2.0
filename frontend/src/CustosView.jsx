@@ -336,8 +336,12 @@ export const CustosView = ({ selectedEmpresa }) => {
                     disabled={syncing}
                     className="bg-[var(--v-hover)] hover:bg-[#333] text-[var(--v-text-bold)] w-40 py-3 rounded-[var(--v-radius)] text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all disabled:opacity-50 border border-[var(--v-border)]"
                 >
+                    {/* Rotulo em <span>: como texto solto ele seria irmao do icone condicional, e o
+                        React usaria esse no de texto como referencia no insertBefore ao trocar o
+                        icone. Se um tradutor de pagina embrulhar o texto, o commit estoura com
+                        NotFoundError e derruba a tela. */}
                     {syncing ? <RefreshCw className="animate-spin text-[var(--v-accent-2)]" size={14}/> : <RefreshCw size={14} className="text-[var(--v-text-muted)]"/>}
-                    Sync Questor
+                    <span>Sync Questor</span>
                 </button>
 
                 <button
@@ -350,7 +354,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                     className="bg-[var(--v-accent-2)] hover:bg-[var(--v-accent)] text-[var(--v-text-inv)] w-48 py-3 rounded-[var(--v-radius)] text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_var(--v-accent-2)] disabled:opacity-50 disabled:shadow-none"
                 >
                     {loading ? <RefreshCw className="animate-spin" size={14}/> : <Plus size={14}/>}
-                    Apropriar Custo
+                    <span>Apropriar Custo</span>
                 </button>
             </div>
 
@@ -584,7 +588,7 @@ export const CustosView = ({ selectedEmpresa }) => {
                             </div>
                             <button type="submit" disabled={submitting} className="mt-2 bg-[var(--v-accent-2)] hover:bg-[var(--v-accent)] text-[var(--v-text-inv)] w-full py-4 text-[12px] font-black tracking-[0.2em] uppercase flex items-center justify-center gap-3 rounded-[var(--v-radius)] shadow-[0_0_20px_var(--v-accent-2)] active:scale-95 transition-all">
                                 {submitting ? <RefreshCw className="animate-spin" size={16}/> : <UploadCloud size={16}/>}
-                                Gravar no Questor
+                                <span>Gravar no Questor</span>
                             </button>
                         </form>
                     </div>

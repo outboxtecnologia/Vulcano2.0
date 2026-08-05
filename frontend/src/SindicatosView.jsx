@@ -59,8 +59,11 @@ function ClausulaExpand({ texto }) {
           onClick={() => setAberto((v) => !v)}
           className="flex items-center gap-1 text-[9px] text-[rgb(var(--v-accent-rgb)_/_0.5)] hover:text-[var(--v-accent)] mt-1 transition-colors"
         >
+          {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de referencia
+              do insertBefore e quebra o commit do React se algo (tradutor de pagina) tiver
+              embrulhado o texto. */}
           {aberto ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-          {aberto ? 'Menos' : 'Ver trecho completo'}
+          <span>{aberto ? 'Menos' : 'Ver trecho completo'}</span>
         </button>
       )}
     </div>

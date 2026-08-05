@@ -1,10 +1,16 @@
 <!doctype html>
-<html lang="en">
+<!-- lang precisa ser pt-BR: com "en" o navegador de um usuario pt-BR oferece (ou
+     aplica sozinho) a traducao automatica de um app que ja esta em portugues.
+     O tradutor reescreve os nos de texto envolvendo-os em <font>, o React perde a
+     referencia dos irmaos e o commit quebra com NotFoundError em insertBefore.
+     translate="no" e o cinto de seguranca: barra tambem a traducao pedida na mao. -->
+<html lang="pt-BR" translate="no">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
+    <meta name="google" content="notranslate" />
     <title>Vulcano 2.0</title>
 
     <!-- Cor de fundo antes de qualquer CSS carregar. Em `vite dev` o index.css e

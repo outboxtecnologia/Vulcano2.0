@@ -211,7 +211,10 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
                 <div className="min-w-72"
                     title={todasEmpresas ? 'O empreendimento pertence a uma empresa só — desmarque “todas as empresas” para recortar por obra.' : undefined}>
                     <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">
-                        Empreendimento {todasEmpresas && <span className="text-[var(--v-text-faint)]">(só por empresa)</span>}
+                        {/* Rotulo em <span>: como texto solto ele seria irmao do sufixo condicional,
+                            e o React o usaria como referencia ao inserir/remover aquele span. Se um
+                            tradutor de pagina embrulhar o texto, o commit estoura com NotFoundError. */}
+                        <span>Empreendimento </span>{todasEmpresas && <span className="text-[var(--v-text-faint)]">(só por empresa)</span>}
                     </label>
                     <select value={todasEmpresas ? '' : emp} disabled={todasEmpresas}
                         onChange={(e) => invalidar(setEmp)(e.target.value)}
@@ -225,7 +228,7 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
 
                 <div title={modo === 'A' ? 'No modo A a venda recebe a matriz inteira de prazos — recortar por data deixaria a venda pela metade.' : undefined}>
                     <label className="block text-[9px] uppercase tracking-[0.2em] text-[var(--v-text-ghost)] mb-1.5 font-bold">
-                        Vencimento de / até {modo === 'A' && <span className="text-[var(--v-text-faint)]">(só no modo B)</span>}
+                        <span>Vencimento de / até </span>{modo === 'A' && <span className="text-[var(--v-text-faint)]">(só no modo B)</span>}
                     </label>
                     <div className="flex items-center gap-1">
                         <input type="date" value={de} disabled={modo === 'A'}
@@ -246,7 +249,7 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
 
                 <button onClick={() => simular()} disabled={simulando || executando}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--v-info)]/15 border border-[var(--v-info)]/30 text-[var(--v-info)] text-[11px] font-bold uppercase tracking-wider hover:bg-[var(--v-info)]/25 disabled:opacity-40">
-                    {simulando ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Simular
+                    {simulando ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} <span>Simular</span>
                 </button>
             </div>
 
@@ -335,7 +338,7 @@ export const GeracaoParcelasView = ({ selectedEmpresa }) => {
                                     <td className="px-3 py-2 font-mono">{r.idvenda}</td>
                                     <td className="px-3 py-2 font-mono text-[var(--v-text-muted)]">{r.prazo_id}</td>
                                     <td className="px-3 py-2 font-mono">
-                                        {r.data}
+                                        <span>{r.data}</span>
                                         {r.bloqueada && <span className="ml-2 text-[8px] font-black uppercase tracking-widest text-[var(--v-warn-hi)]">bloqueada</span>}
                                     </td>
                                     <td className="px-3 py-2 font-mono">{r.parcela}</td>

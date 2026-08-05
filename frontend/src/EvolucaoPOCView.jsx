@@ -218,8 +218,11 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                             disabled={loading || selectedEmps.length === 0}
                             className="bg-[var(--v-info)] hover:bg-[var(--v-info)] text-[var(--v-text-bold)] py-3 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto shadow-[0_0_15px_rgba(0,122,255,0.4)]"
                         >
+                            {/* Rotulo em <span>: texto solto irmao de icone condicional vira no de
+                                referencia do insertBefore e quebra o commit do React se algo (tradutor
+                                de pagina) tiver embrulhado o texto. */}
                             {loading ? <RefreshCw size={14} className="animate-spin" /> : <Layers size={14} />}
-                            {loading ? "Calculando VGV/POC..." : "Processar Evolução POC"}
+                            <span>{loading ? "Calculando VGV/POC..." : "Processar Evolução POC"}</span>
                         </button>
                     </div>
                 </div>
@@ -338,7 +341,7 @@ export const EvolucaoPOCView = ({ selectedEmpresa }) => {
                                                                     className="w-full bg-[var(--v-ok)] hover:bg-[#28a745] text-[var(--v-text-inv)] font-black text-[10px] uppercase tracking-widest py-2.5 flex justify-center items-center gap-2 rounded-[var(--v-radius)] transition-colors disabled:opacity-50 mt-2"
                                                                 >
                                                                   {savingPoc ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
-                                                                  GRAVAR SISTEMA
+                                                                  <span>GRAVAR SISTEMA</span>
                                                                 </button>
                                                             </div>
                                                         </div>

@@ -954,8 +954,9 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                 disabled={matriculaLoading}
                                 className="bg-[var(--v-accent)] text-black px-4 py-2 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-white transition-all disabled:opacity-50 shrink-0"
                             >
-                                {matriculaLoading ? <Loader2 size={14} className="animate-spin"/> : <Database size={14}/>}
-                                {matriculaLoading ? 'Lendo (até ~5 min)...' : 'Enviar matrícula'}
+                                {/* Icone e rotulo em spans proprios: ver comentario no botao Salvar. */}
+                                <span className="inline-flex">{matriculaLoading ? <Loader2 size={14} className="animate-spin"/> : <Database size={14}/>}</span>
+                                <span>{matriculaLoading ? 'Lendo (até ~5 min)...' : 'Enviar matrícula'}</span>
                             </button>
                         </div>
 
@@ -1038,8 +1039,10 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                     <button onClick={() => setMatriculaPreview(null)} className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)] hover:bg-white/5 rounded">Descartar</button>
                                     <button onClick={handleGravarEstrutura} disabled={importandoEstrutura}
                                         className="bg-[var(--v-accent)] text-black px-5 py-2 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50 flex items-center gap-2">
+                                        {/* Idem: o spinner entra ANTES do rotulo, entao o rotulo precisa
+                                            do span proprio para nao servir de no de referencia. */}
                                         {importandoEstrutura && <Loader2 size={12} className="animate-spin"/>}
-                                        Gravar {matriculaPreview.total_unidades} unidades em {matriculaPreview.blocos.length} blocos
+                                        <span>Gravar {matriculaPreview.total_unidades} unidades em {matriculaPreview.blocos.length} blocos</span>
                                     </button>
                                 </div>
                             </div>
@@ -1172,8 +1175,16 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                   disabled={saving}
                   className="px-8 py-2.5 bg-[var(--v-accent)] text-[var(--v-text-inv)] font-black text-[10px] uppercase tracking-widest hover:bg-[var(--v-hover)] transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(255,77,0,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {saving ? 'Salvando…' : 'Salvar Alterações'}
+                  {/* O rotulo fica num <span> proprio de proposito. Como texto solto ele
+                      vira irmao direto do icone, e trocar o icone no clique obriga o React
+                      a um insertBefore usando esse no de texto como referencia. Basta que
+                      algo externo (tradutor de pagina, leitor de tela) tenha embrulhado o
+                      texto para o no deixar de ser filho do botao e o commit estourar com
+                      "insertBefore ... is not a child of this node", derrubando a tela.
+                      Com o span, o React troca o conteudo dele por textContent e nao
+                      depende mais de quem e irmao de quem. */}
+                  <span className="inline-flex">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}</span>
+                  <span>{saving ? 'Salvando…' : 'Salvar Alterações'}</span>
                 </button>
               </div>
             </div>

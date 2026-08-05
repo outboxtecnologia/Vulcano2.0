@@ -598,8 +598,11 @@ export const SeroView = ({ selectedEmpresa }) => {
                                         disabled={savingPdf}
                                         className="flex items-center gap-2 bg-[var(--v-ok)]/10 border border-[var(--v-ok)]/30 text-[var(--v-ok)] hover:bg-[var(--v-ok)] hover:text-[var(--v-text-inv)] transition-all duration-200 font-black text-[10px] tracking-[0.15em] uppercase rounded-lg px-5 py-2.5 h-[36px] disabled:opacity-40"
                                     >
+                                        {/* Rotulo em <span>: texto solto irmao de icone condicional vira no
+                                            de referencia do insertBefore e quebra o commit do React se algo
+                                            (tradutor de pagina) tiver embrulhado o texto. */}
                                         {savingPdf ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                                        {savingPdf ? 'Salvando...' : 'Salvar Extrato no Vulcano'}
+                                        <span>{savingPdf ? 'Salvando...' : 'Salvar Extrato no Vulcano'}</span>
                                     </button>
                                 </div>
                             )}

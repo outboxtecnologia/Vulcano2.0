@@ -2264,8 +2264,11 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
               disabled={isProcessing || !pdfFile} 
               className="w-full bg-[var(--v-info)] text-[var(--v-text-bold)] py-4 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] hover:bg-[var(--v-info)] transition-colors disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_10px_rgba(0,122,255,0.4)]"
             >
+              {/* Rotulo em <span>: como texto solto ele seria irmao do icone condicional, e o
+                  React o usaria como referencia no insertBefore ao trocar o icone. Se um tradutor
+                  de pagina embrulhar o texto, o commit estoura com NotFoundError e derruba a tela. */}
               {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
-              {isProcessing ? 'Extraindo...' : extractForceAi ? 'Extrair com IA (Gemini)' : 'Extrair PDF'}
+              <span>{isProcessing ? 'Extraindo...' : extractForceAi ? 'Extrair com IA (Gemini)' : 'Extrair PDF'}</span>
             </button>
           </div>
         </div>
@@ -2305,7 +2308,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                       title="Força a IA a escrever um manifest Python para toda a abstração acima ficar salva pra sempre"
                     >
                       {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Code size={14} />}
-                      {isSaving ? 'Gerando Script...' : 'Salvar Regra .PY'}
+                      <span>{isSaving ? 'Gerando Script...' : 'Salvar Regra .PY'}</span>
                     </button>
                   </div>
                   {selectedEmpresa && (
@@ -2373,12 +2376,12 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                         {viewMode === 'raw' ? (
                           <>
                             {isSimulating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Loader2 className="w-4 h-4" />}
-                            CONCILIAR COM BANCO
+                            <span>CONCILIAR COM BANCO</span>
                           </>
                         ) : (
                           <>
                             {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            EFETIVAR LOTE NO VULCANO
+                            <span>EFETIVAR LOTE NO VULCANO</span>
                           </>
                         )}
                       </button>
@@ -2605,7 +2608,7 @@ export const ConciliadorView = ({ selectedEmpresa }) => {
                             className="bg-[var(--v-accent)] text-[var(--v-text-inv)] px-3 py-2 rounded-[var(--v-radius)] font-bold uppercase tracking-widest text-[10px] disabled:opacity-60 flex items-center gap-2"
                           >
                             {isChatting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                            Enviar
+                            <span>Enviar</span>
                           </button>
                         </div>
                       </div>
