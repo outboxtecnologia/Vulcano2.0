@@ -88,11 +88,14 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
             });
             const d = await res.json();
             if (!res.ok || d.success === false) throw new Error(d.detail || d.error || 'Falha na baixa.');
-            // atualização otimista: linha + saldo das linhas da mesma venda + totais
+            // atualização otimista: linha + saldo das linhas da mesma venda + totais.
+            // O saldo devedor cai pelo PRINCIPAL (valor-base da parcela) — a variação
+            // é receita financeira e não amortiza o contrato.
+            const principal = Math.round((total - variacao + desconto) * 100) / 100;
             setData(prev => {
                 const novas = prev.data.map(x => {
                     let y = { ...x };
-                    if (x.venda_id === r.venda_id) y.saldo_atual = Math.round((y.saldo_atual - total) * 100) / 100;
+                    if (x.venda_id === r.venda_id) y.saldo_atual = Math.round((y.saldo_atual - principal) * 100) / 100;
                     if (x.id === r.id) y = { ...y, status: 'PAGO', total_pago: total, variacao, desconto, data_pagto: baixa.data_pagamento };
                     return y;
                 });
@@ -100,7 +103,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                 t.total_pago = Math.round((t.total_pago + total) * 100) / 100;
                 t.variacao = Math.round((t.variacao + variacao) * 100) / 100;
                 t.desconto = Math.round((t.desconto + desconto) * 100) / 100;
-                t.saldo_atual = Math.round((t.saldo_atual - total) * 100) / 100;
+                t.saldo_atual = Math.round((t.saldo_atual - principal) * 100) / 100;
                 return { ...prev, data: novas, totais: t };
             });
             setEditId(null);
