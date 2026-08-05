@@ -85,6 +85,93 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
     const apuracaoFeita = useRef(null);
     const chaveApuracao = (aba) => `${selectedEmpresa}|${ano}|${mes}|${aba}`;
 
+    // Conferência apartamento por apartamento (composição dos registros)
+    const [analiticoData, setAnaliticoData] = useState(null);
+    const [analiticoAberto, setAnaliticoAberto] = useState(false);
+    const [loadingAnalitico, setLoadingAnalitico] = useState(false);
+
+    const toggleAnalitico = async () => {
+        if (analiticoAberto) { setAnaliticoAberto(false); return; }
+        setAnaliticoAberto(true);
+        if (analiticoData) return;
+        setLoadingAnalitico(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/sped/analitico-unidades?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
+            const d = await res.json();
+            if (!res.ok || d.success === false) throw new Error(typeof d.detail === 'string' ? d.detail : 'Conferência falhou.');
+            setAnaliticoData(d);
+        } catch (err) {
+            alert(err.message);
+            setAnaliticoAberto(false);
+        } finally { setLoadingAnalitico(false); }
+    };
+
+    // Bloco de conferência reutilizado nas abas RET (destino RET_1800) e F200
+    const BlocoAnalitico = ({ destino, accent }) => {
+        if (!analiticoAberto) return null;
+        if (loadingAnalitico) return (
+            <div className="p-6 text-center text-[10px] uppercase tracking-widest text-[var(--v-text-ghost)] animate-pulse">Carregando conferência por apartamento...</div>
+        );
+        const grupos = (analiticoData?.grupos || []).filter(g => g.destino === destino);
+        if (!grupos.length) return (
+            <div className="p-6 text-center text-[10px] uppercase tracking-widest text-[var(--v-text-ghost)]">Nenhum recebimento no destino nesta competência.</div>
+        );
+        return (
+            <div className="border-t border-[var(--v-line)]">
+                {grupos.map(g => {
+                    const rows = (analiticoData?.data || []).filter(x => x.destino === destino && x.empreendimento === g.empreendimento);
+                    return (
+                        <div key={g.empreendimento} className="mb-2">
+                            <div className="px-4 py-2.5 bg-[var(--v-deep)] flex flex-wrap items-center gap-x-6 gap-y-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>{g.empreendimento}</span>
+                                <span className="text-[9px] font-mono text-[var(--v-text-ghost)]">{g.qtd_unidades} unidade(s) · {g.qtd_parcelas} parcela(s)</span>
+                                <span className="text-[9px] font-mono text-[var(--v-text-ghost)]"><span>Parcelas: </span><b className="text-[var(--v-text-bold)]">{fmt(g.valor_parcela)}</b></span>
+                                <span className="text-[9px] font-mono text-[var(--v-text-ghost)]"><span>Variação: </span><b className="text-[var(--v-text-bold)]">{fmt(g.variacao)}</b></span>
+                                <span className="text-[9px] font-mono text-[var(--v-text-ghost)]"><span>{destino === 'RET_1800' ? 'Base do 1800' : 'Base F200'}: </span><b className="text-[var(--v-text-bold)]">{fmt(g.total_recebido)}</b></span>
+                                {destino === 'RET_1800' && (
+                                    <span className="text-[9px] font-mono text-[var(--v-text-ghost)]"><span>Guia RET ({g.aliqret}%): </span><b style={{ color: accent }}>{fmt(g.ret_total)}</b></span>
+                                )}
+                            </div>
+                            <table className="w-full text-[10.5px]">
+                                <thead>
+                                    <tr>
+                                        <Th>Apartamento / Unidade</Th>
+                                        <Th>Comprador</Th>
+                                        <Th>CPF/CNPJ</Th>
+                                        <Th right>Parc.</Th>
+                                        <Th right>Valor Parcelas</Th>
+                                        <Th right>Variação</Th>
+                                        <Th right>Recebido no Mês</Th>
+                                        {destino === 'RET_1800' && <Th right accent={accent}>RET da Unidade</Th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map(x => (
+                                        <tr key={`${x.venda_id}-${x.destino}`} className="border-b border-[var(--v-line)] hover:bg-[var(--v-hover)] transition-colors">
+                                            <td className="px-4 py-2 font-mono font-bold text-[var(--v-text-muted)]">{x.unidade || `VENDA #${x.venda_id}`}</td>
+                                            <td className="px-4 py-2 text-[var(--v-text-muted)] max-w-52 truncate">{x.comprador}</td>
+                                            <td className="px-4 py-2 font-mono text-[var(--v-text-faint)]">{x.cpf_cnpj}</td>
+                                            <td className="px-4 py-2 font-mono text-right text-[var(--v-text-faint)]">{x.qtd_parcelas}</td>
+                                            <td className="px-4 py-2 font-mono text-right text-[var(--v-text-muted)]">{fmt(x.valor_parcela)}</td>
+                                            <td className="px-4 py-2 font-mono text-right text-[var(--v-text-muted)]">{fmt(x.variacao)}</td>
+                                            <td className="px-4 py-2 font-mono text-right text-[var(--v-text-bold)]">{fmt(x.total_recebido)}</td>
+                                            {destino === 'RET_1800' && <td className="px-4 py-2 font-mono text-right" style={{ color: accent }}>{fmt(x.ret_estimado)}</td>}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                })}
+                <p className="px-4 pb-3 text-[9px] text-[var(--v-text-ghost)] uppercase tracking-widest">
+                    {destino === 'RET_1800'
+                        ? 'O registro 1800 é ÚNICO por obra — a soma das unidades acima deve bater com a Base de Cálculo da guia.'
+                        : 'Cada unidade acima vira um registro F200 próprio — confira com a tabela da apuração.'}
+                </p>
+            </div>
+        );
+    };
+
     const fetchRetPreview = async () => {
         if (!selectedEmpresa || !ano || !mes) return;
         apuracaoFeita.current = chaveApuracao('RET');
@@ -94,6 +181,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             if (!res.ok) throw new Error("Apuração RET falhou.");
             const d = await res.json();
             setRetData(Array.isArray(d) ? d : (d.data || [])); setActiveTab('RET');
+            setAnaliticoData(null); setAnaliticoAberto(false); // competência pode ter mudado
         } catch (err) { setError(err.message); } finally { setLoading(false); }
     };
 
@@ -105,6 +193,7 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
             const res = await fetch(`${API_BASE}/api/sped/f200/preview?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}`);
             if (!res.ok) throw new Error("Apuração F200 falhou.");
             setF200Data(await res.json()); setActiveTab('F200');
+            setAnaliticoData(null); setAnaliticoAberto(false); // competência pode ter mudado
         } catch (err) { setError(err.message); } finally { setLoading(false); }
     };
 
@@ -381,6 +470,17 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                             </table>
                         </div>
                         {retData.length > 0 && (
+                            <>
+                                <div className="border-t border-[var(--v-line)] px-4 py-2 flex justify-start">
+                                    <MagmaBtn onClick={toggleAnalitico} disabled={loadingAnalitico} loading={loadingAnalitico}
+                                        icon={ReceiptText}
+                                        label={analiticoAberto ? 'Ocultar conferência por apartamento' : 'Conferência por apartamento (composição do 1800)'}
+                                        accent="var(--v-accent)" />
+                                </div>
+                                <BlocoAnalitico destino="RET_1800" accent="var(--v-accent)" />
+                            </>
+                        )}
+                        {retData.length > 0 && (
                             <div className="border-t border-[var(--v-line)] p-4 flex justify-end">
                                 <MagmaBtn onClick={commitRet} disabled={retCommitting} loading={retCommitting}
                                     icon={CheckCircle2} label="Confirmar e Injetar Lote RET no Questor"
@@ -461,6 +561,17 @@ export const FiscalSpedView = ({ selectedEmpresa }) => {
                                 </div>
                             )}
                         </div>
+                        {(f200Data.data || []).length > 0 && (
+                            <>
+                                <div className="border-t border-[var(--v-line)] px-4 py-2 flex justify-start">
+                                    <MagmaBtn onClick={toggleAnalitico} disabled={loadingAnalitico} loading={loadingAnalitico}
+                                        icon={ReceiptText}
+                                        label={analiticoAberto ? 'Ocultar conferência por apartamento' : 'Conferência por apartamento (composição do F200)'}
+                                        accent="var(--v-src-questor)" />
+                                </div>
+                                <BlocoAnalitico destino="F200" accent="var(--v-src-questor)" />
+                            </>
+                        )}
                         {(f200Data.data || []).length > 0 && (
                             <div className="border-t border-[var(--v-line)] p-4 flex justify-end">
                                 <MagmaBtn onClick={commitF200} disabled={f200Committing} loading={f200Committing}
