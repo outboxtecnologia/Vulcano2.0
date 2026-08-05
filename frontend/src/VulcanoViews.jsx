@@ -502,6 +502,10 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!vendaForm.id_empreendimento) { alert('Selecione o empreendimento.'); return; }
+    if (!vendaForm.data || vendaForm.data < '1990-01-01') {
+      alert(`Data da venda inválida (${vendaForm.data || 'vazia'}) — confira o ano (ex.: 2026).`);
+      return;
+    }
     if (!(compradores[0]?.nome && compradores[0]?.cpf_cnpj)) {
       alert('O 1º comprador (titular da venda) precisa de nome e CPF/CNPJ.');
       return;

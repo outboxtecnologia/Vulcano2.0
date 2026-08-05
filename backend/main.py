@@ -6275,6 +6275,25 @@ def set_parser_template_default(body: ParserTemplateSetDefault):
     conn.close()
     return {"success": True}
 
+def _detectar_linha_header_excel(content: bytes) -> int:
+    """Planilha de cliente costuma ter linhas decorativas antes do cabeçalho
+    (título, logotipo, vazias) — com header=0 o pandas devolve 'Unnamed: N' e a
+    sugestão de mapeamento da IA morre. Procura nas 15 primeiras linhas a que
+    mais parece cabeçalho: maior contagem de células TEXTUAIS distintas."""
+    try:
+        raw = pd.read_excel(io.BytesIO(content), header=None, nrows=15)
+    except Exception:
+        return 0
+    melhor_linha, melhor_score = 0, 0
+    for i in range(len(raw)):
+        celulas = [str(c).strip() for c in raw.iloc[i].tolist()
+                   if c is not None and str(c).strip() not in ("", "nan", "NaT")]
+        textuais = [c for c in celulas if not c.replace(".", "").replace(",", "").replace("-", "").replace("/", "").isdigit()]
+        score = len(set(textuais))
+        if score > melhor_score:
+            melhor_linha, melhor_score = i, score
+    return melhor_linha if melhor_score >= 2 else 0
+
 @app.post("/api/upload-planilha")
 async def upload_planilha(file: UploadFile = File(...)):
     try:
@@ -6285,11 +6304,16 @@ async def upload_planilha(file: UploadFile = File(...)):
             except:
                 df = pd.read_csv(io.BytesIO(content), encoding='latin1', sep=None, engine='python')
         elif file.filename.lower().endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(io.BytesIO(content))
+            header_row = _detectar_linha_header_excel(content)
+            df = pd.read_excel(io.BytesIO(content), header=header_row)
+            df = df.dropna(how='all').loc[:, ~df.columns.astype(str).str.startswith('Unnamed')]
         else:
             raise HTTPException(status_code=400, detail="Formato não suportado. Use CSV ou Excel.")
-            
+
         columns = df.columns.tolist()
+        for col in df.columns:  # datas viram ISO (senao NaT vaza como string na previa)
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.strftime('%Y-%m-%d')
         df = df.fillna('')
         data_preview = df.head(10).to_dict(orient='records')
         
@@ -6731,8 +6755,19 @@ async def post_vendas(request: Request):
         conn = get_conn("vulcano")
         cur = conn.cursor()
 
+        # data da venda: guarda contra ano digitado curto no input date (ex.: 0026)
+        _d = str(data.get("data", "") or "")
+        if _d and (len(_d) < 10 or _d[:4] < "1990"):
+            raise HTTPException(status_code=400, detail=f"Data da venda inválida: {_d}. Confira o ano (ex.: 2026).")
+
         # --- CLIENTES (todos os compradores; o principal vai na VENDA principal,
         # os demais viram vendas satelites vinculadas via IDVENDAVINCULADA) ---
+        # A base viva atual tem CLIENTE só com (ID, NOME, CNPJ) — CODIGOEMPRESA
+        # existia no schema antigo e derruba o INSERT com SQL -206 (caso real da
+        # analista no GRAND LIFE). Detecta a coluna e monta o INSERT compatível.
+        cur.execute("SELECT 1 FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'CLIENTE' AND TRIM(RDB$FIELD_NAME) = 'CODIGOEMPRESA'")
+        cliente_tem_empresa = cur.fetchone() is not None
+
         def _get_or_create_cliente(comp) -> int | None:
             raw_doc = "".join(filter(str.isdigit, comp.get("cpf_cnpj", "")))
             if not raw_doc:
@@ -6743,8 +6778,13 @@ async def post_vendas(request: Request):
                 return cli_row[0]
             cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
             cid = cur.fetchone()[0]
-            cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
-                (cid, str(comp.get("nome", "")).encode('cp1252', 'ignore')[:100], comp.get("cpf_cnpj", ""), int(empresa_id)))
+            nome_enc = str(comp.get("nome", "")).encode('cp1252', 'ignore')[:100]
+            if cliente_tem_empresa:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
+                    (cid, nome_enc, comp.get("cpf_cnpj", ""), int(empresa_id)))
+            else:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ) VALUES (?, ?, ?)",
+                    (cid, nome_enc, comp.get("cpf_cnpj", "")))
             return cid
 
         compradores = data.get("compradores", [])
@@ -8483,6 +8523,112 @@ def sped_analitico_unidades(empresa_id: int, ano: int, mes: int):
         except Exception:
             pass
 
+@app.post("/api/vulcano/cronograma/sanear")
+def sanear_cronograma(empresa_id: int, empreendimento_id: int = None, dry_run: bool = True):
+    """Saneamento do cronograma legado: as baixas antigas entraram só no RECEBER e
+    nunca marcaram VALOR_PAGO no VENDAFORMAPAGTOPRAZO — a venda parece ter dezenas
+    de parcelas 'previstas' já cobertas pelo dinheiro recebido (caso Luiz Osnildo:
+    234 abertas x saldo real de 2 parcelas).
+
+    Regra: por venda, principal amortizado = Σ(TOTALPAGO − VARIACAO + DESCONTO) do
+    RECEBER; abate primeiro o que o cronograma já tem marcado; o restante quita as
+    parcelas abertas em ordem de vencimento (FIFO), só INTEIRAS — sem parciais.
+    dry_run=true (default) apenas lista o que seria marcado."""
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        filtro_emp = " AND V.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+        params_emp = [empresa_id] + ([empreendimento_id] if empreendimento_id else [])
+
+        # principal amortizado por venda (mesmo criterio do saldo da tela Mensal)
+        cur.execute(f"""
+            SELECT R.IDVENDA, SUM(R.TOTALPAGO - COALESCE(R.VALORVARIACAO,0) + COALESCE(R.DESCONTO,0))
+            FROM RECEBER R JOIN VENDA V ON R.IDVENDA = V.ID
+            WHERE V.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              {filtro_emp}
+            GROUP BY R.IDVENDA
+        """, tuple(params_emp))
+        amortizado = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+
+        # cronograma (formas ativas): ja marcado e abertos por venda
+        cur.execute(f"""
+            SELECT F.IDVENDA, P.ID, P.DATA, COALESCE(P.VALOR, 0), COALESCE(P.VALOR_PAGO, 0), C.NOME
+            FROM VENDAFORMAPAGTOPRAZO P
+            JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
+            JOIN VENDA V ON V.ID = F.IDVENDA
+            LEFT JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
+            WHERE V.CODIGOEMPRESA = ?
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND COALESCE(F.ATIVA, 'S') <> 'N'
+              {filtro_emp}
+            ORDER BY F.IDVENDA, P.DATA, P.ID
+        """, tuple(params_emp))
+
+        por_venda = {}
+        for vid, pid, pdata, valor, vpago, cnome in cur.fetchall():
+            v = por_venda.setdefault(vid, {"comprador": dec(cnome), "ja_marcado": 0.0, "abertas": []})
+            if float(vpago) > 0:
+                v["ja_marcado"] += float(valor)
+            else:
+                v["abertas"].append((pid, str(pdata)[:10], float(valor)))
+
+        plano, tot_parcelas, tot_valor = [], 0, 0.0
+        for vid, v in por_venda.items():
+            saldo_marcar = round(amortizado.get(vid, 0.0) - v["ja_marcado"], 2)
+            if saldo_marcar <= 0 or not v["abertas"]:
+                continue
+            marcar = []
+            for pid, pdata, valor in v["abertas"]:  # FIFO por vencimento
+                if valor <= 0 or valor > saldo_marcar + 0.01:
+                    break  # so parcela inteira; parou = resto continua aberto
+                marcar.append({"prazo_id": pid, "vencimento": pdata, "valor": round(valor, 2)})
+                saldo_marcar = round(saldo_marcar - valor, 2)
+            if marcar:
+                plano.append({
+                    "venda_id": vid, "comprador": v["comprador"],
+                    "amortizado_receber": round(amortizado.get(vid, 0.0), 2),
+                    "ja_marcado_cronograma": round(v["ja_marcado"], 2),
+                    "parcelas_a_marcar": len(marcar),
+                    "valor_a_marcar": round(sum(m["valor"] for m in marcar), 2),
+                    "restam_abertas": len(v["abertas"]) - len(marcar),
+                    "parcelas": marcar,
+                })
+                tot_parcelas += len(marcar)
+                tot_valor = round(tot_valor + plano[-1]["valor_a_marcar"], 2)
+
+        if dry_run:
+            return {"success": True, "dry_run": True, "vendas": len(plano),
+                    "parcelas_a_marcar": tot_parcelas, "valor_a_marcar": tot_valor,
+                    "plano": plano}
+
+        for pv in plano:
+            for m in pv["parcelas"]:
+                cur.execute("UPDATE VENDAFORMAPAGTOPRAZO SET VALOR_PAGO = ? WHERE ID = ?",
+                            (m["valor"], m["prazo_id"]))
+        conn.commit()
+        return {"success": True, "dry_run": False, "vendas": len(plano),
+                "parcelas_marcadas": tot_parcelas, "valor_marcado": tot_valor,
+                "message": f"{tot_parcelas} parcela(s) do cronograma marcadas como cobertas em {len(plano)} venda(s) — R$ {tot_valor:,.2f}."}
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
 @app.get("/api/vulcano/recebimentos-mensal")
 def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_id: int = None):
     """Visão mensal legada (tela do analista): parcelas do mês de referência + abertas
@@ -8532,10 +8678,16 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         """, tuple(params))
         rows = cur.fetchall()
 
-        # acumulados por venda: pago total e pago antes do mês (saldos)
+        # acumulados por venda: PRINCIPAL amortizado (total e antes do mês).
+        # TOTALPAGO inclui a variação monetária — abatê-la do valor histórico do
+        # contrato deixava o saldo NEGATIVO em contratos longos (caso Luiz Osnildo,
+        # venda 121: 494.682,21 pagos com 184.947,21 de variação x contrato de
+        # 311.291,00 = saldo -183.391,21). Amortização = TOTALPAGO - VARIACAO
+        # + DESCONTO (para parcela quitada integral, é o valor nominal dela).
         def _acum(extra_sql, extra_params):
             cur.execute(f"""
-                SELECT R.IDVENDA, SUM(R.TOTALPAGO)
+                SELECT R.IDVENDA,
+                       SUM(R.TOTALPAGO - COALESCE(R.VALORVARIACAO, 0) + COALESCE(R.DESCONTO, 0))
                 FROM RECEBER R
                 JOIN VENDA V ON R.IDVENDA = V.ID
                 WHERE V.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0 {extra_sql}
@@ -8560,7 +8712,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             pago_f = float(pago or 0)
             bx = baixas.get(str(rid))
             if bx and pago_f <= 0:
-                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
                 "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
@@ -8618,7 +8770,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
             if bx:
-                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
                 "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
