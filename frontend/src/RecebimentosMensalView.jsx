@@ -114,6 +114,9 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         if (m < 1) { m = 12; a -= 1; }
         if (m > 12) { m = 1; a += 1; }
         setMes(m); setAno(a);
+        // a seta ja navega de verdade: rebusca o novo periodo na hora (com os
+        // valores explicitos — o estado ainda nao foi aplicado neste tick)
+        if (selectedEmpresa) pesquisar(a, m);
     };
 
     const [saneando, setSaneando] = useState(false);
@@ -140,12 +143,14 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         finally { setSaneando(false); }
     };
 
-    const pesquisar = async (signal) => {
+    // (a, m) explicitos porque as setas de competencia chamam antes do state novo
+    // valer; `signal` vem do efeito de deep-link, que aborta a busca anterior.
+    const pesquisar = async (a = ano, m = mes, signal) => {
         if (!selectedEmpresa) { alert('Selecione a empresa.'); return; }
         setLoading(true); setError(null);
         try {
             const emp = empreendimentoId ? `&empreendimento_id=${empreendimentoId}` : '';
-            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos-mensal?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}${emp}`, { signal });
+            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos-mensal?empresa_id=${selectedEmpresa}&ano=${a}&mes=${m}${emp}`, { signal });
             const d = await res.json();
             if (!res.ok) throw new Error(typeof d.detail === 'string' ? d.detail : res.statusText);
             setData(d);
@@ -163,7 +168,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
     useEffect(() => {
         if (!selectedEmpresa || !ano || !mes) return;
         const ac = new AbortController();
-        pesquisar(ac.signal);
+        pesquisar(ano, mes, ac.signal);
         return () => ac.abort();
     }, [selectedEmpresa, ano, mes]);
 
@@ -240,6 +245,19 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         sort.toggle(key);
     };
 
+    const desfazerBaixa = async (r) => {
+        if (!window.confirm(`Desfazer a baixa da parcela de ${fmt(r.valor_parcela)} (${r.comprador})?\nEla volta a ficar em aberto.`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa/desfazer`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_receber: String(r.id), empresa_id: parseInt(selectedEmpresa, 10) })
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+            pesquisar();
+        } catch (e) { alert('Falha ao desfazer: ' + e.message); }
+    };
+
     const abrirBaixa = (r) => {
         if (r.status === 'PAGO') return;
         setEditId(r.id);
@@ -256,6 +274,12 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         const desconto = parseFloat(baixa.desconto) || 0;
         const total = Math.round((valor + variacao - desconto) * 100) / 100;
         if (total <= 0) { alert('Informe o valor da baixa.'); return; }
+        // trava: a data do recebimento tem que estar DENTRO da competência aberta
+        const compet = `${ano}-${String(mes).padStart(2, '0')}`;
+        if (!String(baixa.data_pagamento || '').startsWith(compet)) {
+            alert(`Data de recebimento ${baixa.data_pagamento || '(vazia)'} fora da competência ${String(mes).padStart(2, '0')}/${ano}.\nNavegue para o mês correto com as setas ‹ › antes de baixar, ou ajuste a data.`);
+            return;
+        }
         setSalvando(true);
         try {
             const res = await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
@@ -450,7 +474,16 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                                     <button onClick={e => { e.stopPropagation(); setEditId(null); }}
                                                         className="px-1.5 py-1 rounded border border-[var(--v-border)] text-[var(--v-text-muted)] text-[9px] font-bold uppercase hover:text-[var(--v-text-bold)]">✕</button>
                                                 </span>
-                                            ) : fmt(r.total_pago)}
+                                            ) : (
+                                                <span className="flex items-center justify-end gap-1.5">
+                                                    {fmt(r.total_pago)}
+                                                    {r.status === 'PAGO' && r.baixa_local && (
+                                                        <button title="Desfazer esta baixa (feita pelo Vulcano 2.0) — a parcela volta a ficar em aberto"
+                                                            onClick={e => { e.stopPropagation(); desfazerBaixa(r); }}
+                                                            className="px-1 py-0.5 rounded border border-[#ef4444]/40 text-[#ef4444] text-[9px] font-bold hover:bg-[#ef4444]/15">✕</button>
+                                                    )}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.saldo_atual)}</td>
                                         <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: r.status === 'VENCIDA' ? 'var(--v-err)' : 'var(--v-text-muted)' }}>{r.parcela}</td>
