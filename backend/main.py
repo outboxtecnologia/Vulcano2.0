@@ -7518,6 +7518,101 @@ def sped_resumo(empresa_id: int, ano: int, mes: int):
                      "cofins", "bc_ret", "valor_ret", "distrato")}
     return {"success": True, "data": rows, "totais": tot}
 
+@app.get("/api/sped/analitico-unidades")
+def sped_analitico_unidades(empresa_id: int, ano: int, mes: int):
+    """Conferência apartamento por apartamento do que compõe os registros do SPED:
+    cada linha é uma venda/unidade com recebimento na competência, classificada no
+    destino RET (bloco 1800 — registro único por obra optante) ou F200. Usa as
+    MESMAS regras da apuração (injector_sped): RET='S' + DATAINICIORET por parcela,
+    distrato fora, TOTALPAGO>0 — os subtotais por obra batem com o registro."""
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        # por parcela (sem GROUP BY): classificacao RET/F200 e por parcela — uma
+        # venda pode se dividir na virada do DATAINICIORET; agrega em python
+        cur.execute("""
+            SELECT E.NOME, E.RET, E.DATAINICIORET, E.ALIQRET,
+                   V.ID, V.DESCUNIDIMOB, V.NUMCADIMOB, C.NOME, C.CNPJ,
+                   R.DATA, R.TOTALPAGO, COALESCE(R.VALORVARIACAO, 0)
+            FROM RECEBER R
+            JOIN VENDA V ON R.IDVENDA = V.ID
+            JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
+            LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
+            WHERE V.CODIGOEMPRESA = ?
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND R.TOTALPAGO > 0
+              AND EXTRACT(YEAR FROM R.DATA) = ?
+              AND EXTRACT(MONTH FROM R.DATA) = ?
+        """, (empresa_id, ano, mes))
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        import datetime as _dt
+        linhas = {}
+        for r in cur.fetchall():
+            (obra, ret_flag, dt_ini_ret, aliqret, vid, unidade, numcad,
+             cliente, cnpj, data, pago, variacao) = r
+            if isinstance(data, _dt.datetime):
+                data = data.date()
+            if isinstance(dt_ini_ret, _dt.datetime):
+                dt_ini_ret = dt_ini_ret.date()
+            # mesma regra do injector: parcela optante vai pro 1800, resto e F200
+            eh_ret = dec(ret_flag) == 'S' and (dt_ini_ret is None or (data and data >= dt_ini_ret))
+            destino = "RET_1800" if eh_ret else "F200"
+            chave = (vid, destino)
+            item = linhas.get(chave)
+            if not item:
+                item = linhas[chave] = {
+                    "venda_id": vid, "destino": destino,
+                    "empreendimento": dec(obra) or "(sem empreendimento)",
+                    "unidade": dec(unidade), "numcadimob": numcad,
+                    "comprador": dec(cliente), "cpf_cnpj": dec(cnpj),
+                    "aliqret": float(aliqret) if (eh_ret and aliqret is not None) else (4.0 if eh_ret else None),
+                    "qtd_parcelas": 0, "valor_parcela": 0.0, "variacao": 0.0, "total_recebido": 0.0,
+                }
+            item["qtd_parcelas"] += 1
+            item["total_recebido"] += float(pago or 0)
+            item["variacao"] += float(variacao or 0)
+            item["valor_parcela"] += float(pago or 0) - float(variacao or 0)
+
+        data_rows = sorted(linhas.values(), key=lambda x: (x["empreendimento"], x["destino"], x["unidade"], x["comprador"]))
+        grupos = {}
+        for x in data_rows:
+            for k in ("valor_parcela", "variacao", "total_recebido"):
+                x[k] = round(x[k], 2)
+            x["ret_estimado"] = round(x["total_recebido"] * (x["aliqret"] or 0) / 100, 2) if x["destino"] == "RET_1800" else None
+            g = grupos.setdefault((x["empreendimento"], x["destino"]), {
+                "empreendimento": x["empreendimento"], "destino": x["destino"],
+                "aliqret": x["aliqret"], "qtd_unidades": 0, "qtd_parcelas": 0,
+                "valor_parcela": 0.0, "variacao": 0.0, "total_recebido": 0.0, "ret_total": 0.0,
+            })
+            g["qtd_unidades"] += 1
+            g["qtd_parcelas"] += x["qtd_parcelas"]
+            g["valor_parcela"] = round(g["valor_parcela"] + x["valor_parcela"], 2)
+            g["variacao"] = round(g["variacao"] + x["variacao"], 2)
+            g["total_recebido"] = round(g["total_recebido"] + x["total_recebido"], 2)
+            if x["ret_estimado"]:
+                g["ret_total"] = round(g["ret_total"] + x["ret_estimado"], 2)
+        # guia RET oficial e calculada sobre a BASE agregada da obra (evita drift de
+        # arredondamento por unidade): recalcula no grupo
+        for g in grupos.values():
+            if g["destino"] == "RET_1800" and g["aliqret"]:
+                g["ret_total"] = round(g["total_recebido"] * g["aliqret"] / 100, 2)
+
+        return {"success": True, "data": data_rows,
+                "grupos": sorted(grupos.values(), key=lambda x: (x["empreendimento"], x["destino"]))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
 @app.get("/api/vulcano/recebimentos-mensal")
 def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_id: int = None):
     """Visão mensal legada (tela do analista): parcelas do mês de referência + abertas
