@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Search, Loader2 } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Search, Loader2, ShieldCheck } from 'lucide-react';
 import { API_BASE } from './apiBase';
 
 const fmt = (v) => (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,6 +38,30 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         if (m < 1) { m = 12; a -= 1; }
         if (m > 12) { m = 1; a += 1; }
         setMes(m); setAno(a);
+    };
+
+    const [saneando, setSaneando] = useState(false);
+    const sanearCronograma = async () => {
+        if (!selectedEmpresa) { alert('Selecione a empresa.'); return; }
+        setSaneando(true);
+        try {
+            const emp = empreendimentoId ? `&empreendimento_id=${empreendimentoId}` : '';
+            const base = `${API_BASE}/api/vulcano/cronograma/sanear?empresa_id=${selectedEmpresa}${emp}`;
+            const prev = await (await fetch(`${base}&dry_run=true`, { method: 'POST' })).json();
+            if (prev.success === false) throw new Error(prev.detail || 'Prévia do saneamento falhou.');
+            if (!prev.parcelas_a_marcar) { alert('Nada a sanear: o cronograma já está em dia com o Razão de recebimentos.'); return; }
+            const escopo = empreendimentoId ? 'do empreendimento selecionado' : 'da empresa TODA';
+            if (!window.confirm(
+                `Saneamento do cronograma ${escopo}:\n\n` +
+                `• ${prev.parcelas_a_marcar} parcela(s) antigas em ${prev.vendas} venda(s)\n` +
+                `• ${(prev.valor_a_marcar || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} já cobertos pelo Razão de recebimentos\n\n` +
+                `Elas serão marcadas como pagas no cronograma e saem das "Previstas". Confirmar?`)) return;
+            const res = await (await fetch(`${base}&dry_run=false`, { method: 'POST' })).json();
+            if (res.success === false) throw new Error(res.detail || 'Saneamento falhou.');
+            alert(res.message || 'Saneamento concluído.');
+            if (data) pesquisar();
+        } catch (e) { alert(e.message); }
+        finally { setSaneando(false); }
     };
 
     const pesquisar = async () => {
@@ -145,6 +169,11 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                 <button onClick={pesquisar} disabled={loading}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#22c55e]/15 border border-[#22c55e]/30 text-[#22c55e] text-[11px] font-bold uppercase tracking-wider hover:bg-[#22c55e]/25 disabled:opacity-40">
                     {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Pesquisar
+                </button>
+                <button onClick={sanearCronograma} disabled={saneando}
+                    title="Marca como cobertas as parcelas antigas do cronograma que o Razão de recebimentos já pagou (elas somem das 'Previstas'). Mostra a prévia antes de gravar."
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#f97316]/10 border border-[#f97316]/25 text-[#f97316] text-[11px] font-bold uppercase tracking-wider hover:bg-[#f97316]/20 disabled:opacity-40">
+                    {saneando ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} Sanear cronograma
                 </button>
                 {data && (
                     <div className="ml-auto text-right">
