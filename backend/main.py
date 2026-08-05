@@ -7613,6 +7613,112 @@ def sped_analitico_unidades(empresa_id: int, ano: int, mes: int):
         except Exception:
             pass
 
+@app.post("/api/vulcano/cronograma/sanear")
+def sanear_cronograma(empresa_id: int, empreendimento_id: int = None, dry_run: bool = True):
+    """Saneamento do cronograma legado: as baixas antigas entraram só no RECEBER e
+    nunca marcaram VALOR_PAGO no VENDAFORMAPAGTOPRAZO — a venda parece ter dezenas
+    de parcelas 'previstas' já cobertas pelo dinheiro recebido (caso Luiz Osnildo:
+    234 abertas x saldo real de 2 parcelas).
+
+    Regra: por venda, principal amortizado = Σ(TOTALPAGO − VARIACAO + DESCONTO) do
+    RECEBER; abate primeiro o que o cronograma já tem marcado; o restante quita as
+    parcelas abertas em ordem de vencimento (FIFO), só INTEIRAS — sem parciais.
+    dry_run=true (default) apenas lista o que seria marcado."""
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        def dec(v):
+            if v is None: return ""
+            if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+            return str(v).strip()
+
+        filtro_emp = " AND V.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+        params_emp = [empresa_id] + ([empreendimento_id] if empreendimento_id else [])
+
+        # principal amortizado por venda (mesmo criterio do saldo da tela Mensal)
+        cur.execute(f"""
+            SELECT R.IDVENDA, SUM(R.TOTALPAGO - COALESCE(R.VALORVARIACAO,0) + COALESCE(R.DESCONTO,0))
+            FROM RECEBER R JOIN VENDA V ON R.IDVENDA = V.ID
+            WHERE V.CODIGOEMPRESA = ? AND R.TOTALPAGO > 0
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              {filtro_emp}
+            GROUP BY R.IDVENDA
+        """, tuple(params_emp))
+        amortizado = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+
+        # cronograma (formas ativas): ja marcado e abertos por venda
+        cur.execute(f"""
+            SELECT F.IDVENDA, P.ID, P.DATA, COALESCE(P.VALOR, 0), COALESCE(P.VALOR_PAGO, 0), C.NOME
+            FROM VENDAFORMAPAGTOPRAZO P
+            JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
+            JOIN VENDA V ON V.ID = F.IDVENDA
+            LEFT JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
+            WHERE V.CODIGOEMPRESA = ?
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND COALESCE(F.ATIVA, 'S') <> 'N'
+              {filtro_emp}
+            ORDER BY F.IDVENDA, P.DATA, P.ID
+        """, tuple(params_emp))
+
+        por_venda = {}
+        for vid, pid, pdata, valor, vpago, cnome in cur.fetchall():
+            v = por_venda.setdefault(vid, {"comprador": dec(cnome), "ja_marcado": 0.0, "abertas": []})
+            if float(vpago) > 0:
+                v["ja_marcado"] += float(valor)
+            else:
+                v["abertas"].append((pid, str(pdata)[:10], float(valor)))
+
+        plano, tot_parcelas, tot_valor = [], 0, 0.0
+        for vid, v in por_venda.items():
+            saldo_marcar = round(amortizado.get(vid, 0.0) - v["ja_marcado"], 2)
+            if saldo_marcar <= 0 or not v["abertas"]:
+                continue
+            marcar = []
+            for pid, pdata, valor in v["abertas"]:  # FIFO por vencimento
+                if valor <= 0 or valor > saldo_marcar + 0.01:
+                    break  # so parcela inteira; parou = resto continua aberto
+                marcar.append({"prazo_id": pid, "vencimento": pdata, "valor": round(valor, 2)})
+                saldo_marcar = round(saldo_marcar - valor, 2)
+            if marcar:
+                plano.append({
+                    "venda_id": vid, "comprador": v["comprador"],
+                    "amortizado_receber": round(amortizado.get(vid, 0.0), 2),
+                    "ja_marcado_cronograma": round(v["ja_marcado"], 2),
+                    "parcelas_a_marcar": len(marcar),
+                    "valor_a_marcar": round(sum(m["valor"] for m in marcar), 2),
+                    "restam_abertas": len(v["abertas"]) - len(marcar),
+                    "parcelas": marcar,
+                })
+                tot_parcelas += len(marcar)
+                tot_valor = round(tot_valor + plano[-1]["valor_a_marcar"], 2)
+
+        if dry_run:
+            return {"success": True, "dry_run": True, "vendas": len(plano),
+                    "parcelas_a_marcar": tot_parcelas, "valor_a_marcar": tot_valor,
+                    "plano": plano}
+
+        for pv in plano:
+            for m in pv["parcelas"]:
+                cur.execute("UPDATE VENDAFORMAPAGTOPRAZO SET VALOR_PAGO = ? WHERE ID = ?",
+                            (m["valor"], m["prazo_id"]))
+        conn.commit()
+        return {"success": True, "dry_run": False, "vendas": len(plano),
+                "parcelas_marcadas": tot_parcelas, "valor_marcado": tot_valor,
+                "message": f"{tot_parcelas} parcela(s) do cronograma marcadas como cobertas em {len(plano)} venda(s) — R$ {tot_valor:,.2f}."}
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
 @app.get("/api/vulcano/recebimentos-mensal")
 def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_id: int = None):
     """Visão mensal legada (tela do analista): parcelas do mês de referência + abertas
