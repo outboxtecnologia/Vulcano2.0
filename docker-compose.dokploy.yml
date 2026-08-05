@@ -27,7 +27,8 @@ services:
       APP_PG_PASS: ${APP_PG_PASS:-troque_esta_senha}
     volumes:
       - poc_sqlite:/data
-      # Adicione no Dokploy: Advanced → Mounts → ../files/chave_fernando.json → /app/chave_fernando.json
+      # Conteudo da chave: Dokploy → Advanced → Mounts → File Mount `chave_fernando.json`.
+      - ../files/chave_fernando.json:/app/chave_fernando.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

@@ -41,7 +41,12 @@ services:
       APP_PG_PASS: ${APP_PG_PASS:-troque_esta_senha}
     volumes:
       - poc_sqlite:/data
-      # Dokploy: Mounts → ../files/chave_fernando.json → /app/chave_fernando.json
+      # Credencial Vertex. No Dokploy o conteudo vem de Advanced → Mounts (File Mount
+      # `chave_fernando.json`), que grava em <compose>/files/ — dai o `../files`, ja que
+      # o compose roda a partir de <compose>/code. File Mount em servico Compose nao
+      # monta sozinho: sem esta linha o arquivo fica no host e o container nao ve nada.
+      # Local: sem o arquivo, o Docker cria um diretorio vazio aqui e o backend sobe sem IA.
+      - ../files/chave_fernando.json:/app/chave_fernando.json:ro
     extra_hosts:
       # Acessar serviços no host Linux a partir do container (ex.: Firebird exposto só no host)
       - "host.docker.internal:host-gateway"
