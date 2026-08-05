@@ -4302,6 +4302,36 @@ def baixa_recebimento(data: BaixaInput):
     finally:
         if s_conn: s_conn.close()
 
+@app.post("/api/vulcano/recebimentos/baixa/desfazer")
+def desfazer_baixa_recebimento(payload: dict):
+    """Desfaz uma baixa NOVA (registrada pelo Vulcano 2.0 em operacoes_baixas).
+
+    Baixas legadas ja efetivadas no Firebird (RECEBER.TOTALPAGO > 0) nao passam
+    por aqui — essas so no proprio legado/Questor."""
+    import sqlite3
+    id_receber = str(payload.get("id_receber") or "").strip()
+    empresa_id = int(payload.get("empresa_id") or 0)
+    if not id_receber:
+        raise HTTPException(status_code=400, detail="id_receber obrigatório.")
+    s_conn = None
+    try:
+        s_conn = sqlite3.connect(POC_DATABASE_FILE)
+        s_curr = s_conn.cursor()
+        s_curr.execute("DELETE FROM operacoes_baixas WHERE id_receber = ? AND empresa_id = ?",
+                       (id_receber, empresa_id))
+        apagadas = s_curr.rowcount
+        s_conn.commit()
+        if not apagadas:
+            raise HTTPException(status_code=404, detail="Baixa não encontrada (ou é baixa legada do Firebird, que não pode ser desfeita por aqui).")
+        return {"success": True, "message": "Baixa desfeita — a parcela voltou a ficar em aberto."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if s_conn: s_conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if s_conn: s_conn.close()
+
 @app.post("/api/vulcano/recebimentos/sync-projetadas")
 def sync_recebimentos_projetadas():
     """Recarrega parcelas_abertas_projetadas do Firebird (vulcano) no SQLite.
@@ -7818,6 +7848,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
                 "parcela": _s(parcela), "obs": _s(obs),
                 "status": "PAGO" if pago_f > 0 else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+                "baixa_local": bool(bx and pago_f <= 0),
             }
             if bx and pago_f <= 0:  # baixada pelo Vulcano 2.0 (SQLite), FDB ainda em aberto
                 item["total_pago"] = round(bx["valor_pago"], 2)
@@ -7876,6 +7907,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
                 "parcela": _s(ref), "obs": "Prevista (cronograma)",
                 "status": "PAGO" if bx else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+                "baixa_local": bool(bx),
             }
             result.append(item)
 
