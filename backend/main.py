@@ -7619,6 +7619,59 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 item["status"] = "PAGO"
             result.append(item)
 
+        # ── PARCELAS DO CRONOGRAMA (VENDAFORMAPAGTOPRAZO ainda nao efetivadas) ──
+        # Vendas legadas tem as parcelas futuras/do mes so no cronograma; sem esta
+        # mescla, filtrar um empreendimento cujo mes esta todo no cronograma
+        # devolvia lista vazia ("as parcelas somem"). Mescla direto do Firebird
+        # (nao depende do sync local de parcelas_abertas_projetadas).
+        assinaturas = {(x["venda_id"], x["vencimento"], round(x["valor_parcela"], 2)) for x in result}
+        cur.execute(f"""
+            SELECT P.ID, V.ID, C.NOME, C.CNPJ, V.DESCUNIDIMOB, V.TOTALVENDA,
+                   P.DATA, P.VALOR, P.REFERENCIA, E.NOME
+            FROM VENDAFORMAPAGTOPRAZO P
+            JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
+            JOIN VENDA V ON V.ID = F.IDVENDA
+            LEFT JOIN CLIENTE C ON V.ID_CLIENTE = C.ID
+            LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
+            WHERE V.CODIGOEMPRESA = ?
+              AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND COALESCE(F.ATIVA, 'S') <> 'N'
+              AND COALESCE(P.VALOR_PAGO, 0) = 0
+              AND P.DATA >= ? AND P.DATA <= ?
+              {filtro_emp}
+            ORDER BY C.NOME, P.DATA, P.ID
+        """, tuple([empresa_id, dt_ini, dt_fim] + ([empreendimento_id] if empreendimento_id else [])))
+        for r in cur.fetchall():
+            (pid, vid, cliente, cnpj, unidade, totalvenda, data, vparc, ref, obra) = r
+            if isinstance(data, _dt.datetime):
+                data = data.date()
+            d_iso = data.isoformat() if data else None
+            vparc_f = round(float(vparc or 0), 2)
+            if (vid, d_iso, vparc_f) in assinaturas:
+                continue  # ja efetivada no RECEBER (aparece acima)
+            totalvenda = float(totalvenda or 0)
+            rid = f"prazo_{pid}"
+            bx = baixas.get(rid)
+            if bx:
+                baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"]
+            item = {
+                "id": rid, "venda_id": vid,
+                "comprador": _s(cliente), "cpf_cnpj": _s(cnpj),
+                "unidade": _s(unidade), "empreendimento": _s(obra),
+                "vlr_venda": round(totalvenda, 2),
+                "saldo_anterior": round(totalvenda - pago_antes.get(vid, 0.0), 2),
+                "vencimento": d_iso,
+                "data_pagto": bx["data"] if bx else "",
+                "valor_parcela": vparc_f,
+                "desconto": round(bx["desconto"], 2) if bx else 0.0,
+                "variacao": round(bx["variacao"], 2) if bx else 0.0,
+                "total_pago": round(bx["valor_pago"], 2) if bx else 0.0,
+                "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
+                "parcela": _s(ref), "obs": "Prevista (cronograma)",
+                "status": "PAGO" if bx else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+            }
+            result.append(item)
+
         for x in result:
             x["saldo_atual"] = round(x["saldo_atual"] - baixa_extra.get(x["venda_id"], 0.0), 2)
 
