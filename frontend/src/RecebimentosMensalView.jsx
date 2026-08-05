@@ -38,6 +38,9 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         if (m < 1) { m = 12; a -= 1; }
         if (m > 12) { m = 1; a += 1; }
         setMes(m); setAno(a);
+        // a seta ja navega de verdade: rebusca o novo periodo na hora (com os
+        // valores explicitos — o estado ainda nao foi aplicado neste tick)
+        if (selectedEmpresa) pesquisar(a, m);
     };
 
     const [saneando, setSaneando] = useState(false);
@@ -64,12 +67,12 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         finally { setSaneando(false); }
     };
 
-    const pesquisar = async () => {
+    const pesquisar = async (a = ano, m = mes) => {
         if (!selectedEmpresa) { alert('Selecione a empresa.'); return; }
         setLoading(true); setError(null);
         try {
             const emp = empreendimentoId ? `&empreendimento_id=${empreendimentoId}` : '';
-            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos-mensal?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}${emp}`);
+            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos-mensal?empresa_id=${selectedEmpresa}&ano=${a}&mes=${m}${emp}`);
             const d = await res.json();
             if (!res.ok) throw new Error(typeof d.detail === 'string' ? d.detail : res.statusText);
             setData(d);
@@ -80,6 +83,19 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
     const rows = data?.data || [];
     const tot = data?.totais || {};
     const corStatus = (s) => s === 'PAGO' ? '#22c55e' : s === 'VENCIDA' ? '#f97316' : '#8a7a68';
+
+    const desfazerBaixa = async (r) => {
+        if (!window.confirm(`Desfazer a baixa da parcela de ${fmt(r.valor_parcela)} (${r.comprador})?\nEla volta a ficar em aberto.`)) return;
+        try {
+            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa/desfazer`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_receber: String(r.id), empresa_id: parseInt(selectedEmpresa, 10) })
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+            pesquisar();
+        } catch (e) { alert('Falha ao desfazer: ' + e.message); }
+    };
 
     const abrirBaixa = (r) => {
         if (r.status === 'PAGO') return;
@@ -97,6 +113,12 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         const desconto = parseFloat(baixa.desconto) || 0;
         const total = Math.round((valor + variacao - desconto) * 100) / 100;
         if (total <= 0) { alert('Informe o valor da baixa.'); return; }
+        // trava: a data do recebimento tem que estar DENTRO da competência aberta
+        const compet = `${ano}-${String(mes).padStart(2, '0')}`;
+        if (!String(baixa.data_pagamento || '').startsWith(compet)) {
+            alert(`Data de recebimento ${baixa.data_pagamento || '(vazia)'} fora da competência ${String(mes).padStart(2, '0')}/${ano}.\nNavegue para o mês correto com as setas ‹ › antes de baixar, ou ajuste a data.`);
+            return;
+        }
         setSalvando(true);
         try {
             const res = await fetch(`${API_BASE}/api/vulcano/recebimentos/baixa`, {
@@ -166,7 +188,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                         <button onClick={() => mudaMes(1)} className="p-2 bg-[#111] border border-[#222] rounded-lg text-[#888] hover:text-white"><ChevronRight size={13} /></button>
                     </div>
                 </div>
-                <button onClick={pesquisar} disabled={loading}
+                <button onClick={() => pesquisar()} disabled={loading}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#22c55e]/15 border border-[#22c55e]/30 text-[#22c55e] text-[11px] font-bold uppercase tracking-wider hover:bg-[#22c55e]/25 disabled:opacity-40">
                     {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Pesquisar
                 </button>
@@ -257,7 +279,16 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                                     <button onClick={e => { e.stopPropagation(); setEditId(null); }}
                                                         className="px-1.5 py-1 rounded border border-[#333] text-[#666] text-[9px] font-bold uppercase hover:text-white">✕</button>
                                                 </span>
-                                            ) : fmt(r.total_pago)}
+                                            ) : (
+                                                <span className="flex items-center justify-end gap-1.5">
+                                                    {fmt(r.total_pago)}
+                                                    {r.status === 'PAGO' && r.baixa_local && (
+                                                        <button title="Desfazer esta baixa (feita pelo Vulcano 2.0) — a parcela volta a ficar em aberto"
+                                                            onClick={e => { e.stopPropagation(); desfazerBaixa(r); }}
+                                                            className="px-1 py-0.5 rounded border border-[#ef4444]/40 text-[#ef4444] text-[9px] font-bold hover:bg-[#ef4444]/15">✕</button>
+                                                    )}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 font-mono text-right text-[#999]">{fmt(r.saldo_atual)}</td>
                                         <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: r.status === 'VENCIDA' ? '#ef4444' : '#8a7a68' }}>{r.parcela}</td>
