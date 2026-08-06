@@ -307,7 +307,8 @@ export default function SmartImporter({ selectedEmpresa }) {
         body: JSON.stringify({
           nome,
           target_table: targetTable,
-          mapping_json: JSON.stringify(mapping)
+          // v2: guarda tambem as instrucoes do Apoio ao De-Para junto do layout
+          mapping_json: JSON.stringify({ __v: 2, mapping, instrucoes })
         })
       });
       const data = await res.json();
@@ -324,8 +325,14 @@ export default function SmartImporter({ selectedEmpresa }) {
   const handleApplyTemplate = (templateHtmlJson) => {
     if (!templateHtmlJson) return;
     try {
-       const mapObj = JSON.parse(templateHtmlJson);
-       setMapping(mapObj);
+       const obj = JSON.parse(templateHtmlJson);
+       if (obj && obj.__v === 2 && obj.mapping) {
+         // template v2: layout + instrucoes do Apoio ao De-Para
+         setMapping(obj.mapping);
+         if (obj.instrucoes) { setInstrucoes(obj.instrucoes); setApoioAberto(true); }
+       } else {
+         setMapping(obj); // template antigo (mapa plano)
+       }
     } catch(e) {}
   };
 
