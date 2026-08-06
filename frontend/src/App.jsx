@@ -54,7 +54,20 @@ export default function App() {
   const [empresasError, setEmpresasError] = useState(null);
   const [loadingSlow, setLoadingSlow] = useState(false); // true se passar de 4s
   const [manualId, setManualId] = useState('959');
-  const [currentView, setCurrentView] = useState('receitas');
+  const [currentView, _setCurrentView] = useState('receitas');
+  // histórico de navegação do operador — botão Voltar volta à tela anterior real
+  const [viewHistory, setViewHistory] = useState([]);
+  const setCurrentView = (v) => {
+    if (v !== currentView) setViewHistory(h => [...h.slice(-30), currentView]);
+    _setCurrentView(v);
+  };
+  const voltarView = () => {
+    setViewHistory(h => {
+      if (!h.length) return h;
+      _setCurrentView(h[h.length - 1]);
+      return h.slice(0, -1);
+    });
+  };
   const [search, setSearch] = useState('');
 
   const [theme, setTheme] = useState('night');
@@ -191,6 +204,20 @@ return (
                       background: '#0c0908'
                     }}>
                 <div className="flex items-center gap-4 flex-1">
+                    <button
+                        onClick={voltarView}
+                        disabled={!viewHistory.length}
+                        title={viewHistory.length ? 'Voltar à tela anterior' : 'Sem tela anterior'}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-[var(--v-radius)] text-[10px] font-black uppercase tracking-widest transition-all shrink-0"
+                        style={{
+                          background: 'var(--v-card)',
+                          border: '1px solid rgba(255, 160, 80, 0.08)',
+                          color: viewHistory.length ? 'var(--v-text)' : 'var(--v-text-faint)',
+                          opacity: viewHistory.length ? 1 : 0.5,
+                          cursor: viewHistory.length ? 'pointer' : 'default'
+                        }}>
+                        ← Voltar
+                    </button>
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors" size={16}
                                 style={{ color: 'var(--v-text-faint)' }} />

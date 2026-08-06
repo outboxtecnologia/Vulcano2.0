@@ -5,7 +5,7 @@ import {
     Database, TableProperties, Fingerprint, TrendingUp, Search, X, Maximize2, RotateCcw,
     Zap, Link as LinkIcon, Cpu, AlertCircle, FileText, CheckSquare, MessageSquare, Plus, PlusCircle, PenTool, Hash, Filter,
     LayoutGrid, History, ListFilter, ShoppingCart, Users, DollarSign, Building2, Loader2, ShieldAlert,
-    UploadCloud, Send, Save, Trash2, Code, FileSpreadsheet, Minimize, Maximize, Sparkles, ChevronUp, Lock
+    UploadCloud, Send, Save, Trash2, Code, FileSpreadsheet, Minimize, Maximize, Sparkles, ChevronUp, Lock, Pencil
 } from 'lucide-react';
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar,
@@ -705,6 +705,37 @@ export const VendasView = ({ selectedEmpresa }) => {
   const [estruturaAberta, setEstruturaAberta] = useState(false);
   const [parcelaManualModal, setParcelaManualModal] = useState(null);
   const [salvandoParcela, setSalvandoParcela] = useState(false);
+  const [editVendaModal, setEditVendaModal] = useState(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  const abrirEdicaoVenda = (v) => setEditVendaModal({
+    venda: v, data: v.data_iso || '', num_contrato: v.num_contrato || '',
+    total: v.total != null ? String(v.total) : '', permuta: v.permuta === 'S' ? 'S' : 'N'
+  });
+
+  const salvarEdicaoVenda = async () => {
+    const m = editVendaModal;
+    if (!m) return;
+    if (m.data && m.data < '1990-01-01') { alert('Data inválida.'); return; }
+    if (m.total !== '' && !(parseFloat(m.total) > 0)) { alert('Valor total deve ser maior que zero.'); return; }
+    setSalvandoEdicao(true);
+    try {
+      const payload = { permuta: m.permuta };
+      if (m.data) payload.data = m.data;
+      if (m.num_contrato !== (m.venda.num_contrato || '')) payload.num_contrato = m.num_contrato;
+      if (m.total !== '' && parseFloat(m.total) !== m.venda.total) payload.total = parseFloat(m.total);
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas/${m.venda.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
+      setEditVendaModal(null);
+      setSelectedVenda(null);
+      handleSearch();
+    } catch (e) { alert('Falha ao salvar edição: ' + e.message); }
+    finally { setSalvandoEdicao(false); }
+  };
 
   const salvarParcelaManual = async () => {
     const m = parcelaManualModal;
@@ -910,7 +941,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                                         <div 
                                             key={v.id} 
                                             onClick={() => handleSelectVenda(v)}
-                                            className="grid grid-cols-[60px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors"
+                                            className="grid grid-cols-[60px_40px_1fr_200px_120px_100px_80px_30px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors group/row"
                                             style={{
                                                 background: isSelected ? 'rgba(255, 122, 26, 0.05)' : 'transparent',
                                                 borderBottom: '1px solid rgba(255, 160, 80, 0.08)'
@@ -950,6 +981,14 @@ export const VendasView = ({ selectedEmpresa }) => {
                                             </div>
                                             
                                             <div className="font-mono text-[10px] text-right" style={{ color: '#5a4e42' }}>{v.data}</div>
+
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); abrirEdicaoVenda(v); }}
+                                                title="Editar venda"
+                                                className="p-1 rounded opacity-40 group-hover/row:opacity-100 hover:bg-white/10 transition-all"
+                                                style={{ color: '#ffc247' }}>
+                                                <Pencil size={13}/>
+                                            </button>
                                         </div>
                                     );
                                 })}
@@ -1084,6 +1123,9 @@ export const VendasView = ({ selectedEmpresa }) => {
                             <button onClick={() => setParcelaManualModal({ venda: selectedVenda, data: hojeLocal(), valor: '', referencia: '' })} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
                                 <span className="flex items-center gap-3"><DollarSign size={14} style={{ color: '#8a7a68' }}/> Lançar parcela manual</span>
                             </button>
+                            <button onClick={() => abrirEdicaoVenda(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                                <span className="flex items-center gap-3"><Pencil size={14} style={{ color: '#8a7a68' }}/> Editar venda</span>
+                            </button>
                             {selectedVenda.distrato !== 'S' && (
                                 <button onClick={() => setDistratoModal(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium mt-2 transition-colors hover:bg-red-950/30" style={{ color: '#ef4444' }}>
                                     <span className="flex items-center gap-3"><AlertCircle size={14} className="text-red-500/70"/> Distratar contrato</span>
@@ -1146,6 +1188,50 @@ export const VendasView = ({ selectedEmpresa }) => {
                     <button onClick={() => setParcelaManualModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
                     <button onClick={salvarParcelaManual} disabled={salvandoParcela} className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
                         {salvandoParcela ? 'Gravando...' : 'Lançar Parcela'}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR VENDA */}
+      {editVendaModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] animate-in fade-in p-6">
+            <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6" style={{ background: '#0c0908', border: '1px solid rgba(255, 160, 80, 0.18)' }}>
+                <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-1" style={{ color: '#f0e6d8' }}>
+                    <Pencil size={18} color="#ff7a1a"/> Editar Venda
+                </h3>
+                <p className="text-[11px] mb-5" style={{ color: '#8a7a68' }}>
+                    Venda <b style={{ color: '#f0e6d8' }}>#{editVendaModal.venda.id}</b> — {editVendaModal.venda.cliente_nome}.
+                    {(editVendaModal.venda.qtd_compradores || 1) > 1 && (
+                        <> Contrato com <b style={{ color: '#ffd28a' }}>{editVendaModal.venda.qtd_compradores} compradores</b>: alterar o valor total redistribui as cotas na mesma proporção.</>
+                    )}
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Data da venda</label>
+                        <input type="date" min="1990-01-01" value={editVendaModal.data} onChange={(e) => setEditVendaModal({ ...editVendaModal, data: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Valor total do contrato</label>
+                        <input type="number" step="0.01" value={editVendaModal.total} onChange={(e) => setEditVendaModal({ ...editVendaModal, total: e.target.value })} placeholder="0,00" className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Nº contrato</label>
+                        <input value={editVendaModal.num_contrato} onChange={(e) => setEditVendaModal({ ...editVendaModal, num_contrato: e.target.value })} placeholder="default: id da venda" className="w-full p-2.5 rounded text-[11px] outline-none font-mono" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Permuta</label>
+                        <select value={editVendaModal.permuta} onChange={(e) => setEditVendaModal({ ...editVendaModal, permuta: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }}>
+                            <option value="N">Não</option>
+                            <option value="S">Sim</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setEditVendaModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
+                    <button onClick={salvarEdicaoVenda} disabled={salvandoEdicao} className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                        {salvandoEdicao ? 'Gravando...' : 'Salvar'}
                     </button>
                 </div>
             </div>
@@ -1227,8 +1313,42 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
   const [hasSearched, setHasSearched] = useState(false);
   
   const [selectedRecebimento, setSelectedRecebimento] = useState(null);
-  
+
   const [baixaForm, setBaixaForm] = useState({ valor_pago: '', data_pagamento: '', acrescimos: '', descontos: '' });
+  const [editParcelaModal, setEditParcelaModal] = useState(null);
+  const [salvandoParcelaEdit, setSalvandoParcelaEdit] = useState(false);
+
+  const abrirEdicaoParcela = (r) => setEditParcelaModal({
+    row: r, data: r.vencimento_iso || '', valor: r.parcela != null ? String(r.parcela) : '',
+    rotulo: r.num_parcela || '', obs: r.obs || ''
+  });
+
+  const salvarEdicaoParcela = async () => {
+    const m = editParcelaModal;
+    if (!m) return;
+    if (m.data && m.data < '1990-01-01') { alert('Data inválida.'); return; }
+    if (m.valor !== '' && !(parseFloat(m.valor) > 0)) { alert('Valor deve ser maior que zero.'); return; }
+    setSalvandoParcelaEdit(true);
+    try {
+      const idStr = String(m.row.id);
+      const isPrazo = idStr.startsWith('prazo_');
+      const url = isPrazo
+        ? `${API_BASE}/api/vulcano/cronograma/prazo/${idStr.replace('prazo_', '')}`
+        : `${API_BASE}/api/vulcano/receber/${idStr}`;
+      const payload = isPrazo
+        ? { data: m.data || undefined, valor: m.valor !== '' ? parseFloat(m.valor) : undefined, referencia: m.rotulo }
+        : { data: m.data || undefined, valor_parcela: m.valor !== '' ? parseFloat(m.valor) : undefined, parcela: m.rotulo, obs: m.obs };
+      const res = await fetch(url, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
+      setEditParcelaModal(null);
+      handleSearch();
+    } catch (e) { alert('Falha ao salvar edição: ' + e.message); }
+    finally { setSalvandoParcelaEdit(false); }
+  };
 
   useEffect(() => {
     if (!selectedEmpresa) return;
@@ -1567,7 +1687,7 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                                                         }, 50);
                                                     }
                                                 }}
-                                                className="grid grid-cols-[80px_40px_1fr_200px_120px_100px_80px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors"
+                                                className="grid grid-cols-[80px_40px_1fr_200px_120px_100px_80px_30px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors group/row"
                                                 style={{
                                                     background: isSelected ? 'rgba(255, 122, 26, 0.05)' : isVencida ? 'rgba(239, 68, 68, 0.02)' : 'transparent',
                                                     borderLeft: isSelected ? '2px solid #ff7a1a' : isVencida ? '2px solid #ef4444' : '2px solid transparent'
@@ -1605,6 +1725,14 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
                                                 </div>
                                                 
                                                 <div className="font-mono text-[10px] text-right" style={{ color: '#5a4e42' }}>{r.data}</div>
+
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); abrirEdicaoParcela(r); }}
+                                                    title="Editar parcela"
+                                                    className="p-1 rounded opacity-40 group-hover/row:opacity-100 hover:bg-white/10 transition-all"
+                                                    style={{ color: '#ffc247' }}>
+                                                    <Pencil size={13}/>
+                                                </button>
                                             </div>
 
                                             {isSelected && isAberto && (
@@ -1671,6 +1799,47 @@ export const RecebimentosView = ({ selectedEmpresa }) => {
             <span>⇧⌘E EXPORTAR</span>
         </div>
       </div>
+
+      {/* MODAL EDITAR PARCELA */}
+      {editParcelaModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] animate-in fade-in p-6">
+            <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6" style={{ background: '#0c0908', border: '1px solid rgba(255, 160, 80, 0.18)' }}>
+                <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-1" style={{ color: '#f0e6d8' }}>
+                    <Pencil size={18} color="#ff7a1a"/> Editar Parcela
+                </h3>
+                <p className="text-[11px] mb-5" style={{ color: '#8a7a68' }}>
+                    <b style={{ color: '#f0e6d8' }}>#{String(editParcelaModal.row.id).replace('prazo_', 'pr_')}</b> — {editParcelaModal.row.cliente} · {editParcelaModal.row.descricao_venda}
+                    {String(editParcelaModal.row.id).startsWith('prazo_') && <> <span style={{ color: '#ffd28a' }}>(parcela de cronograma ainda não efetivada)</span></>}
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Vencimento</label>
+                        <input type="date" min="1990-01-01" value={editParcelaModal.data} onChange={(e) => setEditParcelaModal({ ...editParcelaModal, data: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Valor da parcela</label>
+                        <input type="number" step="0.01" value={editParcelaModal.valor} onChange={(e) => setEditParcelaModal({ ...editParcelaModal, valor: e.target.value })} placeholder="0,00" className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Parcela (rótulo)</label>
+                        <input value={editParcelaModal.rotulo} onChange={(e) => setEditParcelaModal({ ...editParcelaModal, rotulo: e.target.value })} placeholder="ex.: 95/240" className="w-full p-2.5 rounded text-[11px] outline-none font-mono" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    {!String(editParcelaModal.row.id).startsWith('prazo_') && (
+                        <div>
+                            <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Observação</label>
+                            <input value={editParcelaModal.obs} onChange={(e) => setEditParcelaModal({ ...editParcelaModal, obs: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                        </div>
+                    )}
+                </div>
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setEditParcelaModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
+                    <button onClick={salvarEdicaoParcela} disabled={salvandoParcelaEdit} className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
+                        {salvandoParcelaEdit ? 'Gravando...' : 'Salvar'}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
     </div>
   );

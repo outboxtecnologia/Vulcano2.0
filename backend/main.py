@@ -4594,7 +4594,7 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
     try:
         conn = get_conn("vulcano")
         query_vendas = """
-            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID, v.DATADISTRATO
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID, v.DATADISTRATO, v.NUMCONT
             FROM VENDA v
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
@@ -4656,10 +4656,11 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
                 return x.decode('cp1252', 'ignore').strip()
             return str(x).strip() if x is not None else ""
 
-        for col in ['NUMCADIMOB', 'DESCUNIDIMOB', 'CNPJ', 'CLIENTE_NOME', 'DISTRATO', 'PERMUTA', 'EMPREENDIMENTO']:
+        for col in ['NUMCADIMOB', 'DESCUNIDIMOB', 'CNPJ', 'CLIENTE_NOME', 'DISTRATO', 'PERMUTA', 'EMPREENDIMENTO', 'NUMCONT']:
             if col in df.columns:
                 df[col] = df[col].map(safe_dec)
 
+        df['DATA_ISO'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
         df['DTOPER'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['DATADISTRATO'] = pd.to_datetime(df['DATADISTRATO'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['TOTALVENDA'] = df['TOTALVENDA'].fillna(0).astype(float)
@@ -4677,10 +4678,12 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
             'PERMUTA': 'permuta',
             'EMPREENDIMENTO': 'empreendimento',
             'EMPREENDIMENTO_ID': 'empreendimento_id',
-            'UNIDADE_ID': 'unidade_id'
+            'UNIDADE_ID': 'unidade_id',
+            'DATA_ISO': 'data_iso',
+            'NUMCONT': 'num_contrato'
         })
 
-        records = df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
+        records = df_mapped[['id', 'num_cad', 'data', 'data_iso', 'num_contrato', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
         for rec in records:
             extras = co_compradores.get(int(rec['id']), [])
             cota_principal = rec['total']
@@ -4937,6 +4940,175 @@ async def lancar_parcela_manual(venda_id: int, request: Request):
         conn.commit()
         return {"success": True, "id": new_id,
                 "message": f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/vendas/{venda_id}")
+async def editar_venda(venda_id: int, request: Request):
+    """Edição de linha da tela de Vendas: data, nº contrato, valor total e
+    permuta. Venda principal propaga contrato/data/permuta às vinculadas
+    MARCADAS e redistribui o total entre as cotas (proporcional às atuais)."""
+    body = await request.json()
+    data_v = str(body.get("data") or "").strip()
+    if data_v and (len(data_v) < 10 or data_v[:4] < "1990"):
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_v!r}")
+    total = body.get("total", None)
+    if total is not None:
+        total = float(total)
+        if total <= 0:
+            raise HTTPException(status_code=400, detail="Valor total deve ser maior que zero.")
+    num_contrato = body.get("num_contrato", None)
+    permuta = str(body.get("permuta") or "").strip().upper()[:1]
+    if not (data_v or total is not None or num_contrato is not None or permuta):
+        raise HTTPException(status_code=400, detail="Nada para alterar.")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT TOTALVENDA, IDVENDAVINCULADA FROM VENDA WHERE ID = ?", (int(venda_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Venda não encontrada.")
+        # vinculadas marcadas (grupo multi-comprador) — só quando editando a principal
+        cur.execute("""SELECT ID, TOTALVENDA FROM VENDA
+                       WHERE IDVENDAVINCULADA = ? AND UPPER(COALESCE(INFCOMP, '')) LIKE 'VINCULADA VENDA #%'""",
+                    (int(venda_id),))
+        sats = [(r[0], float(r[1] or 0)) for r in cur.fetchall()]
+        grupo = [(int(venda_id), float(row[0] or 0))] + sats
+
+        sets, params = [], []
+        if data_v:
+            sets.append("DTOPER = ?"); params.append(data_v)
+        if num_contrato is not None:
+            sets.append("NUMCONT = ?"); params.append(str(num_contrato).strip()[:90].encode('cp1252', 'ignore'))
+        if permuta in ("S", "N"):
+            sets.append("PERMUTA = ?"); params.append(permuta)
+        for vid, _ in grupo:
+            if sets:
+                cur.execute(f"UPDATE VENDA SET {', '.join(sets)} WHERE ID = ?", (*params, vid))
+        if total is not None:
+            soma_atual = sum(c for _, c in grupo)
+            n = len(grupo)
+            if soma_atual > 0:
+                cotas = [round(total * c / soma_atual, 2) for _, c in grupo]
+            else:
+                cotas = [round(total / n, 2) for _ in grupo]
+            cotas[-1] = round(total - sum(cotas[:-1]), 2)
+            for (vid, _), cota in zip(grupo, cotas):
+                cur.execute("UPDATE VENDA SET TOTALVENDA = ? WHERE ID = ?", (cota, vid))
+        conn.commit()
+        return {"success": True, "message": f"Venda #{venda_id} atualizada" +
+                (f" (grupo de {len(grupo)} compradores rateado)" if len(grupo) > 1 and total is not None else "") + "."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/receber/{receber_id}")
+async def editar_receber(receber_id: int, request: Request):
+    """Edição de linha de parcela (RECEBER): vencimento, valor, rótulo e obs."""
+    body = await request.json()
+    data_v = str(body.get("data") or "").strip()
+    if data_v and (len(data_v) < 10 or data_v[:4] < "1990"):
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_v!r}")
+    valor = body.get("valor_parcela", None)
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT TOTALPAGO FROM RECEBER WHERE ID = ?", (int(receber_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Parcela não encontrada.")
+        pago = float(row[0] or 0)
+        sets, params = [], []
+        if data_v:
+            sets.append("DATA = ?"); params.append(data_v)
+        if valor is not None:
+            valor = float(valor)
+            if valor <= 0:
+                raise HTTPException(status_code=400, detail="Valor da parcela deve ser maior que zero.")
+            if valor < pago - 0.005:
+                raise HTTPException(status_code=400, detail=f"Valor ({valor:,.2f}) menor que o já pago ({pago:,.2f}).")
+            sets.append("VALORPARCELA = ?"); params.append(round(valor, 2))
+        if body.get("parcela") is not None:
+            sets.append("PARCELA = ?"); params.append(str(body["parcela"]).strip()[:50].encode('cp1252', 'ignore'))
+        if body.get("obs") is not None:
+            sets.append("OBS = ?"); params.append(str(body["obs"]).strip()[:300].encode('cp1252', 'ignore'))
+        if not sets:
+            raise HTTPException(status_code=400, detail="Nada para alterar.")
+        cur.execute(f"UPDATE RECEBER SET {', '.join(sets)} WHERE ID = ?", (*params, int(receber_id)))
+        conn.commit()
+        return {"success": True, "message": f"Parcela #{receber_id} atualizada."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/cronograma/prazo/{prazo_id}")
+async def editar_prazo_cronograma(prazo_id: int, request: Request):
+    """Edição de parcela do cronograma (VENDAFORMAPAGTOPRAZO) — linhas
+    'prazo_<id>' da tela Recebimentos Mensal ainda não efetivadas no RECEBER."""
+    body = await request.json()
+    data_v = str(body.get("data") or "").strip()
+    if data_v and (len(data_v) < 10 or data_v[:4] < "1990"):
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_v!r}")
+    valor = body.get("valor", None)
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT VALOR_PAGO FROM VENDAFORMAPAGTOPRAZO WHERE ID = ?", (int(prazo_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Parcela do cronograma não encontrada.")
+        pago = float(row[0] or 0)
+        sets, params = [], []
+        if data_v:
+            sets.append("DATA = ?"); params.append(data_v)
+        if valor is not None:
+            valor = float(valor)
+            if valor <= 0:
+                raise HTTPException(status_code=400, detail="Valor deve ser maior que zero.")
+            if valor < pago - 0.005:
+                raise HTTPException(status_code=400, detail=f"Valor ({valor:,.2f}) menor que o já pago ({pago:,.2f}).")
+            sets.append("VALOR = ?"); params.append(round(valor, 2))
+        if body.get("referencia") is not None:
+            sets.append("REFERENCIA = ?"); params.append(str(body["referencia"]).strip()[:10].encode('cp1252', 'ignore'))
+        if not sets:
+            raise HTTPException(status_code=400, detail="Nada para alterar.")
+        cur.execute(f"UPDATE VENDAFORMAPAGTOPRAZO SET {', '.join(sets)} WHERE ID = ?", (*params, int(prazo_id)))
+        conn.commit()
+        return {"success": True, "message": f"Parcela de cronograma #{prazo_id} atualizada."}
     except HTTPException:
         raise
     except Exception as e:
