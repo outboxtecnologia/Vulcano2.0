@@ -8770,19 +8770,29 @@ def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
         return (exatas or cands)[0] if cands else None
 
     def _split_compradores(nome_cell, cpf_cell):
-        """Casais vem com 2 CPFs na MESMA celula ('030... / 053...') — cada um
-        vira um comprador (multi-comprador com rateio igual; CNPJ e varchar(20),
-        dois documentos juntos estouravam SQL -303)."""
-        docs = [d.strip() for d in _re.split(r"[/;]", cpf_cell or "")
-                if len("".join(filter(str.isdigit, d))) >= 11]
+        """Casais vem com 2 CPFs na MESMA celula ('030... / 053...') e CNPJ tem
+        '/' INTERNO — nunca quebrar nele. Extrai documentos por padrao (CNPJ
+        formatado primeiro, depois runs de digitos >=11); cada documento vira
+        um comprador (CNPJ e varchar(20), docs juntos estouravam SQL -303)."""
+        txt = (cpf_cell or "").strip()
+        pat = _re.compile(r"(\d{2}[.\s]?\d{3}[.\s]?\d{3}\s*/\s*\d{4}\s*-?\s*\d{2})|([\d.\-]+)")
+        docs = []
+        for m in pat.finditer(txt):
+            tok = _re.sub(r"\s", "", m.group(0))
+            if m.group(1) or len("".join(filter(str.isdigit, tok))) >= 11:
+                docs.append(tok[:20])
         nomes = [n.strip() for n in _re.split(r"[/;]", nome_cell or "") if n.strip()]
+        if len(docs) > 1 and len(nomes) != len(docs):
+            alt = [n.strip() for n in _re.split(r"\s+E\s+", nome_cell or "", flags=_re.I) if n.strip()]
+            if len(alt) == len(docs):
+                nomes = alt
         comps = []
         for i, d in enumerate(docs):
             nome_i = nomes[i] if len(nomes) == len(docs) else (nome_cell or "").strip()
-            comps.append({"nome": (nome_i or "(sem nome)")[:100], "cpf": d[:20]})
+            comps.append({"nome": (nome_i or "(sem nome)")[:100], "cpf": d})
         if not comps and (nome_cell or cpf_cell):
             comps = [{"nome": (nome_cell or "(sem nome)").strip()[:100],
-                      "cpf": (cpf_cell or "").strip()[:20]}]
+                      "cpf": txt[:20]}]
         return comps
 
     resultados, importaveis = [], []
@@ -9193,9 +9203,14 @@ async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
 
         def _cliente(nome, cpf):
             raw = "".join(filter(str.isdigit, cpf))
-            cur.execute("SELECT FIRST 1 ID FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw,))
+            cur.execute("SELECT FIRST 1 ID, NOME FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw,))
             r = cur.fetchone()
             if r:
+                # cadastro reencontrado sem nome (residuo de importacao) ganha o da planilha
+                atual = r[1].decode('cp1252', 'ignore').strip() if isinstance(r[1], bytes) else (r[1] or "").strip()
+                if (not atual or atual == "(sem nome)") and nome.strip():
+                    cur.execute("UPDATE CLIENTE SET NOME = ? WHERE ID = ?",
+                                (nome.encode('cp1252', 'ignore')[:100], r[0]))
                 return r[0]
             cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
             cid = cur.fetchone()[0]
