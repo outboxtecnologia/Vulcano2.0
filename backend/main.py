@@ -4928,6 +4928,55 @@ def get_vulcano_venda_condicoes(venda_id: int):
             conn.close()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/vulcano/vendas/{venda_id}/parcelas")
+async def lancar_parcela_manual(venda_id: int, request: Request):
+    """Lança uma parcela avulsa (prevista) no RECEBER da venda — ação
+    'Lançar parcela manual' do painel de Vendas."""
+    data = await request.json()
+    data_venc = str(data.get("data") or "").strip()
+    valor = float(data.get("valor") or 0)
+    if not data_venc or len(data_venc) < 10 or data_venc[:4] < "1990":
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_venc!r}")
+    if valor <= 0:
+        raise HTTPException(status_code=400, detail="Informe o valor da parcela.")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT ID_CLIENTE, DISTRATO FROM VENDA WHERE ID = ?", (int(venda_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Venda não encontrada.")
+        if str(row[1] or "").strip().upper().startswith("S"):
+            raise HTTPException(status_code=400, detail="Venda distratada — não recebe parcelas novas.")
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+        new_id = cur.fetchone()[0]
+        referencia = str(data.get("referencia") or "MANUAL").strip()[:10]
+        obs = str(data.get("obs") or "Parcela lançada manualmente (Vulcano 2.0)").strip()[:100]
+        cur.execute(
+            """INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA,
+                                    VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO)
+               VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)""",
+            (new_id, int(venda_id), row[0], data_venc, round(valor, 2),
+             referencia.encode('cp1252', 'ignore'), obs.encode('cp1252', 'ignore')),
+        )
+        conn.commit()
+        return {"success": True, "id": new_id,
+                "message": f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
 @app.get("/api/vulcano/recebimentos")
 def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, data_ini: str = None, data_fim: str = None):
     import sqlite3
@@ -5125,6 +5174,56 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
         except Exception as e_sq:
             print("Erro ao integrar parcelas projetadas:", e_sq)
 
+        # ── PAGAS NO PERÍODO (baixas novas) ──────────────────────────────────
+        # A busca é por VENCIMENTO; uma parcela vencida em abril e PAGA em junho
+        # não aparecia ao pesquisar junho nem no filtro 'Baixadas'. Inclui as
+        # parcelas cuja data_pagamento (operacoes_baixas) cai no período.
+        try:
+            if data_ini and data_fim and locais:
+                ids_ja = {str(x['id']) for x in result_list}
+                pagos_periodo = [k for k, v in locais.items()
+                                 if v[2] and data_ini <= str(v[2])[:10] <= data_fim and k not in ids_ja]
+                ids_receber = [int(k) for k in pagos_periodo if not k.startswith('prazo_')]
+                if ids_receber:
+                    cur_extra = conn.cursor()
+                    for i0 in range(0, len(ids_receber), 400):
+                        chunk = ids_receber[i0:i0 + 400]
+                        ph = ",".join("?" * len(chunk))
+                        filtro_emp_sql = " AND v.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+                        cur_extra.execute(f'''
+                            SELECT r.DATA, r.TOTALPAGO, r.VALORPARCELA, r.VALORVARIACAO, v.DESCUNIDIMOB,
+                                   c.CNPJ, r.PARCELA, c.NOME, e.NOME, r.OBS, r.ID, r.DESCONTO, v.ID
+                            FROM VENDA v
+                            JOIN RECEBER r ON r.IDVENDA = v.ID
+                            LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
+                            LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
+                            WHERE v.CODIGOEMPRESA = ? AND r.ID IN ({ph}) {filtro_emp_sql}
+                        ''', tuple([empresa_id] + chunk + ([empreendimento_id] if empreendimento_id else [])))
+                        for rr in cur_extra.fetchall():
+                            def _sd(x):
+                                if isinstance(x, bytes): return x.decode('cp1252', 'ignore').strip()
+                                return str(x).strip() if x is not None else ""
+                            db_l = locais.get(str(rr[10]))
+                            dt_v = rr[0]
+                            result_list.append({
+                                'id': rr[10],
+                                'data': dt_v.strftime('%d/%m/%Y') if hasattr(dt_v, 'strftime') else _sd(dt_v),
+                                'vencimento_iso': dt_v.strftime('%Y-%m-%d') if hasattr(dt_v, 'strftime') else _sd(dt_v)[:10],
+                                'total': (db_l[1] if db_l else float(rr[1] or 0)),
+                                'parcela': float(rr[2] or 0), 'variacao': float(rr[3] or 0),
+                                'descricao_venda': _sd(rr[4]), 'cliente_cnpj': _sd(rr[5]),
+                                'num_parcela': _sd(rr[6]), 'cliente': _sd(rr[7]),
+                                'empreendimento': _sd(rr[8]),
+                                'obs': (_sd(rr[9]) + ' · paga no período').strip(' ·'),
+                                'desconto': float(rr[11] or 0), 'venda_id': rr[12],
+                                'data_pagamento': db_l[2] if db_l else '',
+                                'desconto_local': db_l[3] if db_l else 0.0,
+                                'acrescimo_local': db_l[4] if db_l else 0.0,
+                                'status_sistema': 'BAIXADO_NOVO',
+                            })
+        except Exception as e_pp:
+            print("Erro ao incluir pagas no período:", e_pp)
+
         result_list.sort(key=lambda x: x.get('vencimento_iso') or '')
 
         return result_list
@@ -5165,6 +5264,36 @@ def baixa_recebimento(data: BaixaInput):
         """, (str(data.id_receber), emp_id, data_pgto, data.valor_pago, data.descontos, data.acrescimos))
         s_conn.commit()
         return {"success": True, "message": "Baixada no sistema auxiliar SQLite com sucesso"}
+    except Exception as e:
+        if s_conn: s_conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if s_conn: s_conn.close()
+
+@app.post("/api/vulcano/recebimentos/baixa/desfazer")
+def desfazer_baixa_recebimento(payload: dict):
+    """Desfaz uma baixa NOVA (registrada pelo Vulcano 2.0 em operacoes_baixas).
+
+    Baixas legadas ja efetivadas no Firebird (RECEBER.TOTALPAGO > 0) nao passam
+    por aqui — essas so no proprio legado/Questor."""
+    import sqlite3
+    id_receber = str(payload.get("id_receber") or "").strip()
+    empresa_id = int(payload.get("empresa_id") or 0)
+    if not id_receber:
+        raise HTTPException(status_code=400, detail="id_receber obrigatório.")
+    s_conn = None
+    try:
+        s_conn = sqlite3.connect(POC_DATABASE_FILE)
+        s_curr = s_conn.cursor()
+        s_curr.execute("DELETE FROM operacoes_baixas WHERE id_receber = ? AND empresa_id = ?",
+                       (id_receber, empresa_id))
+        apagadas = s_curr.rowcount
+        s_conn.commit()
+        if not apagadas:
+            raise HTTPException(status_code=404, detail="Baixa não encontrada (ou é baixa legada do Firebird, que não pode ser desfeita por aqui).")
+        return {"success": True, "message": "Baixa desfeita — a parcela voltou a ficar em aberto."}
+    except HTTPException:
+        raise
     except Exception as e:
         if s_conn: s_conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -6328,43 +6457,50 @@ async def upload_planilha(file: UploadFile = File(...)):
 
 @app.post("/api/schema-match")
 def schema_match(payload: dict):
+    """Sugestao de de-para coluna->campo p/ o Smart Importer.
+
+    Reescrito: usava Ollama (inexistente no deploy -> 500 silencioso e tudo
+    'Ignorar') e devolvia o mapa aninhado por tabela (o front espera plano).
+    Agora usa o Vertex/Gemini padrao do projeto, restrito aos campos validos
+    do destino, com validacao server-side do retorno.
+    """
     import json
     columns = payload.get("columns", [])
-    
-    # Introspect internal DB schema
-    try:
-        available_schema = api_schema_tables().get("schema", {})
-    except Exception:
-        available_schema = {}
+    campos_validos = payload.get("campos", [])
+    destino = payload.get("target_table", "")
+    amostras = payload.get("amostras", {})
+    if not columns:
+        return {"mapping": {}}
 
-    prompt = f"""You are an absolute expert database administrator and data analyst.
-We have imported a worksheet with the following columns:
-{json.dumps(columns, ensure_ascii=False)}
+    prompt = f"""Você mapeia colunas de planilhas de clientes para campos de um sistema imobiliário.
+DESTINO: {destino}
+CAMPOS VÁLIDOS (use exatamente estes valores): {json.dumps(campos_validos, ensure_ascii=False)}
+COLUNAS DA PLANILHA (com amostra da 1ª linha): {json.dumps({c: str(amostras.get(c, ''))[:40] for c in columns}, ensure_ascii=False)}
 
-Our Vulcano Database contains the following target tables and columns:
-{json.dumps(available_schema, ensure_ascii=False)}
-
-Your objective:
-1. Analyze the worksheet columns and infer which table(s) from our Vulcano schema it represents.
-2. Return ONLY a valid JSON object with the exact name of the inferred table(s) as keys, and inside them, another object where keys are the SOURCE column names, and values are the TARGET field names. Example format:
-{{
-   "VENDA": {{
-      "DATA_OPERACAO": "DATA_VENDA",
-      "CPF_CLIENTE": "CLIENTE_DOCUMENTO"
-   }}
-}}
-
-No markdown, no explanation, no formatting tags. Only return the raw JSON object."""
+Responda SOMENTE um objeto JSON plano onde cada chave é o nome EXATO da coluna da planilha
+e o valor é um dos CAMPOS VÁLIDOS, ou null quando a coluna não corresponder a nenhum campo.
+Exemplo: {{"CPF": "CLIENTE_CPF_CNPJ", "OBS INTERNA": null}}"""
 
     try:
-        mapping = _ollama_generate_json(prompt)
-        if not isinstance(mapping, dict):
-            raise HTTPException(status_code=500, detail="Ollama não retornou um objeto JSON válido de mapeamento.")
+        raw = _gemini_generate_json(prompt)
+        if not isinstance(raw, dict):
+            raise ValueError("resposta nao e objeto JSON")
+        # achata retornos aninhados por tabela e valida contra os campos validos
+        if raw and all(isinstance(v, dict) for v in raw.values()):
+            flat = {}
+            for sub in raw.values():
+                flat.update(sub)
+            raw = flat
+        validos = set(campos_validos)
+        mapping = {}
+        for col in columns:
+            v = raw.get(col)
+            mapping[col] = v if (isinstance(v, str) and (not validos or v in validos)) else None
         return {"mapping": mapping}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao analisar schema com Ollama: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sugestao de mapeamento falhou: {str(e)[:200]}")
 
 # --- VULCANO MVP DAY 1 CRUD ENDPOINTS ---
 from fastapi import Request
@@ -6823,6 +6959,10 @@ async def post_vendas(request: Request):
 
         conta_permuta = int(data.get("conta_permuta") or 0) or None
 
+        # Nº do contrato: informavel; default = id da venda (UNICO por venda —
+        # o PGD da DIMOB rejeita 2 linhas do MESMO CPF com contrato repetido)
+        num_contrato = str(data.get("num_contrato") or "").strip()[:90] or str(new_id)
+
         # NUMCADIMOB e INTEGER na base viva (nao aceita o antigo "MVP-<id>"):
         # usa o numero de cadastro imobiliario da 1a unidade vendida, se houver.
         num_cad = None
@@ -6836,11 +6976,12 @@ async def post_vendas(request: Request):
             except Exception:
                 num_cad = None
 
-        query = "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, CONTA_PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?)"
+        query = "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, CONTA_PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?)"
         params = (
             new_id,
             id_empreendimento,
             num_cad,
+            num_contrato.encode('cp1252', 'ignore'),
             date_str,
             str(data.get("unidade", "")).encode('cp1252', 'ignore')[:100],
             cotas[0] if cotas else total_contrato,
@@ -6863,11 +7004,12 @@ async def post_vendas(request: Request):
                 continue
             sat_id = new_id + offset
             cur.execute(
-                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?, ?)",
+                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, ?, ?)",
                 (
                     sat_id,
                     id_empreendimento,
                     num_cad,
+                    num_contrato.encode('cp1252', 'ignore'),
                     date_str,
                     desc_unid,
                     cotas[offset] if offset < len(cotas) else 0,
@@ -8728,6 +8870,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
                 "parcela": _s(parcela), "obs": _s(obs),
                 "status": "PAGO" if pago_f > 0 else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+                "baixa_local": bool(bx and pago_f <= 0),
             }
             if bx and pago_f <= 0:  # baixada pelo Vulcano 2.0 (SQLite), FDB ainda em aberto
                 item["total_pago"] = round(bx["valor_pago"], 2)
@@ -8786,6 +8929,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 "saldo_atual": round(totalvenda - pago_total.get(vid, 0.0), 2),
                 "parcela": _s(ref), "obs": "Prevista (cronograma)",
                 "status": "PAGO" if bx else ("VENCIDA" if data and data < dt_ini else "ABERTA"),
+                "baixa_local": bool(bx),
             }
             result.append(item)
 

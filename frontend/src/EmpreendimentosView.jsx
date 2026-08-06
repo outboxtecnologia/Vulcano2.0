@@ -984,8 +984,8 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                 </div>
 
                                 {(Object.keys(matriculaPreview.conferencias.divergencias_cadastro || {}).length > 0 || matriculaPreview.unidades.some(u => u.divergente_conferir)) && (
-                                    <div className="bg-[#ff3b30]/10 border border-[#ff3b30]/30 p-3 rounded text-[10px] text-[var(--v-text-bold)] space-y-1">
-                                        <p className="font-black uppercase text-[#ff3b30]">Conferir antes de gravar:</p>
+                                    <div className="bg-[var(--v-err)]/10 border border-[var(--v-err)]/30 p-3 rounded text-[10px] text-[var(--v-text-bold)] space-y-1">
+                                        <p className="font-black uppercase text-[var(--v-err)]">Conferir antes de gravar:</p>
                                         {Object.entries(matriculaPreview.conferencias.divergencias_cadastro || {}).map(([campo, vars]) => (
                                             <p key={campo}>• {campo}: leituras divergiram — {Array.isArray(vars) ? vars.join(' | ') : String(vars)}</p>
                                         ))}
@@ -997,7 +997,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
 
                                 <div className="flex items-center gap-4 flex-wrap text-[10px] text-[var(--v-text-bold)]">
                                     <label className="flex items-center gap-2 uppercase font-bold text-[var(--v-text-faint)]">Metragem a gravar:
-                                        <select value={metragemCampo} onChange={(e) => setMetragemCampo(e.target.value)} className="bg-black/40 border border-white/5 p-1.5 text-[10px] text-[var(--v-text-bold)] outline-none">
+                                        <select value={metragemCampo} onChange={(e) => setMetragemCampo(e.target.value)} className="bg-black/40 border border-[var(--v-line)] p-1.5 text-[10px] text-[var(--v-text-bold)] outline-none">
                                             <option value="area_privativa_m2">Área privativa</option>
                                             <option value="area_privativa_total_m2">Área privativa total (c/ acessória)</option>
                                             <option value="area_total_m2">Área real total (c/ comum)</option>
@@ -1009,7 +1009,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                     <button onClick={aplicarCadastroMatricula} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded text-[10px] font-bold uppercase hover:bg-[var(--v-accent)]/15 text-[var(--v-accent)]">Usar endereço/nome no cadastro</button>
                                 </div>
 
-                                <div className="max-h-64 overflow-y-auto custom-scrollbar border border-white/5 rounded">
+                                <div className="max-h-64 overflow-y-auto custom-scrollbar border border-[var(--v-line)] rounded">
                                     <table className="w-full text-[10px] text-[var(--v-text-bold)]">
                                         <thead className="sticky top-0 bg-black/90">
                                             <tr className="text-[var(--v-text-faint)] uppercase text-left">
@@ -1020,7 +1020,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                         </thead>
                                         <tbody>
                                             {matriculaPreview.unidades.map(u => (
-                                                <tr key={`${u.bloco}-${u.numero}`} className="border-t border-white/5">
+                                                <tr key={`${u.bloco}-${u.numero}`} className="border-t border-[var(--v-line)]">
                                                     <td className="p-1.5">{u.bloco}</td>
                                                     <td className="p-1.5 font-bold">{descricaoUnidadeMatricula(u)}</td>
                                                     <td className="p-1.5 text-[var(--v-text-faint)]">{u.vaga || '—'}</td>
@@ -1028,7 +1028,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                                     <td className="p-1.5 text-right font-mono">{u.area_privativa_total_m2 ?? '—'}</td>
                                                     <td className="p-1.5 text-right font-mono">{u.area_total_m2 ?? '—'}</td>
                                                     <td className="p-1.5 text-right font-mono">{u.fracao_ideal_pct ?? '—'}</td>
-                                                    <td className="p-1.5">{u.divergente_conferir ? <span title="Leituras divergiram — conferir" className="text-[#ff3b30] font-black">⚠</span> : u.corrigida_desempate ? <span title="Resolvida em leitura de desempate" className="text-[var(--v-accent)]">⚙</span> : ''}</td>
+                                                    <td className="p-1.5">{u.divergente_conferir ? <span title="Leituras divergiram — conferir" className="text-[var(--v-err)] font-black">⚠</span> : u.corrigida_desempate ? <span title="Resolvida em leitura de desempate" className="text-[var(--v-accent)]">⚙</span> : ''}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1036,7 +1036,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                 </div>
 
                                 <div className="flex justify-end gap-3">
-                                    <button onClick={() => setMatriculaPreview(null)} className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)] hover:bg-white/5 rounded">Descartar</button>
+                                    <button onClick={() => setMatriculaPreview(null)} className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[var(--v-text-faint)] hover:bg-[var(--v-tint)] rounded">Descartar</button>
                                     <button onClick={handleGravarEstrutura} disabled={importandoEstrutura}
                                         className="bg-[var(--v-accent)] text-black px-5 py-2 rounded-[var(--v-radius)] font-black text-[10px] uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50 flex items-center gap-2">
                                         {/* Idem: o spinner entra ANTES do rotulo, entao o rotulo precisa
@@ -1049,16 +1049,59 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                         )}
                     </div>
 
+                    {/* Totalizador de áreas p/ conferência (Σ metragem das unidades) */}
+                    {unidades.length > 0 && (() => {
+                        const porBloco = {};
+                        unidades.forEach(u => {
+                            const b = blocos.find(x => x.id === u.id_bloco);
+                            const nome = b ? b.nome : '?';
+                            porBloco[nome] = porBloco[nome] || { qtd: 0, m2: 0 };
+                            porBloco[nome].qtd += 1;
+                            porBloco[nome].m2 += parseFloat(u.metragem) || 0;
+                        });
+                        const totalM2 = unidades.reduce((s, u) => s + (parseFloat(u.metragem) || 0), 0);
+                        return (
+                            <div className="bg-[var(--v-scrim)] border border-[var(--v-line)] rounded-[var(--v-radius)] p-3 flex flex-wrap items-center gap-x-6 gap-y-1">
+                                <span className="text-[9px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">Totais p/ conferência:</span>
+                                {Object.entries(porBloco).map(([nome, t]) => (
+                                    <span key={nome} className="text-[10px] font-mono text-[var(--v-text-muted)]">{nome}: <b className="text-[var(--v-text-bold)]">{t.qtd} un · {t.m2.toFixed(2)} m²</b></span>
+                                ))}
+                                <span className="text-[10px] font-mono text-[var(--v-accent)] ml-auto">GERAL: <b>{unidades.length} un · {totalM2.toFixed(2)} m²</b></span>
+                                <button
+                                    onClick={() => { setFormData({ ...formData, metragem: totalM2.toFixed(2) }); alert(`Metragem total do empreendimento atualizada para ${totalM2.toFixed(2)} m² (Σ das unidades). Salve para gravar.`); }}
+                                    title="Preenche o campo Metragem Total (aba Dados Gerais) com a soma das áreas das unidades"
+                                    className="px-2.5 py-1 bg-[var(--v-tint)] border border-[var(--v-border)] rounded text-[9px] font-bold uppercase hover:bg-[var(--v-accent)]/15 text-[var(--v-accent)]">
+                                    Usar como metragem total
+                                </button>
+                            </div>
+                        );
+                    })()}
+
                     <div className="grid grid-cols-12 gap-8">
                         {/* Blocos List */}
                         <div className="col-span-4 border-r border-[var(--v-border)] pr-8 space-y-4">
-                            <h4 className="text-[10px] font-black text-[var(--v-accent)] uppercase tracking-widest flex items-center gap-2">
-                                <Layers size={14}/> Blocos Estruturais
-                            </h4>
-                            
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-[10px] font-black text-[var(--v-accent)] uppercase tracking-widest flex items-center gap-2">
+                                    <Layers size={14}/> Blocos Estruturais
+                                </h4>
+                                {blocos.length > 1 && (
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm(`Excluir TODOS os ${blocos.length} blocos e suas ${unidades.length} unidades deste empreendimento?`)) return;
+                                            for (const b of blocos) {
+                                                await fetch(`${API_BASE}/api/vulcano/blocos/${b.id}`, { method: 'DELETE' });
+                                            }
+                                            fetchEstrutura(editingEmp.id);
+                                        }}
+                                        className="text-[9px] font-bold uppercase text-[var(--v-err)]/70 hover:text-[var(--v-err)] transition-colors">
+                                        Excluir todos
+                                    </button>
+                                )}
+                            </div>
+
                             <div className="flex gap-2">
-                                <input 
-                                    value={newBlocoName} 
+                                <input
+                                    value={newBlocoName}
                                     onChange={(e) => setNewBlocoName(e.target.value)}
                                     placeholder="Ex: Bloco A"
                                     className="flex-1 bg-[var(--v-card)] border border-[var(--v-border)] p-2 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50"
@@ -1077,7 +1120,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                             <span className="text-[10px] font-black text-[var(--v-text-faint)]">{b.id}</span>
                                             <span className="text-[11px] font-bold text-[var(--v-text-bold)] uppercase">{b.nome}</span>
                                         </div>
-                                        <button onClick={() => handleDeleteEstrutura('bloco', b.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-[var(--v-err)] transition-all"><Trash2 size={12}/></button>
+                                        <button onClick={() => handleDeleteEstrutura('bloco', b.id)} title="Excluir o bloco inteiro (com as unidades dele)" className="p-1 text-[var(--v-text-faint)] hover:text-[var(--v-err)] transition-all"><Trash2 size={12}/></button>
                                     </div>
                                 ))}
                             </div>
