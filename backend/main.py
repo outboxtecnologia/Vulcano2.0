@@ -2939,6 +2939,17 @@ def get_app_conn():
                     fonte TEXT, codigo_outemp INTEGER, codigo_estab INTEGER,
                     atualizado_em TEXT DEFAULT (datetime('now'))
                 )""")
+                # sessão de extração de matrícula: guarda o PDF (documento
+                # integral) e o resultado até a importação ser CONCLUÍDA —
+                # base do chat de conferência do operador
+                conn.execute("""CREATE TABLE IF NOT EXISTS matricula_sessao (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT, pdf_path TEXT,
+                    resultado TEXT,
+                    status TEXT DEFAULT 'aberta',
+                    criado_em TEXT DEFAULT (datetime('now')),
+                    atualizado_em TEXT DEFAULT (datetime('now'))
+                )""")
                 conn.commit()
                 _APP_ENDERECO_DDL_OK = True
     return conn
@@ -4071,14 +4082,19 @@ Extraia a ESTRUTURA de blocos e unidades autônomas e retorne EXATAMENTE este JS
      "area_privativa_m2": 0.0, "area_acessoria_m2": 0.0, "area_privativa_total_m2": 0.0,
      "area_comum_m2": 0.0, "area_total_m2": 0.0, "fracao_ideal_pct": 0.0}
   ],
-  "unidades_autonomas_extras": [{"descricao": "", "quantidade": 0, "numeracao": ""}]
+  "unidades_autonomas_extras": [{"descricao": "", "quantidade": 0, "numeracao": ""}],
+  "total_unidades_declarado": 0,
+  "area_privativa_total_declarada_m2": 0.0
 }
+
+total_unidades_declarado = o TOTAL de unidades que a própria matrícula declara (ex.: "condomínio composto por 288 apartamentos"); area_privativa_total_declarada_m2 = a área privativa TOTAL do condomínio declarada no documento (m²). 0 se não constar.
 
 Na seção "DISCRIMINAÇÃO NUMÉRICA, LOCALIZAÇÃO, ÁREA E FRAÇÃO IDEAL DAS UNIDADES" (ou equivalente), as unidades vêm em GRUPOS com áreas idênticas (ex.: "Apartamento nº 101 do bloco A com vaga nº 001, Apartamento nº 201 do bloco A com vaga nº 009...: área privativa de X m²..."). Para cada grupo: o bloco (use o nome como escrito, ex. "BLOCO A"); o tipo; os pares {numero, vaga} respeitando o pareamento apartamento↔vaga do texto (vaga com descrição curta; "" se não houver); e as áreas do grupo. ATENÇÃO fracao_ideal_pct: a matrícula escreve "coeficiente de proporcionalidade equivalente a 0,3801% ou 39,8546m² de fração ideal" — fracao_ideal_pct é o PERCENTUAL (0.3801), NUNCA o valor em m². Decimais com ponto.
 
 REGRAS CRÍTICAS:
 - NÃO invente unidades: transcreva exatamente as numerações listadas em cada grupo.
 - Cada apartamento aparece em exatamente UM grupo — cuidado com grupos que continuam na página/verso seguinte (o cabeçalho repete; a lista de apartamentos do grupo pode atravessar a quebra de página).
+- NEM TODA unidade segue o padrão contínuo dos grupos grandes: algumas são descritas FORA do padrão, em parágrafo próprio ou grupo pequeno com redação diferente (ex.: coberturas, finais específicos como aptos 401/501 de um bloco, unidades com vaga dupla). Varra TODAS as páginas procurando por "Apartamento nº" e inclua cada uma no seu grupo — não assuma que a listagem contínua é completa.
 - Confira: a soma das unidades de todos os grupos deve bater com o total declarado na matrícula (ex.: "288 apartamentos"). Se não bater, revise antes de responder.
 - unidades_autonomas_extras: só unidades AUTÔNOMAS fora dos blocos (lojas, vagas autônomas). Vagas VINCULADAS a apartamentos não entram."""
 
@@ -4159,6 +4175,34 @@ def _expandir_grupos_matricula(extracao: dict) -> tuple[list[dict], list[str]]:
                 "fracao_ideal_pct": _num_matricula(g.get("fracao_ideal_pct")),
             })
     return unidades, duplicatas
+
+def _criticas_matricula(resultado: dict) -> dict:
+    """Crítica permanente da prévia: unidades extraídas × total declarado na
+    matrícula e Σ m² privativa extraída × área privativa total declarada."""
+    unidades = resultado.get("unidades") or []
+    soma_priv = round(sum(u.get("area_privativa_m2") or 0 for u in unidades), 2)
+    # o total declarado costuma ser privativa + ACESSÓRIA (vagas) — compara os dois
+    soma_priv_total = round(sum(u.get("area_privativa_total_m2") or u.get("area_privativa_m2") or 0
+                                for u in unidades), 2)
+    total_decl = resultado.get("total_unidades_declarado")
+    m2_decl = resultado.get("area_privativa_total_declarada_m2")
+    base = None
+    if m2_decl:
+        base = "privativa+acessoria" if abs(m2_decl - soma_priv_total) <= abs(m2_decl - soma_priv) else "privativa"
+    melhor = soma_priv_total if base == "privativa+acessoria" else soma_priv
+    por_bloco = {}
+    for u in unidades:
+        por_bloco[u["bloco"]] = por_bloco.get(u["bloco"], 0) + 1
+    return {
+        "unidades": {"extraido": len(unidades), "declarado": total_decl,
+                     "ok": (not total_decl) or int(total_decl) == len(unidades)},
+        "area_privativa": {"soma_extraida_m2": soma_priv,
+                           "soma_priv_total_m2": soma_priv_total,
+                           "declarado_m2": m2_decl, "base_comparacao": base,
+                           "diferenca_m2": round((m2_decl - melhor), 2) if m2_decl else None,
+                           "ok": (not m2_decl) or abs(m2_decl - melhor) < 1.0},
+        "unidades_por_bloco": por_bloco,
+    }
 
 @app.post("/api/vulcano/matricula/extrair")
 async def extrair_matricula(file: UploadFile = File(...)):
@@ -4388,10 +4432,20 @@ async def extrair_matricula(file: UploadFile = File(...)):
         "fracao_fecha_100": abs(soma_fracao - 100.0) < 1.0 if soma_fracao else None,
     }
 
+    # totais DECLARADOS na matrícula (voto entre as leituras; 0 = não constou)
+    def _voto_num(vals):
+        vals = [round(float(v), 2) for v in (_num_matricula(x) for x in vals) if v]
+        if not vals:
+            return None
+        vencedor, n = Counter(vals).most_common(1)[0]
+        return vencedor if n >= 2 or len(vals) == 1 else max(vals)
+    total_decl = _voto_num([r.get("total_unidades_declarado") for r in est_runs])
+    m2_decl = _voto_num([r.get("area_privativa_total_declarada_m2") for r in est_runs])
+
     obs = emp_raw.get("observacoes") or extracao.get("observacoes") or ""
     if isinstance(obs, list):
         obs = " ".join(str(o) for o in obs)
-    return {
+    resultado = {
         "empreendimento": _normalizar_emp_matricula(emp_raw),
         "blocos": blocos,
         "grupos_unidades": extracao.get("grupos_unidades") or [],
@@ -4400,10 +4454,171 @@ async def extrair_matricula(file: UploadFile = File(...)):
         "unidades_autonomas_extras": extracao.get("unidades_autonomas_extras") or [],
         "observacoes": obs,
         "conferencias": conferencias,
+        "total_unidades_declarado": total_decl,
+        "area_privativa_total_declarada_m2": m2_decl,
     }
+    resultado["criticas"] = _criticas_matricula(resultado)
+
+    # sessão persistida (PDF + resultado) até a importação concluir — permite
+    # o chat de conferência do operador buscar no documento integral
+    try:
+        import uuid as _uuid
+        import json
+        pasta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "matriculas_sessao")
+        os.makedirs(pasta, exist_ok=True)
+        pdf_path = os.path.join(pasta, f"{_uuid.uuid4().hex}.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        appc = get_app_conn()
+        cur = appc.execute(
+            "INSERT INTO matricula_sessao (filename, pdf_path, resultado, status) VALUES (?, ?, ?, 'aberta')",
+            (file.filename or "matricula.pdf", pdf_path, json.dumps(resultado, ensure_ascii=False)))
+        appc.commit()
+        rid = appc.execute("SELECT MAX(id) FROM matricula_sessao WHERE pdf_path = ?", (pdf_path,)).fetchone()
+        resultado["sessao_id"] = rid[0] if rid else None
+        appc.close()
+    except Exception as e:
+        resultado["sessao_id"] = None
+        resultado["sessao_erro"] = f"Sessão não persistida ({e}) — chat de conferência indisponível."
+    return resultado
+
+class MatriculaChatInput(BaseModel):
+    sessao_id: int
+    mensagem: str
+
+@app.post("/api/vulcano/matricula/chat")
+async def chat_matricula(data: MatriculaChatInput):
+    """Chat de conferência do operador sobre a matrícula extraída: aponta
+    inconsistências/padrões ('faltam os aptos 401 e 501 do bloco C') e a IA
+    busca no DOCUMENTO INTEGRAL (PDF da sessão), devolvendo unidades novas ou
+    corrigidas que são mescladas na prévia. A sessão vive até a importação."""
+    import json
+    msg = (data.mensagem or "").strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="Escreva a inconsistência ou padrão a verificar.")
+    appc = get_app_conn()
+    row = appc.execute("SELECT pdf_path, resultado, status FROM matricula_sessao WHERE id = ?",
+                       (int(data.sessao_id),)).fetchone()
+    if not row:
+        appc.close()
+        raise HTTPException(status_code=404, detail="Sessão de extração não encontrada.")
+    pdf_path, resultado_json, status = row[0], row[1], row[2]
+    if status != "aberta":
+        appc.close()
+        raise HTTPException(status_code=400, detail="Sessão já concluída — refaça a extração para reabrir.")
+    if not pdf_path or not os.path.exists(pdf_path):
+        appc.close()
+        raise HTTPException(status_code=410, detail="PDF da sessão não está mais disponível — refaça a extração.")
+    with open(pdf_path, "rb") as f:
+        pdf_bytes = f.read()
+    resultado = json.loads(resultado_json or "{}")
+    unidades = resultado.get("unidades") or []
+
+    # estado compacto p/ a IA saber o que JÁ foi extraído (numerações por bloco)
+    por_bloco = {}
+    for u in unidades:
+        por_bloco.setdefault(u["bloco"], []).append(str(u["numero"]))
+    estado = "; ".join(
+        f"{b}: {len(ns)} unidades ({', '.join(sorted(ns, key=lambda x: (len(x), x)))})"
+        for b, ns in sorted(por_bloco.items()))
+    criticas = resultado.get("criticas") or _criticas_matricula(resultado)
+    soma_m2 = criticas.get("area_privativa", {}).get("soma_extraida_m2")
+
+    prompt = (
+        "O PDF anexo é a certidão de matrícula com INCORPORAÇÃO já processada. Estado atual da "
+        f"extração — {estado}. Soma da área privativa extraída: {soma_m2} m². Total de unidades "
+        f"declarado: {resultado.get('total_unidades_declarado')}; área privativa total declarada: "
+        f"{resultado.get('area_privativa_total_declarada_m2')} m².\n\n"
+        f"O OPERADOR aponta: \"{msg}\"\n\n"
+        "Busque no documento o que o operador indicou (unidades faltantes, áreas erradas, padrões "
+        "de escrita diferentes — ex.: unidades descritas em parágrafo próprio fora da listagem "
+        "contínua). Responda no JSON: {\"resposta\": \"<explicação curta do que encontrou>\", "
+        "\"unidades_novas\": [{\"bloco\", \"numero\", \"tipo\", \"vaga\", \"area_privativa_m2\", "
+        "\"area_privativa_total_m2\", \"area_total_m2\", \"fracao_ideal_pct\"}], "
+        "\"unidades_corrigidas\": [<mesmo shape, p/ unidades que JÁ estão na lista mas com dado errado>], "
+        "\"total_unidades_declarado\": 0, \"area_privativa_total_declarada_m2\": 0.0}.\n"
+        "REGRAS: transcreva SÓ o que está escrito na matrícula (nunca invente); unidades_novas só "
+        "as que NÃO estão no estado atual; unidades_corrigidas SÓ as unidades ESPECÍFICAS com dado "
+        "errado relacionadas ao apontamento (NUNCA devolva a lista inteira — se a observação valer "
+        "para todas, explique em 'resposta' e deixe as listas vazias; máximo ~60 itens); "
+        "fracao_ideal_pct é o PERCENTUAL (nunca m²); decimais com ponto; totais declarados = 0 se "
+        "não constarem."
+    )
+    try:
+        resp = await _gemini_generate_json_async(prompt, file_data=pdf_bytes,
+                                                 mime_type="application/pdf",
+                                                 max_output_tokens=24576)
+    except Exception as e:
+        appc.close()
+        raise HTTPException(status_code=502, detail=f"Consulta ao documento falhou: {e}")
+
+    def _unidade_do_chat(c):
+        return {
+            "bloco": _canon_bloco(c.get("bloco")),
+            "tipo": (c.get("tipo") or "apartamento").strip(),
+            "numero": str(c.get("numero") or "").strip(),
+            "vaga": str(c.get("vaga") or "").strip(),
+            "area_privativa_m2": _num_matricula(c.get("area_privativa_m2")),
+            "area_privativa_total_m2": _num_matricula(c.get("area_privativa_total_m2")),
+            "area_total_m2": _num_matricula(c.get("area_total_m2")),
+            "fracao_ideal_pct": _num_matricula(c.get("fracao_ideal_pct")),
+            "origem_chat": True,
+        }
+
+    por_chave = {(u["bloco"], str(u["numero"])): u for u in unidades}
+    adicionadas, corrigidas_chat = [], []
+    for c in (resp.get("unidades_novas") or []):
+        nu = _unidade_do_chat(c)
+        if not nu["numero"] or not nu["bloco"]:
+            continue
+        if (nu["fracao_ideal_pct"] or 0) > 10:
+            nu["fracao_ideal_pct"] = None  # veio m² no lugar do percentual
+        chave = (nu["bloco"], nu["numero"])
+        if chave in por_chave:
+            continue  # já existe — não duplica
+        unidades.append(nu)
+        por_chave[chave] = nu
+        adicionadas.append(f"{nu['bloco']} nº {nu['numero']}")
+    for c in (resp.get("unidades_corrigidas") or []):
+        nu = _unidade_do_chat(c)
+        alvo = por_chave.get((nu["bloco"], nu["numero"]))
+        if not alvo:
+            continue
+        for k in ("vaga", "area_privativa_m2", "area_privativa_total_m2", "area_total_m2", "fracao_ideal_pct"):
+            v = nu.get(k)
+            if v in (None, ""):
+                continue
+            if k == "fracao_ideal_pct" and v > 10:
+                continue
+            alvo[k] = v
+        alvo["corrigida_chat"] = True
+        corrigidas_chat.append(f"{nu['bloco']} nº {nu['numero']}")
+
+    for campo in ("total_unidades_declarado", "area_privativa_total_declarada_m2"):
+        v = _num_matricula(resp.get(campo))
+        if v:
+            resultado[campo] = v
+    blocos = resultado.get("blocos") or []
+    for u in unidades:
+        if u["bloco"] and u["bloco"] not in blocos:
+            blocos.append(u["bloco"])
+    resultado["blocos"] = blocos
+    resultado["unidades"] = unidades
+    resultado["total_unidades"] = len(unidades)
+    resultado["criticas"] = _criticas_matricula(resultado)
+    resultado["sessao_id"] = int(data.sessao_id)
+
+    appc.execute("UPDATE matricula_sessao SET resultado = ?, atualizado_em = datetime('now') WHERE id = ?",
+                 (json.dumps(resultado, ensure_ascii=False), int(data.sessao_id)))
+    appc.commit()
+    appc.close()
+    return {"resposta": str(resp.get("resposta") or "").strip() or "Verificação concluída.",
+            "adicionadas": adicionadas, "corrigidas": corrigidas_chat,
+            "resultado": resultado}
 
 class ImportarEstruturaInput(BaseModel):
     empreendimento_id: int
+    sessao_id: int | None = None
     blocos: list[dict]  # [{nome: str, unidades: [{descricao: str, metragem: float|None, inscricao: int|None}]}]
 
 @app.post("/api/vulcano/estrutura/importar")
@@ -4470,7 +4685,37 @@ def importar_estrutura(data: ImportarEstruturaInput):
                 ja_existem.add(descricao.upper())
                 stats["unidades_criadas"] += 1
 
+        # METRAGEMTOTAL zerada não aparece no card de Empreendimentos — se o
+        # cadastro ainda não tem metragem, assume a soma das unidades importadas
+        cur.execute("SELECT COALESCE(METRAGEMTOTAL, 0) FROM EMPREENDIMENTO WHERE ID = ?",
+                    (data.empreendimento_id,))
+        r = cur.fetchone()
+        if r is not None and float(r[0] or 0) <= 0:
+            cur.execute("""SELECT COALESCE(SUM(U.METRAGEM), 0) FROM UNIDADE U
+                           JOIN BLOCO B ON B.ID = U.IDBLOCO WHERE B.IDEMPREENDIMENTO = ?""",
+                        (data.empreendimento_id,))
+            soma = round(float(cur.fetchone()[0] or 0), 2)
+            if soma > 0:
+                cur.execute("UPDATE EMPREENDIMENTO SET METRAGEMTOTAL = ? WHERE ID = ?",
+                            (soma, data.empreendimento_id))
+                stats["metragem_total_atualizada"] = soma
+
         conn.commit()
+
+        # importação CONCLUÍDA encerra a sessão da matrícula (o PDF integral sai do disco)
+        if data.sessao_id:
+            try:
+                appc = get_app_conn()
+                row = appc.execute("SELECT pdf_path FROM matricula_sessao WHERE id = ?",
+                                   (int(data.sessao_id),)).fetchone()
+                appc.execute("UPDATE matricula_sessao SET status = 'concluida', atualizado_em = datetime('now') WHERE id = ?",
+                             (int(data.sessao_id),))
+                appc.commit()
+                appc.close()
+                if row and row[0] and os.path.exists(row[0]):
+                    os.remove(row[0])
+            except Exception:
+                pass  # sessão pendurada não invalida a importação
         return {"success": True, **stats}
     except HTTPException:
         raise
