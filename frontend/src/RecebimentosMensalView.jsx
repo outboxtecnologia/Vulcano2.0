@@ -38,14 +38,18 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         if (m < 1) { m = 12; a -= 1; }
         if (m > 12) { m = 1; a += 1; }
         setMes(m); setAno(a);
+        // navegacao de verdade: rebusca o novo periodo na hora (valores explicitos —
+        // o setState ainda nao foi aplicado neste tick; sem isso a grade ficava
+        // presa no mes corrente ate clicar Pesquisar)
+        if (selectedEmpresa) pesquisar(a, m);
     };
 
-    const pesquisar = async () => {
+    const pesquisar = async (a = ano, m = mes) => {
         if (!selectedEmpresa) { alert('Selecione a empresa.'); return; }
         setLoading(true); setError(null);
         try {
             const emp = empreendimentoId ? `&empreendimento_id=${empreendimentoId}` : '';
-            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos-mensal?empresa_id=${selectedEmpresa}&ano=${ano}&mes=${mes}${emp}`);
+            const res = await fetch(`${API_BASE}/api/vulcano/recebimentos-mensal?empresa_id=${selectedEmpresa}&ano=${a}&mes=${m}${emp}`);
             const d = await res.json();
             if (!res.ok) throw new Error(typeof d.detail === 'string' ? d.detail : res.statusText);
             setData(d);
@@ -139,7 +143,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                         <button onClick={() => mudaMes(1)} className="p-2 bg-[#111] border border-[#222] rounded-lg text-[#888] hover:text-white"><ChevronRight size={13} /></button>
                     </div>
                 </div>
-                <button onClick={pesquisar} disabled={loading}
+                <button onClick={() => pesquisar()} disabled={loading}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#22c55e]/15 border border-[#22c55e]/30 text-[#22c55e] text-[11px] font-bold uppercase tracking-wider hover:bg-[#22c55e]/25 disabled:opacity-40">
                     {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Pesquisar
                 </button>
