@@ -4615,7 +4615,7 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
     try:
         conn = get_conn("vulcano")
         query_vendas = """
-            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID, v.DATADISTRATO
+            SELECT v.ID, v.NUMCADIMOB, v.DTOPER, v.DESCUNIDIMOB, c.CNPJ, c.NOME AS CLIENTE_NOME, v.TOTALVENDA, v.DISTRATO, v.PERMUTA, e.NOME AS EMPREENDIMENTO, e.ID as EMPREENDIMENTO_ID, v.DATADISTRATO, v.NUMCONT
             FROM VENDA v
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
@@ -4677,10 +4677,11 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
                 return x.decode('cp1252', 'ignore').strip()
             return str(x).strip() if x is not None else ""
 
-        for col in ['NUMCADIMOB', 'DESCUNIDIMOB', 'CNPJ', 'CLIENTE_NOME', 'DISTRATO', 'PERMUTA', 'EMPREENDIMENTO']:
+        for col in ['NUMCADIMOB', 'DESCUNIDIMOB', 'CNPJ', 'CLIENTE_NOME', 'DISTRATO', 'PERMUTA', 'EMPREENDIMENTO', 'NUMCONT']:
             if col in df.columns:
                 df[col] = df[col].map(safe_dec)
 
+        df['DATA_ISO'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%Y-%m-%d').fillna('')
         df['DTOPER'] = pd.to_datetime(df['DTOPER'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['DATADISTRATO'] = pd.to_datetime(df['DATADISTRATO'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
         df['TOTALVENDA'] = df['TOTALVENDA'].fillna(0).astype(float)
@@ -4698,10 +4699,12 @@ def get_vulcano_vendas(empresa_id: int, empreendimento_id: int = None, data_ini:
             'PERMUTA': 'permuta',
             'EMPREENDIMENTO': 'empreendimento',
             'EMPREENDIMENTO_ID': 'empreendimento_id',
-            'UNIDADE_ID': 'unidade_id'
+            'UNIDADE_ID': 'unidade_id',
+            'DATA_ISO': 'data_iso',
+            'NUMCONT': 'num_contrato'
         })
 
-        records = df_mapped[['id', 'num_cad', 'data', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
+        records = df_mapped[['id', 'num_cad', 'data', 'data_iso', 'num_contrato', 'descricao', 'cliente_cnpj', 'cliente_nome', 'total', 'distrato', 'data_distrato', 'permuta', 'empreendimento', 'empreendimento_id', 'unidade_id']].to_dict('records')
         for rec in records:
             extras = co_compradores.get(int(rec['id']), [])
             cota_principal = rec['total']
@@ -4963,6 +4966,175 @@ async def lancar_parcela_manual(venda_id: int, request: Request):
         conn.commit()
         return {"success": True, "id": new_id,
                 "message": f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/vendas/{venda_id}")
+async def editar_venda(venda_id: int, request: Request):
+    """Edição de linha da tela de Vendas: data, nº contrato, valor total e
+    permuta. Venda principal propaga contrato/data/permuta às vinculadas
+    MARCADAS e redistribui o total entre as cotas (proporcional às atuais)."""
+    body = await request.json()
+    data_v = str(body.get("data") or "").strip()
+    if data_v and (len(data_v) < 10 or data_v[:4] < "1990"):
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_v!r}")
+    total = body.get("total", None)
+    if total is not None:
+        total = float(total)
+        if total <= 0:
+            raise HTTPException(status_code=400, detail="Valor total deve ser maior que zero.")
+    num_contrato = body.get("num_contrato", None)
+    permuta = str(body.get("permuta") or "").strip().upper()[:1]
+    if not (data_v or total is not None or num_contrato is not None or permuta):
+        raise HTTPException(status_code=400, detail="Nada para alterar.")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT TOTALVENDA, IDVENDAVINCULADA FROM VENDA WHERE ID = ?", (int(venda_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Venda não encontrada.")
+        # vinculadas marcadas (grupo multi-comprador) — só quando editando a principal
+        cur.execute("""SELECT ID, TOTALVENDA FROM VENDA
+                       WHERE IDVENDAVINCULADA = ? AND UPPER(COALESCE(INFCOMP, '')) LIKE 'VINCULADA VENDA #%'""",
+                    (int(venda_id),))
+        sats = [(r[0], float(r[1] or 0)) for r in cur.fetchall()]
+        grupo = [(int(venda_id), float(row[0] or 0))] + sats
+
+        sets, params = [], []
+        if data_v:
+            sets.append("DTOPER = ?"); params.append(data_v)
+        if num_contrato is not None:
+            sets.append("NUMCONT = ?"); params.append(str(num_contrato).strip()[:90].encode('cp1252', 'ignore'))
+        if permuta in ("S", "N"):
+            sets.append("PERMUTA = ?"); params.append(permuta)
+        for vid, _ in grupo:
+            if sets:
+                cur.execute(f"UPDATE VENDA SET {', '.join(sets)} WHERE ID = ?", (*params, vid))
+        if total is not None:
+            soma_atual = sum(c for _, c in grupo)
+            n = len(grupo)
+            if soma_atual > 0:
+                cotas = [round(total * c / soma_atual, 2) for _, c in grupo]
+            else:
+                cotas = [round(total / n, 2) for _ in grupo]
+            cotas[-1] = round(total - sum(cotas[:-1]), 2)
+            for (vid, _), cota in zip(grupo, cotas):
+                cur.execute("UPDATE VENDA SET TOTALVENDA = ? WHERE ID = ?", (cota, vid))
+        conn.commit()
+        return {"success": True, "message": f"Venda #{venda_id} atualizada" +
+                (f" (grupo de {len(grupo)} compradores rateado)" if len(grupo) > 1 and total is not None else "") + "."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/receber/{receber_id}")
+async def editar_receber(receber_id: int, request: Request):
+    """Edição de linha de parcela (RECEBER): vencimento, valor, rótulo e obs."""
+    body = await request.json()
+    data_v = str(body.get("data") or "").strip()
+    if data_v and (len(data_v) < 10 or data_v[:4] < "1990"):
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_v!r}")
+    valor = body.get("valor_parcela", None)
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT TOTALPAGO FROM RECEBER WHERE ID = ?", (int(receber_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Parcela não encontrada.")
+        pago = float(row[0] or 0)
+        sets, params = [], []
+        if data_v:
+            sets.append("DATA = ?"); params.append(data_v)
+        if valor is not None:
+            valor = float(valor)
+            if valor <= 0:
+                raise HTTPException(status_code=400, detail="Valor da parcela deve ser maior que zero.")
+            if valor < pago - 0.005:
+                raise HTTPException(status_code=400, detail=f"Valor ({valor:,.2f}) menor que o já pago ({pago:,.2f}).")
+            sets.append("VALORPARCELA = ?"); params.append(round(valor, 2))
+        if body.get("parcela") is not None:
+            sets.append("PARCELA = ?"); params.append(str(body["parcela"]).strip()[:50].encode('cp1252', 'ignore'))
+        if body.get("obs") is not None:
+            sets.append("OBS = ?"); params.append(str(body["obs"]).strip()[:300].encode('cp1252', 'ignore'))
+        if not sets:
+            raise HTTPException(status_code=400, detail="Nada para alterar.")
+        cur.execute(f"UPDATE RECEBER SET {', '.join(sets)} WHERE ID = ?", (*params, int(receber_id)))
+        conn.commit()
+        return {"success": True, "message": f"Parcela #{receber_id} atualizada."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/cronograma/prazo/{prazo_id}")
+async def editar_prazo_cronograma(prazo_id: int, request: Request):
+    """Edição de parcela do cronograma (VENDAFORMAPAGTOPRAZO) — linhas
+    'prazo_<id>' da tela Recebimentos Mensal ainda não efetivadas no RECEBER."""
+    body = await request.json()
+    data_v = str(body.get("data") or "").strip()
+    if data_v and (len(data_v) < 10 or data_v[:4] < "1990"):
+        raise HTTPException(status_code=400, detail=f"Data inválida: {data_v!r}")
+    valor = body.get("valor", None)
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT VALOR_PAGO FROM VENDAFORMAPAGTOPRAZO WHERE ID = ?", (int(prazo_id),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Parcela do cronograma não encontrada.")
+        pago = float(row[0] or 0)
+        sets, params = [], []
+        if data_v:
+            sets.append("DATA = ?"); params.append(data_v)
+        if valor is not None:
+            valor = float(valor)
+            if valor <= 0:
+                raise HTTPException(status_code=400, detail="Valor deve ser maior que zero.")
+            if valor < pago - 0.005:
+                raise HTTPException(status_code=400, detail=f"Valor ({valor:,.2f}) menor que o já pago ({pago:,.2f}).")
+            sets.append("VALOR = ?"); params.append(round(valor, 2))
+        if body.get("referencia") is not None:
+            sets.append("REFERENCIA = ?"); params.append(str(body["referencia"]).strip()[:10].encode('cp1252', 'ignore'))
+        if not sets:
+            raise HTTPException(status_code=400, detail="Nada para alterar.")
+        cur.execute(f"UPDATE VENDAFORMAPAGTOPRAZO SET {', '.join(sets)} WHERE ID = ?", (*params, int(prazo_id)))
+        conn.commit()
+        return {"success": True, "message": f"Parcela de cronograma #{prazo_id} atualizada."}
     except HTTPException:
         raise
     except Exception as e:
@@ -6455,6 +6627,70 @@ async def upload_planilha(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
 
+@app.post("/api/smart-importer/preparar-colunas")
+def smart_importer_preparar_colunas(payload: dict):
+    """Apoio ao De-Para: o analista descreve em texto livre como interpretar a
+    planilha (ex.: 'a coluna UNIDADE traz bloco e apartamento juntos, BL A AP 101')
+    e a IA devolve um plano de COLUNAS DERIVADAS (regex por coluna nova). O regex
+    é aplicado aqui, deterministicamente, em TODAS as linhas — a IA desenha a
+    regra uma vez, sem custo por linha."""
+    import json
+    import re as _re
+    columns = payload.get("columns", [])
+    rows = payload.get("rows", [])
+    instrucoes = str(payload.get("instrucoes") or "").strip()
+    if not instrucoes:
+        raise HTTPException(status_code=400, detail="Escreva as instruções para o apoio ao De-Para.")
+    if not columns or not rows:
+        raise HTTPException(status_code=400, detail="Envie a planilha antes de aplicar as instruções.")
+
+    amostras = {c: [str(r.get(c, ""))[:60] for r in rows[:8]] for c in columns}
+    prompt = f"""Você prepara planilhas de clientes para importação num sistema imobiliário.
+COLUNAS ATUAIS (com até 8 amostras de valores): {json.dumps(amostras, ensure_ascii=False)}
+
+INSTRUÇÕES DO ANALISTA:
+{instrucoes[:2000]}
+
+Se alguma coluna contém MAIS DE UMA informação (conforme as instruções), proponha colunas derivadas.
+Responda SOMENTE este JSON:
+{{"novas_colunas": [{{"nome": "NOME DA NOVA COLUNA", "origem": "COLUNA DE ORIGEM EXATA",
+   "regex": "expressão regular Python com UM grupo de captura que extrai o valor"}}],
+ "observacao": "explicação curta do que foi feito"}}
+
+Regras: o regex deve funcionar nas amostras mostradas; use grupos de captura (parênteses);
+se nada precisa ser derivado, devolva novas_colunas como lista vazia e explique na observacao."""
+
+    plano = _gemini_generate_json(prompt)
+    novas = plano.get("novas_colunas") or []
+    relatorio = []
+    for nc in novas:
+        nome = str(nc.get("nome") or "").strip()
+        origem = str(nc.get("origem") or "").strip()
+        rx = str(nc.get("regex") or "").strip()
+        if not nome or origem not in columns or not rx:
+            relatorio.append({"coluna": nome or "?", "ok": False, "detalhe": f"plano inválido (origem '{origem}' inexistente ou regex vazio)"})
+            continue
+        try:
+            comp = _re.compile(rx)
+        except _re.error as e:
+            relatorio.append({"coluna": nome, "ok": False, "detalhe": f"regex inválido: {e}"})
+            continue
+        preenchidas = 0
+        for r in rows:
+            m = comp.search(str(r.get(origem, "") or ""))
+            valor = (m.group(1) if (m and m.groups()) else (m.group(0) if m else "")).strip() if m else ""
+            r[nome] = valor
+            if valor:
+                preenchidas += 1
+        if nome not in columns:
+            columns.append(nome)
+        relatorio.append({"coluna": nome, "ok": True,
+                          "detalhe": f"extraída de '{origem}' — {preenchidas}/{len(rows)} linha(s) preenchidas"})
+
+    return {"success": True, "columns": columns, "all_rows": rows,
+            "preview": rows[:10], "relatorio": relatorio,
+            "observacao": str(plano.get("observacao") or "")}
+
 @app.post("/api/schema-match")
 def schema_match(payload: dict):
     """Sugestao de de-para coluna->campo p/ o Smart Importer.
@@ -6472,11 +6708,13 @@ def schema_match(payload: dict):
     if not columns:
         return {"mapping": {}}
 
+    instrucoes = str(payload.get("instrucoes") or "").strip()
+    bloco_instrucoes = f"\nINSTRUÇÕES DO ANALISTA (siga-as ao decidir o mapeamento):\n{instrucoes[:1500]}\n" if instrucoes else ""
     prompt = f"""Você mapeia colunas de planilhas de clientes para campos de um sistema imobiliário.
 DESTINO: {destino}
 CAMPOS VÁLIDOS (use exatamente estes valores): {json.dumps(campos_validos, ensure_ascii=False)}
 COLUNAS DA PLANILHA (com amostra da 1ª linha): {json.dumps({c: str(amostras.get(c, ''))[:40] for c in columns}, ensure_ascii=False)}
-
+{bloco_instrucoes}
 Responda SOMENTE um objeto JSON plano onde cada chave é o nome EXATO da coluna da planilha
 e o valor é um dos CAMPOS VÁLIDOS, ou null quando a coluna não corresponder a nenhum campo.
 Exemplo: {{"CPF": "CLIENTE_CPF_CNPJ", "OBS INTERNA": null}}"""
@@ -9089,6 +9327,148 @@ def api_agentes_resumir(req: AuditResumeReq):
         "state": _serialize_agent_state(res)
     }
 
+def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
+                                empresa_id, empreendimento_id):
+    """Plano de importação de VENDAS a partir da planilha mapeada.
+
+    Casa a UNIDADE (bloco + número) com a estrutura do empreendimento; linhas
+    sem cliente/CPF são unidades não vendidas (ignoradas); unidade já vendida
+    não importa de novo (re-importação segura)."""
+    import re as _re
+
+    def dec(v):
+        if v is None: return ""
+        if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+        return str(v).strip()
+
+    # estrutura do empreendimento
+    cur.execute("SELECT ID, NOME FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (empreendimento_id,))
+    blocos = {r[0]: dec(r[1]).upper() for r in cur.fetchall()}
+    unidades = []
+    if blocos:
+        ph = ",".join("?" * len(blocos))
+        cur.execute(f"SELECT ID, IDBLOCO, DESCRICAO, METRAGEM, NUMCADIMOB FROM UNIDADE WHERE IDBLOCO IN ({ph})", tuple(blocos))
+        unidades = [{"id": r[0], "bloco": blocos.get(r[1], ""), "descricao": dec(r[2]),
+                     "numcadimob": r[4]} for r in cur.fetchall()]
+
+    # unidades ja vendidas (venda ativa)
+    vendidas = set()
+    if unidades:
+        ph = ",".join("?" * len(unidades))
+        cur.execute(f"""SELECT VU.IDUNIDADE FROM VENDAUNIDADE VU
+                        JOIN VENDA V ON V.ID = VU.IDVENDA
+                        WHERE VU.IDUNIDADE IN ({ph})
+                          AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)""",
+                    tuple(u["id"] for u in unidades))
+        vendidas = {r[0] for r in cur.fetchall()}
+
+    # cpfs com venda ativa no empreendimento (dedupe p/ linhas sem unidade casada)
+    cur.execute("""SELECT C.CNPJ, V.TOTALVENDA FROM VENDA V
+                   JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
+                   WHERE V.IDEMPREENDIMENTO = ? AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)""",
+                (empreendimento_id,))
+    vendas_cpf = {("".join(filter(str.isdigit, dec(r[0]))), round(float(r[1] or 0), 2)) for r in cur.fetchall()}
+
+    def _canon_bloco_nome(b):
+        b = str(b or "").strip().upper()
+        return f"BLOCO {b}" if b and len(b) <= 3 else b
+
+    def _match_unidade(bloco_pl, unidade_pl):
+        num = str(unidade_pl or "").strip()
+        if not num:
+            return None
+        alvo_bloco = _canon_bloco_nome(bloco_pl)
+        cands = [u for u in unidades
+                 if _re.search(rf"(?<!\d){_re.escape(num)}(?!\d)", u["descricao"])]
+        if alvo_bloco:
+            no_bloco = [u for u in cands if u["bloco"] == alvo_bloco]
+            cands = no_bloco or cands
+        exatas = [u for u in cands if _re.match(rf"^\D*{_re.escape(num)}(?!\d)", u["descricao"].replace("APTO", "").strip())]
+        return (exatas or cands)[0] if cands else None
+
+    def _split_compradores(nome_cell, cpf_cell):
+        """Casais vem com 2 CPFs na MESMA celula ('030... / 053...') e CNPJ tem
+        '/' INTERNO — nunca quebrar nele. Extrai documentos por padrao (CNPJ
+        formatado primeiro, depois runs de digitos >=11); cada documento vira
+        um comprador (CNPJ e varchar(20), docs juntos estouravam SQL -303)."""
+        txt = (cpf_cell or "").strip()
+        pat = _re.compile(r"(\d{2}[.\s]?\d{3}[.\s]?\d{3}\s*/\s*\d{4}\s*-?\s*\d{2})|([\d.\-]+)")
+        docs = []
+        for m in pat.finditer(txt):
+            tok = _re.sub(r"\s", "", m.group(0))
+            if m.group(1) or len("".join(filter(str.isdigit, tok))) >= 11:
+                docs.append(tok[:20])
+        nomes = [n.strip() for n in _re.split(r"[/;]", nome_cell or "") if n.strip()]
+        if len(docs) > 1 and len(nomes) != len(docs):
+            alt = [n.strip() for n in _re.split(r"\s+E\s+", nome_cell or "", flags=_re.I) if n.strip()]
+            if len(alt) == len(docs):
+                nomes = alt
+        comps = []
+        for i, d in enumerate(docs):
+            nome_i = nomes[i] if len(nomes) == len(docs) else (nome_cell or "").strip()
+            comps.append({"nome": (nome_i or "(sem nome)")[:100], "cpf": d})
+        if not comps and (nome_cell or cpf_cell):
+            comps = [{"nome": (nome_cell or "(sem nome)").strip()[:100],
+                      "cpf": txt[:20]}]
+        return comps
+
+    resultados, importaveis = [], []
+    for row in rows:
+        cliente = dec(_get(row, "CLIENTE_NOME"))
+        cpf = dec(_get(row, "CLIENTE_CPF_CNPJ"))
+        valor = _parse_valor(_get(row, "VGV"))
+        data_v = _parse_data(_get(row, "DATA_VENDA"))
+        contrato = dec(_get(row, "NUMERO_CONTRATO"))
+        bloco_pl = dec(_get(row, "BLOCO"))
+        unidade_pl = dec(_get(row, "UNIDADE"))
+
+        base = {"cliente_planilha": cliente, "contrato": contrato,
+                "dt_vencimento": data_v.isoformat() if data_v else None,
+                "dt_pagamento": None, "valor_planilha": valor, "valor_vulcano": None}
+
+        if not cliente and not cpf:
+            resultados.append({**base, "status": "IGNORADA",
+                               "unidade": f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip(),
+                               "obs": "Unidade sem venda na planilha (sem cliente/CPF)."})
+            continue
+        if not cpf or not valor or not data_v:
+            faltas = [n for n, v in (("CPF", cpf), ("valor", valor), ("data", data_v)) if not v]
+            resultados.append({**base, "status": "SEM_DADOS",
+                               "unidade": f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip(),
+                               "obs": f"Linha com venda mas sem {', '.join(faltas)} — complete a planilha."})
+            continue
+
+        u = _match_unidade(bloco_pl, unidade_pl)
+        compradores = _split_compradores(cliente, cpf)
+        cpf_digits = "".join(filter(str.isdigit, compradores[0]["cpf"])) if compradores else ""
+        if u and u["id"] in vendidas:
+            resultados.append({**base, "status": "JA_VENDIDA",
+                               "unidade": f"{u['bloco']} — {u['descricao']}",
+                               "obs": "Unidade já tem venda ativa — não importa de novo."})
+            continue
+        if not u and (cpf_digits, round(valor, 2)) in vendas_cpf:
+            resultados.append({**base, "status": "JA_VENDIDA",
+                               "unidade": f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip(),
+                               "obs": "Já existe venda ativa deste CPF com este valor no empreendimento."})
+            continue
+
+        status = "PRONTA" if u else "PRONTA_SEM_UNIDADE"
+        item = {
+            "compradores": compradores, "valor": round(valor, 2),
+            "data": data_v.isoformat(), "contrato": contrato,
+            "unidade_id": u["id"] if u else None,
+            "numcadimob": (u or {}).get("numcadimob"),
+            "descricao": (f"{u['bloco']} — {u['descricao']}" if u
+                          else f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip())[:90],
+        }
+        importaveis.append(item)
+        multi = f" {len(compradores)} compradores — rateio igual entre os CPFs (DIMOB por adquirente)." if len(compradores) > 1 else ""
+        resultados.append({**base, "status": status, "unidade": item["descricao"],
+                           "obs": "Vai criar venda + cliente + parcela única (1/1)." + multi
+                                  + ("" if u else " ⚠ unidade não encontrada na estrutura — grava sem vínculo.")})
+
+    return {"resultados": resultados, "importaveis": importaveis}
+
 class PreviewMatchRequest(BaseModel):
     rows: list
     mapping: dict
@@ -9350,6 +9730,21 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
 
         finally:
             conn_v.close()
+    elif payload.target_table == "VENDAS":
+        # VENDAS não é conciliação: é IMPORTAÇÃO. Analisa cada linha (cliente,
+        # CPF, data, valor), casa a UNIDADE com a estrutura do empreendimento e
+        # devolve o plano; a gravação acontece em /api/smart-importer/importar-vendas.
+        if not payload.empreendimento_id:
+            raise HTTPException(status_code=400, detail="Selecione o empreendimento de destino para importar VENDAS.")
+        conn_v = get_conn("vulcano")
+        try:
+            cur = conn_v.cursor()
+            plano = _analisar_importacao_vendas(cur, payload.rows, _get, _parse_valor,
+                                                _parse_data, payload.empresa_id,
+                                                payload.empreendimento_id)
+            resultados = plano["resultados"]
+        finally:
+            conn_v.close()
     else:
         for row in payload.rows:
             resultados.append({
@@ -9366,8 +9761,156 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
         "ja_quitados":    sum(1 for r in resultados if r["status"] == "JA_QUITADO"),
         "match_perfeito": sum(1 for r in resultados if r["status"] == "MATCH_PERFEITO"),
         "sem_match":      sum(1 for r in resultados if r["status"] == "SEM_MATCH"),
+        "importaveis":    sum(1 for r in resultados if r["status"] in ("PRONTA", "PRONTA_SEM_UNIDADE")),
     }
     return {"resultados": resultados, "counts": counts}
+
+@app.post("/api/smart-importer/importar-vendas")
+async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
+    """Gravação do plano de importação de VENDAS ('Gravar no ERP' do Smart
+    Importer): cria CLIENTE (find-or-create por CPF), VENDA (contrato único),
+    vincula a UNIDADE casada e gera PARCELA ÚNICA 1/1 no RECEBER (o valor total
+    fica aberto para baixas — inclusive parciais)."""
+    import re as _re
+    from datetime import datetime as _dt
+
+    inv = {str(v): k for k, v in payload.mapping.items() if v and v != "null" and isinstance(v, str)}
+
+    def _get(row, campo):
+        col = inv.get(campo)
+        return row.get(col) if col else None
+
+    def _parse_valor(v):
+        if v is None: return None
+        if isinstance(v, (int, float)): return float(v)
+        try:
+            s = _re.sub(r"[^\d,\.]", "", str(v).strip())
+            if '.' in s and ',' in s:
+                s = s.replace(".", "").replace(",", ".") if s.rfind(',') > s.rfind('.') else s.replace(",", "")
+            elif ',' in s:
+                s = s.replace(",", ".")
+            return float(s) if s else None
+        except Exception:
+            return None
+
+    def _parse_data(v):
+        if not v: return None
+        v = str(v).strip()[:10]
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return _dt.strptime(v, fmt).date()
+            except ValueError:
+                pass
+        return None
+
+    if not payload.empresa_id or not payload.empreendimento_id:
+        raise HTTPException(status_code=400, detail="Empresa e empreendimento são obrigatórios para importar vendas.")
+
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        plano = _analisar_importacao_vendas(cur, payload.rows, _get, _parse_valor,
+                                            _parse_data, payload.empresa_id,
+                                            payload.empreendimento_id)
+        importaveis = plano["importaveis"]
+        if not importaveis:
+            return {"success": True, "inseridas": 0, "resultados": plano["resultados"],
+                    "message": "Nada a importar (linhas sem venda, incompletas ou já importadas)."}
+
+        cur.execute("SELECT 1 FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'CLIENTE' AND TRIM(RDB$FIELD_NAME) = 'CODIGOEMPRESA'")
+        cliente_tem_empresa = cur.fetchone() is not None
+
+        def _cliente(nome, cpf):
+            raw = "".join(filter(str.isdigit, cpf))
+            cur.execute("SELECT FIRST 1 ID, NOME FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw,))
+            r = cur.fetchone()
+            if r:
+                # cadastro reencontrado sem nome (residuo de importacao) ganha o da planilha
+                atual = r[1].decode('cp1252', 'ignore').strip() if isinstance(r[1], bytes) else (r[1] or "").strip()
+                if (not atual or atual == "(sem nome)") and nome.strip():
+                    cur.execute("UPDATE CLIENTE SET NOME = ? WHERE ID = ?",
+                                (nome.encode('cp1252', 'ignore')[:100], r[0]))
+                return r[0]
+            cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
+            cid = cur.fetchone()[0]
+            if cliente_tem_empresa:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
+                            (cid, nome.encode('cp1252', 'ignore')[:100], cpf, int(payload.empresa_id)))
+            else:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ) VALUES (?, ?, ?)",
+                            (cid, nome.encode('cp1252', 'ignore')[:100], cpf))
+            return cid
+
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDA")
+        prox_venda = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAUNIDADE")
+        prox_vu = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+        prox_rec = cur.fetchone()[0]
+
+        inseridas = 0
+        for item in importaveis:
+            comps = item["compradores"]
+            n = max(1, len(comps))
+            # rateio igual entre os CPFs — cotas fecham exatamente o total
+            cotas = [round(item["valor"] / n, 2) for _ in comps]
+            if cotas:
+                cotas[-1] = round(item["valor"] - sum(cotas[:-1]), 2)
+            ids_cli = [_cliente(c["nome"], c["cpf"]) for c in comps]
+
+            vid = prox_venda; prox_venda += 1
+            num_contrato = (item["contrato"] or str(vid))[:90]
+            num_cad = _int_or_none(item.get("numcadimob"))
+            cur.execute(
+                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?)",
+                (vid, int(payload.empreendimento_id), num_cad,
+                 num_contrato.encode('cp1252', 'ignore'), item["data"],
+                 item["descricao"].encode('cp1252', 'ignore'), cotas[0],
+                 int(payload.empresa_id), ids_cli[0]),
+            )
+            # compradores extras = vendas vinculadas com a cota de cada CPF
+            # (mesmo modelo do cadastro manual: DIMOB/EFD por adquirente)
+            for offset, cid_extra in enumerate(ids_cli[1:], start=1):
+                sat_id = prox_venda; prox_venda += 1
+                cur.execute(
+                    "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?, ?, ?)",
+                    (sat_id, int(payload.empreendimento_id), num_cad,
+                     num_contrato.encode('cp1252', 'ignore'), item["data"],
+                     item["descricao"].encode('cp1252', 'ignore'), cotas[offset],
+                     int(payload.empresa_id), cid_extra, vid,
+                     f"VINCULADA VENDA #{vid}".encode('cp1252', 'ignore')),
+                )
+            if item["unidade_id"]:
+                cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)",
+                            (prox_vu, vid, int(item["unidade_id"])))
+                prox_vu += 1
+            # parcela única 1/1 na PRINCIPAL com o VALOR TOTAL do contrato:
+            # em aberto, baixável (inclusive parcial)
+            cur.execute(
+                "INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)",
+                (prox_rec, vid, ids_cli[0], item["data"], item["valor"],
+                 "1/1".encode('cp1252'), "GERADA NA IMPORTACAO (PARCELA UNICA)".encode('cp1252')),
+            )
+            prox_rec += 1
+            inseridas += 1
+
+        conn.commit()
+        return {"success": True, "inseridas": inseridas,
+                "message": f"{inseridas} venda(s) importadas com cliente e parcela única 1/1 (abertas para baixa, inclusive parcial)."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
 
 
 

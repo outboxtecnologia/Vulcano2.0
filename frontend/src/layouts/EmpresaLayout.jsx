@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router';
 import {
-  Bell, ChevronRight, Cpu, Database, Download, Plus, Search,
+  ArrowLeft, Bell, ChevronRight, Cpu, Database, Download, Plus, Search,
 } from 'lucide-react';
 import { useEmpresas } from '../context/EmpresasContext';
 import { useTheme } from '../context/ThemeContext';
@@ -48,6 +48,14 @@ export default function EmpresaLayout() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [search, setSearch] = useState('');
+
+  // Voltar do operador. A versao original mantinha uma pilha propria de telas
+  // (setCurrentView empilhava a anterior), o que fazia sentido quando a view era
+  // estado do App. Hoje a navegacao e por URL, entao a pilha JA e a do historico
+  // do navegador — duplicar isso desincronizaria os dois. `idx` e o indice que o
+  // react-router grava em history.state; 0 significa primeira entrada da sessao,
+  // ou seja, nao ha para onde voltar.
+  const podeVoltar = (window.history.state?.idx ?? 0) > 0;
 
   const empresa = findEmpresa(empresaId);
 
@@ -157,6 +165,19 @@ export default function EmpresaLayout() {
                       background: 'var(--v-shell)'
                     }}>
                 <div className="flex items-center gap-4 flex-1">
+                    <button
+                        onClick={() => navigate(-1)}
+                        disabled={!podeVoltar}
+                        title={podeVoltar ? 'Voltar à tela anterior' : 'Sem tela anterior'}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-[var(--v-radius)] text-[10px] font-black uppercase tracking-widest transition-all shrink-0 disabled:cursor-default"
+                        style={{
+                          background: 'var(--v-card)',
+                          border: '1px solid var(--v-shell-border)',
+                          color: podeVoltar ? 'var(--v-text)' : 'var(--v-text-faint)',
+                          opacity: podeVoltar ? 1 : 0.5,
+                        }}>
+                        <ArrowLeft size={13} /> <span>Voltar</span>
+                    </button>
                     <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors" size={16}
                                 style={{ color: 'var(--v-text-faint)' }} />

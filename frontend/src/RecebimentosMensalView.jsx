@@ -98,6 +98,40 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
     const [editId, setEditId] = useState(null);
     const [baixa, setBaixa] = useState({ data_pagamento: '', valor: '', variacao: '', desconto: '' });
     const [salvando, setSalvando] = useState(false);
+    const [editParcela, setEditParcela] = useState(null);
+    const [salvandoEd, setSalvandoEd] = useState(false);
+
+    const abrirEdicaoParcela = (r) => setEditParcela({
+        row: r, venc: r.vencimento || '', valor: r.valor_parcela != null ? String(r.valor_parcela) : '',
+        rotulo: r.parcela || '', obs: r.obs || ''
+    });
+
+    const salvarEdicaoParcela = async () => {
+        const m = editParcela;
+        if (!m) return;
+        if (m.venc && m.venc < '1990-01-01') { alert('Data inválida.'); return; }
+        if (m.valor !== '' && !(parseFloat(m.valor) > 0)) { alert('Valor deve ser maior que zero.'); return; }
+        setSalvandoEd(true);
+        try {
+            const idStr = String(m.row.id);
+            const isPrazo = idStr.startsWith('prazo_');
+            const url = isPrazo
+                ? `${API_BASE}/api/vulcano/cronograma/prazo/${idStr.replace('prazo_', '')}`
+                : `${API_BASE}/api/vulcano/receber/${idStr}`;
+            const payload = isPrazo
+                ? { data: m.venc || undefined, valor: m.valor !== '' ? parseFloat(m.valor) : undefined, referencia: m.rotulo }
+                : { data: m.venc || undefined, valor_parcela: m.valor !== '' ? parseFloat(m.valor) : undefined, parcela: m.rotulo, obs: m.obs };
+            const res = await fetch(url, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
+            setEditParcela(null);
+            pesquisar();
+        } catch (e) { alert('Falha ao salvar edição: ' + e.message); }
+        finally { setSalvandoEd(false); }
+    };
 
     useEffect(() => {
         if (!selectedEmpresa) return;
@@ -410,6 +444,9 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                         {c.label}
                                     </Th>
                                 ))}
+                                {/* coluna da acao (lapis) — fora de colunasVisiveis porque nao e dado
+                                    e portanto nao entra na ordenacao nem na busca */}
+                                <Th></Th>
                             </tr>
                         </thead>
                         <tbody>
@@ -487,12 +524,17 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                         </td>
                                         <td className="px-3 py-2 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.saldo_atual)}</td>
                                         <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: r.status === 'VENCIDA' ? 'var(--v-err)' : 'var(--v-text-muted)' }}>{r.parcela}</td>
-                                        <td className="px-3 py-2 text-[#8a7a68] whitespace-nowrap max-w-44 truncate">{r.obs}</td>
+                                        <td className="px-3 py-2 text-[var(--v-text-muted)] whitespace-nowrap max-w-44 truncate">{r.obs}</td>
+                                        <td className="px-2 py-2">
+                                            <button title="Editar parcela (vencimento, valor, rótulo)"
+                                                onClick={e => { e.stopPropagation(); abrirEdicaoParcela(r); }}
+                                                className="px-1.5 py-0.5 rounded border border-[var(--v-line)] text-[var(--v-text-muted)] text-[10px] hover:text-[var(--v-text-bold)] hover:border-[var(--v-border)]">✎</button>
+                                        </td>
                                     </tr>
                                 );
                             })}
                             {data && rows.length === 0 && (
-                                <tr><td colSpan={colunasVisiveis.length} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
+                                <tr><td colSpan={colunasVisiveis.length + 1} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
                                     {/* A mensagem antiga ("sem parcelas para o periodo") mentia
                                         quando o mes tinha linhas e era a busca que nao achava. */}
                                     {buscando ? (
@@ -507,7 +549,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                 </td></tr>
                             )}
                             {!data && !loading && (
-                                <tr><td colSpan={colunasVisiveis.length} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
+                                <tr><td colSpan={colunasVisiveis.length + 1} className="py-16 text-center text-[var(--v-text-ghost)] text-[10px] uppercase tracking-widest">
                                     Selecione o mês de referência e pesquise.
                                 </td></tr>
                             )}
@@ -525,13 +567,61 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                     <td className="px-3 py-2.5 text-right text-[var(--v-text-muted)]">{fmt(tot.variacao)}</td>
                                     <td className="px-3 py-2.5 text-right text-[var(--v-ok)]">{fmt(tot.total_pago)}</td>
                                     <td className="px-3 py-2.5 text-right text-[var(--v-text-muted)]">{fmt(tot.saldo_atual)}</td>
-                                    <td colSpan={2}></td>
+                                    {/* +1 em relacao ao original: a coluna do lapis */}
+                                    <td colSpan={3}></td>
                                 </tr>
                             </tfoot>
                         )}
                     </table>
                 </div>
             </div>
+
+            {/* MODAL EDITAR PARCELA */}
+            {editParcela && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[110] p-6">
+                    <div className="w-full max-w-md rounded-xl shadow-2xl flex flex-col p-6 bg-[var(--v-bg)] border border-[var(--v-line)]">
+                        <h3 className="text-[13px] font-black uppercase tracking-widest text-[var(--v-text-bold)] mb-1">✎ Editar Parcela</h3>
+                        <p className="text-[11px] text-[var(--v-text-muted)] mb-5">
+                            <b className="text-[var(--v-text-bold)]">#{String(editParcela.row.id).replace('prazo_', 'pr_')}</b> — {editParcela.row.comprador} · {(editParcela.row.unidade || '').replace(/\s+/g, ' ')}
+                            {String(editParcela.row.id).startsWith('prazo_') && <> <span className="text-[var(--v-warn)]">(cronograma ainda não efetivado)</span></>}
+                        </p>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <label className="text-[9px] uppercase font-bold mb-1 block text-[var(--v-text-ghost)] tracking-widest">Vencimento</label>
+                                <input type="date" min="1990-01-01" value={editParcela.venc} onChange={e => setEditParcela({ ...editParcela, venc: e.target.value })}
+                                    className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-1.5 rounded outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-[9px] uppercase font-bold mb-1 block text-[var(--v-text-ghost)] tracking-widest">Valor da parcela</label>
+                                <input type="number" step="0.01" value={editParcela.valor} onChange={e => setEditParcela({ ...editParcela, valor: e.target.value })}
+                                    className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-1.5 rounded outline-none text-right" />
+                            </div>
+                            <div>
+                                <label className="text-[9px] uppercase font-bold mb-1 block text-[var(--v-text-ghost)] tracking-widest">Parcela (rótulo)</label>
+                                <input value={editParcela.rotulo} onChange={e => setEditParcela({ ...editParcela, rotulo: e.target.value })}
+                                    className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] text-[var(--v-text-bold)] text-[11px] font-mono px-2 py-1.5 rounded outline-none" />
+                            </div>
+                            {!String(editParcela.row.id).startsWith('prazo_') && (
+                                <div>
+                                    <label className="text-[9px] uppercase font-bold mb-1 block text-[var(--v-text-ghost)] tracking-widest">Observação</label>
+                                    <input value={editParcela.obs} onChange={e => setEditParcela({ ...editParcela, obs: e.target.value })}
+                                        className="w-full bg-[var(--v-bg)] border border-[var(--v-line)] text-[var(--v-text-bold)] text-[11px] px-2 py-1.5 rounded outline-none" />
+                                </div>
+                            )}
+                        </div>
+                        {editParcela.row.status === 'PAGO' && (
+                            <p className="text-[10px] text-[var(--v-accent)] mb-3">Parcela já paga: o valor não pode ficar menor que o total pago.</p>
+                        )}
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setEditParcela(null)} className="px-4 py-2 hover:bg-[var(--v-tint)] text-[10px] font-bold uppercase tracking-widest rounded text-[var(--v-text-muted)]">Cancelar</button>
+                            <button onClick={salvarEdicaoParcela} disabled={salvandoEd}
+                                className="px-6 py-2 rounded text-[10px] font-bold uppercase tracking-widest bg-[var(--v-ok)]/20 border border-[var(--v-ok)]/40 text-[var(--v-ok)] hover:bg-[var(--v-ok)]/30 disabled:opacity-40">
+                                {salvandoEd ? 'Gravando...' : 'Salvar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -47,6 +47,12 @@ const STATUS_META = {
   MATCH_MANUAL:  { label: 'MATCH MANUAL', color: 'var(--v-src-vu1)' },
   SEM_MATCH:     { label: 'SEM MATCH',    color: 'var(--v-accent)' },
   DIVERGENCIA:   { label: 'DIVERGÊNCIA',  color: 'var(--v-warn-hi)' },
+  // importação de VENDAS (não é conciliação: cria venda+cliente+parcela única)
+  PRONTA:             { label: 'IMPORTAR',            color: 'var(--v-ok)' },
+  PRONTA_SEM_UNIDADE: { label: 'IMPORTAR S/ UNIDADE', color: 'var(--v-warn-hi)' },
+  JA_VENDIDA:         { label: 'JÁ VENDIDA',          color: 'var(--v-text-muted)' },
+  IGNORADA:           { label: 'SEM VENDA',           color: 'var(--v-text-faint)' },
+  SEM_DADOS:          { label: 'DADOS INCOMPLETOS',   color: 'var(--v-accent)' },
 };
 
 export default function SmartImporter({ selectedEmpresa }) {
@@ -184,6 +190,10 @@ export default function SmartImporter({ selectedEmpresa }) {
   };
 
   const handlePreviewMatch = async () => {
+    if (targetTable === 'VENDAS' && !selectedEmpreendimento) {
+      alert('Para importar VENDAS, selecione o EMPREENDIMENTO de destino (a unidade é casada com a estrutura dele).');
+      return;
+    }
     setMatchLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/smart-importer/preview-match`, {
@@ -210,6 +220,83 @@ export default function SmartImporter({ selectedEmpresa }) {
   };
 
   
+  // Apoio ao De-Para: instruções livres do analista p/ a IA (colunas com mais
+  // de uma informação, formatos fora do padrão etc.)
+  const [apoioAberto, setApoioAberto] = useState(false);
+  const [instrucoes, setInstrucoes] = useState('');
+  const [aplicandoApoio, setAplicandoApoio] = useState(false);
+
+  const aplicarApoioDePara = async () => {
+    if (!instrucoes.trim()) { alert('Descreva como a IA deve interpretar a planilha.'); return; }
+    if (!columns.length) { alert('Envie uma planilha primeiro.'); return; }
+    setAplicandoApoio(true);
+    try {
+      // 1) deriva colunas novas quando a instrução pede separação de informações
+      const res = await fetch(`${API_BASE}/api/smart-importer/preparar-colunas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columns, rows: allRows, instrucoes })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+      setColumns(d.columns || columns);
+      setAllRows(d.all_rows || allRows);
+      setPreviewData(d.preview || previewData);
+      const linhas = (d.relatorio || []).map(r => `${r.ok ? '✓' : '✗'} ${r.coluna}: ${r.detalhe}`);
+      // 2) refaz a sugestão de mapeamento já com as instruções e colunas novas
+      await callGeminiMatchingComInstrucoes(d.columns || columns, (d.preview || previewData)[0]);
+      alert(`Apoio aplicado.\n${d.observacao || ''}\n${linhas.join('\n')}`.trim());
+    } catch (e) {
+      alert('Falha no apoio ao De-Para: ' + e.message);
+    } finally {
+      setAplicandoApoio(false);
+    }
+  };
+
+  const callGeminiMatchingComInstrucoes = async (cols, amostra) => {
+    const res = await fetch(`${API_BASE}/api/schema-match`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        columns: cols, target_table: targetTable,
+        campos: (TARGET_SCHEMAS[targetTable] || []).map(f => f.value),
+        amostras: amostra || {}, instrucoes,
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.detail || 'Falha no mapeamento IA');
+    const normalized = {};
+    for (const [k, v] of Object.entries(data.mapping || {})) {
+      normalized[k] = (v === null || v === undefined || v === '' || v === 'null') ? 'null' : v;
+    }
+    setMapping(normalized);
+  };
+
+  const [gravandoErp, setGravandoErp] = useState(false);
+  const handleGravarNoErp = async () => {
+    if (targetTable !== 'VENDAS') { alert('Gravação disponível por enquanto apenas para o destino VENDAS.'); return; }
+    const prontas = matchData.filter(r => r.status?.startsWith('PRONTA')).length;
+    if (!prontas) { alert('Nenhuma linha importável no preview.'); return; }
+    if (!window.confirm(`Importar ${prontas} venda(s) para o empreendimento selecionado?\n\nSerá criado: cliente (se novo), venda com Nº de contrato único, vínculo da unidade e parcela única 1/1 em aberto (baixável, inclusive parcial).`)) return;
+    setGravandoErp(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/smart-importer/importar-vendas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: allRows, mapping, target_table: targetTable,
+          empresa_id: selectedEmpresa ? parseInt(selectedEmpresa, 10) : null,
+          empreendimento_id: selectedEmpreendimento ? parseInt(selectedEmpreendimento, 10) : null,
+        })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+      alert(d.message || `${d.inseridas} venda(s) importadas.`);
+      handlePreviewMatch(); // re-analisa: as importadas agora aparecem como JÁ VENDIDA
+    } catch (e) {
+      alert('Falha na importação: ' + e.message);
+    } finally {
+      setGravandoErp(false);
+    }
+  };
+
   const handleSaveTemplate = async () => {
     const nome = prompt("Digite um nome para o template:");
     if (!nome) return;
@@ -220,7 +307,8 @@ export default function SmartImporter({ selectedEmpresa }) {
         body: JSON.stringify({
           nome,
           target_table: targetTable,
-          mapping_json: JSON.stringify(mapping)
+          // v2: guarda tambem as instrucoes do Apoio ao De-Para junto do layout
+          mapping_json: JSON.stringify({ __v: 2, mapping, instrucoes })
         })
       });
       const data = await res.json();
@@ -237,8 +325,14 @@ export default function SmartImporter({ selectedEmpresa }) {
   const handleApplyTemplate = (templateHtmlJson) => {
     if (!templateHtmlJson) return;
     try {
-       const mapObj = JSON.parse(templateHtmlJson);
-       setMapping(mapObj);
+       const obj = JSON.parse(templateHtmlJson);
+       if (obj && obj.__v === 2 && obj.mapping) {
+         // template v2: layout + instrucoes do Apoio ao De-Para
+         setMapping(obj.mapping);
+         if (obj.instrucoes) { setInstrucoes(obj.instrucoes); setApoioAberto(true); }
+       } else {
+         setMapping(obj); // template antigo (mapa plano)
+       }
     } catch(e) {}
   };
 
@@ -500,6 +594,9 @@ export default function SmartImporter({ selectedEmpresa }) {
                 <option value="VENDAS">Destino: VENDAS</option>
                 <option value="RECEBIMENTOS">Destino: RECEBIMENTOS</option>
               </select>
+              <button onClick={() => setApoioAberto(v => !v)} className={`flex items-center gap-1.5 px-3 py-1.5 border rounded text-[11px] font-medium transition-colors ${apoioAberto || instrucoes ? 'bg-[var(--v-accent)]/10 text-[var(--v-accent)] border-[var(--v-accent)]/40' : 'bg-[var(--v-deep)] border-[var(--v-border)] text-[var(--v-text-muted)] hover:bg-[var(--v-hover)]'}`}>
+                <Sparkles size={12} /> Apoio ao De-Para
+              </button>
               <button onClick={() => callGeminiMatching(columns)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
                 <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Re-analisar
               </button>
@@ -508,7 +605,31 @@ export default function SmartImporter({ selectedEmpresa }) {
               </button>
             </div>
           </div>
-          
+
+          {/* Janela de apoio ao De-Para: instruções livres do analista para a IA */}
+          {apoioAberto && (
+            <div className="p-4 border-b border-[var(--v-border)] bg-[var(--v-accent)]/5 space-y-3">
+              <p className="text-[11px] text-[var(--v-text-muted)] leading-snug">
+                Explique para a IA como interpretar a planilha deste cliente — principalmente quando <b className="text-[var(--v-text-bold)]">uma coluna traz mais de uma informação</b>. A IA cria colunas separadas (aplicando a regra em todas as linhas) e refaz a sugestão de mapeamento seguindo suas instruções.
+              </p>
+              <textarea
+                value={instrucoes}
+                onChange={(e) => setInstrucoes(e.target.value)}
+                rows={4}
+                placeholder={"Exemplos:\n• A coluna 'UNIDADE' traz bloco e apartamento juntos (ex.: 'BL A AP 101') — separe em BLOCO e APARTAMENTO.\n• Na coluna 'CLIENTE' vem nome e CPF na mesma célula, separados por ' - '.\n• A coluna 'VALOR' usa ponto como separador de milhar."}
+                className="w-full bg-black/40 border border-[var(--v-border)] rounded p-3 text-[12px] text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent)]/50 font-mono placeholder:text-[var(--v-text-faint)]"
+              />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { setApoioAberto(false); }} className="px-3 py-1.5 text-[11px] text-[var(--v-text-muted)] hover:text-[var(--v-text-bold)] transition-colors">Fechar</button>
+                <button onClick={aplicarApoioDePara} disabled={aplicandoApoio || !instrucoes.trim()}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-accent)]/15 text-[var(--v-accent)] border border-[var(--v-accent)]/40 rounded text-[11px] font-bold hover:bg-[var(--v-accent)]/25 transition-colors disabled:opacity-40">
+                  {aplicandoApoio ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {aplicandoApoio ? 'Aplicando...' : 'Aplicar instruções com IA'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
@@ -582,8 +703,8 @@ export default function SmartImporter({ selectedEmpresa }) {
               <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
                 Voltar
               </button>
-              <button onClick={() => alert("Gravação será implementada na API")} className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-ok)]/10 text-[var(--v-ok)] border border-[var(--v-ok)]/30 rounded text-[11px] font-bold hover:bg-[var(--v-ok)]/20 transition-colors shadow-sm">
-                <Save size={14} /> Gravar no ERP
+              <button onClick={handleGravarNoErp} disabled={gravandoErp} className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-ok)]/10 text-[var(--v-ok)] border border-[var(--v-ok)]/30 rounded text-[11px] font-bold hover:bg-[var(--v-ok)]/20 transition-colors shadow-sm disabled:opacity-40">
+                <Save size={14} /> <span>{gravandoErp ? 'Gravando...' : (targetTable === 'VENDAS' ? `Importar ${matchData.filter(r => r.status?.startsWith('PRONTA')).length} venda(s)` : 'Gravar no ERP')}</span>
               </button>
             </div>
           </div>
