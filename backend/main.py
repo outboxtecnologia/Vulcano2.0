@@ -9214,6 +9214,22 @@ def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
         exatas = [u for u in cands if _re.match(rf"^\D*{_re.escape(num)}(?!\d)", u["descricao"].replace("APTO", "").strip())]
         return (exatas or cands)[0] if cands else None
 
+    def _split_compradores(nome_cell, cpf_cell):
+        """Casais vem com 2 CPFs na MESMA celula ('030... / 053...') — cada um
+        vira um comprador (multi-comprador com rateio igual; CNPJ e varchar(20),
+        dois documentos juntos estouravam SQL -303)."""
+        docs = [d.strip() for d in _re.split(r"[/;]", cpf_cell or "")
+                if len("".join(filter(str.isdigit, d))) >= 11]
+        nomes = [n.strip() for n in _re.split(r"[/;]", nome_cell or "") if n.strip()]
+        comps = []
+        for i, d in enumerate(docs):
+            nome_i = nomes[i] if len(nomes) == len(docs) else (nome_cell or "").strip()
+            comps.append({"nome": (nome_i or "(sem nome)")[:100], "cpf": d[:20]})
+        if not comps and (nome_cell or cpf_cell):
+            comps = [{"nome": (nome_cell or "(sem nome)").strip()[:100],
+                      "cpf": (cpf_cell or "").strip()[:20]}]
+        return comps
+
     resultados, importaveis = [], []
     for row in rows:
         cliente = dec(_get(row, "CLIENTE_NOME"))
@@ -9241,7 +9257,8 @@ def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
             continue
 
         u = _match_unidade(bloco_pl, unidade_pl)
-        cpf_digits = "".join(filter(str.isdigit, cpf))
+        compradores = _split_compradores(cliente, cpf)
+        cpf_digits = "".join(filter(str.isdigit, compradores[0]["cpf"])) if compradores else ""
         if u and u["id"] in vendidas:
             resultados.append({**base, "status": "JA_VENDIDA",
                                "unidade": f"{u['bloco']} — {u['descricao']}",
@@ -9255,7 +9272,7 @@ def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
 
         status = "PRONTA" if u else "PRONTA_SEM_UNIDADE"
         item = {
-            "cliente": cliente, "cpf_cnpj": cpf, "valor": round(valor, 2),
+            "compradores": compradores, "valor": round(valor, 2),
             "data": data_v.isoformat(), "contrato": contrato,
             "unidade_id": u["id"] if u else None,
             "numcadimob": (u or {}).get("numcadimob"),
@@ -9263,8 +9280,9 @@ def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
                           else f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip())[:90],
         }
         importaveis.append(item)
+        multi = f" {len(compradores)} compradores — rateio igual entre os CPFs (DIMOB por adquirente)." if len(compradores) > 1 else ""
         resultados.append({**base, "status": status, "unidade": item["descricao"],
-                           "obs": "Vai criar venda + cliente + parcela única (1/1)."
+                           "obs": "Vai criar venda + cliente + parcela única (1/1)." + multi
                                   + ("" if u else " ⚠ unidade não encontrada na estrutura — grava sem vínculo.")})
 
     return {"resultados": resultados, "importaveis": importaveis}
@@ -9646,7 +9664,14 @@ async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
 
         inseridas = 0
         for item in importaveis:
-            cid = _cliente(item["cliente"], item["cpf_cnpj"])
+            comps = item["compradores"]
+            n = max(1, len(comps))
+            # rateio igual entre os CPFs — cotas fecham exatamente o total
+            cotas = [round(item["valor"] / n, 2) for _ in comps]
+            if cotas:
+                cotas[-1] = round(item["valor"] - sum(cotas[:-1]), 2)
+            ids_cli = [_cliente(c["nome"], c["cpf"]) for c in comps]
+
             vid = prox_venda; prox_venda += 1
             num_contrato = (item["contrato"] or str(vid))[:90]
             num_cad = _int_or_none(item.get("numcadimob"))
@@ -9654,17 +9679,30 @@ async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
                 "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?)",
                 (vid, int(payload.empreendimento_id), num_cad,
                  num_contrato.encode('cp1252', 'ignore'), item["data"],
-                 item["descricao"].encode('cp1252', 'ignore'), item["valor"],
-                 int(payload.empresa_id), cid),
+                 item["descricao"].encode('cp1252', 'ignore'), cotas[0],
+                 int(payload.empresa_id), ids_cli[0]),
             )
+            # compradores extras = vendas vinculadas com a cota de cada CPF
+            # (mesmo modelo do cadastro manual: DIMOB/EFD por adquirente)
+            for offset, cid_extra in enumerate(ids_cli[1:], start=1):
+                sat_id = prox_venda; prox_venda += 1
+                cur.execute(
+                    "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE, IDVENDAVINCULADA, INFCOMP) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?, ?, ?)",
+                    (sat_id, int(payload.empreendimento_id), num_cad,
+                     num_contrato.encode('cp1252', 'ignore'), item["data"],
+                     item["descricao"].encode('cp1252', 'ignore'), cotas[offset],
+                     int(payload.empresa_id), cid_extra, vid,
+                     f"VINCULADA VENDA #{vid}".encode('cp1252', 'ignore')),
+                )
             if item["unidade_id"]:
                 cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)",
                             (prox_vu, vid, int(item["unidade_id"])))
                 prox_vu += 1
-            # parcela única 1/1: valor total em aberto, baixável (inclusive parcial)
+            # parcela única 1/1 na PRINCIPAL com o VALOR TOTAL do contrato:
+            # em aberto, baixável (inclusive parcial)
             cur.execute(
                 "INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)",
-                (prox_rec, vid, cid, item["data"], item["valor"],
+                (prox_rec, vid, ids_cli[0], item["data"], item["valor"],
                  "1/1".encode('cp1252'), "GERADA NA IMPORTACAO (PARCELA UNICA)".encode('cp1252')),
             )
             prox_rec += 1
