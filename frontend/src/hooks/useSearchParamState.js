@@ -42,3 +42,38 @@ export function useSearchParamState(key, initial, options = {}) {
 
   return [value, setValue];
 }
+
+/**
+ * Escreve VARIOS parametros de uma vez, numa unica navegacao.
+ *
+ * Use sempre que uma acao mudar mais de um parametro. Dois setters do
+ * useSearchParamState no mesmo tick NAO se acumulam: o setSearchParams do
+ * react-router resolve a funcao contra o `searchParams` do render atual
+ * (useMemo sobre location.search), entao a segunda chamada parte da MESMA
+ * origem que a primeira e o navigate dela sobrescreve o anterior.
+ *
+ *   setMes(9); setAno(2026);   // -> ?ano=2026&mes=8   (o mes 9 se perdeu)
+ *   setCompetencia({ mes: 9, ano: 2026 });  // -> ?ano=2026&mes=9
+ *
+ * Foi o que travou a navegacao de competencia em Recebimentos Mensal: como o
+ * ano quase nunca muda junto, o setAno reescrevia o mes antigo por cima e a
+ * tela nao saia do lugar.
+ */
+export function useSearchParamsPatch(options = {}) {
+  const [, setParams] = useSearchParams();
+  const { replace = true } = options;
+
+  return useCallback((patch) => {
+    setParams((prev) => {
+      const novo = new URLSearchParams(prev);
+      for (const [chave, valor] of Object.entries(patch)) {
+        if (valor === '' || valor === null || valor === undefined) {
+          novo.delete(chave);
+        } else {
+          novo.set(chave, String(valor));
+        }
+      }
+      return novo;
+    }, { replace });
+  }, [setParams, replace]);
+}

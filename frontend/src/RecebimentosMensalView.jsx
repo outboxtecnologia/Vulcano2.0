@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Search, Loader2, X, ShieldCheck } from 'lucide-react';
 import { API_BASE } from './apiBase';
-import { useSearchParamState } from './hooks/useSearchParamState';
+import { useSearchParamState, useSearchParamsPatch } from './hooks/useSearchParamState';
 import { useTableSort } from './hooks/useTableSort';
 import SortIcon from './components/SortIcon';
 import { normaliza, termosDeBusca } from './utils/texto';
@@ -88,8 +88,10 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
     const hoje = new Date();
     // Competencia na URL: o mes navegado e compartilhavel e sobrevive ao F5.
     // parse: Number e obrigatorio — mudaMes() faz aritmetica com estes valores.
-    const [ano, setAno] = useSearchParamState('ano', hoje.getFullYear(), { parse: Number });
-    const [mes, setMes] = useSearchParamState('mes', hoje.getMonth() + 1, { parse: Number });
+    const [ano] = useSearchParamState('ano', hoje.getFullYear(), { parse: Number });
+    const [mes] = useSearchParamState('mes', hoje.getMonth() + 1, { parse: Number });
+    // As setas mudam ano e mes juntos — precisa ser uma gravacao so.
+    const setCompetencia = useSearchParamsPatch();
     const [empreendimentos, setEmpreendimentos] = useState([]);
     const [empreendimentoId, setEmpreendimentoId] = useState('');
     const [data, setData] = useState(null);
@@ -147,10 +149,11 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
         let m = mes + delta, a = ano;
         if (m < 1) { m = 12; a -= 1; }
         if (m > 12) { m = 1; a += 1; }
-        setMes(m); setAno(a);
-        // a seta ja navega de verdade: rebusca o novo periodo na hora (com os
-        // valores explicitos — o estado ainda nao foi aplicado neste tick)
-        if (selectedEmpresa) pesquisar(a, m);
+        // Ano e mes numa GRAVACAO SO. Com dois setters (setMes; setAno) o segundo
+        // sobrescrevia o primeiro e a competencia nao mudava — ver
+        // useSearchParamsPatch. Nao chame pesquisar() aqui: o efeito de [ano, mes]
+        // ja rebusca quando a URL muda, e a chamada extra so duplicava a request.
+        setCompetencia({ ano: a, mes: m });
     };
 
     const [saneando, setSaneando] = useState(false);

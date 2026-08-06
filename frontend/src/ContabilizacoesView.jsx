@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParamState } from './hooks/useSearchParamState';
+import { useSearchParamState, useSearchParamsPatch } from './hooks/useSearchParamState';
 import {
   TrendingUp, Zap, AlertTriangle, Building2,
   ChevronDown, ChevronUp, RefreshCw, Download
@@ -197,9 +197,11 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
   // Filtros na URL. Aqui o deep-link restaura os filtros mas NAO dispara a consulta:
   // fetchTudo faz Promise.all sobre ate 18 competencias, e um link colado nao deve
   // custar isso ao banco sem o usuario pedir. O botao "Iniciar" segue sendo o gatilho.
-  const [periodoInicio, setPeriodoInicio] = useSearchParamState('de', mesAtual);
-  const [periodoFim,    setPeriodoFim]    = useSearchParamState('ate', mesAtual);
+  const [periodoInicio] = useSearchParamState('de', mesAtual);
+  const [periodoFim]    = useSearchParamState('ate', mesAtual);
   const [filtroEmpId,   setFiltroEmpId]   = useSearchParamState('filtroEmp', '');
+  // De/Ate mudam juntos quando um invade o outro — precisa ser uma gravacao so.
+  const setPeriodo = useSearchParamsPatch();
   // empreendimentos para o select (carregados na montagem)
   const [empreendimentos, setEmpreendimentos] = useState([]);
   const [empsLoading,     setEmpsLoading]     = useState(false);
@@ -369,7 +371,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         <div className="flex flex-col gap-1">
           <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Período De</span>
           <input type="month" value={periodoInicio}
-            onChange={e => { const v = e.target.value; setPeriodoInicio(v); if (v > periodoFim) setPeriodoFim(v); }}
+            onChange={e => { const v = e.target.value; setPeriodo(v > periodoFim ? { de: v, ate: v } : { de: v }); }}
             className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
 
@@ -377,7 +379,7 @@ export const ContabilizacoesView = ({ selectedEmpresa }) => {
         <div className="flex flex-col gap-1">
           <span className="text-[8px] font-black uppercase tracking-widest text-[var(--v-text-faint)]">Até</span>
           <input type="month" value={periodoFim}
-            onChange={e => { const v = e.target.value; setPeriodoFim(v); if (v < periodoInicio) setPeriodoInicio(v); }}
+            onChange={e => { const v = e.target.value; setPeriodo(v < periodoInicio ? { de: v, ate: v } : { ate: v }); }}
             className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
         </div>
 
