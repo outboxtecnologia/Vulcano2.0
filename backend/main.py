@@ -6455,6 +6455,70 @@ async def upload_planilha(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {str(e)}")
 
+@app.post("/api/smart-importer/preparar-colunas")
+def smart_importer_preparar_colunas(payload: dict):
+    """Apoio ao De-Para: o analista descreve em texto livre como interpretar a
+    planilha (ex.: 'a coluna UNIDADE traz bloco e apartamento juntos, BL A AP 101')
+    e a IA devolve um plano de COLUNAS DERIVADAS (regex por coluna nova). O regex
+    é aplicado aqui, deterministicamente, em TODAS as linhas — a IA desenha a
+    regra uma vez, sem custo por linha."""
+    import json
+    import re as _re
+    columns = payload.get("columns", [])
+    rows = payload.get("rows", [])
+    instrucoes = str(payload.get("instrucoes") or "").strip()
+    if not instrucoes:
+        raise HTTPException(status_code=400, detail="Escreva as instruções para o apoio ao De-Para.")
+    if not columns or not rows:
+        raise HTTPException(status_code=400, detail="Envie a planilha antes de aplicar as instruções.")
+
+    amostras = {c: [str(r.get(c, ""))[:60] for r in rows[:8]] for c in columns}
+    prompt = f"""Você prepara planilhas de clientes para importação num sistema imobiliário.
+COLUNAS ATUAIS (com até 8 amostras de valores): {json.dumps(amostras, ensure_ascii=False)}
+
+INSTRUÇÕES DO ANALISTA:
+{instrucoes[:2000]}
+
+Se alguma coluna contém MAIS DE UMA informação (conforme as instruções), proponha colunas derivadas.
+Responda SOMENTE este JSON:
+{{"novas_colunas": [{{"nome": "NOME DA NOVA COLUNA", "origem": "COLUNA DE ORIGEM EXATA",
+   "regex": "expressão regular Python com UM grupo de captura que extrai o valor"}}],
+ "observacao": "explicação curta do que foi feito"}}
+
+Regras: o regex deve funcionar nas amostras mostradas; use grupos de captura (parênteses);
+se nada precisa ser derivado, devolva novas_colunas como lista vazia e explique na observacao."""
+
+    plano = _gemini_generate_json(prompt)
+    novas = plano.get("novas_colunas") or []
+    relatorio = []
+    for nc in novas:
+        nome = str(nc.get("nome") or "").strip()
+        origem = str(nc.get("origem") or "").strip()
+        rx = str(nc.get("regex") or "").strip()
+        if not nome or origem not in columns or not rx:
+            relatorio.append({"coluna": nome or "?", "ok": False, "detalhe": f"plano inválido (origem '{origem}' inexistente ou regex vazio)"})
+            continue
+        try:
+            comp = _re.compile(rx)
+        except _re.error as e:
+            relatorio.append({"coluna": nome, "ok": False, "detalhe": f"regex inválido: {e}"})
+            continue
+        preenchidas = 0
+        for r in rows:
+            m = comp.search(str(r.get(origem, "") or ""))
+            valor = (m.group(1) if (m and m.groups()) else (m.group(0) if m else "")).strip() if m else ""
+            r[nome] = valor
+            if valor:
+                preenchidas += 1
+        if nome not in columns:
+            columns.append(nome)
+        relatorio.append({"coluna": nome, "ok": True,
+                          "detalhe": f"extraída de '{origem}' — {preenchidas}/{len(rows)} linha(s) preenchidas"})
+
+    return {"success": True, "columns": columns, "all_rows": rows,
+            "preview": rows[:10], "relatorio": relatorio,
+            "observacao": str(plano.get("observacao") or "")}
+
 @app.post("/api/schema-match")
 def schema_match(payload: dict):
     """Sugestao de de-para coluna->campo p/ o Smart Importer.
@@ -6472,11 +6536,13 @@ def schema_match(payload: dict):
     if not columns:
         return {"mapping": {}}
 
+    instrucoes = str(payload.get("instrucoes") or "").strip()
+    bloco_instrucoes = f"\nINSTRUÇÕES DO ANALISTA (siga-as ao decidir o mapeamento):\n{instrucoes[:1500]}\n" if instrucoes else ""
     prompt = f"""Você mapeia colunas de planilhas de clientes para campos de um sistema imobiliário.
 DESTINO: {destino}
 CAMPOS VÁLIDOS (use exatamente estes valores): {json.dumps(campos_validos, ensure_ascii=False)}
 COLUNAS DA PLANILHA (com amostra da 1ª linha): {json.dumps({c: str(amostras.get(c, ''))[:40] for c in columns}, ensure_ascii=False)}
-
+{bloco_instrucoes}
 Responda SOMENTE um objeto JSON plano onde cada chave é o nome EXATO da coluna da planilha
 e o valor é um dos CAMPOS VÁLIDOS, ou null quando a coluna não corresponder a nenhum campo.
 Exemplo: {{"CPF": "CLIENTE_CPF_CNPJ", "OBS INTERNA": null}}"""
