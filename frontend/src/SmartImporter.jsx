@@ -47,6 +47,12 @@ const STATUS_META = {
   MATCH_MANUAL:  { label: 'MATCH MANUAL', color: '#a259ff' },
   SEM_MATCH:     { label: 'SEM MATCH',    color: '#ff4d00' },
   DIVERGENCIA:   { label: 'DIVERGÊNCIA',  color: '#ffcc00' },
+  // importação de VENDAS (não é conciliação: cria venda+cliente+parcela única)
+  PRONTA:             { label: 'IMPORTAR',            color: '#34c759' },
+  PRONTA_SEM_UNIDADE: { label: 'IMPORTAR S/ UNIDADE', color: '#ffcc00' },
+  JA_VENDIDA:         { label: 'JÁ VENDIDA',          color: '#8a8a8a' },
+  IGNORADA:           { label: 'SEM VENDA',           color: '#555555' },
+  SEM_DADOS:          { label: 'DADOS INCOMPLETOS',   color: '#ff4d00' },
 };
 
 export default function SmartImporter({ selectedEmpresa }) {
@@ -184,6 +190,10 @@ export default function SmartImporter({ selectedEmpresa }) {
   };
 
   const handlePreviewMatch = async () => {
+    if (targetTable === 'VENDAS' && !selectedEmpreendimento) {
+      alert('Para importar VENDAS, selecione o EMPREENDIMENTO de destino (a unidade é casada com a estrutura dele).');
+      return;
+    }
     setMatchLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/smart-importer/preview-match`, {
@@ -210,6 +220,33 @@ export default function SmartImporter({ selectedEmpresa }) {
   };
 
   
+  const [gravandoErp, setGravandoErp] = useState(false);
+  const handleGravarNoErp = async () => {
+    if (targetTable !== 'VENDAS') { alert('Gravação disponível por enquanto apenas para o destino VENDAS.'); return; }
+    const prontas = matchData.filter(r => r.status?.startsWith('PRONTA')).length;
+    if (!prontas) { alert('Nenhuma linha importável no preview.'); return; }
+    if (!window.confirm(`Importar ${prontas} venda(s) para o empreendimento selecionado?\n\nSerá criado: cliente (se novo), venda com Nº de contrato único, vínculo da unidade e parcela única 1/1 em aberto (baixável, inclusive parcial).`)) return;
+    setGravandoErp(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/smart-importer/importar-vendas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: allRows, mapping, target_table: targetTable,
+          empresa_id: selectedEmpresa ? parseInt(selectedEmpresa, 10) : null,
+          empreendimento_id: selectedEmpreendimento ? parseInt(selectedEmpreendimento, 10) : null,
+        })
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+      alert(d.message || `${d.inseridas} venda(s) importadas.`);
+      handlePreviewMatch(); // re-analisa: as importadas agora aparecem como JÁ VENDIDA
+    } catch (e) {
+      alert('Falha na importação: ' + e.message);
+    } finally {
+      setGravandoErp(false);
+    }
+  };
+
   const handleSaveTemplate = async () => {
     const nome = prompt("Digite um nome para o template:");
     if (!nome) return;
@@ -579,8 +616,8 @@ export default function SmartImporter({ selectedEmpresa }) {
               <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--v-deep)] border border-[var(--v-border)] rounded text-[11px] font-medium hover:bg-[var(--v-hover)] transition-colors">
                 Voltar
               </button>
-              <button onClick={() => alert("Gravação será implementada na API")} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#3dd68c]/10 text-[#3dd68c] border border-[#3dd68c]/30 rounded text-[11px] font-bold hover:bg-[#3dd68c]/20 transition-colors shadow-sm">
-                <Save size={14} /> Gravar no ERP
+              <button onClick={handleGravarNoErp} disabled={gravandoErp} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#3dd68c]/10 text-[#3dd68c] border border-[#3dd68c]/30 rounded text-[11px] font-bold hover:bg-[#3dd68c]/20 transition-colors shadow-sm disabled:opacity-40">
+                <Save size={14} /> {gravandoErp ? 'Gravando...' : (targetTable === 'VENDAS' ? `Importar ${matchData.filter(r => r.status?.startsWith('PRONTA')).length} venda(s)` : 'Gravar no ERP')}
               </button>
             </div>
           </div>
