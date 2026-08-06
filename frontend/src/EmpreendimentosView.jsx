@@ -252,6 +252,28 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const [incluirVaga, setIncluirVaga] = useState(false);
   const [importandoEstrutura, setImportandoEstrutura] = useState(false);
   const matriculaInputRef = React.useRef(null);
+  const [chatMsg, setChatMsg] = useState('');
+  const [chatLog, setChatLog] = useState([]);
+  const [chatBusy, setChatBusy] = useState(false);
+
+  const enviarChatMatricula = async () => {
+    const msg = chatMsg.trim();
+    if (!msg || !matriculaPreview?.sessao_id) return;
+    setChatBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/matricula/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessao_id: matriculaPreview.sessao_id, mensagem: msg })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
+      setChatLog(l => [...l, { pergunta: msg, resposta: data.resposta,
+                               adicionadas: data.adicionadas || [], corrigidas: data.corrigidas || [] }]);
+      setMatriculaPreview(data.resultado);   // prévia + críticas atualizadas
+      setChatMsg('');
+    } catch (e) { alert('Falha na verificação: ' + e.message); }
+    finally { setChatBusy(false); }
+  };
 
   const handleUploadMatricula = async (file) => {
     if (!file) return;
@@ -290,6 +312,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     });
     const payload = {
       empreendimento_id: editingEmp.id,
+      sessao_id: matriculaPreview.sessao_id || null,
       blocos: Object.entries(porBloco).map(([nome, unidades]) => ({ nome, unidades })),
     };
     setImportandoEstrutura(true);
@@ -934,6 +957,28 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                     </div>
                                 </div>
 
+                                {matriculaPreview.criticas && (
+                                    <div className={`p-3 rounded text-[10.5px] space-y-1 border ${matriculaPreview.criticas.unidades?.ok && matriculaPreview.criticas.area_privativa?.ok ? 'bg-[#22c55e]/10 border-[#22c55e]/30' : 'bg-[#ff9500]/10 border-[#ff9500]/40'}`}>
+                                        <p className="font-black uppercase text-[var(--v-text-bold)]">Crítica contra a matrícula</p>
+                                        <p style={{ color: matriculaPreview.criticas.unidades?.ok ? '#22c55e' : '#ff9500' }}>
+                                            {matriculaPreview.criticas.unidades?.ok ? '✓' : '⚠'} Unidades: <b>{matriculaPreview.criticas.unidades?.extraido}</b> extraídas × <b>{matriculaPreview.criticas.unidades?.declarado ?? 'não consta'}</b> declaradas na matrícula
+                                        </p>
+                                        <p style={{ color: matriculaPreview.criticas.area_privativa?.ok ? '#22c55e' : '#ff9500' }}>
+                                            {matriculaPreview.criticas.area_privativa?.ok ? '✓' : '⚠'} Área privativa: Σ <b>{(matriculaPreview.criticas.area_privativa?.soma_extraida_m2 ?? 0).toLocaleString('pt-BR')} m²</b>
+                                            {matriculaPreview.criticas.area_privativa?.soma_priv_total_m2 > (matriculaPreview.criticas.area_privativa?.soma_extraida_m2 ?? 0) && ` (c/ acessória ${matriculaPreview.criticas.area_privativa.soma_priv_total_m2.toLocaleString('pt-BR')} m²)`}
+                                            {' '}× <b>{matriculaPreview.criticas.area_privativa?.declarado_m2 ? matriculaPreview.criticas.area_privativa.declarado_m2.toLocaleString('pt-BR') + ' m²' : 'não consta'}</b> declarada
+                                            {matriculaPreview.criticas.area_privativa?.base_comparacao === 'privativa+acessoria' && ' — total declarado inclui as áreas acessórias das vagas'}
+                                            {matriculaPreview.criticas.area_privativa?.diferenca_m2 != null && !matriculaPreview.criticas.area_privativa?.ok && ` (diferença ${matriculaPreview.criticas.area_privativa.diferenca_m2.toLocaleString('pt-BR')} m²)`}
+                                        </p>
+                                        <p className="text-[var(--v-text-faint)]">
+                                            Por bloco: {Object.entries(matriculaPreview.criticas.unidades_por_bloco || {}).map(([b, n]) => `${b}: ${n}`).join(' · ')}
+                                        </p>
+                                        {!(matriculaPreview.criticas.unidades?.ok && matriculaPreview.criticas.area_privativa?.ok) && (
+                                            <p className="text-[var(--v-text-faint)]">Use o chat abaixo para apontar o que falta (ex.: "faltam os aptos 401 e 501 do bloco C e suas vagas").</p>
+                                        )}
+                                    </div>
+                                )}
+
                                 {(Object.keys(matriculaPreview.conferencias.divergencias_cadastro || {}).length > 0 || matriculaPreview.unidades.some(u => u.divergente_conferir)) && (
                                     <div className="bg-[#ff3b30]/10 border border-[#ff3b30]/30 p-3 rounded text-[10px] text-[var(--v-text-bold)] space-y-1">
                                         <p className="font-black uppercase text-[#ff3b30]">Conferir antes de gravar:</p>
@@ -979,11 +1024,40 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                                     <td className="p-1.5 text-right font-mono">{u.area_privativa_total_m2 ?? '—'}</td>
                                                     <td className="p-1.5 text-right font-mono">{u.area_total_m2 ?? '—'}</td>
                                                     <td className="p-1.5 text-right font-mono">{u.fracao_ideal_pct ?? '—'}</td>
-                                                    <td className="p-1.5">{u.divergente_conferir ? <span title="Leituras divergiram — conferir" className="text-[#ff3b30] font-black">⚠</span> : u.corrigida_desempate ? <span title="Resolvida em leitura de desempate" className="text-[var(--v-accent)]">⚙</span> : ''}</td>
+                                                    <td className="p-1.5">{u.divergente_conferir ? <span title="Leituras divergiram — conferir" className="text-[#ff3b30] font-black">⚠</span> : u.origem_chat ? <span title="Localizada via chat de conferência" className="text-[#22c55e]">🗨</span> : u.corrigida_chat ? <span title="Corrigida via chat de conferência" className="text-[#22c55e]">🗨</span> : u.corrigida_desempate ? <span title="Resolvida em leitura de desempate" className="text-[var(--v-accent)]">⚙</span> : ''}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+
+                                {/* CHAT DE CONFERÊNCIA — o operador aponta, a IA busca no documento integral */}
+                                <div className="border border-white/10 rounded p-3 space-y-2">
+                                    <p className="text-[10px] font-black uppercase text-[var(--v-text-faint)]">Conferência assistida (busca no texto integral da matrícula)</p>
+                                    {chatLog.map((c, i) => (
+                                        <div key={i} className="text-[10.5px] space-y-1">
+                                            <p className="text-[var(--v-accent)]">▸ {c.pergunta}</p>
+                                            <p className="text-[var(--v-text-bold)]">{c.resposta}</p>
+                                            {(c.adicionadas.length > 0 || c.corrigidas.length > 0) && (
+                                                <p className="text-[#22c55e]">
+                                                    {c.adicionadas.length > 0 && `+ ${c.adicionadas.length} unidade(s) incluída(s): ${c.adicionadas.join(', ')}. `}
+                                                    {c.corrigidas.length > 0 && `⚙ ${c.corrigidas.length} corrigida(s): ${c.corrigidas.join(', ')}.`}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div className="flex gap-2">
+                                        <input value={chatMsg} onChange={(e) => setChatMsg(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' && !chatBusy) enviarChatMatricula(); }}
+                                            placeholder={matriculaPreview.sessao_id ? 'ex.: faltam os aptos 401 e 501 do bloco C e suas vagas' : 'sessão indisponível — refaça a extração'}
+                                            disabled={!matriculaPreview.sessao_id || chatBusy}
+                                            className="flex-1 bg-black/40 border border-white/10 p-2 text-[11px] text-[var(--v-text-bold)] outline-none focus:border-[var(--v-accent)]/50 rounded" />
+                                        <button onClick={enviarChatMatricula} disabled={!matriculaPreview.sessao_id || chatBusy || !chatMsg.trim()}
+                                            className="px-4 py-2 bg-white/5 border border-white/10 rounded text-[10px] font-bold uppercase hover:bg-[var(--v-accent)]/15 text-[var(--v-accent)] disabled:opacity-40 flex items-center gap-2">
+                                            {chatBusy && <Loader2 size={11} className="animate-spin"/>}
+                                            {chatBusy ? 'Verificando…' : 'Verificar na matrícula'}
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-3">
