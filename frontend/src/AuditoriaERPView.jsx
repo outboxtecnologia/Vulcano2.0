@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
-import { useSearchParamState } from './hooks/useSearchParamState';
+import { useSearchParamState, useSearchParamsPatch } from './hooks/useSearchParamState';
 
 import * as XLSX from 'xlsx';
 
@@ -3326,11 +3326,14 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
   // Filtros na URL. Como em Contabilizacoes, o deep-link restaura os filtros mas NAO
   // dispara a apuracao: fetchTudo varre ate 18 competencias e o gatilho continua sendo
   // o botao.
-  const [periodoInicio, setPeriodoInicio] = useSearchParamState('de', mesAtual);
+  const [periodoInicio] = useSearchParamState('de', mesAtual);
 
-  const [periodoFim,    setPeriodoFim]    = useSearchParamState('ate', mesAtual);
+  const [periodoFim]    = useSearchParamState('ate', mesAtual);
 
   const [filtroEmpId,   setFiltroEmpId]   = useSearchParamState('filtroEmp', '');
+
+  // De/Ate mudam juntos quando um invade o outro — precisa ser uma gravacao so.
+  const setPeriodo = useSearchParamsPatch();
 
   const [empreendimentos, setEmpreendimentos] = useState([]);
 
@@ -4115,7 +4118,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           <input type="month" value={periodoInicio}
 
-            onChange={e => { const v = e.target.value; setPeriodoInicio(v); if (v > periodoFim) setPeriodoFim(v); }}
+            onChange={e => { const v = e.target.value; setPeriodo(v > periodoFim ? { de: v, ate: v } : { de: v }); }}
 
             className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
 
@@ -4127,7 +4130,7 @@ export const AuditoriaERPView = ({ selectedEmpresa }) => {
 
           <input type="month" value={periodoFim}
 
-            onChange={e => { const v = e.target.value; setPeriodoFim(v); if (v < periodoInicio) setPeriodoInicio(v); }}
+            onChange={e => { const v = e.target.value; setPeriodo(v < periodoInicio ? { de: v, ate: v } : { ate: v }); }}
 
             className="bg-[var(--v-deep)] border border-[var(--v-border)] rounded px-3 py-2 text-[var(--v-text)] text-xs font-mono outline-none focus:border-[#ff4d00] transition-colors [color-scheme:dark]"/>
 
