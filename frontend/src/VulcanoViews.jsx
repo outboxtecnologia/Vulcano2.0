@@ -707,6 +707,49 @@ export const VendasView = ({ selectedEmpresa }) => {
   const [salvandoParcela, setSalvandoParcela] = useState(false);
   const [editVendaModal, setEditVendaModal] = useState(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [selecao, setSelecao] = useState(new Set());
+  const [excluirModal, setExcluirModal] = useState(null);
+  const [excluindo, setExcluindo] = useState(false);
+
+  const toggleSelecao = (id) => setSelecao(s => {
+    const n = new Set(s);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
+  const prepararExclusao = async (ids) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas/excluir`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, empresa_id: parseInt(selectedEmpresa, 10), dry_run: true })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
+      setExcluirModal({ ids, preview: data, forcar: false });
+    } catch (e) { alert('Falha na prévia de exclusão: ' + e.message); }
+  };
+
+  const confirmarExclusao = async () => {
+    const m = excluirModal;
+    if (!m) return;
+    const total = (m.preview.excluiveis?.length || 0) + (m.forcar ? (m.preview.bloqueadas?.length || 0) : 0);
+    if (!window.confirm(`EXCLUSÃO DEFINITIVA (sem distrato) de ${total} venda(s) e toda a cascata. Não há desfazer. Continuar?`)) return;
+    setExcluindo(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/vulcano/vendas/excluir`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: m.ids, empresa_id: parseInt(selectedEmpresa, 10), dry_run: false, forcar: m.forcar })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
+      alert(data.message || 'Excluídas.');
+      setExcluirModal(null);
+      setSelecao(new Set());
+      setSelectedVenda(null);
+      handleSearch();
+    } catch (e) { alert('Falha na exclusão: ' + e.message); }
+    finally { setExcluindo(false); }
+  };
 
   const abrirEdicaoVenda = (v) => setEditVendaModal({
     venda: v, data: v.data_iso || '', num_contrato: v.num_contrato || '',
@@ -887,6 +930,11 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <button onClick={handleExportXLSX} disabled={!filtered.length} title={filtered.length ? 'Exportar a lista filtrada para Excel' : 'Busque vendas primeiro'} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#f0e6d8' }}>
                     <FileSpreadsheet size={12}/> Excel
                 </button>
+                {selecao.size > 0 && (
+                    <button onClick={() => prepararExclusao([...selecao])} title="Utilitário de exclusão de registros (sem distrato) — abre prévia antes de confirmar" className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444' }}>
+                        <Trash2 size={12}/> Excluir {selecao.size} selecionada(s)
+                    </button>
+                )}
                 <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[12px] font-bold shadow-lg" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
                     <Plus size={12}/> Nova venda <kbd className="ml-1 text-[10px] bg-black/20 border border-black/30 px-1 rounded" style={{ color: '#3a1606' }}>⇧⌘N</kbd>
                 </button>
@@ -941,15 +989,21 @@ export const VendasView = ({ selectedEmpresa }) => {
                                         <div 
                                             key={v.id} 
                                             onClick={() => handleSelectVenda(v)}
-                                            className="grid grid-cols-[60px_40px_1fr_200px_120px_100px_80px_30px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors group/row"
+                                            className="grid grid-cols-[20px_60px_40px_1fr_200px_120px_100px_80px_30px] items-center gap-3 px-6 py-3 cursor-pointer transition-colors group/row"
                                             style={{
                                                 background: isSelected ? 'rgba(255, 122, 26, 0.05)' : 'transparent',
                                                 borderBottom: '1px solid rgba(255, 160, 80, 0.08)'
                                             }}
                                         >
+                                            <input type="checkbox" checked={selecao.has(v.id)}
+                                                onChange={() => toggleSelecao(v.id)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                title="Selecionar para exclusão"
+                                                className="accent-[#ef4444] cursor-pointer" />
+
                                             <span className="font-mono text-[10.5px]" style={{ color: isSelected ? '#ff7a1a' : '#5a4e42' }}>#{v.id}</span>
-                                            
-                                            <div className="w-[30px] h-[22px] rounded flex items-center justify-center font-mono text-[9.5px] font-bold" 
+
+                                            <div className="w-[30px] h-[22px] rounded flex items-center justify-center font-mono text-[9.5px] font-bold"
                                                  style={{ background: 'linear-gradient(135deg, rgba(255, 122, 26, 0.25), rgba(201, 58, 18, 0.15))', border: '1px solid rgba(255, 140, 42, 0.25)', color: '#ffd28a' }}>
                                                 {(v.empreendimento || 'EMP').substring(0,3).toUpperCase()}
                                             </div>
@@ -1126,6 +1180,9 @@ export const VendasView = ({ selectedEmpresa }) => {
                             <button onClick={() => abrirEdicaoVenda(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
                                 <span className="flex items-center gap-3"><Pencil size={14} style={{ color: '#8a7a68' }}/> Editar venda</span>
                             </button>
+                            <button onClick={() => prepararExclusao([selectedVenda.id])} title="Exclusão definitiva do registro (com prévia) — para registro errado/teste; distrato é outra ação" className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-red-950/30" style={{ color: '#ef4444' }}>
+                                <span className="flex items-center gap-3"><Trash2 size={14} className="text-red-500/70"/> Excluir registro (sem distrato)</span>
+                            </button>
                             {selectedVenda.distrato !== 'S' && (
                                 <button onClick={() => setDistratoModal(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium mt-2 transition-colors hover:bg-red-950/30" style={{ color: '#ef4444' }}>
                                     <span className="flex items-center gap-3"><AlertCircle size={14} className="text-red-500/70"/> Distratar contrato</span>
@@ -1188,6 +1245,46 @@ export const VendasView = ({ selectedEmpresa }) => {
                     <button onClick={() => setParcelaManualModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
                     <button onClick={salvarParcelaManual} disabled={salvandoParcela} className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
                         {salvandoParcela ? 'Gravando...' : 'Lançar Parcela'}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* MODAL EXCLUIR REGISTROS (SEM DISTRATO) */}
+      {excluirModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[120] animate-in fade-in p-6">
+            <div className="w-full max-w-lg rounded-xl shadow-2xl flex flex-col p-6" style={{ background: '#0c0908', border: '1px solid rgba(239, 68, 68, 0.35)' }}>
+                <h3 className="text-red-500 text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-1">
+                    <Trash2 size={20}/> Excluir registros — sem distrato
+                </h3>
+                <p className="text-[11px] mb-4" style={{ color: '#8a7a68' }}>
+                    Exclusão <b className="text-red-500">DEFINITIVA</b> do banco (para registros errados ou de teste). Diferente do distrato, não deixa histórico e <b>não há desfazer</b>.
+                </p>
+                <div className="rounded p-3 mb-3 text-[11px] space-y-1" style={{ background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#f0e6d8' }}>
+                    <p className="font-black uppercase text-[10px]" style={{ color: '#8a7a68' }}>O que será removido</p>
+                    <p>• <b>{excluirModal.preview.cascata?.vendas ?? 0}</b> venda(s) {excluirModal.preview.cascata?.vinculadas > 0 && <> + <b>{excluirModal.preview.cascata.vinculadas}</b> vinculada(s) de multi-comprador</>}</p>
+                    <p>• {excluirModal.preview.cascata?.parcelas_receber ?? 0} parcela(s) do contas a receber · {excluirModal.preview.cascata?.parcelas_cronograma ?? 0} do cronograma · {excluirModal.preview.cascata?.formas_pagto ?? 0} forma(s) de pagto</p>
+                    <p>• {excluirModal.preview.cascata?.unidades_vendidas ?? 0} vínculo(s) de unidade (a unidade volta a ficar disponível) · {excluirModal.preview.cascata?.reparcelamentos ?? 0} reparcelamento(s) · {excluirModal.preview.cascata?.baixas_locais ?? 0} baixa(s) local(is)</p>
+                </div>
+                {(excluirModal.preview.bloqueadas || []).length > 0 && (
+                    <div className="rounded p-3 mb-3 text-[10.5px] space-y-1" style={{ background: 'rgba(255, 149, 0, 0.08)', border: '1px solid rgba(255, 149, 0, 0.3)', color: '#f0e6d8' }}>
+                        <p className="font-black uppercase text-[#ff9500]">{excluirModal.preview.bloqueadas.length} venda(s) com pagamento — fora da exclusão por padrão:</p>
+                        {excluirModal.preview.bloqueadas.slice(0, 8).map(b => (
+                            <p key={b.id}>• #{b.id} {b.cliente} — {b.motivo}</p>
+                        ))}
+                        {excluirModal.preview.bloqueadas.length > 8 && <p>… e mais {excluirModal.preview.bloqueadas.length - 8}</p>}
+                        <label className="flex items-center gap-2 mt-2 cursor-pointer" style={{ color: '#ff9500' }}>
+                            <input type="checkbox" checked={excluirModal.forcar} onChange={(e) => setExcluirModal({ ...excluirModal, forcar: e.target.checked })} className="accent-[#ff9500]" />
+                            Incluir também as vendas com pagamento (as baixas locais serão removidas)
+                        </label>
+                    </div>
+                )}
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setExcluirModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
+                    <button onClick={confirmarExclusao} disabled={excluindo || (!excluirModal.preview.excluiveis?.length && !excluirModal.forcar)}
+                        className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50 bg-red-600/80 hover:bg-red-600 text-white">
+                        {excluindo ? 'Excluindo…' : `Excluir definitivamente`}
                     </button>
                 </div>
             </div>

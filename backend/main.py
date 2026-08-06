@@ -5269,6 +5269,170 @@ async def editar_venda(venda_id: int, request: Request):
         except Exception:
             pass
 
+@app.post("/api/vulcano/vendas/excluir")
+async def excluir_vendas(request: Request):
+    """Utilitário de EXCLUSÃO REAL (sem distrato): apaga vendas erradas/teste
+    com toda a cascata (vinculadas, parcelas, formas de pagamento, unidades
+    vendidas, reparcelamentos, distratos e baixas locais). dry_run devolve a
+    prévia; venda com pagamento (TOTALPAGO ou baixa local) só sai com forcar."""
+    body = await request.json()
+    ids = [int(i) for i in (body.get("ids") or []) if str(i).strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Informe os ids das vendas a excluir.")
+    if len(ids) > 500:
+        raise HTTPException(status_code=400, detail="Máximo de 500 vendas por operação.")
+    empresa_id = _int_or_none(body.get("empresa_id"))
+    forcar = bool(body.get("forcar"))
+    dry_run = body.get("dry_run", True) is not False
+    import sqlite3 as _sq
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+
+        def _dec(v):
+            return v.decode('cp1252', 'ignore').strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
+
+        ph = ",".join("?" * len(ids))
+        cur.execute(f"SELECT ID FROM VENDA WHERE ID IN ({ph})", tuple(ids))
+        existentes = {r[0] for r in cur.fetchall()}
+        if not existentes:
+            raise HTTPException(status_code=404, detail="Nenhuma das vendas informadas existe.")
+        # cascata: vinculadas entram junto com a principal
+        cur.execute(f"SELECT ID FROM VENDA WHERE IDVENDAVINCULADA IN ({ph})", tuple(ids))
+        vinculadas = {r[0] for r in cur.fetchall()} - existentes
+        todas = sorted(existentes | vinculadas)
+        ph_t = ",".join("?" * len(todas))
+
+        cur.execute(f"""SELECT R.ID, R.IDVENDA, COALESCE(R.TOTALPAGO, 0) FROM RECEBER R
+                        WHERE R.IDVENDA IN ({ph_t})""", tuple(todas))
+        receber = cur.fetchall()
+        receber_ids = [r[0] for r in receber]
+        pagas_fb = {r[1] for r in receber if float(r[2] or 0) > 0}
+
+        # baixas novas do Vulcano 2.0 (sqlite local) também contam como pagamento
+        baixas_locais = set()
+        op_keys = set()
+        try:
+            s_conn = _sq.connect(POC_DATABASE_FILE)
+            s_cur = s_conn.cursor()
+            q = "SELECT id_receber FROM operacoes_baixas"
+            args = ()
+            if empresa_id:
+                q += " WHERE empresa_id = ?"
+                args = (empresa_id,)
+            s_cur.execute(q, args)
+            op_keys = {str(r[0]) for r in s_cur.fetchall()}
+            s_conn.close()
+        except Exception:
+            pass
+        mapa_receber_venda = {r[0]: r[1] for r in receber}
+        for rid, vid in mapa_receber_venda.items():
+            if str(rid) in op_keys:
+                baixas_locais.add(vid)
+
+        com_pagamento = pagas_fb | baixas_locais
+        bloqueadas = sorted(com_pagamento) if not forcar else []
+        alvo = [v for v in todas if v not in bloqueadas]
+        # se a principal ficou bloqueada, as vinculadas dela também ficam (e vice-versa não se aplica)
+        if bloqueadas:
+            cur.execute(f"SELECT ID, IDVENDAVINCULADA FROM VENDA WHERE ID IN ({ph_t})", tuple(todas))
+            vinc_de = {r[0]: r[1] for r in cur.fetchall()}
+            alvo = [v for v in alvo if not (vinc_de.get(v) and vinc_de[v] in bloqueadas)]
+
+        detalhe_bloq = []
+        if bloqueadas:
+            ph_b = ",".join("?" * len(bloqueadas))
+            cur.execute(f"""SELECT V.ID, C.NOME FROM VENDA V LEFT JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
+                            WHERE V.ID IN ({ph_b})""", tuple(bloqueadas))
+            detalhe_bloq = [{"id": r[0], "cliente": _dec(r[1]),
+                             "motivo": "tem pagamento (parcela paga ou baixa local)"} for r in cur.fetchall()]
+
+        rec_alvo = [rid for rid, vid in mapa_receber_venda.items() if vid in alvo]
+        cascata = {"vendas": len([v for v in alvo if v in existentes]),
+                   "vinculadas": len([v for v in alvo if v in vinculadas]),
+                   "parcelas_receber": len(rec_alvo)}
+        prazo_alvo = []
+        if alvo:
+            ph_a = ",".join("?" * len(alvo))
+            cur.execute(f"SELECT ID FROM VENDAFORMAPAGTO WHERE IDVENDA IN ({ph_a})", tuple(alvo))
+            fp_ids = [r[0] for r in cur.fetchall()]
+            cascata["formas_pagto"] = len(fp_ids)
+            if fp_ids:
+                ph_f = ",".join("?" * len(fp_ids))
+                cur.execute(f"SELECT ID FROM VENDAFORMAPAGTOPRAZO WHERE IDVENDAFORMAPAGTO IN ({ph_f})", tuple(fp_ids))
+                prazo_alvo = [r[0] for r in cur.fetchall()]
+            cascata["parcelas_cronograma"] = len(prazo_alvo)
+            for tab, rot in (("VENDAUNIDADE", "unidades_vendidas"), ("VENDAREPARCELAMENTO", "reparcelamentos"), ("DISTRATO", "distratos")):
+                cur.execute(f"SELECT COUNT(*) FROM {tab} WHERE IDVENDA IN ({ph_a})", tuple(alvo))
+                cascata[rot] = cur.fetchone()[0]
+            chaves_op = {str(r) for r in rec_alvo} | {f"prazo_{p}" for p in prazo_alvo}
+            cascata["baixas_locais"] = len(chaves_op & op_keys)
+        else:
+            fp_ids, chaves_op = [], set()
+
+        if dry_run:
+            return {"dry_run": True, "excluiveis": alvo, "cascata": cascata,
+                    "bloqueadas": detalhe_bloq,
+                    "aviso": "Exclusão DEFINITIVA, sem distrato — não há desfazer." }
+
+        if not alvo:
+            raise HTTPException(status_code=400, detail="Nada a excluir: todas as vendas têm pagamento (use forcar).")
+
+        ph_a = ",".join("?" * len(alvo))
+        if prazo_alvo:
+            ph_p = ",".join("?" * len(prazo_alvo))
+            cur.execute(f"DELETE FROM VENDAFORMAPAGTOPRAZO WHERE ID IN ({ph_p})", tuple(prazo_alvo))
+        if fp_ids:
+            ph_f = ",".join("?" * len(fp_ids))
+            cur.execute(f"DELETE FROM VENDAFORMAPAGTO WHERE ID IN ({ph_f})", tuple(fp_ids))
+        if rec_alvo:
+            ph_r = ",".join("?" * len(rec_alvo))
+            cur.execute(f"DELETE FROM RECEBER WHERE ID IN ({ph_r})", tuple(rec_alvo))
+        for tab in ("VENDAUNIDADE", "VENDAREPARCELAMENTO", "DISTRATO"):
+            cur.execute(f"DELETE FROM {tab} WHERE IDVENDA IN ({ph_a})", tuple(alvo))
+        # vinculadas antes das principais
+        vinc_alvo = [v for v in alvo if v in vinculadas]
+        if vinc_alvo:
+            ph_v = ",".join("?" * len(vinc_alvo))
+            cur.execute(f"DELETE FROM VENDA WHERE ID IN ({ph_v})", tuple(vinc_alvo))
+        princ_alvo = [v for v in alvo if v not in vinculadas]
+        if princ_alvo:
+            ph_v = ",".join("?" * len(princ_alvo))
+            cur.execute(f"DELETE FROM VENDA WHERE ID IN ({ph_v})", tuple(princ_alvo))
+        conn.commit()
+
+        # limpeza best-effort das baixas locais (sqlite) das parcelas excluídas
+        try:
+            if chaves_op:
+                s_conn = _sq.connect(POC_DATABASE_FILE)
+                s_cur = s_conn.cursor()
+                for k in chaves_op:
+                    if empresa_id:
+                        s_cur.execute("DELETE FROM operacoes_baixas WHERE id_receber = ? AND empresa_id = ?", (k, empresa_id))
+                    else:
+                        s_cur.execute("DELETE FROM operacoes_baixas WHERE id_receber = ?", (k,))
+                s_conn.commit()
+                s_conn.close()
+        except Exception:
+            pass
+        return {"success": True, "excluidas": len(alvo), "cascata": cascata,
+                "bloqueadas": detalhe_bloq,
+                "message": f"{len(alvo)} venda(s) excluída(s) definitivamente (com cascata)."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
 @app.patch("/api/vulcano/receber/{receber_id}")
 async def editar_receber(receber_id: int, request: Request):
     """Edição de linha de parcela (RECEBER): vencimento, valor, rótulo e obs."""
