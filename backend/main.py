@@ -9089,6 +9089,120 @@ def api_agentes_resumir(req: AuditResumeReq):
         "state": _serialize_agent_state(res)
     }
 
+def _analisar_importacao_vendas(cur, rows, _get, _parse_valor, _parse_data,
+                                empresa_id, empreendimento_id):
+    """Plano de importação de VENDAS a partir da planilha mapeada.
+
+    Casa a UNIDADE (bloco + número) com a estrutura do empreendimento; linhas
+    sem cliente/CPF são unidades não vendidas (ignoradas); unidade já vendida
+    não importa de novo (re-importação segura)."""
+    import re as _re
+
+    def dec(v):
+        if v is None: return ""
+        if isinstance(v, bytes): return v.decode('win1252', 'ignore').strip()
+        return str(v).strip()
+
+    # estrutura do empreendimento
+    cur.execute("SELECT ID, NOME FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (empreendimento_id,))
+    blocos = {r[0]: dec(r[1]).upper() for r in cur.fetchall()}
+    unidades = []
+    if blocos:
+        ph = ",".join("?" * len(blocos))
+        cur.execute(f"SELECT ID, IDBLOCO, DESCRICAO, METRAGEM, NUMCADIMOB FROM UNIDADE WHERE IDBLOCO IN ({ph})", tuple(blocos))
+        unidades = [{"id": r[0], "bloco": blocos.get(r[1], ""), "descricao": dec(r[2]),
+                     "numcadimob": r[4]} for r in cur.fetchall()]
+
+    # unidades ja vendidas (venda ativa)
+    vendidas = set()
+    if unidades:
+        ph = ",".join("?" * len(unidades))
+        cur.execute(f"""SELECT VU.IDUNIDADE FROM VENDAUNIDADE VU
+                        JOIN VENDA V ON V.ID = VU.IDVENDA
+                        WHERE VU.IDUNIDADE IN ({ph})
+                          AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)""",
+                    tuple(u["id"] for u in unidades))
+        vendidas = {r[0] for r in cur.fetchall()}
+
+    # cpfs com venda ativa no empreendimento (dedupe p/ linhas sem unidade casada)
+    cur.execute("""SELECT C.CNPJ, V.TOTALVENDA FROM VENDA V
+                   JOIN CLIENTE C ON C.ID = V.ID_CLIENTE
+                   WHERE V.IDEMPREENDIMENTO = ? AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)""",
+                (empreendimento_id,))
+    vendas_cpf = {("".join(filter(str.isdigit, dec(r[0]))), round(float(r[1] or 0), 2)) for r in cur.fetchall()}
+
+    def _canon_bloco_nome(b):
+        b = str(b or "").strip().upper()
+        return f"BLOCO {b}" if b and len(b) <= 3 else b
+
+    def _match_unidade(bloco_pl, unidade_pl):
+        num = str(unidade_pl or "").strip()
+        if not num:
+            return None
+        alvo_bloco = _canon_bloco_nome(bloco_pl)
+        cands = [u for u in unidades
+                 if _re.search(rf"(?<!\d){_re.escape(num)}(?!\d)", u["descricao"])]
+        if alvo_bloco:
+            no_bloco = [u for u in cands if u["bloco"] == alvo_bloco]
+            cands = no_bloco or cands
+        exatas = [u for u in cands if _re.match(rf"^\D*{_re.escape(num)}(?!\d)", u["descricao"].replace("APTO", "").strip())]
+        return (exatas or cands)[0] if cands else None
+
+    resultados, importaveis = [], []
+    for row in rows:
+        cliente = dec(_get(row, "CLIENTE_NOME"))
+        cpf = dec(_get(row, "CLIENTE_CPF_CNPJ"))
+        valor = _parse_valor(_get(row, "VGV"))
+        data_v = _parse_data(_get(row, "DATA_VENDA"))
+        contrato = dec(_get(row, "NUMERO_CONTRATO"))
+        bloco_pl = dec(_get(row, "BLOCO"))
+        unidade_pl = dec(_get(row, "UNIDADE"))
+
+        base = {"cliente_planilha": cliente, "contrato": contrato,
+                "dt_vencimento": data_v.isoformat() if data_v else None,
+                "dt_pagamento": None, "valor_planilha": valor, "valor_vulcano": None}
+
+        if not cliente and not cpf:
+            resultados.append({**base, "status": "IGNORADA",
+                               "unidade": f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip(),
+                               "obs": "Unidade sem venda na planilha (sem cliente/CPF)."})
+            continue
+        if not cpf or not valor or not data_v:
+            faltas = [n for n, v in (("CPF", cpf), ("valor", valor), ("data", data_v)) if not v]
+            resultados.append({**base, "status": "SEM_DADOS",
+                               "unidade": f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip(),
+                               "obs": f"Linha com venda mas sem {', '.join(faltas)} — complete a planilha."})
+            continue
+
+        u = _match_unidade(bloco_pl, unidade_pl)
+        cpf_digits = "".join(filter(str.isdigit, cpf))
+        if u and u["id"] in vendidas:
+            resultados.append({**base, "status": "JA_VENDIDA",
+                               "unidade": f"{u['bloco']} — {u['descricao']}",
+                               "obs": "Unidade já tem venda ativa — não importa de novo."})
+            continue
+        if not u and (cpf_digits, round(valor, 2)) in vendas_cpf:
+            resultados.append({**base, "status": "JA_VENDIDA",
+                               "unidade": f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip(),
+                               "obs": "Já existe venda ativa deste CPF com este valor no empreendimento."})
+            continue
+
+        status = "PRONTA" if u else "PRONTA_SEM_UNIDADE"
+        item = {
+            "cliente": cliente, "cpf_cnpj": cpf, "valor": round(valor, 2),
+            "data": data_v.isoformat(), "contrato": contrato,
+            "unidade_id": u["id"] if u else None,
+            "numcadimob": (u or {}).get("numcadimob"),
+            "descricao": (f"{u['bloco']} — {u['descricao']}" if u
+                          else f"{_canon_bloco_nome(bloco_pl)} {unidade_pl}".strip())[:90],
+        }
+        importaveis.append(item)
+        resultados.append({**base, "status": status, "unidade": item["descricao"],
+                           "obs": "Vai criar venda + cliente + parcela única (1/1)."
+                                  + ("" if u else " ⚠ unidade não encontrada na estrutura — grava sem vínculo.")})
+
+    return {"resultados": resultados, "importaveis": importaveis}
+
 class PreviewMatchRequest(BaseModel):
     rows: list
     mapping: dict
@@ -9350,6 +9464,21 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
 
         finally:
             conn_v.close()
+    elif payload.target_table == "VENDAS":
+        # VENDAS não é conciliação: é IMPORTAÇÃO. Analisa cada linha (cliente,
+        # CPF, data, valor), casa a UNIDADE com a estrutura do empreendimento e
+        # devolve o plano; a gravação acontece em /api/smart-importer/importar-vendas.
+        if not payload.empreendimento_id:
+            raise HTTPException(status_code=400, detail="Selecione o empreendimento de destino para importar VENDAS.")
+        conn_v = get_conn("vulcano")
+        try:
+            cur = conn_v.cursor()
+            plano = _analisar_importacao_vendas(cur, payload.rows, _get, _parse_valor,
+                                                _parse_data, payload.empresa_id,
+                                                payload.empreendimento_id)
+            resultados = plano["resultados"]
+        finally:
+            conn_v.close()
     else:
         for row in payload.rows:
             resultados.append({
@@ -9366,8 +9495,131 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
         "ja_quitados":    sum(1 for r in resultados if r["status"] == "JA_QUITADO"),
         "match_perfeito": sum(1 for r in resultados if r["status"] == "MATCH_PERFEITO"),
         "sem_match":      sum(1 for r in resultados if r["status"] == "SEM_MATCH"),
+        "importaveis":    sum(1 for r in resultados if r["status"] in ("PRONTA", "PRONTA_SEM_UNIDADE")),
     }
     return {"resultados": resultados, "counts": counts}
+
+@app.post("/api/smart-importer/importar-vendas")
+async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
+    """Gravação do plano de importação de VENDAS ('Gravar no ERP' do Smart
+    Importer): cria CLIENTE (find-or-create por CPF), VENDA (contrato único),
+    vincula a UNIDADE casada e gera PARCELA ÚNICA 1/1 no RECEBER (o valor total
+    fica aberto para baixas — inclusive parciais)."""
+    import re as _re
+    from datetime import datetime as _dt
+
+    inv = {str(v): k for k, v in payload.mapping.items() if v and v != "null" and isinstance(v, str)}
+
+    def _get(row, campo):
+        col = inv.get(campo)
+        return row.get(col) if col else None
+
+    def _parse_valor(v):
+        if v is None: return None
+        if isinstance(v, (int, float)): return float(v)
+        try:
+            s = _re.sub(r"[^\d,\.]", "", str(v).strip())
+            if '.' in s and ',' in s:
+                s = s.replace(".", "").replace(",", ".") if s.rfind(',') > s.rfind('.') else s.replace(",", "")
+            elif ',' in s:
+                s = s.replace(",", ".")
+            return float(s) if s else None
+        except Exception:
+            return None
+
+    def _parse_data(v):
+        if not v: return None
+        v = str(v).strip()[:10]
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return _dt.strptime(v, fmt).date()
+            except ValueError:
+                pass
+        return None
+
+    if not payload.empresa_id or not payload.empreendimento_id:
+        raise HTTPException(status_code=400, detail="Empresa e empreendimento são obrigatórios para importar vendas.")
+
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        plano = _analisar_importacao_vendas(cur, payload.rows, _get, _parse_valor,
+                                            _parse_data, payload.empresa_id,
+                                            payload.empreendimento_id)
+        importaveis = plano["importaveis"]
+        if not importaveis:
+            return {"success": True, "inseridas": 0, "resultados": plano["resultados"],
+                    "message": "Nada a importar (linhas sem venda, incompletas ou já importadas)."}
+
+        cur.execute("SELECT 1 FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'CLIENTE' AND TRIM(RDB$FIELD_NAME) = 'CODIGOEMPRESA'")
+        cliente_tem_empresa = cur.fetchone() is not None
+
+        def _cliente(nome, cpf):
+            raw = "".join(filter(str.isdigit, cpf))
+            cur.execute("SELECT FIRST 1 ID FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw,))
+            r = cur.fetchone()
+            if r:
+                return r[0]
+            cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
+            cid = cur.fetchone()[0]
+            if cliente_tem_empresa:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ, CODIGOEMPRESA) VALUES (?, ?, ?, ?)",
+                            (cid, nome.encode('cp1252', 'ignore')[:100], cpf, int(payload.empresa_id)))
+            else:
+                cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ) VALUES (?, ?, ?)",
+                            (cid, nome.encode('cp1252', 'ignore')[:100], cpf))
+            return cid
+
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDA")
+        prox_venda = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM VENDAUNIDADE")
+        prox_vu = cur.fetchone()[0]
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
+        prox_rec = cur.fetchone()[0]
+
+        inseridas = 0
+        for item in importaveis:
+            cid = _cliente(item["cliente"], item["cpf_cnpj"])
+            vid = prox_venda; prox_venda += 1
+            num_contrato = (item["contrato"] or str(vid))[:90]
+            num_cad = _int_or_none(item.get("numcadimob"))
+            cur.execute(
+                "INSERT INTO VENDA (ID, IDEMPREENDIMENTO, NUMCADIMOB, NUMCONT, DTOPER, DESCUNIDIMOB, TOTALVENDA, CODIGOEMPRESA, DISTRATO, PERMUTA, ID_CLIENTE) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?)",
+                (vid, int(payload.empreendimento_id), num_cad,
+                 num_contrato.encode('cp1252', 'ignore'), item["data"],
+                 item["descricao"].encode('cp1252', 'ignore'), item["valor"],
+                 int(payload.empresa_id), cid),
+            )
+            if item["unidade_id"]:
+                cur.execute("INSERT INTO VENDAUNIDADE (ID, IDVENDA, IDUNIDADE) VALUES (?, ?, ?)",
+                            (prox_vu, vid, int(item["unidade_id"])))
+                prox_vu += 1
+            # parcela única 1/1: valor total em aberto, baixável (inclusive parcial)
+            cur.execute(
+                "INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA, VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)",
+                (prox_rec, vid, cid, item["data"], item["valor"],
+                 "1/1".encode('cp1252'), "GERADA NA IMPORTACAO (PARCELA UNICA)".encode('cp1252')),
+            )
+            prox_rec += 1
+            inseridas += 1
+
+        conn.commit()
+        return {"success": True, "inseridas": inseridas,
+                "message": f"{inseridas} venda(s) importadas com cliente e parcela única 1/1 (abertas para baixa, inclusive parcial)."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
 
 
 
