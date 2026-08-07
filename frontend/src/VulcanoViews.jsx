@@ -930,6 +930,17 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <button onClick={handleExportXLSX} disabled={!filtered.length} title={filtered.length ? 'Exportar a lista filtrada para Excel' : 'Busque vendas primeiro'} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#f0e6d8' }}>
                     <FileSpreadsheet size={12}/> Excel
                 </button>
+                {filtered.length > 0 && (
+                    selecao.size < filtered.length ? (
+                        <button onClick={() => setSelecao(new Set(filtered.map(v => v.id)))} title="Marca todas as vendas da lista filtrada" className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#f0e6d8' }}>
+                            <CheckSquare size={12}/> Selecionar todas ({filtered.length})
+                        </button>
+                    ) : (
+                        <button onClick={() => setSelecao(new Set())} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.18)', color: '#8a7a68' }}>
+                            <X size={12}/> Limpar seleção
+                        </button>
+                    )
+                )}
                 {selecao.size > 0 && (
                     <button onClick={() => prepararExclusao([...selecao])} title="Utilitário de exclusão de registros (sem distrato) — abre prévia antes de confirmar" className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444' }}>
                         <Trash2 size={12}/> Excluir {selecao.size} selecionada(s)
