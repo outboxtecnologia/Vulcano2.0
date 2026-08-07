@@ -272,13 +272,21 @@ export default function SmartImporter({ selectedEmpresa }) {
 
   const [gravandoErp, setGravandoErp] = useState(false);
   const handleGravarNoErp = async () => {
-    if (targetTable !== 'VENDAS') { alert('Gravação disponível por enquanto apenas para o destino VENDAS.'); return; }
-    const prontas = matchData.filter(r => r.status?.startsWith('PRONTA')).length;
-    if (!prontas) { alert('Nenhuma linha importável no preview.'); return; }
-    if (!window.confirm(`Importar ${prontas} venda(s) para o empreendimento selecionado?\n\nSerá criado: cliente (se novo), venda com Nº de contrato único, vínculo da unidade e parcela única 1/1 em aberto (baixável, inclusive parcial).`)) return;
+    if (targetTable !== 'VENDAS' && targetTable !== 'RECEBIMENTOS') { alert('Gravação disponível para os destinos VENDAS e RECEBIMENTOS.'); return; }
+    const isVendas = targetTable === 'VENDAS';
+    if (isVendas) {
+      const prontas = matchData.filter(r => r.status?.startsWith('PRONTA')).length;
+      if (!prontas) { alert('Nenhuma linha importável no preview.'); return; }
+      if (!window.confirm(`Importar ${prontas} venda(s) para o empreendimento selecionado?\n\nSerá criado: cliente (se novo), venda com Nº de contrato único, vínculo da unidade e parcela única 1/1 em aberto (baixável, inclusive parcial).`)) return;
+    } else {
+      const casadas = matchData.filter(r => r.status === 'MATCH_PERFEITO').length;
+      if (!casadas) { alert('Nenhuma parcela casada (MATCH_PERFEITO) no preview.'); return; }
+      if (!selectedEmpresa) { alert('Selecione a empresa — a baixa local é registrada por empresa.'); return; }
+      if (!window.confirm(`Registrar baixa em ${casadas} parcela(s) casada(s)?\n\nAs baixas são LOCAIS (modelo Vulcano 2.0, sem tocar o legado) e podem ser desfeitas uma a uma na tela Recebimentos Mensal. Parcelas já quitadas no legado ou com baixa local existente são puladas.`)) return;
+    }
     setGravandoErp(true);
     try {
-      const res = await fetch(`${API_BASE}/api/smart-importer/importar-vendas`, {
+      const res = await fetch(`${API_BASE}/api/smart-importer/importar-${isVendas ? 'vendas' : 'recebimentos'}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rows: allRows, mapping, target_table: targetTable,
@@ -288,8 +296,8 @@ export default function SmartImporter({ selectedEmpresa }) {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
-      alert(d.message || `${d.inseridas} venda(s) importadas.`);
-      handlePreviewMatch(); // re-analisa: as importadas agora aparecem como JÁ VENDIDA
+      alert(d.message || (isVendas ? `${d.inseridas} venda(s) importadas.` : `${d.baixadas} baixa(s) registradas.`));
+      handlePreviewMatch(); // re-analisa: importadas viram JÁ VENDIDA / baixadas somem das casáveis
     } catch (e) {
       alert('Falha na importação: ' + e.message);
     } finally {
@@ -704,7 +712,7 @@ export default function SmartImporter({ selectedEmpresa }) {
                 Voltar
               </button>
               <button onClick={handleGravarNoErp} disabled={gravandoErp} className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--v-ok)]/10 text-[var(--v-ok)] border border-[var(--v-ok)]/30 rounded text-[11px] font-bold hover:bg-[var(--v-ok)]/20 transition-colors shadow-sm disabled:opacity-40">
-                <Save size={14} /> <span>{gravandoErp ? 'Gravando...' : (targetTable === 'VENDAS' ? `Importar ${matchData.filter(r => r.status?.startsWith('PRONTA')).length} venda(s)` : 'Gravar no ERP')}</span>
+                <Save size={14} /> <span>{gravandoErp ? 'Gravando...' : (targetTable === 'VENDAS' ? `Importar ${matchData.filter(r => r.status?.startsWith('PRONTA')).length} venda(s)` : targetTable === 'RECEBIMENTOS' ? `Baixar ${matchData.filter(r => r.status === 'MATCH_PERFEITO').length} parcela(s)` : 'Gravar no ERP')}</span>
               </button>
             </div>
           </div>

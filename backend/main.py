@@ -10152,7 +10152,12 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 if (dt_str, val) in assinaturas_fb:
                     continue
                     
-                abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
+                # id prefixado: baixa em parcela projetada grava 'prazo_<id>' no
+                # operacoes_baixas (mesma chave da tela Mensal — sem colidir com RECEBER.ID)
+                abertas.append((f"prazo_{row[0]}", row[1], dt_venc, row[3], row[4], row[5], row[6]))
+            # (o conn_sq.close() do commit original nao entra aqui: neste repo a
+            #  conexao so existe dentro do `if PROJETADAS_ATIVAS` acima, onde ja e
+            #  fechada — fechar de novo aqui daria NameError com a env desligada)
             TOLE = 1.0
 
             from collections import defaultdict
@@ -10326,6 +10331,79 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
         "importaveis":    sum(1 for r in resultados if r["status"] in ("PRONTA", "PRONTA_SEM_UNIDADE")),
     }
     return {"resultados": resultados, "counts": counts}
+
+@app.post("/api/smart-importer/importar-recebimentos")
+async def smart_importer_importar_recebimentos(payload: PreviewMatchRequest):
+    """Gravação do destino RECEBIMENTOS ('Gravar no ERP' do Smart Importer):
+    re-analisa a planilha (mesmo matching do preview) e registra BAIXA LOCAL
+    (operacoes_baixas, modelo da tela Mensal — o Firebird não é tocado; dá
+    para desfazer) em cada parcela MATCH_PERFEITO com valor. Idempotente:
+    parcela com baixa local existente é pulada; JA_QUITADO no legado idem."""
+    if payload.target_table != "RECEBIMENTOS":
+        raise HTTPException(status_code=400, detail="Endpoint exclusivo do destino RECEBIMENTOS.")
+    if not payload.empresa_id:
+        raise HTTPException(status_code=400, detail="Selecione a empresa (a baixa local é por empresa).")
+    preview = await api_smart_importer_preview_match(payload)
+    resultados = preview["resultados"]
+
+    import sqlite3 as _sq
+    s_conn = _sq.connect(POC_DATABASE_FILE)
+    try:
+        s_cur = s_conn.cursor()
+        s_cur.execute("SELECT id_receber FROM operacoes_baixas WHERE empresa_id = ?", (int(payload.empresa_id),))
+        existentes = {str(r[0]) for r in s_cur.fetchall()}
+        baixadas, puladas, venc_como_pgto = 0, [], 0
+        for r in resultados:
+            if r.get("status") != "MATCH_PERFEITO" or not r.get("id_parcela"):
+                continue
+            rid = str(r["id_parcela"])
+            valor = r.get("valor_planilha") or r.get("valor_vulcano")
+            if not valor or float(valor) <= 0:
+                puladas.append(f"{rid}: sem valor")
+                continue
+            dt_pgto = r.get("dt_pagamento")
+            if not dt_pgto:
+                # planilha sem coluna de pagamento: assume o vencimento casado
+                dt_pgto = r.get("dt_venc_vulcano") or r.get("dt_vencimento")
+                if not dt_pgto:
+                    puladas.append(f"{rid}: sem data de pagamento/vencimento")
+                    continue
+                venc_como_pgto += 1
+            if rid in existentes:
+                puladas.append(f"{rid}: baixa local já registrada")
+                continue
+            s_cur.execute(
+                """INSERT INTO operacoes_baixas (id_receber, empresa_id, data_pagamento, valor_pago, descontos, acrescimos)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (rid, int(payload.empresa_id), str(dt_pgto)[:10], round(float(valor), 2),
+                 float(r.get("descontos") or 0), float(r.get("acrescimos") or 0)))
+            existentes.add(rid)
+            baixadas += 1
+        s_conn.commit()
+        ja_quitadas = sum(1 for r in resultados if r.get("status") == "JA_QUITADO")
+        sem_match = sum(1 for r in resultados if r.get("status") == "SEM_MATCH")
+        msg = f"{baixadas} baixa(s) registrada(s) (locais, reversíveis pela tela Mensal)."
+        if venc_como_pgto:
+            msg += f" {venc_como_pgto} sem data de pagamento na planilha usaram o vencimento."
+        if ja_quitadas:
+            msg += f" {ja_quitadas} já quitada(s) no legado (puladas)."
+        if sem_match:
+            msg += f" {sem_match} sem match (não gravadas)."
+        return {"success": True, "baixadas": baixadas, "ja_quitadas": ja_quitadas,
+                "sem_match": sem_match, "puladas": puladas[:20], "message": msg}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            s_conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            s_conn.close()
+        except Exception:
+            pass
 
 @app.post("/api/smart-importer/importar-vendas")
 async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
