@@ -5553,6 +5553,10 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             if s_conn: s_conn.close()
             
         conn = get_conn("vulcano")
+        # dedupe de SATÉLITE (auditoria 07/08): duplicatas legadas de multi-
+        # comprador espelham as parcelas na venda vinculada — a linha da
+        # satélite só entra quando NÃO houver espelho exato (DATA+VALOR+PAGO)
+        # na principal; pagamentos registrados SÓ na satélite continuam vindo.
         query = '''
             SELECT r.DATA, r.TOTALPAGO, r.VALORPARCELA, r.VALORVARIACAO, v.DESCUNIDIMOB, c.CNPJ, r.PARCELA, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO, r.OBS, r.ID, v.TOTALVENDA, r.DESCONTO, v.ID AS VENDA_ID
             FROM VENDA v
@@ -5560,6 +5564,12 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
             WHERE v.CODIGOEMPRESA = ?
+              AND (v.IDVENDAVINCULADA IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM RECEBER rp
+                    WHERE rp.IDVENDA = v.IDVENDAVINCULADA
+                      AND rp.DATA = r.DATA
+                      AND ABS(COALESCE(rp.VALORPARCELA, 0) - COALESCE(r.VALORPARCELA, 0)) < 0.02
+                      AND ABS(COALESCE(rp.TOTALPAGO, 0) - COALESCE(r.TOTALPAGO, 0)) < 0.02))
         '''
         params = [empresa_id]
         
