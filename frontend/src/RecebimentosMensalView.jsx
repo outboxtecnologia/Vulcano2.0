@@ -249,6 +249,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                 <Th>Nº</Th><Th>CPF/CNPJ</Th><Th>Comprador</Th><Th>Unidade(s)</Th>
                                 {!empreendimentoId && <Th>Empreendimento</Th>}
                                 <Th right>Vlr Venda</Th><Th right>Saldo Ant.</Th>
+                                <Th>Vencimento</Th>
                                 <Th>Data Pagto</Th><Th right>Valor Parcela</Th><Th right>Desconto</Th>
                                 <Th right>Variação</Th><Th right>Total Pago</Th><Th right>Saldo Atual</Th>
                                 <Th>Parcela</Th><Th>Observação</Th><Th></Th>
@@ -271,6 +272,9 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                         {!empreendimentoId && <td className="px-3 py-2 text-[#777] max-w-40 truncate">{r.empreendimento}</td>}
                                         <td className="px-3 py-2 font-mono text-right text-[#999]">{fmt(r.vlr_venda)}</td>
                                         <td className="px-3 py-2 font-mono text-right text-[#777]">{fmt(r.saldo_anterior)}</td>
+                                        <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: r.status === 'VENCIDA' ? '#ef4444' : '#999' }}>
+                                            {r.vencimento ? r.vencimento.split('-').reverse().join('/') : ''}
+                                        </td>
                                         <td className="px-3 py-2 font-mono text-[#22c55e]">
                                             {editando ? (
                                                 <input type="date" value={baixa.data_pagamento} onKeyDown={onKey}
@@ -336,12 +340,12 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                 );
                             })}
                             {data && rows.length === 0 && (
-                                <tr><td colSpan={16} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
+                                <tr><td colSpan={17} className="py-16 text-center text-[#333] text-[10px] uppercase tracking-widest">
                                     Sem parcelas para o período selecionado.
                                 </td></tr>
                             )}
                             {!data && !loading && (
-                                <tr><td colSpan={16} className="py-16 text-center text-[#2a2a2a] text-[10px] uppercase tracking-widest">
+                                <tr><td colSpan={17} className="py-16 text-center text-[#2a2a2a] text-[10px] uppercase tracking-widest">
                                     Selecione o mês de referência e pesquise.
                                 </td></tr>
                             )}
@@ -349,7 +353,7 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                         {rows.length > 0 && (
                             <tfoot>
                                 <tr className="bg-[#0e0e0e] border-t border-[#1e1e1e] font-mono font-bold">
-                                    <td colSpan={empreendimentoId ? 7 : 8} className="px-3 py-2.5 text-[9px] uppercase tracking-widest text-[#444]">
+                                    <td colSpan={empreendimentoId ? 8 : 9} className="px-3 py-2.5 text-[9px] uppercase tracking-widest text-[#444]">
                                         Totais · {rows.length} parcelas
                                     </td>
                                     <td className="px-3 py-2.5 text-right text-[#f97316]">{fmt(tot.valor_parcela)}</td>
