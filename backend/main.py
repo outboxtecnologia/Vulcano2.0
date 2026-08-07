@@ -9625,44 +9625,70 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         """, tuple([empresa_id, dt_ini, dt_fim] + ([empreendimento_id] if empreendimento_id else [])))
         candidatos = cur.fetchall()
 
-        # ── BAIXA ANTECIPADA DO LEGADO (consumo FIFO por venda+valor) ──────────
+        # ── BAIXA ANTECIPADA DO LEGADO (consumo de slots em 3 passes) ──────────
         # O legado quita parcelas futuras criando RECEBER com a DATA DO PAGAMENTO
-        # (ex.: 06, 07 e 08/2026 todas pagas em 10/06) e só marca VALOR_PAGO no
-        # 1º slot do cronograma — os slots de jul/ago ficariam "previstos" para
-        # sempre. Regra: cada RECEBER da venda com o MESMO VALOR consome um slot
-        # do cronograma; quem casa por vencimento exato consome o próprio slot,
-        # os demais consomem os slots mais antigos ainda livres (FIFO).
-        rank, n_extra = {}, {}
+        # e a COMPETÊNCIA no rótulo (PARCELA='MM/YYYY') — e pode PULAR meses
+        # (caso venda 19145: pagou 04..10/2026, deixou fev/mar em aberto; o FIFO
+        # puro consumia fev/mar e deixava set/out como fantasmas). Regra: cada
+        # RECEBER da venda com o MESMO VALOR consome um slot — 1º quem casa por
+        # vencimento exato, 2º quem tem competência no rótulo consome o slot
+        # DAQUELA competência, 3º FIFO nos mais antigos livres. Só entram
+        # RECEBER com DATA <= fim do mês navegado: pagamento futuro não some
+        # com slot em visão retrospectiva (a parcela ainda estava aberta).
+        suprimidos = set()
         vids_cand = sorted({r[1] for r in candidatos})
         if vids_cand:
             ph_v = ",".join("?" * len(vids_cand))
-            cur.execute(f"SELECT IDVENDA, DATA, VALORPARCELA FROM RECEBER WHERE IDVENDA IN ({ph_v})",
-                        tuple(vids_cand))
-            rec_count, rec_keys = {}, set()
-            for rvid, rdt, rval in cur.fetchall():
+            cur.execute(f"""SELECT IDVENDA, DATA, VALORPARCELA, PARCELA FROM RECEBER
+                            WHERE IDVENDA IN ({ph_v}) AND DATA <= ?""",
+                        tuple(vids_cand) + (dt_fim,))
+            comp_re = re.compile(r"^(0[1-9]|1[0-2])/(\d{4})$")
+            recs = {}
+            for rvid, rdt, rval, rparc in cur.fetchall():
                 if isinstance(rdt, _dt.datetime):
                     rdt = rdt.date()
                 rv = round(float(rval or 0), 2)
-                rec_count[(rvid, rv)] = rec_count.get((rvid, rv), 0) + 1
-                rec_keys.add((rvid, rdt.isoformat() if rdt else None, rv))
+                parc = rparc.decode('cp1252', 'ignore').strip() if isinstance(rparc, bytes) else str(rparc or "").strip()
+                m = comp_re.match(parc)
+                recs.setdefault((rvid, rv), []).append({
+                    "d": rdt.isoformat() if rdt else None,
+                    "comp": f"{m.group(2)}-{m.group(1)}" if m else None})
             cur.execute(f"""SELECT P.ID, F.IDVENDA, P.DATA, P.VALOR
                             FROM VENDAFORMAPAGTOPRAZO P
                             JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
                             WHERE F.IDVENDA IN ({ph_v}) AND COALESCE(F.ATIVA, 'S') <> 'N'
                             ORDER BY P.DATA, P.ID""", tuple(vids_cand))
-            contador, matched = {}, {}
+            slots = {}
             for spid, svid, sdt, sval in cur.fetchall():
                 if isinstance(sdt, _dt.datetime):
                     sdt = sdt.date()
                 sv = round(float(sval or 0), 2)
-                k = (svid, sv)
-                if (svid, sdt.isoformat() if sdt else None, sv) in rec_keys and \
-                        matched.get(k, 0) < rec_count.get(k, 0):
-                    matched[k] = matched.get(k, 0) + 1  # slot com parcela própria
+                d_iso = sdt.isoformat() if sdt else None
+                slots.setdefault((svid, sv), []).append(
+                    {"id": spid, "d": d_iso, "ym": d_iso[:7] if d_iso else None, "livre": True})
+            for chave, rlist in recs.items():
+                sl = slots.get(chave)
+                if not sl:
                     continue
-                contador[k] = contador.get(k, 0) + 1
-                rank[spid] = contador[k]
-            n_extra = {k: max(0, rec_count.get(k, 0) - matched.get(k, 0)) for k in rec_count}
+                pend = []
+                for r in rlist:      # passe 1: vencimento exato
+                    alvo = next((s for s in sl if s["livre"] and s["d"] == r["d"]), None)
+                    if alvo:
+                        alvo["livre"] = False
+                    else:
+                        pend.append(r)
+                resto = []
+                for r in pend:       # passe 2: competência do rótulo (MM/YYYY)
+                    alvo = next((s for s in sl if s["livre"] and r["comp"] and s["ym"] == r["comp"]), None)
+                    if alvo:
+                        alvo["livre"] = False
+                    else:
+                        resto.append(r)
+                for r in resto:      # passe 3: FIFO nos mais antigos livres
+                    alvo = next((s for s in sl if s["livre"]), None)
+                    if alvo:
+                        alvo["livre"] = False
+                suprimidos.update(s["id"] for s in sl if not s["livre"])
 
         for r in candidatos:
             (pid, vid, cliente, cnpj, unidade, totalvenda, data, vparc, ref, obra) = r
@@ -9672,8 +9698,8 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             vparc_f = round(float(vparc or 0), 2)
             if (vid, d_iso, vparc_f) in assinaturas:
                 continue  # ja efetivada no RECEBER (aparece acima)
-            if rank.get(pid, 10**9) <= n_extra.get((vid, vparc_f), 0):
-                continue  # quitada ANTECIPADAMENTE no legado (RECEBER com data do pagamento)
+            if pid in suprimidos:
+                continue  # parcela realizada consome este slot (venc exato, competência do rótulo, ou FIFO)
             totalvenda = float(totalvenda or 0) + cota_extra.get(vid, 0.0)
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
