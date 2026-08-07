@@ -3792,6 +3792,15 @@ def _num_or_none(v):
         return None
 
 
+# Mesma funcao com o nome usado no repositorio do Fernando (ele a criou como
+# _int_or_none em 9429a61; ao portar aquele commit ela entrou aqui como
+# _num_or_none). Sem este alias, todo codigo novo dele que chama _int_or_none
+# chega quebrado: o NameError so aparece em runtime, com HTTP 500 no endpoint —
+# ja aconteceu em estrutura/importar, vendas/excluir e importar-vendas.
+# Nao remova achando que e codigo morto; o unico uso e o codigo portado.
+_int_or_none = _num_or_none
+
+
 def _float_or_none(v):
     """AJUSTEFINALPOC e DOUBLE na base atual (era CHAR S/N na antiga) — o model
     manda 'N' por default e o Firebird da SQL -303. Aceita numero; resto vira NULL."""
