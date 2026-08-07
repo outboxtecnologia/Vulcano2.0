@@ -7830,6 +7830,20 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         pago_total = _acum(" AND R.DATA <= ?", [dt_fim])
         pago_antes = _acum(" AND R.DATA < ?", [dt_ini])
 
+        # multi-comprador NOVO (rateio com marcador): a principal guarda só a
+        # COTA do 1º CPF, mas as parcelas carregam o contrato cheio — sem esta
+        # soma, o "Vlr Venda"/saldo do grupo rateado ficaria negativo conforme
+        # paga. Vinculadas legadas SEM marcador ficam de fora (valor cheio
+        # duplicado — somar dobraria).
+        cur.execute("""
+            SELECT V.IDVENDAVINCULADA, SUM(COALESCE(V.TOTALVENDA, 0))
+            FROM VENDA V
+            WHERE V.CODIGOEMPRESA = ? AND V.IDVENDAVINCULADA IS NOT NULL
+              AND UPPER(COALESCE(V.INFCOMP, '')) LIKE 'VINCULADA VENDA #%'
+            GROUP BY V.IDVENDAVINCULADA
+        """, (empresa_id,))
+        cota_extra = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+
         def _s(v):
             return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
 
@@ -7841,7 +7855,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
              desc, var, pago, parcela, obs, obra) = r
             if isinstance(data, _dt.datetime):
                 data = data.date()
-            totalvenda = float(totalvenda or 0)
+            totalvenda = float(totalvenda or 0) + cota_extra.get(vid, 0.0)
             pago_f = float(pago or 0)
             bx = baixas.get(str(rid))
             if bx and pago_f <= 0 and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
@@ -7944,7 +7958,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 continue  # ja efetivada no RECEBER (aparece acima)
             if rank.get(pid, 10**9) <= n_extra.get((vid, vparc_f), 0):
                 continue  # quitada ANTECIPADAMENTE no legado (RECEBER com data do pagamento)
-            totalvenda = float(totalvenda or 0)
+            totalvenda = float(totalvenda or 0) + cota_extra.get(vid, 0.0)
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
             if bx and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
