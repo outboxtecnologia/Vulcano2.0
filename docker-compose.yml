@@ -7,8 +7,9 @@
 #   docker compose build
 #   docker compose up -d
 #
-# Frontend fala com a API na URL usada pelo navegador. Para máquina local com portas publicadas:
-#   VITE_API_BASE=http://localhost:8000 docker compose build frontend
+# Frontend serve a SPA e faz proxy de /api para o backend (ver frontend/nginx.conf),
+# entao VITE_API_BASE fica VAZIO e o navegador chama a mesma origem. Nao aponte para
+# um host http:// quando o acesso for por dominio https — o navegador bloqueia.
 #
 # Persistência SQLite POC (crie o arquivo vazio se não existir:  touch backend/poc_database.sqlite)
 #
@@ -69,7 +70,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+        # Vazio de proposito: a SPA chama a MESMA ORIGEM e o nginx do frontend
+        # encaminha /api para o backend. Apontar isto para um host http:// quebra
+        # o acesso pelo dominio https (mixed content). So preencha se o frontend
+        # for servido de uma origem diferente da API, e ai use https.
+        VITE_API_BASE: ${VITE_API_BASE:-}
     ports:
       - "8080:80"
     depends_on:
