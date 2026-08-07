@@ -7461,39 +7461,48 @@ def delete_unidade(unid_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/vulcano/empreendimentos/{emp_id}/detalhes")
-def get_empreendimento_detalhes(emp_id: int):
+def get_empreendimento_detalhes(emp_id: int, incluir_vendidas: bool = False):
+    """Blocos + unidades do empreendimento. Por padrão só as DISPONÍVEIS (o
+    modal de venda consome assim); incluir_vendidas=true devolve todas com a
+    flag `vendida` e a `data_venda` da venda ativa (aba Estrutura)."""
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        
+
         cur.execute("SELECT ID, NOME FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (emp_id,))
         blocos = [{"id": r[0], "nome": r[1].decode('win1252', 'ignore').strip() if isinstance(r[1], bytes) else str(r[1] or "").strip()} for r in cur.fetchall()]
-        
+
         unidades = []
         if blocos:
             b_ids = [str(b['id']) for b in blocos]
             placeholders = ",".join(["?"] * len(b_ids))
-            
+
             query_unidades = f"""
-                SELECT u.ID, u.IDBLOCO, u.DESCRICAO, u.METRAGEM, u.NUMCADIMOB, u.UNIDADE_DISTRATO 
+                SELECT u.ID, u.IDBLOCO, u.DESCRICAO, u.METRAGEM, u.NUMCADIMOB, u.UNIDADE_DISTRATO,
+                       (SELECT MAX(v.DTOPER) FROM VENDAUNIDADE vu
+                        JOIN VENDA v ON vu.IDVENDA = v.ID
+                        WHERE vu.IDUNIDADE = u.ID AND COALESCE(v.DISTRATO, 'N') <> 'S') AS DT_VENDA
                 FROM UNIDADE u
                 WHERE u.IDBLOCO IN ({placeholders})
-                  AND NOT EXISTS (
-                      SELECT 1 FROM VENDAUNIDADE vu
-                      JOIN VENDA v ON vu.IDVENDA = v.ID
-                      WHERE vu.IDUNIDADE = u.ID AND COALESCE(v.DISTRATO, 'N') <> 'S'
-                  )
+                ORDER BY u.IDBLOCO, u.ID
             """
             cur.execute(query_unidades, tuple(b_ids))
-            
+
             for r in cur.fetchall():
+                dt_venda = r[6]
+                if dt_venda is not None and not incluir_vendidas:
+                    continue  # comportamento clássico: só disponíveis
+                if hasattr(dt_venda, "date"):
+                    dt_venda = dt_venda.date()
                 unidades.append({
                     "id": r[0],
                     "id_bloco": r[1],
                     "descricao": r[2].decode('win1252', 'ignore').strip() if isinstance(r[2], bytes) else str(r[2] or "").strip(),
                     "metragem": float(r[3] or 0),
                     "inscricao": str(r[4] or ""),
-                    "unidade_distrato": r[5].decode('win1252', 'ignore').strip() if isinstance(r[5], bytes) else str(r[5] or "N").strip()
+                    "unidade_distrato": r[5].decode('win1252', 'ignore').strip() if isinstance(r[5], bytes) else str(r[5] or "N").strip(),
+                    "vendida": dt_venda is not None,
+                    "data_venda": dt_venda.strftime('%d/%m/%Y') if dt_venda else None
                 })
                 
         conn.close()

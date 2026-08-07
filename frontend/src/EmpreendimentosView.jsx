@@ -143,7 +143,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const fetchEstrutura = async (empId) => {
     setLoadingEstrutura(true);
     try {
-        const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/detalhes`);
+        const res = await fetch(`${API_BASE}/api/vulcano/empreendimentos/${empId}/detalhes?incluir_vendidas=true`);
         const data = await res.json();
         setBlocos(asArray(data?.blocos));
         setUnidades(asArray(data?.unidades));
@@ -1245,6 +1245,7 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                             <th className="p-3">Descrição/Nº</th>
                                             <th className="p-3">Metragem</th>
                                             <th className="p-3">Inc. Questor</th>
+                                            <th className="p-3">Situação</th>
                                             <th className="p-3 text-right">Ação</th>
                                         </tr>
                                     </thead>
@@ -1255,14 +1256,29 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
                                                 <td className="p-3 font-black text-[var(--v-text-bold)]">{u.descricao}</td>
                                                 <td className="p-3 text-[var(--v-accent-3)] font-mono">{u.metragem} m²</td>
                                                 <td className="p-3 text-[var(--v-text-faint)] font-mono">{u.inscricao || '---'}</td>
+                                                <td className="p-3">
+                                                    {u.vendida ? (
+                                                        <span className="px-2 py-0.5 rounded font-black uppercase tracking-widest text-[9px]" style={{ background: 'var(--v-warn-soft)', border: '1px solid var(--v-warn)', color: 'var(--v-warn)' }}>
+                                                            Vendida · {u.data_venda}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded font-black uppercase tracking-widest text-[9px]" style={{ background: 'var(--v-ok-soft)', border: '1px solid var(--v-ok)', color: 'var(--v-ok)' }}>
+                                                            Disponível
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="p-3 text-right">
-                                                    <button onClick={() => handleDeleteEstrutura('unidade', u.id)} className="text-[var(--v-text-faint)] hover:text-[var(--v-err)] transition-colors"><Trash2 size={12}/></button>
+                                                    {u.vendida ? (
+                                                        <span title="Unidade com venda ativa — exclua ou distrate a venda antes" className="text-[var(--v-text-faint)] opacity-40 cursor-not-allowed inline-block"><Trash2 size={12}/></span>
+                                                    ) : (
+                                                        <button onClick={() => handleDeleteEstrutura('unidade', u.id)} className="text-[var(--v-text-faint)] hover:text-[var(--v-err)] transition-colors"><Trash2 size={12}/></button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
                                         {!unidades.length && !loadingEstrutura && (
                                             <tr>
-                                                <td colSpan="5" className="p-10 text-center text-[var(--v-text-faint)] font-black uppercase tracking-[0.3em]">Nenhuma unidade vinculada</td>
+                                                <td colSpan="6" className="p-10 text-center text-[var(--v-text-faint)] font-black uppercase tracking-[0.3em]">Nenhuma unidade vinculada</td>
                                             </tr>
                                         )}
                                     </tbody>
