@@ -5616,6 +5616,10 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             if s_conn: s_conn.close()
             
         conn = get_conn("vulcano")
+        # dedupe de SATÉLITE (auditoria 07/08): duplicatas legadas de multi-
+        # comprador espelham as parcelas na venda vinculada — a linha da
+        # satélite só entra quando NÃO houver espelho exato (DATA+VALOR+PAGO)
+        # na principal; pagamentos registrados SÓ na satélite continuam vindo.
         query = '''
             SELECT r.DATA, r.TOTALPAGO, r.VALORPARCELA, r.VALORVARIACAO, v.DESCUNIDIMOB, c.CNPJ, r.PARCELA, c.NOME AS CLIENTE_NOME, e.NOME AS EMPREENDIMENTO, r.OBS, r.ID, v.TOTALVENDA, r.DESCONTO, v.ID AS VENDA_ID
             FROM VENDA v
@@ -5623,6 +5627,12 @@ def get_vulcano_recebimentos(empresa_id: int, empreendimento_id: int = None, dat
             LEFT JOIN CLIENTE c ON v.ID_CLIENTE = c.ID
             LEFT JOIN EMPREENDIMENTO e ON v.IDEMPREENDIMENTO = e.ID
             WHERE v.CODIGOEMPRESA = ?
+              AND (v.IDVENDAVINCULADA IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM RECEBER rp
+                    WHERE rp.IDVENDA = v.IDVENDAVINCULADA
+                      AND rp.DATA = r.DATA
+                      AND ABS(COALESCE(rp.VALORPARCELA, 0) - COALESCE(r.VALORPARCELA, 0)) < 0.02
+                      AND ABS(COALESCE(rp.TOTALPAGO, 0) - COALESCE(r.TOTALPAGO, 0)) < 0.02))
         '''
         params = [empresa_id]
         
@@ -7451,39 +7461,48 @@ def delete_unidade(unid_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/vulcano/empreendimentos/{emp_id}/detalhes")
-def get_empreendimento_detalhes(emp_id: int):
+def get_empreendimento_detalhes(emp_id: int, incluir_vendidas: bool = False):
+    """Blocos + unidades do empreendimento. Por padrão só as DISPONÍVEIS (o
+    modal de venda consome assim); incluir_vendidas=true devolve todas com a
+    flag `vendida` e a `data_venda` da venda ativa (aba Estrutura)."""
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        
+
         cur.execute("SELECT ID, NOME FROM BLOCO WHERE IDEMPREENDIMENTO = ?", (emp_id,))
         blocos = [{"id": r[0], "nome": r[1].decode('win1252', 'ignore').strip() if isinstance(r[1], bytes) else str(r[1] or "").strip()} for r in cur.fetchall()]
-        
+
         unidades = []
         if blocos:
             b_ids = [str(b['id']) for b in blocos]
             placeholders = ",".join(["?"] * len(b_ids))
-            
+
             query_unidades = f"""
-                SELECT u.ID, u.IDBLOCO, u.DESCRICAO, u.METRAGEM, u.NUMCADIMOB, u.UNIDADE_DISTRATO 
+                SELECT u.ID, u.IDBLOCO, u.DESCRICAO, u.METRAGEM, u.NUMCADIMOB, u.UNIDADE_DISTRATO,
+                       (SELECT MAX(v.DTOPER) FROM VENDAUNIDADE vu
+                        JOIN VENDA v ON vu.IDVENDA = v.ID
+                        WHERE vu.IDUNIDADE = u.ID AND COALESCE(v.DISTRATO, 'N') <> 'S') AS DT_VENDA
                 FROM UNIDADE u
                 WHERE u.IDBLOCO IN ({placeholders})
-                  AND NOT EXISTS (
-                      SELECT 1 FROM VENDAUNIDADE vu
-                      JOIN VENDA v ON vu.IDVENDA = v.ID
-                      WHERE vu.IDUNIDADE = u.ID AND COALESCE(v.DISTRATO, 'N') <> 'S'
-                  )
+                ORDER BY u.IDBLOCO, u.ID
             """
             cur.execute(query_unidades, tuple(b_ids))
-            
+
             for r in cur.fetchall():
+                dt_venda = r[6]
+                if dt_venda is not None and not incluir_vendidas:
+                    continue  # comportamento clássico: só disponíveis
+                if hasattr(dt_venda, "date"):
+                    dt_venda = dt_venda.date()
                 unidades.append({
                     "id": r[0],
                     "id_bloco": r[1],
                     "descricao": r[2].decode('win1252', 'ignore').strip() if isinstance(r[2], bytes) else str(r[2] or "").strip(),
                     "metragem": float(r[3] or 0),
                     "inscricao": str(r[4] or ""),
-                    "unidade_distrato": r[5].decode('win1252', 'ignore').strip() if isinstance(r[5], bytes) else str(r[5] or "N").strip()
+                    "unidade_distrato": r[5].decode('win1252', 'ignore').strip() if isinstance(r[5], bytes) else str(r[5] or "N").strip(),
+                    "vendida": dt_venda is not None,
+                    "data_venda": dt_venda.strftime('%d/%m/%Y') if dt_venda else None
                 })
                 
         conn.close()
@@ -9499,10 +9518,21 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
               AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
               AND ((R.DATA >= ? AND R.DATA <= ?)
                    OR (COALESCE(R.TOTALPAGO, 0) = 0 AND R.DATA <= ?))
+              AND (V.IDVENDAVINCULADA IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM RECEBER RP
+                    WHERE RP.IDVENDA = V.IDVENDAVINCULADA
+                      AND RP.DATA = R.DATA
+                      AND ABS(COALESCE(RP.VALORPARCELA, 0) - COALESCE(R.VALORPARCELA, 0)) < 0.02
+                      AND ABS(COALESCE(RP.TOTALPAGO, 0) - COALESCE(R.TOTALPAGO, 0)) < 0.02))
               {filtro_emp}
             ORDER BY C.NOME, R.DATA, R.ID
         """, tuple(params))
         rows = cur.fetchall()
+        # ↑ dedupe de SATÉLITE (auditoria 07/08): duplicatas legadas de
+        # multi-comprador registram as MESMAS parcelas na venda vinculada —
+        # a linha da satélite só entra quando NÃO houver espelho exato
+        # (DATA+VALOR+PAGO) na principal, preservando pagamentos que o
+        # legado registrou apenas na satélite (R$2,3mi na 95 / R$2,8mi na ALZ).
 
         # acumulados por venda: PRINCIPAL amortizado (total e antes do mês).
         # TOTALPAGO inclui a variação monetária — abatê-la do valor histórico do
@@ -9525,6 +9555,20 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         pago_total = _acum(" AND R.DATA <= ?", [dt_fim])
         pago_antes = _acum(" AND R.DATA < ?", [dt_ini])
 
+        # multi-comprador NOVO (rateio com marcador): a principal guarda só a
+        # COTA do 1º CPF, mas as parcelas carregam o contrato cheio — sem esta
+        # soma, o "Vlr Venda"/saldo do grupo rateado ficaria negativo conforme
+        # paga. Vinculadas legadas SEM marcador ficam de fora (valor cheio
+        # duplicado — somar dobraria).
+        cur.execute("""
+            SELECT V.IDVENDAVINCULADA, SUM(COALESCE(V.TOTALVENDA, 0))
+            FROM VENDA V
+            WHERE V.CODIGOEMPRESA = ? AND V.IDVENDAVINCULADA IS NOT NULL
+              AND UPPER(COALESCE(V.INFCOMP, '')) LIKE 'VINCULADA VENDA #%'
+            GROUP BY V.IDVENDAVINCULADA
+        """, (empresa_id,))
+        cota_extra = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
+
         def _s(v):
             return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
 
@@ -9536,7 +9580,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
              desc, var, pago, parcela, obs, obra) = r
             if isinstance(data, _dt.datetime):
                 data = data.date()
-            totalvenda = float(totalvenda or 0)
+            totalvenda = float(totalvenda or 0) + cota_extra.get(vid, 0.0)
             pago_f = float(pago or 0)
             bx = baixas.get(str(rid))
             if bx and pago_f <= 0 and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
@@ -9581,6 +9625,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
             WHERE V.CODIGOEMPRESA = ?
               AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND V.IDVENDAVINCULADA IS NULL
               AND COALESCE(F.ATIVA, 'S') <> 'N'
               AND COALESCE(P.VALOR_PAGO, 0) = 0
               AND P.DATA >= ? AND P.DATA <= ?
@@ -9589,44 +9634,70 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         """, tuple([empresa_id, dt_ini, dt_fim] + ([empreendimento_id] if empreendimento_id else [])))
         candidatos = cur.fetchall()
 
-        # ── BAIXA ANTECIPADA DO LEGADO (consumo FIFO por venda+valor) ──────────
+        # ── BAIXA ANTECIPADA DO LEGADO (consumo de slots em 3 passes) ──────────
         # O legado quita parcelas futuras criando RECEBER com a DATA DO PAGAMENTO
-        # (ex.: 06, 07 e 08/2026 todas pagas em 10/06) e só marca VALOR_PAGO no
-        # 1º slot do cronograma — os slots de jul/ago ficariam "previstos" para
-        # sempre. Regra: cada RECEBER da venda com o MESMO VALOR consome um slot
-        # do cronograma; quem casa por vencimento exato consome o próprio slot,
-        # os demais consomem os slots mais antigos ainda livres (FIFO).
-        rank, n_extra = {}, {}
+        # e a COMPETÊNCIA no rótulo (PARCELA='MM/YYYY') — e pode PULAR meses
+        # (caso venda 19145: pagou 04..10/2026, deixou fev/mar em aberto; o FIFO
+        # puro consumia fev/mar e deixava set/out como fantasmas). Regra: cada
+        # RECEBER da venda com o MESMO VALOR consome um slot — 1º quem casa por
+        # vencimento exato, 2º quem tem competência no rótulo consome o slot
+        # DAQUELA competência, 3º FIFO nos mais antigos livres. Só entram
+        # RECEBER com DATA <= fim do mês navegado: pagamento futuro não some
+        # com slot em visão retrospectiva (a parcela ainda estava aberta).
+        suprimidos = set()
         vids_cand = sorted({r[1] for r in candidatos})
         if vids_cand:
             ph_v = ",".join("?" * len(vids_cand))
-            cur.execute(f"SELECT IDVENDA, DATA, VALORPARCELA FROM RECEBER WHERE IDVENDA IN ({ph_v})",
-                        tuple(vids_cand))
-            rec_count, rec_keys = {}, set()
-            for rvid, rdt, rval in cur.fetchall():
+            cur.execute(f"""SELECT IDVENDA, DATA, VALORPARCELA, PARCELA FROM RECEBER
+                            WHERE IDVENDA IN ({ph_v}) AND DATA <= ?""",
+                        tuple(vids_cand) + (dt_fim,))
+            comp_re = re.compile(r"^(0[1-9]|1[0-2])/(\d{4})$")
+            recs = {}
+            for rvid, rdt, rval, rparc in cur.fetchall():
                 if isinstance(rdt, _dt.datetime):
                     rdt = rdt.date()
                 rv = round(float(rval or 0), 2)
-                rec_count[(rvid, rv)] = rec_count.get((rvid, rv), 0) + 1
-                rec_keys.add((rvid, rdt.isoformat() if rdt else None, rv))
+                parc = rparc.decode('cp1252', 'ignore').strip() if isinstance(rparc, bytes) else str(rparc or "").strip()
+                m = comp_re.match(parc)
+                recs.setdefault((rvid, rv), []).append({
+                    "d": rdt.isoformat() if rdt else None,
+                    "comp": f"{m.group(2)}-{m.group(1)}" if m else None})
             cur.execute(f"""SELECT P.ID, F.IDVENDA, P.DATA, P.VALOR
                             FROM VENDAFORMAPAGTOPRAZO P
                             JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
                             WHERE F.IDVENDA IN ({ph_v}) AND COALESCE(F.ATIVA, 'S') <> 'N'
                             ORDER BY P.DATA, P.ID""", tuple(vids_cand))
-            contador, matched = {}, {}
+            slots = {}
             for spid, svid, sdt, sval in cur.fetchall():
                 if isinstance(sdt, _dt.datetime):
                     sdt = sdt.date()
                 sv = round(float(sval or 0), 2)
-                k = (svid, sv)
-                if (svid, sdt.isoformat() if sdt else None, sv) in rec_keys and \
-                        matched.get(k, 0) < rec_count.get(k, 0):
-                    matched[k] = matched.get(k, 0) + 1  # slot com parcela própria
+                d_iso = sdt.isoformat() if sdt else None
+                slots.setdefault((svid, sv), []).append(
+                    {"id": spid, "d": d_iso, "ym": d_iso[:7] if d_iso else None, "livre": True})
+            for chave, rlist in recs.items():
+                sl = slots.get(chave)
+                if not sl:
                     continue
-                contador[k] = contador.get(k, 0) + 1
-                rank[spid] = contador[k]
-            n_extra = {k: max(0, rec_count.get(k, 0) - matched.get(k, 0)) for k in rec_count}
+                pend = []
+                for r in rlist:      # passe 1: vencimento exato
+                    alvo = next((s for s in sl if s["livre"] and s["d"] == r["d"]), None)
+                    if alvo:
+                        alvo["livre"] = False
+                    else:
+                        pend.append(r)
+                resto = []
+                for r in pend:       # passe 2: competência do rótulo (MM/YYYY)
+                    alvo = next((s for s in sl if s["livre"] and r["comp"] and s["ym"] == r["comp"]), None)
+                    if alvo:
+                        alvo["livre"] = False
+                    else:
+                        resto.append(r)
+                for r in resto:      # passe 3: FIFO nos mais antigos livres
+                    alvo = next((s for s in sl if s["livre"]), None)
+                    if alvo:
+                        alvo["livre"] = False
+                suprimidos.update(s["id"] for s in sl if not s["livre"])
 
         for r in candidatos:
             (pid, vid, cliente, cnpj, unidade, totalvenda, data, vparc, ref, obra) = r
@@ -9636,9 +9707,9 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             vparc_f = round(float(vparc or 0), 2)
             if (vid, d_iso, vparc_f) in assinaturas:
                 continue  # ja efetivada no RECEBER (aparece acima)
-            if rank.get(pid, 10**9) <= n_extra.get((vid, vparc_f), 0):
-                continue  # quitada ANTECIPADAMENTE no legado (RECEBER com data do pagamento)
-            totalvenda = float(totalvenda or 0)
+            if pid in suprimidos:
+                continue  # parcela realizada consome este slot (venc exato, competência do rótulo, ou FIFO)
+            totalvenda = float(totalvenda or 0) + cota_extra.get(vid, 0.0)
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
             if bx and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
@@ -10081,7 +10152,12 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
                 if (dt_str, val) in assinaturas_fb:
                     continue
                     
-                abertas.append((row[0], row[1], dt_venc, row[3], row[4], row[5], row[6]))
+                # id prefixado: baixa em parcela projetada grava 'prazo_<id>' no
+                # operacoes_baixas (mesma chave da tela Mensal — sem colidir com RECEBER.ID)
+                abertas.append((f"prazo_{row[0]}", row[1], dt_venc, row[3], row[4], row[5], row[6]))
+            # (o conn_sq.close() do commit original nao entra aqui: neste repo a
+            #  conexao so existe dentro do `if PROJETADAS_ATIVAS` acima, onde ja e
+            #  fechada — fechar de novo aqui daria NameError com a env desligada)
             TOLE = 1.0
 
             from collections import defaultdict
@@ -10255,6 +10331,79 @@ async def api_smart_importer_preview_match(payload: PreviewMatchRequest):
         "importaveis":    sum(1 for r in resultados if r["status"] in ("PRONTA", "PRONTA_SEM_UNIDADE")),
     }
     return {"resultados": resultados, "counts": counts}
+
+@app.post("/api/smart-importer/importar-recebimentos")
+async def smart_importer_importar_recebimentos(payload: PreviewMatchRequest):
+    """Gravação do destino RECEBIMENTOS ('Gravar no ERP' do Smart Importer):
+    re-analisa a planilha (mesmo matching do preview) e registra BAIXA LOCAL
+    (operacoes_baixas, modelo da tela Mensal — o Firebird não é tocado; dá
+    para desfazer) em cada parcela MATCH_PERFEITO com valor. Idempotente:
+    parcela com baixa local existente é pulada; JA_QUITADO no legado idem."""
+    if payload.target_table != "RECEBIMENTOS":
+        raise HTTPException(status_code=400, detail="Endpoint exclusivo do destino RECEBIMENTOS.")
+    if not payload.empresa_id:
+        raise HTTPException(status_code=400, detail="Selecione a empresa (a baixa local é por empresa).")
+    preview = await api_smart_importer_preview_match(payload)
+    resultados = preview["resultados"]
+
+    import sqlite3 as _sq
+    s_conn = _sq.connect(POC_DATABASE_FILE)
+    try:
+        s_cur = s_conn.cursor()
+        s_cur.execute("SELECT id_receber FROM operacoes_baixas WHERE empresa_id = ?", (int(payload.empresa_id),))
+        existentes = {str(r[0]) for r in s_cur.fetchall()}
+        baixadas, puladas, venc_como_pgto = 0, [], 0
+        for r in resultados:
+            if r.get("status") != "MATCH_PERFEITO" or not r.get("id_parcela"):
+                continue
+            rid = str(r["id_parcela"])
+            valor = r.get("valor_planilha") or r.get("valor_vulcano")
+            if not valor or float(valor) <= 0:
+                puladas.append(f"{rid}: sem valor")
+                continue
+            dt_pgto = r.get("dt_pagamento")
+            if not dt_pgto:
+                # planilha sem coluna de pagamento: assume o vencimento casado
+                dt_pgto = r.get("dt_venc_vulcano") or r.get("dt_vencimento")
+                if not dt_pgto:
+                    puladas.append(f"{rid}: sem data de pagamento/vencimento")
+                    continue
+                venc_como_pgto += 1
+            if rid in existentes:
+                puladas.append(f"{rid}: baixa local já registrada")
+                continue
+            s_cur.execute(
+                """INSERT INTO operacoes_baixas (id_receber, empresa_id, data_pagamento, valor_pago, descontos, acrescimos)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (rid, int(payload.empresa_id), str(dt_pgto)[:10], round(float(valor), 2),
+                 float(r.get("descontos") or 0), float(r.get("acrescimos") or 0)))
+            existentes.add(rid)
+            baixadas += 1
+        s_conn.commit()
+        ja_quitadas = sum(1 for r in resultados if r.get("status") == "JA_QUITADO")
+        sem_match = sum(1 for r in resultados if r.get("status") == "SEM_MATCH")
+        msg = f"{baixadas} baixa(s) registrada(s) (locais, reversíveis pela tela Mensal)."
+        if venc_como_pgto:
+            msg += f" {venc_como_pgto} sem data de pagamento na planilha usaram o vencimento."
+        if ja_quitadas:
+            msg += f" {ja_quitadas} já quitada(s) no legado (puladas)."
+        if sem_match:
+            msg += f" {sem_match} sem match (não gravadas)."
+        return {"success": True, "baixadas": baixadas, "ja_quitadas": ja_quitadas,
+                "sem_match": sem_match, "puladas": puladas[:20], "message": msg}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            s_conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            s_conn.close()
+        except Exception:
+            pass
 
 @app.post("/api/smart-importer/importar-vendas")
 async def smart_importer_importar_vendas(payload: PreviewMatchRequest):
