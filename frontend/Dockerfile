@@ -1,5 +1,7 @@
-# Build: passa a URL da API que o navegador usará (não use host interno docker tipo http://backend:8000
-# a menos que o usuário acesse só via outro proxy).
+# Build da SPA. VITE_API_BASE fica VAZIO por padrão: o nginx desta mesma imagem faz
+# proxy de /api para o backend (nginx.conf), então o navegador chama a mesma origem —
+# funciona igual por http e por https. Só preencha se a API for servida de outra origem,
+# e nesse caso use https, senão o navegador bloqueia por mixed content.
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
@@ -8,7 +10,7 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_BASE=http://localhost:8000
+ARG VITE_API_BASE=
 ENV VITE_API_BASE=${VITE_API_BASE}
 
 RUN npm run build
