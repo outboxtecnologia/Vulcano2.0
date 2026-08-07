@@ -54,6 +54,8 @@ const COLUNAS = [
     { key: 'empreendimento', label: 'Empreendimento', type: 'text', when: (ctx) => !ctx.empreendimentoId },
     { key: 'vlr_venda',      label: 'Vlr Venda',      type: 'number', right: true, firstDir: 'desc', money: true },
     { key: 'saldo_anterior', label: 'Saldo Ant.',     right: true, money: true },
+    // Vencimento em ISO no dado (ordena certo) e dd/mm/aaaa na tela.
+    { key: 'vencimento',     label: 'Vencimento',     type: 'date' },
     { key: 'data_pagto',     label: 'Data Pagto',     type: 'date' },
     { key: 'valor_parcela',  label: 'Valor Parcela',  type: 'number', right: true, firstDir: 'desc', money: true },
     { key: 'desconto',       label: 'Desconto',       type: 'number', right: true, firstDir: 'desc', money: true },
@@ -472,6 +474,9 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                                         {!empreendimentoId && <td className="px-3 py-2 text-[var(--v-text-muted)] max-w-40 truncate">{r.empreendimento}</td>}
                                         <td className="px-3 py-2 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.vlr_venda)}</td>
                                         <td className="px-3 py-2 font-mono text-right text-[var(--v-text-muted)]">{fmt(r.saldo_anterior)}</td>
+                                        <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: r.status === 'VENCIDA' ? 'var(--v-err)' : 'var(--v-text-muted)' }}>
+                                            {r.vencimento ? r.vencimento.split('-').reverse().join('/') : ''}
+                                        </td>
                                         <td className="px-3 py-2 font-mono text-[var(--v-ok)]">
                                             {editando ? (
                                                 <input type="date" value={baixa.data_pagamento} onKeyDown={onKey}
@@ -560,6 +565,8 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                         {rows.length > 0 && (
                             <tfoot>
                                 <tr className="bg-[var(--v-deep)] border-t border-[var(--v-line)] font-mono font-bold">
+                                    {/* colSpan derivado do indice da coluna: a coluna Vencimento nova
+                                        entra sozinha na conta, sem numero magico para manter. */}
                                     <td colSpan={colunasVisiveis.findIndex(c => c.key === 'valor_parcela')} className="px-3 py-2.5 text-[9px] uppercase tracking-widest text-[var(--v-text-ghost)]">
                                         {buscando
                                             ? <>Totais <span className="text-[var(--v-accent)]">(filtrado)</span> · {rows.length} de {totalDoMes} parcelas</>

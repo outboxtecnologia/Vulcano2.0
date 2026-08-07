@@ -9483,7 +9483,9 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 GROUP BY R.IDVENDA
             """, tuple([empresa_id] + extra_params))
             return {r[0]: float(r[1] or 0) for r in cur.fetchall()}
-        pago_total = _acum("", [])
+        # "Saldo Atual" da tela = saldo no FIM DO MÊS selecionado, não o de hoje
+        # — navegando para um mês passado, pagamentos posteriores não entram.
+        pago_total = _acum(" AND R.DATA <= ?", [dt_fim])
         pago_antes = _acum(" AND R.DATA < ?", [dt_ini])
 
         def _s(v):
@@ -9500,7 +9502,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             totalvenda = float(totalvenda or 0)
             pago_f = float(pago or 0)
             bx = baixas.get(str(rid))
-            if bx and pago_f <= 0:
+            if bx and pago_f <= 0 and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
                 baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
@@ -9548,7 +9550,48 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
               {filtro_emp}
             ORDER BY C.NOME, P.DATA, P.ID
         """, tuple([empresa_id, dt_ini, dt_fim] + ([empreendimento_id] if empreendimento_id else [])))
-        for r in cur.fetchall():
+        candidatos = cur.fetchall()
+
+        # ── BAIXA ANTECIPADA DO LEGADO (consumo FIFO por venda+valor) ──────────
+        # O legado quita parcelas futuras criando RECEBER com a DATA DO PAGAMENTO
+        # (ex.: 06, 07 e 08/2026 todas pagas em 10/06) e só marca VALOR_PAGO no
+        # 1º slot do cronograma — os slots de jul/ago ficariam "previstos" para
+        # sempre. Regra: cada RECEBER da venda com o MESMO VALOR consome um slot
+        # do cronograma; quem casa por vencimento exato consome o próprio slot,
+        # os demais consomem os slots mais antigos ainda livres (FIFO).
+        rank, n_extra = {}, {}
+        vids_cand = sorted({r[1] for r in candidatos})
+        if vids_cand:
+            ph_v = ",".join("?" * len(vids_cand))
+            cur.execute(f"SELECT IDVENDA, DATA, VALORPARCELA FROM RECEBER WHERE IDVENDA IN ({ph_v})",
+                        tuple(vids_cand))
+            rec_count, rec_keys = {}, set()
+            for rvid, rdt, rval in cur.fetchall():
+                if isinstance(rdt, _dt.datetime):
+                    rdt = rdt.date()
+                rv = round(float(rval or 0), 2)
+                rec_count[(rvid, rv)] = rec_count.get((rvid, rv), 0) + 1
+                rec_keys.add((rvid, rdt.isoformat() if rdt else None, rv))
+            cur.execute(f"""SELECT P.ID, F.IDVENDA, P.DATA, P.VALOR
+                            FROM VENDAFORMAPAGTOPRAZO P
+                            JOIN VENDAFORMAPAGTO F ON F.ID = P.IDVENDAFORMAPAGTO
+                            WHERE F.IDVENDA IN ({ph_v}) AND COALESCE(F.ATIVA, 'S') <> 'N'
+                            ORDER BY P.DATA, P.ID""", tuple(vids_cand))
+            contador, matched = {}, {}
+            for spid, svid, sdt, sval in cur.fetchall():
+                if isinstance(sdt, _dt.datetime):
+                    sdt = sdt.date()
+                sv = round(float(sval or 0), 2)
+                k = (svid, sv)
+                if (svid, sdt.isoformat() if sdt else None, sv) in rec_keys and \
+                        matched.get(k, 0) < rec_count.get(k, 0):
+                    matched[k] = matched.get(k, 0) + 1  # slot com parcela própria
+                    continue
+                contador[k] = contador.get(k, 0) + 1
+                rank[spid] = contador[k]
+            n_extra = {k: max(0, rec_count.get(k, 0) - matched.get(k, 0)) for k in rec_count}
+
+        for r in candidatos:
             (pid, vid, cliente, cnpj, unidade, totalvenda, data, vparc, ref, obra) = r
             if isinstance(data, _dt.datetime):
                 data = data.date()
@@ -9556,10 +9599,12 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             vparc_f = round(float(vparc or 0), 2)
             if (vid, d_iso, vparc_f) in assinaturas:
                 continue  # ja efetivada no RECEBER (aparece acima)
+            if rank.get(pid, 10**9) <= n_extra.get((vid, vparc_f), 0):
+                continue  # quitada ANTECIPADAMENTE no legado (RECEBER com data do pagamento)
             totalvenda = float(totalvenda or 0)
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
-            if bx:
+            if bx and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
                 baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
