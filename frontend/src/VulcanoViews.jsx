@@ -942,6 +942,20 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <button onClick={handleExportXLSX} disabled={!filtered.length} title={filtered.length ? 'Exportar a lista filtrada para Excel' : 'Busque vendas primeiro'} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold disabled:opacity-40" style={{ background: 'var(--v-card)', border: '1px solid rgba(255, 160, 80, 0.18)', color: 'var(--v-text-bold)' }}>
                     <FileSpreadsheet size={12}/> Excel
                 </button>
+                {filtered.length > 0 && (
+                    selecao.size < filtered.length ? (
+                        <button onClick={() => setSelecao(new Set(filtered.map(v => v.id)))} title="Marca todas as vendas da lista filtrada" className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-bold)' }}>
+                            {/* rotulo em <span>: os dois botoes ocupam a mesma posicao e o React
+                                troca so o icone e o texto — texto solto ali vira no de referencia
+                                do insertBefore (mesmo caso de 371b471) */}
+                            <CheckSquare size={12}/> <span>Selecionar todas ({filtered.length})</span>
+                        </button>
+                    ) : (
+                        <button onClick={() => setSelecao(new Set())} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'var(--v-card)', border: '1px solid var(--v-line-warm)', color: 'var(--v-text-muted)' }}>
+                            <X size={12}/> <span>Limpar seleção</span>
+                        </button>
+                    )
+                )}
                 {selecao.size > 0 && (
                     <button onClick={() => prepararExclusao([...selecao])} title="Utilitário de exclusão de registros (sem distrato) — abre prévia antes de confirmar" className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-bold" style={{ background: 'var(--v-err-soft)', border: '1px solid var(--v-err)', color: 'var(--v-err)' }}>
                         <Trash2 size={12}/> <span>Excluir {selecao.size} selecionada(s)</span>
