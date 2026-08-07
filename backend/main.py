@@ -7814,7 +7814,9 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                 GROUP BY R.IDVENDA
             """, tuple([empresa_id] + extra_params))
             return {r[0]: float(r[1] or 0) for r in cur.fetchall()}
-        pago_total = _acum("", [])
+        # "Saldo Atual" da tela = saldo no FIM DO MÊS selecionado, não o de hoje
+        # — navegando para um mês passado, pagamentos posteriores não entram.
+        pago_total = _acum(" AND R.DATA <= ?", [dt_fim])
         pago_antes = _acum(" AND R.DATA < ?", [dt_ini])
 
         def _s(v):
@@ -7831,7 +7833,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             totalvenda = float(totalvenda or 0)
             pago_f = float(pago or 0)
             bx = baixas.get(str(rid))
-            if bx and pago_f <= 0:
+            if bx and pago_f <= 0 and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
                 baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
@@ -7933,7 +7935,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             totalvenda = float(totalvenda or 0)
             rid = f"prazo_{pid}"
             bx = baixas.get(rid)
-            if bx:
+            if bx and str(bx["data"] or "")[:10] <= dt_fim.isoformat():
                 baixa_extra[vid] = baixa_extra.get(vid, 0.0) + bx["valor_pago"] - bx["variacao"] + bx["desconto"]  # principal
             item = {
                 "id": rid, "venda_id": vid,
