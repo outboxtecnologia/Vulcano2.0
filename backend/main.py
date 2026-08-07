@@ -9499,10 +9499,21 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
               AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
               AND ((R.DATA >= ? AND R.DATA <= ?)
                    OR (COALESCE(R.TOTALPAGO, 0) = 0 AND R.DATA <= ?))
+              AND (V.IDVENDAVINCULADA IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM RECEBER RP
+                    WHERE RP.IDVENDA = V.IDVENDAVINCULADA
+                      AND RP.DATA = R.DATA
+                      AND ABS(COALESCE(RP.VALORPARCELA, 0) - COALESCE(R.VALORPARCELA, 0)) < 0.02
+                      AND ABS(COALESCE(RP.TOTALPAGO, 0) - COALESCE(R.TOTALPAGO, 0)) < 0.02))
               {filtro_emp}
             ORDER BY C.NOME, R.DATA, R.ID
         """, tuple(params))
         rows = cur.fetchall()
+        # ↑ dedupe de SATÉLITE (auditoria 07/08): duplicatas legadas de
+        # multi-comprador registram as MESMAS parcelas na venda vinculada —
+        # a linha da satélite só entra quando NÃO houver espelho exato
+        # (DATA+VALOR+PAGO) na principal, preservando pagamentos que o
+        # legado registrou apenas na satélite (R$2,3mi na 95 / R$2,8mi na ALZ).
 
         # acumulados por venda: PRINCIPAL amortizado (total e antes do mês).
         # TOTALPAGO inclui a variação monetária — abatê-la do valor histórico do
@@ -9581,6 +9592,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
             LEFT JOIN EMPREENDIMENTO E ON V.IDEMPREENDIMENTO = E.ID
             WHERE V.CODIGOEMPRESA = ?
               AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND V.IDVENDAVINCULADA IS NULL
               AND COALESCE(F.ATIVA, 'S') <> 'N'
               AND COALESCE(P.VALOR_PAGO, 0) = 0
               AND P.DATA >= ? AND P.DATA <= ?
