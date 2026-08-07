@@ -5398,13 +5398,28 @@ async def excluir_vendas(request: Request):
                 cur.execute(f"SELECT ID FROM VENDAFORMAPAGTOPRAZO WHERE IDVENDAFORMAPAGTO IN ({ph_f})", tuple(fp_ids))
                 prazo_alvo = [r[0] for r in cur.fetchall()]
             cascata["parcelas_cronograma"] = len(prazo_alvo)
+            # A ordem certa (RECEBER antes do prazo) resolve o caso normal, em que
+            # a parcela e o slot pertencem a mesma venda. Resta o caso torto: um
+            # RECEBER de venda FORA do alvo apontando para um prazo do alvo. Ai a FK
+            # barraria de novo — e apagar esse RECEBER seria mexer em venda que
+            # ninguem mandou excluir. Detecta e avisa em vez de estourar erro de
+            # banco na cara do operador.
+            if prazo_alvo:
+                ph_p0 = ",".join("?" * len(prazo_alvo))
+                cur.execute(
+                    f"""SELECT R.ID, R.IDVENDA FROM RECEBER R
+                        WHERE R.IDVENDAFORMAPAGTOPRAZO IN ({ph_p0})""", tuple(prazo_alvo))
+                rec_externos = [(r[0], r[1]) for r in cur.fetchall() if r[0] not in set(rec_alvo)]
+            else:
+                rec_externos = []
+            cascata["receber_de_outras_vendas"] = len(rec_externos)
             for tab, rot in (("VENDAUNIDADE", "unidades_vendidas"), ("VENDAREPARCELAMENTO", "reparcelamentos"), ("DISTRATO", "distratos")):
                 cur.execute(f"SELECT COUNT(*) FROM {tab} WHERE IDVENDA IN ({ph_a})", tuple(alvo))
                 cascata[rot] = cur.fetchone()[0]
             chaves_op = {str(r) for r in rec_alvo} | {f"prazo_{p}" for p in prazo_alvo}
             cascata["baixas_locais"] = len(chaves_op & op_keys)
         else:
-            fp_ids, chaves_op = [], set()
+            fp_ids, chaves_op, rec_externos = [], set(), []
 
         if dry_run:
             return {"dry_run": True, "excluiveis": alvo, "cascata": cascata,
@@ -5414,16 +5429,29 @@ async def excluir_vendas(request: Request):
         if not alvo:
             raise HTTPException(status_code=400, detail="Nada a excluir: todas as vendas têm pagamento (use forcar).")
 
+        if rec_externos:
+            vendas_ext = sorted({v for _, v in rec_externos if v})
+            raise HTTPException(status_code=409, detail=(
+                f"{len(rec_externos)} parcela(s) do contas a receber de OUTRA(S) venda(s) "
+                f"({', '.join(f'#{v}' for v in vendas_ext[:10])}) apontam para o cronograma "
+                "destas vendas. Excluir aqui apagaria dado de venda que não foi selecionada — "
+                "confira esses vínculos antes."))
+
         ph_a = ",".join("?" * len(alvo))
+        # ORDEM IMPORTA: RECEBER e FILHO de VENDAFORMAPAGTOPRAZO
+        # (RECEBER.IDVENDAFORMAPAGTOPRAZO). Apagando o prazo primeiro o Firebird
+        # recusa com "violation of FOREIGN KEY constraint FK_RECEBER_FORMAPAGTOPRAZO"
+        # e a transacao inteira volta atras. Filho antes do pai:
+        # RECEBER -> VENDAFORMAPAGTOPRAZO -> VENDAFORMAPAGTO -> VENDA.
+        if rec_alvo:
+            ph_r = ",".join("?" * len(rec_alvo))
+            cur.execute(f"DELETE FROM RECEBER WHERE ID IN ({ph_r})", tuple(rec_alvo))
         if prazo_alvo:
             ph_p = ",".join("?" * len(prazo_alvo))
             cur.execute(f"DELETE FROM VENDAFORMAPAGTOPRAZO WHERE ID IN ({ph_p})", tuple(prazo_alvo))
         if fp_ids:
             ph_f = ",".join("?" * len(fp_ids))
             cur.execute(f"DELETE FROM VENDAFORMAPAGTO WHERE ID IN ({ph_f})", tuple(fp_ids))
-        if rec_alvo:
-            ph_r = ",".join("?" * len(rec_alvo))
-            cur.execute(f"DELETE FROM RECEBER WHERE ID IN ({ph_r})", tuple(rec_alvo))
         for tab in ("VENDAUNIDADE", "VENDAREPARCELAMENTO", "DISTRATO"):
             cur.execute(f"DELETE FROM {tab} WHERE IDVENDA IN ({ph_a})", tuple(alvo))
         # vinculadas antes das principais
