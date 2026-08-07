@@ -5380,15 +5380,17 @@ async def excluir_vendas(request: Request):
             raise HTTPException(status_code=400, detail="Nada a excluir: todas as vendas têm pagamento (use forcar).")
 
         ph_a = ",".join("?" * len(alvo))
+        # ordem importa: RECEBER referencia VENDAFORMAPAGTO(+PRAZO) via FK
+        # (FK_RECEBER_FORMAPAGTOPRAZO) — parcelas saem ANTES do cronograma
+        if rec_alvo:
+            ph_r = ",".join("?" * len(rec_alvo))
+            cur.execute(f"DELETE FROM RECEBER WHERE ID IN ({ph_r})", tuple(rec_alvo))
         if prazo_alvo:
             ph_p = ",".join("?" * len(prazo_alvo))
             cur.execute(f"DELETE FROM VENDAFORMAPAGTOPRAZO WHERE ID IN ({ph_p})", tuple(prazo_alvo))
         if fp_ids:
             ph_f = ",".join("?" * len(fp_ids))
             cur.execute(f"DELETE FROM VENDAFORMAPAGTO WHERE ID IN ({ph_f})", tuple(fp_ids))
-        if rec_alvo:
-            ph_r = ",".join("?" * len(rec_alvo))
-            cur.execute(f"DELETE FROM RECEBER WHERE ID IN ({ph_r})", tuple(rec_alvo))
         for tab in ("VENDAUNIDADE", "VENDAREPARCELAMENTO", "DISTRATO"):
             cur.execute(f"DELETE FROM {tab} WHERE IDVENDA IN ({ph_a})", tuple(alvo))
         # vinculadas antes das principais
