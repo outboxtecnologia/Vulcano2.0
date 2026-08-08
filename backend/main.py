@@ -5257,8 +5257,13 @@ def get_vulcano_venda_condicoes(venda_id: int):
 
 @app.post("/api/vulcano/vendas/{venda_id}/parcelas")
 async def lancar_parcela_manual(venda_id: int, request: Request):
-    """Lança uma parcela avulsa (prevista) no RECEBER da venda — ação
-    'Lançar parcela manual' do painel de Vendas."""
+    """Lança parcelas previstas no RECEBER da venda — ação 'Lançar parcela
+    manual' do painel de Vendas, agora no FORMATO DE CONDIÇÃO (Melhorias 2):
+    tipo + quantidade + valor por parcela + 1º vencimento geram N parcelas
+    com a mesma régua de intervalos do cadastro de venda (MENSAL +1, SEMESTRAL
+    +6, ANUAL +12, REFORCO intervalo custom; SINAL/INTERMEDIARIA/CHAVES/
+    FINANCIAMENTO são únicas). Sem `tipo` = comportamento clássico (1 avulsa)."""
+    import datetime as _dt
     data = await request.json()
     data_venc = str(data.get("data") or "").strip()
     valor = float(data.get("valor") or 0)
@@ -5266,6 +5271,24 @@ async def lancar_parcela_manual(venda_id: int, request: Request):
         raise HTTPException(status_code=400, detail=f"Data inválida: {data_venc!r}")
     if valor <= 0:
         raise HTTPException(status_code=400, detail="Informe o valor da parcela.")
+    tipo = str(data.get("tipo") or "AVULSA").strip().upper()
+    unicas = ("AVULSA", "SINAL", "INTERMEDIARIA", "CHAVES", "FINANCIAMENTO")
+    qtd = 1 if tipo in unicas else max(1, min(240, int(data.get("quantidade") or 1)))
+    intervalo = {"MENSAL": 1, "SEMESTRAL": 6, "ANUAL": 12}.get(tipo)
+    if tipo == "REFORCO":
+        intervalo = max(1, int(data.get("intervalo_meses") or 6))
+    if intervalo is None:
+        intervalo = 1
+
+    def _add_months(d, n):
+        month = d.month - 1 + n
+        year = d.year + month // 12
+        month = month % 12 + 1
+        dias = [31, 29 if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 else 28,
+                31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        return _dt.date(year, month, min(d.day, dias[month - 1]))
+
+    base = _dt.datetime.strptime(data_venc[:10], "%Y-%m-%d").date()
     conn = None
     try:
         conn = get_conn("vulcano")
@@ -5278,18 +5301,27 @@ async def lancar_parcela_manual(venda_id: int, request: Request):
             raise HTTPException(status_code=400, detail="Venda distratada — não recebe parcelas novas.")
         cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
         new_id = cur.fetchone()[0]
-        referencia = str(data.get("referencia") or "MANUAL").strip()[:10]
-        obs = str(data.get("obs") or "Parcela lançada manualmente (Vulcano 2.0)").strip()[:100]
-        cur.execute(
-            """INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA,
-                                    VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO)
-               VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)""",
-            (new_id, int(venda_id), row[0], data_venc, round(valor, 2),
-             referencia.encode('cp1252', 'ignore'), obs.encode('cp1252', 'ignore')),
-        )
+        obs = str(data.get("obs") or f"MANUAL {tipo} (Vulcano 2.0)").strip()[:100]
+        ids = []
+        for i in range(qtd):
+            venc = base if qtd == 1 else _add_months(base, i * intervalo)
+            if qtd == 1:
+                referencia = str(data.get("referencia") or "MANUAL").strip()[:10]
+            else:
+                referencia = f"{i + 1}/{qtd}"
+            cur.execute(
+                """INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA,
+                                        VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO)
+                   VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)""",
+                (new_id + i, int(venda_id), row[0], venc.isoformat(), round(valor, 2),
+                 referencia.encode('cp1252', 'ignore'), obs.encode('cp1252', 'ignore')),
+            )
+            ids.append(new_id + i)
         conn.commit()
-        return {"success": True, "id": new_id,
-                "message": f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}."}
+        ult = base if qtd == 1 else _add_months(base, (qtd - 1) * intervalo)
+        return {"success": True, "id": ids[0], "ids": ids, "quantidade": qtd,
+                "message": (f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}." if qtd == 1 else
+                            f"{qtd} parcelas {tipo} de {valor:,.2f} lançadas na venda #{venda_id} ({base.isoformat()} a {ult.isoformat()}).")}
     except HTTPException:
         raise
     except Exception as e:

@@ -813,7 +813,9 @@ export const VendasView = ({ selectedEmpresa }) => {
     try {
       const res = await fetch(`${API_BASE}/api/vulcano/vendas/${m.venda.id}/parcelas`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: m.data, valor: parseFloat(m.valor), referencia: m.referencia })
+        body: JSON.stringify({ data: m.data, valor: parseFloat(m.valor), referencia: m.referencia,
+                              tipo: m.tipo || 'AVULSA', quantidade: parseInt(m.quantidade || 1, 10),
+                              intervalo_meses: parseInt(m.intervalo_meses || 6, 10) })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.detail || `HTTP ${res.status}`);
@@ -1209,7 +1211,7 @@ export const VendasView = ({ selectedEmpresa }) => {
                             <button onClick={() => setEstruturaAberta(v => !v)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
                                 <span className="flex items-center gap-3"><Layers size={14} style={{ color: '#8a7a68' }}/> {estruturaAberta ? 'Ocultar' : 'Abrir'} estrutura financeira</span>
                             </button>
-                            <button onClick={() => setParcelaManualModal({ venda: selectedVenda, data: hojeLocal(), valor: '', referencia: '' })} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
+                            <button onClick={() => setParcelaManualModal({ venda: selectedVenda, data: hojeLocal(), valor: '', referencia: '', tipo: 'AVULSA', quantidade: 1, intervalo_meses: 6 })} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
                                 <span className="flex items-center gap-3"><DollarSign size={14} style={{ color: '#8a7a68' }}/> Lançar parcela manual</span>
                             </button>
                             <button onClick={() => abrirEdicaoVenda(selectedVenda)} className="flex justify-between items-center px-4 py-2.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/5" style={{ color: '#f0e6d8' }}>
@@ -1261,21 +1263,61 @@ export const VendasView = ({ selectedEmpresa }) => {
                 <h3 className="text-lg font-black uppercase tracking-widest flex items-center gap-3 mb-1" style={{ color: '#f0e6d8' }}>
                     <DollarSign size={20} color="#ff7a1a"/> Lançar Parcela Manual
                 </h3>
-                <p className="text-[11px] mb-5" style={{ color: '#8a7a68' }}>Venda <b style={{ color: '#f0e6d8' }}>#{parcelaManualModal.venda.id}</b> — {parcelaManualModal.venda.cliente_nome}. A parcela entra como prevista (em aberto) e pode ser baixada normalmente.</p>
-                <div className="grid grid-cols-3 gap-3 mb-6">
+                <p className="text-[11px] mb-5" style={{ color: '#8a7a68' }}>Venda <b style={{ color: '#f0e6d8' }}>#{parcelaManualModal.venda.id}</b> — {parcelaManualModal.venda.cliente_nome}. As parcelas entram como previstas (em aberto) e podem ser baixadas normalmente.</p>
+                <div className="grid grid-cols-3 gap-3 mb-3">
                     <div>
-                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Vencimento</label>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Tipo (formato de condição)</label>
+                        <select value={parcelaManualModal.tipo || 'AVULSA'} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, tipo: e.target.value, quantidade: ['MENSAL','SEMESTRAL','ANUAL','REFORCO'].includes(e.target.value) ? (parcelaManualModal.quantidade > 1 ? parcelaManualModal.quantidade : 2) : 1 })} className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }}>
+                            <option value="AVULSA">Avulsa (1 parcela)</option>
+                            <option value="SINAL">Sinal</option>
+                            <option value="MENSAL">Mensal</option>
+                            <option value="SEMESTRAL">Semestral</option>
+                            <option value="ANUAL">Anual</option>
+                            <option value="REFORCO">Reforço (intervalo custom)</option>
+                            <option value="INTERMEDIARIA">Intermediária</option>
+                            <option value="CHAVES">Chaves</option>
+                            <option value="FINANCIAMENTO">Financiamento</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Quantidade</label>
+                        <input type="number" min="1" max="240" disabled={!['MENSAL','SEMESTRAL','ANUAL','REFORCO'].includes(parcelaManualModal.tipo)} value={parcelaManualModal.quantidade || 1} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, quantidade: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none disabled:opacity-40" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                    </div>
+                    {parcelaManualModal.tipo === 'REFORCO' ? (
+                        <div>
+                            <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Intervalo (meses)</label>
+                            <input type="number" min="1" max="60" value={parcelaManualModal.intervalo_meses || 6} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, intervalo_meses: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Referência (avulsa)</label>
+                            <input value={parcelaManualModal.referencia} disabled={(parcelaManualModal.quantidade || 1) > 1} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, referencia: e.target.value })} placeholder="ex.: 95/240 (série usa i/N)" className="w-full p-2.5 rounded text-[11px] outline-none font-mono disabled:opacity-40" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
+                        </div>
+                    )}
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>1º vencimento</label>
                         <input type="date" min="1990-01-01" value={parcelaManualModal.data} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, data: e.target.value })} className="w-full p-2.5 rounded text-[11px] outline-none dark-calendar" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
                     </div>
                     <div>
-                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Valor</label>
+                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Valor por parcela</label>
                         <input type="number" step="0.01" value={parcelaManualModal.valor} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, valor: e.target.value })} placeholder="0,00" className="w-full p-2.5 rounded text-[11px] outline-none" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
                     </div>
-                    <div>
-                        <label className="text-[10px] uppercase font-bold mb-1 block" style={{ color: '#8a7a68' }}>Referência</label>
-                        <input value={parcelaManualModal.referencia} onChange={(e) => setParcelaManualModal({ ...parcelaManualModal, referencia: e.target.value })} placeholder="ex.: 95/240" className="w-full p-2.5 rounded text-[11px] outline-none font-mono" style={{ background: '#1a1614', border: '1px solid rgba(255, 160, 80, 0.08)', color: '#f0e6d8' }} />
-                    </div>
                 </div>
+                {(() => {
+                    const q = parseInt(parcelaManualModal.quantidade || 1, 10);
+                    const v = parseFloat(parcelaManualModal.valor || 0);
+                    if (!(q > 1) || !parcelaManualModal.data) return null;
+                    const passo = parcelaManualModal.tipo === 'SEMESTRAL' ? 6 : parcelaManualModal.tipo === 'ANUAL' ? 12 : parcelaManualModal.tipo === 'REFORCO' ? Math.max(1, parseInt(parcelaManualModal.intervalo_meses || 6, 10)) : 1;
+                    const [Y, M, D] = parcelaManualModal.data.split('-').map(Number);
+                    const venc = (i) => { const d = new Date(Y, M - 1 + i * passo, 1); const dias = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(D, dias)); return d.toLocaleDateString('pt-BR'); };
+                    return (
+                        <p className="text-[10.5px] mb-4" style={{ color: '#ffd28a' }}>
+                            Gera <b>{q}</b> parcelas de <b>{v ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '—'}</b> ({q}× = {v ? (q * v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '—'}): {venc(0)}, {venc(1)}{q > 2 ? `, … , ${venc(q - 1)}` : ''} — rótulos 1/{q} a {q}/{q}.
+                        </p>
+                    );
+                })()}
                 <div className="flex justify-end gap-3">
                     <button onClick={() => setParcelaManualModal(null)} className="px-4 py-2 hover:bg-white/5 transition-colors text-[11px] font-bold uppercase tracking-widest rounded" style={{ color: '#8a7a68' }}>Cancelar</button>
                     <button onClick={salvarParcelaManual} disabled={salvandoParcela} className="px-6 py-2 rounded text-[11px] font-bold uppercase tracking-widest disabled:opacity-50" style={{ background: 'linear-gradient(135deg, #ff7a1a, #c93a12)', color: '#1a0a04' }}>
