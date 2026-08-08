@@ -10,6 +10,72 @@ import { API_BASE } from './apiBase';
 // Sem esta guarda o objeto de erro cai direto no estado e quebra o .map() na renderizacao.
 const asArray = (v) => (Array.isArray(v) ? v : []);
 
+// Picker de conta contábil do plano Questor da empresa: busca por código,
+// classificação ou nome (sem acento), sintéticas visíveis mas não
+// selecionáveis, e digitação manual do código (Enter/blur com dígitos).
+const ContaPicker = ({ label, value, onChange, contas, prefix, loading }) => {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState('');
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const sel = contas.find(c => String(c.id) === String(value || ''));
+  const base = contas.filter(c => !prefix || String(c.classificacao || '').startsWith(prefix));
+  const t = norm(busca.trim());
+  const filtradas = !t ? base : base.filter(c =>
+    String(c.id).includes(t) || String(c.classificacao || '').includes(t) || norm(c.descricao).includes(t));
+  const commitDigitos = () => {
+    const d = busca.trim();
+    if (/^\d+$/.test(d)) onChange(d);
+  };
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">{label}</label>
+      <div className="relative">
+        <input
+          value={aberto ? busca : (sel ? `${sel.id} — ${sel.descricao}` : String(value || '') === '0' ? '' : String(value || ''))}
+          onFocus={() => { setAberto(true); setBusca(''); }}
+          onChange={(e) => setBusca(e.target.value)}
+          onBlur={() => setTimeout(() => { commitDigitos(); setAberto(false); }, 150)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const d = busca.trim();
+              if (/^\d+$/.test(d)) commitDigitos();
+              else if (filtradas.length && filtradas[0].tipo !== 1) onChange(String(filtradas[0].id));
+              setAberto(false); e.target.blur();
+            }
+            if (e.key === 'Escape') { setAberto(false); e.target.blur(); }
+          }}
+          placeholder={loading ? 'Carregando plano de contas...' : 'Código, classificação ou nome...'}
+          className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50 transition-all font-mono"
+        />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-30 pointer-events-none">
+          <Search size={12} className="text-[var(--v-accent)]" />
+        </div>
+        {aberto && filtradas.length > 0 && (
+          <div className="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto rounded border border-white/10 shadow-2xl custom-scrollbar" style={{ background: '#141110' }}>
+            {filtradas.slice(0, 40).map(c => (
+              <button type="button" key={c.id} disabled={c.tipo === 1}
+                onMouseDown={(e) => { e.preventDefault(); if (c.tipo !== 1) { onChange(String(c.id)); setAberto(false); } }}
+                className={`w-full text-left px-2.5 py-1.5 text-[10.5px] ${c.tipo === 1 ? 'opacity-40 cursor-default' : 'hover:bg-white/10 cursor-pointer'}`}>
+                <span className="font-mono text-[var(--v-accent)]">{c.classificacao}</span>
+                <span className="font-mono text-[var(--v-text-faint)]"> #{c.id}</span>
+                <span className="text-[var(--v-text-bold)]"> — {c.descricao}</span>
+                {c.tipo === 1 && <span className="text-[9px] uppercase"> (sintética)</span>}
+              </button>
+            ))}
+            {filtradas.length > 40 && (
+              <div className="px-2.5 py-1 text-[9px] text-[var(--v-text-faint)]">… e mais {filtradas.length - 40} conta(s) — refine a busca</div>
+            )}
+          </div>
+        )}
+      </div>
+      <p className="text-[9px] text-[var(--v-text-faint)] font-medium truncate" title={sel ? sel.descricao : ''}>
+        Questor ID: {value || '0'} {sel ? `— ${sel.descricao}` : ''}
+      </p>
+    </div>
+  );
+};
+
 export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
   const [empreendimentos, setEmpreendimentos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -489,46 +555,14 @@ export const EmpreendimentosView = ({ selectedEmpresa, onNavigate }) => {
     }
   };
 
-  // Filtered account selectors helper
+  // Picker do plano de contas Questor (Melhorias 2, item 1): datalist não
+  // escala p/ milhares de contas — dropdown próprio com busca por código,
+  // classificação ou nome; sintéticas (tipo=1) aparecem mas não selecionam;
+  // digitação manual do código continua valendo (blur/Enter com dígitos).
   const renderAccountInput = (label, name, prefix) => {
-    const filtered = planoContas.filter(c => c.classificacao.startsWith(prefix));
-    const listId = `list-${name}`;
-    const selected = planoContas.find(c => String(c.id) === String(formData[name]));
-
-    const displayValue = (() => {
-        const val = String(formData[name] || '');
-        if (/^\d+$/.test(val)) {
-            const matched = planoContas.find(c => String(c.id) === val);
-            if (matched) return `${matched.id} - ${matched.descricao}`;
-        }
-        return val;
-    })();
-
-    return (
-      <div className="space-y-1">
-        <label className="text-[10px] font-black text-[var(--v-text-faint)] uppercase tracking-widest">{label}</label>
-        <div className="relative group">
-            <input
-                list={listId}
-                value={displayValue}
-                onChange={(e) => setFormData({ ...formData, [name]: e.target.value })}
-                className="w-full bg-black/40 border border-white/5 p-2.5 text-xs text-[var(--v-text-bold)] outline-none focus:border-[#ff4d00]/50 transition-all font-mono"
-                placeholder={loadingQuestor ? "Carregando..." : "Digite ou selecione..."}
-            />
-            <datalist id={listId}>
-                {filtered.map(c => (
-                    <option key={c.id} value={c.id}>{c.classificacao} - {c.descricao}</option>
-                ))}
-            </datalist>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-20 group-hover:opacity-100 transition-opacity">
-                <Search size={12} className="text-[var(--v-accent)]" />
-            </div>
-        </div>
-        <p className="text-[9px] text-[var(--v-text-faint)] font-medium truncate" title={selected ? selected.descricao : ''}>
-            Questor ID: {formData[name] || '0'} {selected ? `— ${selected.descricao}` : ''}
-        </p>
-      </div>
-    );
+    return <ContaPicker key={name} label={label} prefix={prefix}
+        value={formData[name]} contas={planoContas} loading={loadingQuestor}
+        onChange={(v) => setFormData(f => ({ ...f, [name]: v }))} />;
   };
 
   if (loading && !empreendimentos.length) {
