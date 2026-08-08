@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SmartImporter from './SmartImporter';
 import { DashboardMeta, VendasView, RecebimentosView, ConciliadorView } from './VulcanoViews';
+import { ClientesView } from './ClientesView';
 import { EmpreendimentosView } from './EmpreendimentosView';
 import { FiscalSpedView } from './FiscalSpedView';
 import { TributosGlobaisView } from './TributosGlobaisView';
@@ -169,6 +170,7 @@ return (
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<Building2 size={16}/>} label="Empreendimentos" active={currentView === 'empreendimentos'} onClick={() => setCurrentView('empreendimentos')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<ShoppingCart size={16}/>} label="Vendas" active={currentView === 'vendas'} onClick={() => setCurrentView('vendas')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<DollarSign size={16}/>} label="Recebimentos" active={currentView === 'recebimentos'} onClick={() => setCurrentView('recebimentos')} />
+                    <NavItem isSidebarOpen={isSidebarOpen} icon={<Users size={16}/>} label="Clientes" active={currentView === 'clientes'} onClick={() => setCurrentView('clientes')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<FileSpreadsheet size={16}/>} label="Smart Importer" active={currentView === 'importer'} onClick={() => setCurrentView('importer')} />
                     <NavItem isSidebarOpen={isSidebarOpen} icon={<UploadCloud size={16}/>} label="Conversor Universal" active={currentView === 'conciliador'} onClick={() => setCurrentView('conciliador')} />
                 </div>
@@ -285,6 +287,7 @@ return (
                       {currentView === 'empreendimentos' && <EmpreendimentosView selectedEmpresa={selectedEmpresa} onNavigate={(view) => setCurrentView(view)} />}
                       {currentView === 'vendas' && <VendasView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'recebimentos' && <RecebimentosView selectedEmpresa={selectedEmpresa} />}
+                      {currentView === 'clientes' && <ClientesView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'receitas' && <DashboardMeta selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'conciliador' && <ConciliadorView selectedEmpresa={selectedEmpresa} />}
                       {currentView === 'importer' && <SmartImporter dbPath="poc_database.sqlite" selectedEmpresa={selectedEmpresa} />}
