@@ -4737,17 +4737,32 @@ def importar_estrutura(data: ImportarEstruturaInput):
             pass
 
 @app.get("/api/vulcano/clientes")
-def get_vulcano_clientes(empresa_id: int):
+def get_vulcano_clientes(empresa_id: int, busca: str = None):
+    """Sem `busca`: clientes com venda na empresa (comportamento clássico).
+    Com `busca` (tela Clientes): pesquisa a base TODA por nome ou documento."""
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        cur.execute("""
-            SELECT DISTINCT c.ID, c.NOME, c.CNPJ 
-            FROM CLIENTE c
-            JOIN VENDA v ON c.ID = v.ID_CLIENTE
-            WHERE v.CODIGOEMPRESA = ?
-            ORDER BY c.NOME
-        """, (empresa_id,))
+        if busca and busca.strip():
+            b = busca.strip().upper()
+            digitos = "".join(filter(str.isdigit, b))
+            if digitos and len(digitos) >= 3:
+                cur.execute("""
+                    SELECT FIRST 100 c.ID, c.NOME, c.CNPJ FROM CLIENTE c
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(c.CNPJ, ''), '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?
+                    ORDER BY c.NOME
+                """, (f"%{digitos}%",))
+            else:
+                cur.execute("SELECT FIRST 100 c.ID, c.NOME, c.CNPJ FROM CLIENTE c WHERE UPPER(c.NOME) LIKE ? ORDER BY c.NOME",
+                            (f"%{b}%".encode('cp1252', 'ignore'),))
+        else:
+            cur.execute("""
+                SELECT DISTINCT c.ID, c.NOME, c.CNPJ
+                FROM CLIENTE c
+                JOIN VENDA v ON c.ID = v.ID_CLIENTE
+                WHERE v.CODIGOEMPRESA = ?
+                ORDER BY c.NOME
+            """, (empresa_id,))
         
         def dec(v):
             if v is None: return ""
@@ -4764,6 +4779,96 @@ def get_vulcano_clientes(empresa_id: int):
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/vulcano/clientes")
+async def criar_cliente(request: Request):
+    """Tela Clientes: cadastro avulso (fora do fluxo de venda). Dedupe por
+    dígitos do documento — se já existir, devolve o existente sem duplicar."""
+    body = await request.json()
+    nome = str(body.get("nome") or "").strip()
+    doc = str(body.get("cpf_cnpj") or "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Informe o nome.")
+    raw = "".join(filter(str.isdigit, doc))
+    if len(raw) not in (11, 14):
+        raise HTTPException(status_code=400, detail="Documento deve ser CPF (11 dígitos) ou CNPJ (14).")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT FIRST 1 ID, NOME FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw,))
+        r = cur.fetchone()
+        if r:
+            nome_atual = r[1].decode('cp1252', 'ignore').strip() if isinstance(r[1], bytes) else str(r[1] or "").strip()
+            return {"success": True, "id": r[0], "criado": False,
+                    "message": f"Documento já cadastrado: #{r[0]} {nome_atual} — use a edição."}
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
+        cid = cur.fetchone()[0]
+        cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ) VALUES (?, ?, ?)",
+                    (cid, nome.encode('cp1252', 'ignore')[:100], doc[:20]))
+        conn.commit()
+        return {"success": True, "id": cid, "criado": True, "message": f"Cliente #{cid} criado."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/clientes/{cliente_id}")
+async def editar_cliente(cliente_id: int, request: Request):
+    """Edição de cliente (nome e/ou documento) com guarda de duplicidade."""
+    body = await request.json()
+    nome = body.get("nome")
+    doc = body.get("cpf_cnpj")
+    if nome is None and doc is None:
+        raise HTTPException(status_code=400, detail="Nada para alterar.")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT ID FROM CLIENTE WHERE ID = ?", (int(cliente_id),))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        sets, params = [], []
+        if nome is not None:
+            if not str(nome).strip():
+                raise HTTPException(status_code=400, detail="Nome não pode ficar vazio.")
+            sets.append("NOME = ?"); params.append(str(nome).strip().encode('cp1252', 'ignore')[:100])
+        if doc is not None:
+            raw = "".join(filter(str.isdigit, str(doc)))
+            if len(raw) not in (11, 14):
+                raise HTTPException(status_code=400, detail="Documento deve ser CPF (11 dígitos) ou CNPJ (14).")
+            cur.execute("""SELECT FIRST 1 ID FROM CLIENTE
+                           WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ? AND ID <> ?""",
+                        (raw, int(cliente_id)))
+            outro = cur.fetchone()
+            if outro:
+                raise HTTPException(status_code=400, detail=f"Documento já pertence ao cliente #{outro[0]}.")
+            sets.append("CNPJ = ?"); params.append(str(doc).strip()[:20])
+        cur.execute(f"UPDATE CLIENTE SET {', '.join(sets)} WHERE ID = ?", (*params, int(cliente_id)))
+        conn.commit()
+        return {"success": True, "message": f"Cliente #{cliente_id} atualizado."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
 
 @app.get("/api/vulcano/dashboard-lancamentos")
 def api_dashboard_lancamentos(empresa_id: int, data_ini: str = None, data_fim: str = None):
