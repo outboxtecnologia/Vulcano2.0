@@ -459,6 +459,17 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
     }
   };
 
+  // filtro que isola exatamente 1 empreendimento já o seleciona (e carrega as
+  // unidades) — num listbox, filtrar não dispara onChange sozinho
+  useEffect(() => {
+    const t = filtroEmp.trim().toLowerCase();
+    if (!t) return;
+    const cands = empreendimentosList.filter(emp => `${emp.id} ${emp.nome}`.toLowerCase().includes(t));
+    if (cands.length === 1 && String(cands[0].id) !== String(vendaForm.id_empreendimento)) {
+      handleSelectEmpreendimento(String(cands[0].id));
+    }
+  }, [filtroEmp]);
+
   const toggleUnidade = (uid) => {
     setUnidadesSel(sel => sel.includes(uid) ? sel.filter(i => i !== uid) : [...sel, uid]);
   };
@@ -558,10 +569,23 @@ const NovaVendaModal = ({ selectedEmpresa, empreendimentosList, onClose, onSaved
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls} style={labelStyle}>Empreendimento</label>
-                <input value={filtroEmp} onChange={(e) => setFiltroEmp(e.target.value)} placeholder="Filtrar por nº ou nome..." className="w-full p-2 mb-1.5 rounded text-[11px] outline-none" style={inputStyle} />
+                <input value={filtroEmp}
+                    onChange={(e) => setFiltroEmp(e.target.value)}
+                    onKeyDown={(e) => {
+                        // Enter no filtro seleciona o 1º candidato (e não submete o form)
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const t = filtroEmp.trim().toLowerCase();
+                            const cands = empreendimentosList.filter(emp => !t || `${emp.id} ${emp.nome}`.toLowerCase().includes(t));
+                            if (cands.length) handleSelectEmpreendimento(String(cands[0].id));
+                        }
+                    }}
+                    placeholder="Filtrar por nº ou nome (Enter seleciona)..." className="w-full p-2 mb-1.5 rounded text-[11px] outline-none" style={inputStyle} />
                 <select value={vendaForm.id_empreendimento} onChange={(e) => handleSelectEmpreendimento(e.target.value)} required size={6} className="w-full p-1 rounded text-[11px] outline-none" style={inputStyle}>
                   {empreendimentosList
-                    .filter(emp => !filtroEmp.trim() || `${emp.id} ${emp.nome}`.toLowerCase().includes(filtroEmp.trim().toLowerCase()))
+                    .filter(emp => !filtroEmp.trim()
+                        || `${emp.id} ${emp.nome}`.toLowerCase().includes(filtroEmp.trim().toLowerCase())
+                        || String(emp.id) === String(vendaForm.id_empreendimento))
                     .map(emp => <option key={emp.id} value={emp.id} className="py-1">{emp.id} — {emp.nome}</option>)}
                 </select>
               </div>
