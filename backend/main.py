@@ -4737,17 +4737,32 @@ def importar_estrutura(data: ImportarEstruturaInput):
             pass
 
 @app.get("/api/vulcano/clientes")
-def get_vulcano_clientes(empresa_id: int):
+def get_vulcano_clientes(empresa_id: int, busca: str = None):
+    """Sem `busca`: clientes com venda na empresa (comportamento clássico).
+    Com `busca` (tela Clientes): pesquisa a base TODA por nome ou documento."""
     try:
         conn = get_conn("vulcano")
         cur = conn.cursor()
-        cur.execute("""
-            SELECT DISTINCT c.ID, c.NOME, c.CNPJ 
-            FROM CLIENTE c
-            JOIN VENDA v ON c.ID = v.ID_CLIENTE
-            WHERE v.CODIGOEMPRESA = ?
-            ORDER BY c.NOME
-        """, (empresa_id,))
+        if busca and busca.strip():
+            b = busca.strip().upper()
+            digitos = "".join(filter(str.isdigit, b))
+            if digitos and len(digitos) >= 3:
+                cur.execute("""
+                    SELECT FIRST 100 c.ID, c.NOME, c.CNPJ FROM CLIENTE c
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(c.CNPJ, ''), '.', ''), '-', ''), '/', ''), ' ', '') LIKE ?
+                    ORDER BY c.NOME
+                """, (f"%{digitos}%",))
+            else:
+                cur.execute("SELECT FIRST 100 c.ID, c.NOME, c.CNPJ FROM CLIENTE c WHERE UPPER(c.NOME) LIKE ? ORDER BY c.NOME",
+                            (f"%{b}%".encode('cp1252', 'ignore'),))
+        else:
+            cur.execute("""
+                SELECT DISTINCT c.ID, c.NOME, c.CNPJ
+                FROM CLIENTE c
+                JOIN VENDA v ON c.ID = v.ID_CLIENTE
+                WHERE v.CODIGOEMPRESA = ?
+                ORDER BY c.NOME
+            """, (empresa_id,))
         
         def dec(v):
             if v is None: return ""
@@ -4764,6 +4779,96 @@ def get_vulcano_clientes(empresa_id: int):
     except Exception as e:
         if 'conn' in locals() and conn: conn.close()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/vulcano/clientes")
+async def criar_cliente(request: Request):
+    """Tela Clientes: cadastro avulso (fora do fluxo de venda). Dedupe por
+    dígitos do documento — se já existir, devolve o existente sem duplicar."""
+    body = await request.json()
+    nome = str(body.get("nome") or "").strip()
+    doc = str(body.get("cpf_cnpj") or "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Informe o nome.")
+    raw = "".join(filter(str.isdigit, doc))
+    if len(raw) not in (11, 14):
+        raise HTTPException(status_code=400, detail="Documento deve ser CPF (11 dígitos) ou CNPJ (14).")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT FIRST 1 ID, NOME FROM CLIENTE WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ?", (raw,))
+        r = cur.fetchone()
+        if r:
+            nome_atual = r[1].decode('cp1252', 'ignore').strip() if isinstance(r[1], bytes) else str(r[1] or "").strip()
+            return {"success": True, "id": r[0], "criado": False,
+                    "message": f"Documento já cadastrado: #{r[0]} {nome_atual} — use a edição."}
+        cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM CLIENTE")
+        cid = cur.fetchone()[0]
+        cur.execute("INSERT INTO CLIENTE (ID, NOME, CNPJ) VALUES (?, ?, ?)",
+                    (cid, nome.encode('cp1252', 'ignore')[:100], doc[:20]))
+        conn.commit()
+        return {"success": True, "id": cid, "criado": True, "message": f"Cliente #{cid} criado."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+@app.patch("/api/vulcano/clientes/{cliente_id}")
+async def editar_cliente(cliente_id: int, request: Request):
+    """Edição de cliente (nome e/ou documento) com guarda de duplicidade."""
+    body = await request.json()
+    nome = body.get("nome")
+    doc = body.get("cpf_cnpj")
+    if nome is None and doc is None:
+        raise HTTPException(status_code=400, detail="Nada para alterar.")
+    conn = None
+    try:
+        conn = get_conn("vulcano")
+        cur = conn.cursor()
+        cur.execute("SELECT ID FROM CLIENTE WHERE ID = ?", (int(cliente_id),))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Cliente não encontrado.")
+        sets, params = [], []
+        if nome is not None:
+            if not str(nome).strip():
+                raise HTTPException(status_code=400, detail="Nome não pode ficar vazio.")
+            sets.append("NOME = ?"); params.append(str(nome).strip().encode('cp1252', 'ignore')[:100])
+        if doc is not None:
+            raw = "".join(filter(str.isdigit, str(doc)))
+            if len(raw) not in (11, 14):
+                raise HTTPException(status_code=400, detail="Documento deve ser CPF (11 dígitos) ou CNPJ (14).")
+            cur.execute("""SELECT FIRST 1 ID FROM CLIENTE
+                           WHERE REPLACE(REPLACE(REPLACE(REPLACE(CNPJ, '.', ''), '-', ''), '/', ''), ' ', '') = ? AND ID <> ?""",
+                        (raw, int(cliente_id)))
+            outro = cur.fetchone()
+            if outro:
+                raise HTTPException(status_code=400, detail=f"Documento já pertence ao cliente #{outro[0]}.")
+            sets.append("CNPJ = ?"); params.append(str(doc).strip()[:20])
+        cur.execute(f"UPDATE CLIENTE SET {', '.join(sets)} WHERE ID = ?", (*params, int(cliente_id)))
+        conn.commit()
+        return {"success": True, "message": f"Cliente #{cliente_id} atualizado."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
 
 @app.get("/api/vulcano/dashboard-lancamentos")
 def api_dashboard_lancamentos(empresa_id: int, data_ini: str = None, data_fim: str = None):
@@ -5187,8 +5292,13 @@ def get_vulcano_venda_condicoes(venda_id: int):
 
 @app.post("/api/vulcano/vendas/{venda_id}/parcelas")
 async def lancar_parcela_manual(venda_id: int, request: Request):
-    """Lança uma parcela avulsa (prevista) no RECEBER da venda — ação
-    'Lançar parcela manual' do painel de Vendas."""
+    """Lança parcelas previstas no RECEBER da venda — ação 'Lançar parcela
+    manual' do painel de Vendas, agora no FORMATO DE CONDIÇÃO (Melhorias 2):
+    tipo + quantidade + valor por parcela + 1º vencimento geram N parcelas
+    com a mesma régua de intervalos do cadastro de venda (MENSAL +1, SEMESTRAL
+    +6, ANUAL +12, REFORCO intervalo custom; SINAL/INTERMEDIARIA/CHAVES/
+    FINANCIAMENTO são únicas). Sem `tipo` = comportamento clássico (1 avulsa)."""
+    import datetime as _dt
     data = await request.json()
     data_venc = str(data.get("data") or "").strip()
     valor = float(data.get("valor") or 0)
@@ -5196,6 +5306,24 @@ async def lancar_parcela_manual(venda_id: int, request: Request):
         raise HTTPException(status_code=400, detail=f"Data inválida: {data_venc!r}")
     if valor <= 0:
         raise HTTPException(status_code=400, detail="Informe o valor da parcela.")
+    tipo = str(data.get("tipo") or "AVULSA").strip().upper()
+    unicas = ("AVULSA", "SINAL", "INTERMEDIARIA", "CHAVES", "FINANCIAMENTO")
+    qtd = 1 if tipo in unicas else max(1, min(240, int(data.get("quantidade") or 1)))
+    intervalo = {"MENSAL": 1, "SEMESTRAL": 6, "ANUAL": 12}.get(tipo)
+    if tipo == "REFORCO":
+        intervalo = max(1, int(data.get("intervalo_meses") or 6))
+    if intervalo is None:
+        intervalo = 1
+
+    def _add_months(d, n):
+        month = d.month - 1 + n
+        year = d.year + month // 12
+        month = month % 12 + 1
+        dias = [31, 29 if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 else 28,
+                31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        return _dt.date(year, month, min(d.day, dias[month - 1]))
+
+    base = _dt.datetime.strptime(data_venc[:10], "%Y-%m-%d").date()
     conn = None
     try:
         conn = get_conn("vulcano")
@@ -5208,18 +5336,27 @@ async def lancar_parcela_manual(venda_id: int, request: Request):
             raise HTTPException(status_code=400, detail="Venda distratada — não recebe parcelas novas.")
         cur.execute("SELECT COALESCE(MAX(ID), 0) + 1 FROM RECEBER")
         new_id = cur.fetchone()[0]
-        referencia = str(data.get("referencia") or "MANUAL").strip()[:10]
-        obs = str(data.get("obs") or "Parcela lançada manualmente (Vulcano 2.0)").strip()[:100]
-        cur.execute(
-            """INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA,
-                                    VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO)
-               VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)""",
-            (new_id, int(venda_id), row[0], data_venc, round(valor, 2),
-             referencia.encode('cp1252', 'ignore'), obs.encode('cp1252', 'ignore')),
-        )
+        obs = str(data.get("obs") or f"MANUAL {tipo} (Vulcano 2.0)").strip()[:100]
+        ids = []
+        for i in range(qtd):
+            venc = base if qtd == 1 else _add_months(base, i * intervalo)
+            if qtd == 1:
+                referencia = str(data.get("referencia") or "MANUAL").strip()[:10]
+            else:
+                referencia = f"{i + 1}/{qtd}"
+            cur.execute(
+                """INSERT INTO RECEBER (ID, IDVENDA, IDCLIENTE, DATA, VALORPARCELA,
+                                        VALORVARIACAO, TOTALPAGO, PARCELA, OBS, DESCONTO)
+                   VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 0)""",
+                (new_id + i, int(venda_id), row[0], venc.isoformat(), round(valor, 2),
+                 referencia.encode('cp1252', 'ignore'), obs.encode('cp1252', 'ignore')),
+            )
+            ids.append(new_id + i)
         conn.commit()
-        return {"success": True, "id": new_id,
-                "message": f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}."}
+        ult = base if qtd == 1 else _add_months(base, (qtd - 1) * intervalo)
+        return {"success": True, "id": ids[0], "ids": ids, "quantidade": qtd,
+                "message": (f"Parcela de {valor:,.2f} lançada p/ {data_venc} na venda #{venda_id}." if qtd == 1 else
+                            f"{qtd} parcelas {tipo} de {valor:,.2f} lançadas na venda #{venda_id} ({base.isoformat()} a {ult.isoformat()}).")}
     except HTTPException:
         raise
     except Exception as e:
@@ -9569,6 +9706,24 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         """, (empresa_id,))
         cota_extra = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
 
+        # SALDO DO EMPREENDIMENTO (auditoria Belle Ville): o rodapé soma só as
+        # vendas COM parcela no mês navegado — o operador comparava com o
+        # legado/contábil e via "diferença". Este universo cobre TODAS as
+        # vendas ativas do filtro (principais + cotas marcadas), saldo de
+        # principal no fim do mês navegado.
+        filtro_emp_v = " AND V.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+        cur.execute(f"""
+            SELECT V.ID, COALESCE(V.TOTALVENDA, 0) FROM VENDA V
+            WHERE V.CODIGOEMPRESA = ? AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND V.IDVENDAVINCULADA IS NULL AND COALESCE(V.TOTALVENDA, 0) > 0.01
+              {filtro_emp_v}
+        """, tuple([empresa_id] + ([empreendimento_id] if empreendimento_id else [])))
+        universo_rows = cur.fetchall()
+        saldo_universo = round(sum(
+            float(tv or 0) + cota_extra.get(vid, 0.0) - pago_total.get(vid, 0.0)
+            for vid, tv in universo_rows), 2)
+        contratos_ativos = len(universo_rows)
+
         def _s(v):
             return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
 
@@ -9740,6 +9895,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                for k in ("valor_parcela", "desconto", "variacao", "total_pago")}
         tot["saldo_atual"] = round(sum({x["venda_id"]: x["saldo_atual"] for x in result}.values()), 2)
         return {"success": True, "data": result, "totais": tot,
+                "saldo_universo": saldo_universo, "contratos_ativos": contratos_ativos,
                 "periodo": {"ano": ano, "mes": mes}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

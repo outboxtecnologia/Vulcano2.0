@@ -584,6 +584,14 @@ export const RecebimentosMensalView = ({ selectedEmpresa }) => {
                         )}
                     </table>
                 </div>
+                {data && data.saldo_universo != null && (
+                    <div className="flex justify-between items-center px-3 py-2 bg-[#0e0e0e] border-t border-[#1e1e1e]">
+                        <span className="text-[9px] uppercase tracking-widest text-[#555] font-bold">
+                            Saldo do {empreendimentoId ? 'empreendimento' : 'total da empresa'} · {data.contratos_ativos} contrato(s) ativo(s) — todas as vendas, não só as do mês
+                        </span>
+                        <span className="font-mono font-black text-[13px] text-[#f97316]">{fmt(data.saldo_universo)}</span>
+                    </div>
+                )}
             </div>
 
             {/* MODAL EDITAR PARCELA */}

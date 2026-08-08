@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 import { DashboardMeta, VendasView, RecebimentosView, ConciliadorView } from '../VulcanoViews';
+import { ClientesView } from '../ClientesView';
 import { EmpreendimentosView } from '../EmpreendimentosView';
 import { FiscalSpedView } from '../FiscalSpedView';
 import { RecebimentosMensalView } from '../RecebimentosMensalView';
@@ -40,6 +41,11 @@ export const NAV_SECTIONS = [
       { slug: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, Component: DashboardMeta },
       { slug: 'empreendimentos', label: 'Empreendimentos', icon: Building2, Component: EmpreendimentosView },
       { slug: 'vendas', label: 'Vendas', icon: ShoppingCart, Component: VendasView },
+      // Ao lado de Vendas de proposito: o cliente nasce dentro da venda, esta tela
+      // cobre o resto (busca na base toda, cadastro avulso, edicao). No repo do
+      // Fernando o item era registrado no App.jsx, que aqui nao existe mais — a
+      // sidebar e as rotas saem desta lista unica.
+      { slug: 'clientes', label: 'Clientes', icon: Users, Component: ClientesView },
       { slug: 'recebimentos', label: 'Recebimentos', icon: DollarSign, Component: RecebimentosView },
       { slug: 'recebimentos-mensal', label: 'Receb. Mensal', icon: DollarSign, Component: RecebimentosMensalView },
       { slug: 'gerar-parcelas', label: 'Geração de Parcelas', icon: ListPlus, Component: GeracaoParcelasView, dropQuery: ['emp'] },
