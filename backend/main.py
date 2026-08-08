@@ -7844,6 +7844,24 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
         """, (empresa_id,))
         cota_extra = {r[0]: float(r[1] or 0) for r in cur.fetchall()}
 
+        # SALDO DO EMPREENDIMENTO (auditoria Belle Ville): o rodapé soma só as
+        # vendas COM parcela no mês navegado — o operador comparava com o
+        # legado/contábil e via "diferença". Este universo cobre TODAS as
+        # vendas ativas do filtro (principais + cotas marcadas), saldo de
+        # principal no fim do mês navegado.
+        filtro_emp_v = " AND V.IDEMPREENDIMENTO = ?" if empreendimento_id else ""
+        cur.execute(f"""
+            SELECT V.ID, COALESCE(V.TOTALVENDA, 0) FROM VENDA V
+            WHERE V.CODIGOEMPRESA = ? AND (V.DISTRATO = 'N' OR V.DISTRATO IS NULL)
+              AND V.IDVENDAVINCULADA IS NULL AND COALESCE(V.TOTALVENDA, 0) > 0.01
+              {filtro_emp_v}
+        """, tuple([empresa_id] + ([empreendimento_id] if empreendimento_id else [])))
+        universo_rows = cur.fetchall()
+        saldo_universo = round(sum(
+            float(tv or 0) + cota_extra.get(vid, 0.0) - pago_total.get(vid, 0.0)
+            for vid, tv in universo_rows), 2)
+        contratos_ativos = len(universo_rows)
+
         def _s(v):
             return v.decode("cp1252", "ignore").strip() if isinstance(v, bytes) else (str(v).strip() if v is not None else "")
 
@@ -8015,6 +8033,7 @@ def get_recebimentos_mensal(empresa_id: int, ano: int, mes: int, empreendimento_
                for k in ("valor_parcela", "desconto", "variacao", "total_pago")}
         tot["saldo_atual"] = round(sum({x["venda_id"]: x["saldo_atual"] for x in result}.values()), 2)
         return {"success": True, "data": result, "totais": tot,
+                "saldo_universo": saldo_universo, "contratos_ativos": contratos_ativos,
                 "periodo": {"ano": ano, "mes": mes}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
